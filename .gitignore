@@ -1,0 +1,9 @@
+.venv-asr/
+.models/
+testdata/*.wav
+build/
+.gradle/
+local.properties
+*.apk
+*.aab
+keystore/

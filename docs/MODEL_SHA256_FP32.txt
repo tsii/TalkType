@@ -1,0 +1,24 @@
+# SHA-256-Prüfsummen der fp32-Referenz- und fp16-Konvertierungsdateien
+
+Quelle fp32: `https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx/resolve/main/`
+(Upstream hat KEIN fp16 — fp16 wird aus fp32 selbst konvertiert, T18.)
+
+## fp32-Basis (nach `.models-fp32/`)
+
+```
+98a74b21b4cc0017c1e7030319a4a96f4a9506e50f0708f3a516d02a77c96bb1  encoder-model.onnx            41 770 866 B
+9a22d372c51455c34f13405da2520baefb7125bd16981397561423ed32d24f36  encoder-model.onnx.data    2 435 420 160 B
+e978ddf6688527182c10fde2eb4b83068421648985ef23f7a86be732be8706c1  decoder_joint-model.onnx     72 520 893 B
+666903c76b9798caf2c210afd4f6cd60b08a8dbf9800ec8d7a3bc0d2148ac466  config.json
+```
+
+Unverändert übernommen aus `.models/` (int8-Satz, docs/MODEL_SHA256.txt):
+
+```
+a9fde1486ebfcc08f328d75ad4610c67835fea58c73ba57e3209a6f6cf019e9f  nemo128.onnx
+d58544679ea4bc6ac563d1f545eb7d474bd6cfa467f0a6e2c1dc1c7d37e3c35d  vocab.txt
+```
+
+## fp16-Konvertierung (`.models-fp16/`, eigene Dateien — siehe docs/FP16_EVAL.md)
+
+(nach der Konvertierung ergänzt)

@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Voice Keyboard</string>
+    <string name="setup_title">Voice Keyboard – Einrichtung</string>
+
+    <string name="setup_download_start">Modell herunterladen (ca. 671 MB)</string>
+    <string name="setup_download_cancel">Abbrechen</string>
+    <string name="setup_open_settings">Systemeinstellungen öffnen</string>
+
+    <string name="setup_network_switch">Netzwerk für Downloads erlauben</string>
+    <string name="setup_state_ready">Modell aktiv – Sprachfunktion freigeschaltet.</string>
+    <string name="setup_state_absent">Kein Modell installiert. Laden Sie es einmalig herunter, danach funktioniert die Tastatur dauerhaft offline.</string>
+    <string name="setup_state_downloading">Modell wird geladen …</string>
+    <string name="setup_state_retry_attempt">Versuch %1$d von %2$d — gleich erneuter Versuch</string>
+    <string name="setup_state_verifying">Prüfe heruntergeladene Dateien …</string>
+    <string name="setup_state_failed">Download fehlgeschlagen. Sie können es erneut versuchen – bereits geladene Teile bleiben erhalten.</string>
+    <string name="file_info_placeholder">Datei %1$d/%2$d</string>
+    <string name="setup_state_cancelled">Download abgebrochen. Fortsetzen ist jederzeit möglich.</string>
+
+    <string name="setup_error_network">Netzwerkfehler. Prüfen Sie die Verbindung und versuchen Sie es erneut.</string>
+    <string name="setup_error_hash">Heruntergeladene Datei war beschädigt (Hash-Fehler). Bitte erneut versuchen.</string>
+    <string name="setup_error_space">Zu wenig Speicherplatz. Es werden ca. 2,5 GB freier Speicher benötigt.</string>
+    <string name="setup_error_cancelled">Download abgebrochen.</string>
+    <string name="setup_error_server">Der Server hat die angeforderte Datei abgelehnt. Bitte versuchen Sie es erneut.</string>
+    <string name="setup_error_wait">Der Server ist überlastet. Bitte versuchen Sie es in einigen Minuten erneut.</string>
+    <string name="setup_error_resume">Der Download konnte nicht fortgesetzt werden. Der Versuch wird wiederholt; bitte bleiben Sie online.</string>
+    <string name="setup_error_fgs_blocked">Download konnte nicht gestartet werden. Öffnen Sie die App erneut und versuchen Sie es noch einmal.</string>
+
+    <string name="setup_permissions_hint">Für Diktat werden Mikrofon- und Benachrichtigungsrechte benötigt. Ohne installiertes Modell bleibt die Tastatur trotzdem nutzbar, die Sprachfunktion ist dann deaktiviert.</string>
+    <string name="setup_request_permissions">Berechtigungen erteilen</string>
+    <string name="setup_permissions_denied_forever">Berechtigung dauerhaft abgelehnt. Sie kann nur in den Systemeinstellungen erteilt werden.</string>
+
+    <string name="setup_network_disabled">Netzwerkzugriff ist deaktiviert — Schalter aktivieren</string>
+
+    <string name="setup_privacy_text">Ihre Sprache und Ihr Text bleiben auf diesem Gerät. Die App nutzt das Netzwerk ausschließlich für den einmaligen Download des Spracherkennungsmodells (ca. 671 MB) von der angegebenen Adresse; es gibt keine Telemetrie, keine Konten und keine Cloud-Erkennung. Nach dem Download deaktiviert die App ihren Download-Schalter automatisch; es findet dann kein weiterer Netzwerkzugriff statt. Sie können den Schalter jederzeit wieder aktivieren oder der App in den Android-Einstellungen die Netzwerkberechtigung ganz entziehen — die Tastatur funktioniert danach unverändert offline. Ohne installiertes Modell bleibt die Tastatur nutzbar, die Sprachfunktion ist dann deaktiviert.</string>
+
+    <!-- E5 (ERROR_UX_DECISIONS.md): Diktat-Fehlertexte ≤ 45 Zeichen, nie Rohcodes -->
+    <string name="dictation_error_audio_start">Audio-Start fehlgeschlagen – erneut versuchen</string>
+    <string name="dictation_error_permission">Mikrofon-Berechtigung fehlt</string>
+    <string name="dictation_error_permission_mic">Mikrofonfreigabe nötig – ohne sie kann nicht diktiert werden</string>
+    <string name="dictation_error_permission_settings">Berechtigung nötig – in den Systemeinstellungen aktivieren</string>
+    <string name="dictation_starting">Starte Aufnahme…</string>
+    <!-- D10-Rest §2: stumme Leerausgabe verhindern — Erklärung statt Ratlosigkeit.
+         Regel 9: kein Pfad, kein Audio-/Textinhalt, nur die Aufforderung. -->
+    <string name="dictation_no_text">Kein Text erkannt. Bitte erneut versuchen.</string>
+    <string name="dictation_error_model_absent">Modell nicht geladen – Setup öffnen</string>
+    <string name="dictation_error_model_broken">Modelldatei defekt – neu herunterladen</string>
+    <string name="dictation_error_bt_lost">Bluetooth-Mikrofon getrennt</string>
+    <string name="dictation_error_no_mic">Kein Mikrofon gefunden – Gerät prüfen</string>
+    <string name="dictation_error_out_of_memory">Zu wenig Speicher – App neu starten</string>
+    <string name="dictation_error_unknown">Diktat-Start fehlgeschlagen</string>
+
+    <string name="download_channel_name">Modell-Download</string>
+    <string name="download_notification_title">Sprachmodell</string>
+    <string name="download_notification_loading">Modell wird geladen …</string>
+    <string name="download_notification_verifying">Prüfe Hash …</string>
+
+    <!-- E9.1 (M8b-1): Sprachwechsel & Sprachauswahl -->
+    <string name="language_switched_to">%1$s aktiv</string>
+    <string name="language_switch_single_active">Nur eine Sprache aktiv – in Einrichtung ändern</string>
+    <string name="language_switch_blocked_recording">Sprachwechsel während Diktat nicht möglich</string>
+    <string name="emoji_blocked_recording">Emoji während Diktat nicht möglich</string>
+
+    <!-- EMOJI_PANEL_DESIGN_V2 §5: Rueckweg-Button + Kategorienamen (E10.2) -->
+    <string name="emoji_back_to_keyboard">Zur Tastatur</string>
+    <string name="emoji_cat_smileys">Gesichter</string>
+    <string name="emoji_cat_people">Personen</string>
+    <string name="emoji_cat_animals">Tiere &amp; Natur</string>
+    <string name="emoji_cat_food">Essen &amp; Trinken</string>
+    <string name="emoji_cat_travel">Reisen &amp; Orte</string>
+    <string name="emoji_cat_activities">Aktivität</string>
+    <string name="emoji_cat_objects">Objekte</string>
+    <string name="emoji_cat_symbols">Symbole</string>
+
+    <!-- M9a R1: SPACE-Label-Fallback fuer Blank-Labels (" "), wenn das Asset kein
+         sprechendes Label liefert. Sprachwerte kommen aus den Layout-Assets. -->
+    <string name="key_space_label">Space</string>
+    <string name="setup_languages_title">Aktive Sprachen (Tastaturlayouts)</string>
+    <string name="setup_languages_hint">Mindestens eine Sprache muss aktiv bleiben. Kurztipp auf 🌐 in der Tastatur wechselt zwischen den aktiven Sprachen.</string>
+</resources>

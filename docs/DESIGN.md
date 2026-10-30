@@ -42,7 +42,7 @@ Wechsel des erprobten Streaming-Defaults.
 | Finale Transkription | Voll korrigierend, committed_len=0 | Vollständiger Whole-buffer-Finaldecode; eigene Spanne ganz revidierbar bei bewiesenem Besitz | UP beweist auf Android keine Cursorposition | Bei Besitzverlust explizite Übernahme |
 | Finales Revisionslimit | force_revision für Vollkorrektur | Kein 60-Zeichen-Limit für sichere finale eigene Spanne | Finale Vollkorrektur nicht künstlich kappen | Große Änderungen nur bei sicherem Besitz |
 | Tokenbudget | 12*s+64, min 256, max 4096 | Übernommen, gesamte Eingabe inklusive Kontext | Verhindert kontextbedingte Kappung | Limit: sichtbar fehlschlagen/retry |
-| Erstes Partial | min_audio_s mindestens 1, besser 2,5–3 | 3 s übernommen; kurze Finals trotzdem decodieren | Kurze Diktate nicht verlieren | Kurze Finals halluzinationsanfällig |
+| Erstes Partial | min_audio_s mindestens 1, besser 2,5–3 | **2,0 s** — gemessen (ASR_CONTRACT §4.4): 1,0 s halluziniert („Oh yes."), ab 2,0 s 0 Fehlfälle in 23 Proben; 3,0 s bringt keinen messbaren Vorteil. Kurze Finals trotzdem decodieren | Erste Ausgabe ~1 s früher als 3 s, ohne belegtes Halluzinationsrisiko | Kurze Finals halluzinationsanfällig |
 | VAD | Nur kurze Reste unter 2 s bei False verwerfen | Kein VAD-Gate in Version 1; nichts wegen VAD verwerfen | Optionalen Filter weglassen verhindert Sprachverlust | Mehr Inferenz auf Stille |
 | Stop | join → Queue drainen → neuester Rest | Semantisch übernommen; read entblockieren, join, Queue, letzter Read, EOS | AudioRecord.stop liefert keinen Restpuffer | Race-/Sequenztests erforderlich |
 | Aufnahmelimit | 300 s | Übernommen | 9,6 MB Roh-PCM vertretbar | Tensor-/Inferenzbedarf größer |

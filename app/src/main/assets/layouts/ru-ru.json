@@ -1,0 +1,1223 @@
+{
+  "schemaVersion": 1,
+  "id": "ru-ru",
+  "language": {
+    "tag": "ru-RU",
+    "label": "Русский",
+    "caseLocale": "ru-RU",
+    "direction": "ltr"
+  },
+  "deadKeys": {},
+  "layers": {
+    "base": {
+      "rows": [
+        [
+          {
+            "id": "i-short",
+            "label": "й",
+            "width": 1,
+            "kind": "text",
+            "value": "й"
+          },
+          {
+            "id": "tse",
+            "label": "ц",
+            "width": 1,
+            "kind": "text",
+            "value": "ц"
+          },
+          {
+            "id": "u-cyr",
+            "label": "у",
+            "width": 1,
+            "kind": "text",
+            "value": "у"
+          },
+          {
+            "id": "ka",
+            "label": "к",
+            "width": 1,
+            "kind": "text",
+            "value": "к"
+          },
+          {
+            "id": "e-cyr",
+            "label": "е",
+            "width": 1,
+            "kind": "text",
+            "value": "е"
+          },
+          {
+            "id": "en",
+            "label": "н",
+            "width": 1,
+            "kind": "text",
+            "value": "н"
+          },
+          {
+            "id": "ge",
+            "label": "г",
+            "width": 1,
+            "kind": "text",
+            "value": "г"
+          },
+          {
+            "id": "sha",
+            "label": "ш",
+            "width": 1,
+            "kind": "text",
+            "value": "ш"
+          },
+          {
+            "id": "shcha",
+            "label": "щ",
+            "width": 1,
+            "kind": "text",
+            "value": "щ"
+          },
+          {
+            "id": "ze",
+            "label": "з",
+            "width": 1,
+            "kind": "text",
+            "value": "з"
+          },
+          {
+            "id": "kha",
+            "label": "х",
+            "width": 1,
+            "kind": "text",
+            "value": "х"
+          }
+        ],
+        [
+          {
+            "id": "hard-sign",
+            "label": "ъ",
+            "width": 1,
+            "kind": "text",
+            "value": "ъ"
+          },
+          {
+            "id": "ef",
+            "label": "ф",
+            "width": 1,
+            "kind": "text",
+            "value": "ф"
+          },
+          {
+            "id": "yeru",
+            "label": "ы",
+            "width": 1,
+            "kind": "text",
+            "value": "ы"
+          },
+          {
+            "id": "ve",
+            "label": "в",
+            "width": 1,
+            "kind": "text",
+            "value": "в"
+          },
+          {
+            "id": "a-cyr",
+            "label": "а",
+            "width": 1,
+            "kind": "text",
+            "value": "а"
+          },
+          {
+            "id": "pe",
+            "label": "п",
+            "width": 1,
+            "kind": "text",
+            "value": "п"
+          },
+          {
+            "id": "er",
+            "label": "р",
+            "width": 1,
+            "kind": "text",
+            "value": "р"
+          },
+          {
+            "id": "o-cyr",
+            "label": "о",
+            "width": 1,
+            "kind": "text",
+            "value": "о"
+          },
+          {
+            "id": "el",
+            "label": "л",
+            "width": 1,
+            "kind": "text",
+            "value": "л"
+          },
+          {
+            "id": "de",
+            "label": "д",
+            "width": 1,
+            "kind": "text",
+            "value": "д"
+          },
+          {
+            "id": "zhe",
+            "label": "ж",
+            "width": 1,
+            "kind": "text",
+            "value": "ж"
+          }
+        ],
+        [
+          {
+            "id": "shift",
+            "label": "⇧",
+            "width": 1.5,
+            "kind": "action",
+            "value": "shift"
+          },
+          {
+            "id": "e-rev",
+            "label": "э",
+            "width": 1,
+            "kind": "text",
+            "value": "э"
+          },
+          {
+            "id": "ya",
+            "label": "я",
+            "width": 1,
+            "kind": "text",
+            "value": "я"
+          },
+          {
+            "id": "che",
+            "label": "ч",
+            "width": 1,
+            "kind": "text",
+            "value": "ч"
+          },
+          {
+            "id": "es",
+            "label": "с",
+            "width": 1,
+            "kind": "text",
+            "value": "с"
+          },
+          {
+            "id": "em",
+            "label": "м",
+            "width": 1,
+            "kind": "text",
+            "value": "м"
+          },
+          {
+            "id": "i-cyr",
+            "label": "и",
+            "width": 1,
+            "kind": "text",
+            "value": "и"
+          },
+          {
+            "id": "te",
+            "label": "т",
+            "width": 1,
+            "kind": "text",
+            "value": "т"
+          },
+          {
+            "id": "soft-sign",
+            "label": "ь",
+            "width": 1,
+            "kind": "text",
+            "value": "ь"
+          },
+          {
+            "id": "be",
+            "label": "б",
+            "width": 1,
+            "kind": "text",
+            "value": "б"
+          },
+          {
+            "id": "yu",
+            "label": "ю",
+            "width": 1,
+            "kind": "text",
+            "value": "ю"
+          },
+          {
+            "id": "yo",
+            "label": "ё",
+            "width": 1,
+            "kind": "text",
+            "value": "ё"
+          },
+          {
+            "id": "backspace",
+            "label": "⌫",
+            "width": 1.5,
+            "kind": "action",
+            "value": "backspace"
+          }
+        ],
+        [
+          {
+            "id": "symbols",
+            "label": "?123",
+            "width": 1.5,
+            "kind": "action",
+            "value": "layer-symbols"
+          },
+          {
+            "id": "language",
+            "label": "🌐",
+            "width": 1,
+            "kind": "action",
+            "value": "language"
+          },
+          {
+            "id": "emoji",
+            "label": "😊",
+            "width": 1,
+            "kind": "action",
+            "value": "emoji"
+          },
+          {
+            "id": "space",
+            "label": "Пробел",
+            "width": 5,
+            "kind": "action",
+            "value": "space"
+          },
+          {
+            "id": "cursor-left",
+            "label": "‹",
+            "width": 1,
+            "kind": "action",
+            "value": "cursor-left"
+          },
+          {
+            "id": "cursor-right",
+            "label": "›",
+            "width": 1,
+            "kind": "action",
+            "value": "cursor-right"
+          },
+          {
+            "id": "mic",
+            "label": "🎤",
+            "width": 1,
+            "kind": "action",
+            "value": "mic"
+          },
+          {
+            "id": "enter",
+            "label": "⏎",
+            "width": 1.5,
+            "kind": "action",
+            "value": "enter"
+          }
+        ]
+      ]
+    },
+    "shift": {
+      "rows": [
+        [
+          {
+            "id": "i-short",
+            "label": "Й",
+            "width": 1,
+            "kind": "text",
+            "value": "Й"
+          },
+          {
+            "id": "tse",
+            "label": "Ц",
+            "width": 1,
+            "kind": "text",
+            "value": "Ц"
+          },
+          {
+            "id": "u-cyr",
+            "label": "У",
+            "width": 1,
+            "kind": "text",
+            "value": "У"
+          },
+          {
+            "id": "ka",
+            "label": "К",
+            "width": 1,
+            "kind": "text",
+            "value": "К"
+          },
+          {
+            "id": "e-cyr",
+            "label": "Е",
+            "width": 1,
+            "kind": "text",
+            "value": "Е"
+          },
+          {
+            "id": "en",
+            "label": "Н",
+            "width": 1,
+            "kind": "text",
+            "value": "Н"
+          },
+          {
+            "id": "ge",
+            "label": "Г",
+            "width": 1,
+            "kind": "text",
+            "value": "Г"
+          },
+          {
+            "id": "sha",
+            "label": "Ш",
+            "width": 1,
+            "kind": "text",
+            "value": "Ш"
+          },
+          {
+            "id": "shcha",
+            "label": "Щ",
+            "width": 1,
+            "kind": "text",
+            "value": "Щ"
+          },
+          {
+            "id": "ze",
+            "label": "З",
+            "width": 1,
+            "kind": "text",
+            "value": "З"
+          },
+          {
+            "id": "kha",
+            "label": "Х",
+            "width": 1,
+            "kind": "text",
+            "value": "Х"
+          }
+        ],
+        [
+          {
+            "id": "hard-sign",
+            "label": "Ъ",
+            "width": 1,
+            "kind": "text",
+            "value": "Ъ"
+          },
+          {
+            "id": "ef",
+            "label": "Ф",
+            "width": 1,
+            "kind": "text",
+            "value": "Ф"
+          },
+          {
+            "id": "yeru",
+            "label": "Ы",
+            "width": 1,
+            "kind": "text",
+            "value": "Ы"
+          },
+          {
+            "id": "ve",
+            "label": "В",
+            "width": 1,
+            "kind": "text",
+            "value": "В"
+          },
+          {
+            "id": "a-cyr",
+            "label": "А",
+            "width": 1,
+            "kind": "text",
+            "value": "А"
+          },
+          {
+            "id": "pe",
+            "label": "П",
+            "width": 1,
+            "kind": "text",
+            "value": "П"
+          },
+          {
+            "id": "er",
+            "label": "Р",
+            "width": 1,
+            "kind": "text",
+            "value": "Р"
+          },
+          {
+            "id": "o-cyr",
+            "label": "О",
+            "width": 1,
+            "kind": "text",
+            "value": "О"
+          },
+          {
+            "id": "el",
+            "label": "Л",
+            "width": 1,
+            "kind": "text",
+            "value": "Л"
+          },
+          {
+            "id": "de",
+            "label": "Д",
+            "width": 1,
+            "kind": "text",
+            "value": "Д"
+          },
+          {
+            "id": "zhe",
+            "label": "Ж",
+            "width": 1,
+            "kind": "text",
+            "value": "Ж"
+          }
+        ],
+        [
+          {
+            "id": "shift",
+            "label": "⇧",
+            "width": 1.5,
+            "kind": "action",
+            "value": "shift"
+          },
+          {
+            "id": "e-rev",
+            "label": "Э",
+            "width": 1,
+            "kind": "text",
+            "value": "Э"
+          },
+          {
+            "id": "ya",
+            "label": "Я",
+            "width": 1,
+            "kind": "text",
+            "value": "Я"
+          },
+          {
+            "id": "che",
+            "label": "Ч",
+            "width": 1,
+            "kind": "text",
+            "value": "Ч"
+          },
+          {
+            "id": "es",
+            "label": "С",
+            "width": 1,
+            "kind": "text",
+            "value": "С"
+          },
+          {
+            "id": "em",
+            "label": "М",
+            "width": 1,
+            "kind": "text",
+            "value": "М"
+          },
+          {
+            "id": "i-cyr",
+            "label": "И",
+            "width": 1,
+            "kind": "text",
+            "value": "И"
+          },
+          {
+            "id": "te",
+            "label": "Т",
+            "width": 1,
+            "kind": "text",
+            "value": "Т"
+          },
+          {
+            "id": "soft-sign",
+            "label": "Ь",
+            "width": 1,
+            "kind": "text",
+            "value": "Ь"
+          },
+          {
+            "id": "be",
+            "label": "Б",
+            "width": 1,
+            "kind": "text",
+            "value": "Б"
+          },
+          {
+            "id": "yu",
+            "label": "Ю",
+            "width": 1,
+            "kind": "text",
+            "value": "Ю"
+          },
+          {
+            "id": "yo",
+            "label": "Ё",
+            "width": 1,
+            "kind": "text",
+            "value": "Ё"
+          },
+          {
+            "id": "backspace",
+            "label": "⌫",
+            "width": 1.5,
+            "kind": "action",
+            "value": "backspace"
+          }
+        ],
+        [
+          {
+            "id": "symbols",
+            "label": "?123",
+            "width": 1.5,
+            "kind": "action",
+            "value": "layer-symbols"
+          },
+          {
+            "id": "language",
+            "label": "🌐",
+            "width": 1,
+            "kind": "action",
+            "value": "language"
+          },
+          {
+            "id": "emoji",
+            "label": "😊",
+            "width": 1,
+            "kind": "action",
+            "value": "emoji"
+          },
+          {
+            "id": "space",
+            "label": "Пробел",
+            "width": 5,
+            "kind": "action",
+            "value": "space"
+          },
+          {
+            "id": "cursor-left",
+            "label": "‹",
+            "width": 1,
+            "kind": "action",
+            "value": "cursor-left"
+          },
+          {
+            "id": "cursor-right",
+            "label": "›",
+            "width": 1,
+            "kind": "action",
+            "value": "cursor-right"
+          },
+          {
+            "id": "mic",
+            "label": "🎤",
+            "width": 1,
+            "kind": "action",
+            "value": "mic"
+          },
+          {
+            "id": "enter",
+            "label": "⏎",
+            "width": 1.5,
+            "kind": "action",
+            "value": "enter"
+          }
+        ]
+      ]
+    },
+    "symbols": {
+      "rows": [
+        [
+          {
+            "id": "one",
+            "label": "1",
+            "width": 1,
+            "kind": "text",
+            "value": "1"
+          },
+          {
+            "id": "two",
+            "label": "2",
+            "width": 1,
+            "kind": "text",
+            "value": "2"
+          },
+          {
+            "id": "three",
+            "label": "3",
+            "width": 1,
+            "kind": "text",
+            "value": "3"
+          },
+          {
+            "id": "four",
+            "label": "4",
+            "width": 1,
+            "kind": "text",
+            "value": "4"
+          },
+          {
+            "id": "five",
+            "label": "5",
+            "width": 1,
+            "kind": "text",
+            "value": "5"
+          },
+          {
+            "id": "six",
+            "label": "6",
+            "width": 1,
+            "kind": "text",
+            "value": "6"
+          },
+          {
+            "id": "seven",
+            "label": "7",
+            "width": 1,
+            "kind": "text",
+            "value": "7"
+          },
+          {
+            "id": "eight",
+            "label": "8",
+            "width": 1,
+            "kind": "text",
+            "value": "8"
+          },
+          {
+            "id": "nine",
+            "label": "9",
+            "width": 1,
+            "kind": "text",
+            "value": "9"
+          },
+          {
+            "id": "zero",
+            "label": "0",
+            "width": 1,
+            "kind": "text",
+            "value": "0"
+          },
+          {
+            "id": "hyphen",
+            "label": "-",
+            "width": 1,
+            "kind": "text",
+            "value": "-"
+          }
+        ],
+        [
+          {
+            "id": "slash",
+            "label": "/",
+            "width": 1,
+            "kind": "text",
+            "value": "/"
+          },
+          {
+            "id": "colon",
+            "label": ":",
+            "width": 1,
+            "kind": "text",
+            "value": ":"
+          },
+          {
+            "id": "semicolon",
+            "label": ";",
+            "width": 1,
+            "kind": "text",
+            "value": ";"
+          },
+          {
+            "id": "paren-left",
+            "label": "(",
+            "width": 1,
+            "kind": "text",
+            "value": "("
+          },
+          {
+            "id": "paren-right",
+            "label": ")",
+            "width": 1,
+            "kind": "text",
+            "value": ")"
+          },
+          {
+            "id": "at",
+            "label": "@",
+            "width": 1,
+            "kind": "text",
+            "value": "@"
+          },
+          {
+            "id": "amp",
+            "label": "&",
+            "width": 1,
+            "kind": "text",
+            "value": "&"
+          },
+          {
+            "id": "percent",
+            "label": "%",
+            "width": 1,
+            "kind": "text",
+            "value": "%"
+          },
+          {
+            "id": "plus",
+            "label": "+",
+            "width": 1,
+            "kind": "text",
+            "value": "+"
+          },
+          {
+            "id": "equals",
+            "label": "=",
+            "width": 1,
+            "kind": "text",
+            "value": "="
+          },
+          {
+            "id": "hash",
+            "label": "#",
+            "width": 1,
+            "kind": "text",
+            "value": "#"
+          }
+        ],
+        [
+          {
+            "id": "shift",
+            "label": "⇧",
+            "width": 1.5,
+            "kind": "action",
+            "value": "shift"
+          },
+          {
+            "id": "asterisk",
+            "label": "*",
+            "width": 1,
+            "kind": "text",
+            "value": "*"
+          },
+          {
+            "id": "underscore",
+            "label": "_",
+            "width": 1,
+            "kind": "text",
+            "value": "_"
+          },
+          {
+            "id": "apostrophe",
+            "label": "'",
+            "width": 1,
+            "kind": "text",
+            "value": "'"
+          },
+          {
+            "id": "dquote",
+            "label": "\"",
+            "width": 1,
+            "kind": "text",
+            "value": "\""
+          },
+          {
+            "id": "dot",
+            "label": ".",
+            "width": 1,
+            "kind": "text",
+            "value": "."
+          },
+          {
+            "id": "comma",
+            "label": ",",
+            "width": 1,
+            "kind": "text",
+            "value": ","
+          },
+          {
+            "id": "question",
+            "label": "?",
+            "width": 1,
+            "kind": "text",
+            "value": "?"
+          },
+          {
+            "id": "exclam",
+            "label": "!",
+            "width": 1,
+            "kind": "text",
+            "value": "!"
+          },
+          {
+            "id": "backspace",
+            "label": "⌫",
+            "width": 1.5,
+            "kind": "action",
+            "value": "backspace"
+          }
+        ],
+        [
+          {
+            "id": "base",
+            "label": "ABC",
+            "width": 1.5,
+            "kind": "action",
+            "value": "layer-base"
+          },
+          {
+            "id": "language",
+            "label": "🌐",
+            "width": 1,
+            "kind": "action",
+            "value": "language"
+          },
+          {
+            "id": "emoji",
+            "label": "😊",
+            "width": 1,
+            "kind": "action",
+            "value": "emoji"
+          },
+          {
+            "id": "space",
+            "label": "Пробел",
+            "width": 5,
+            "kind": "action",
+            "value": "space"
+          },
+          {
+            "id": "cursor-left",
+            "label": "‹",
+            "width": 1,
+            "kind": "action",
+            "value": "cursor-left"
+          },
+          {
+            "id": "cursor-right",
+            "label": "›",
+            "width": 1,
+            "kind": "action",
+            "value": "cursor-right"
+          },
+          {
+            "id": "mic",
+            "label": "🎤",
+            "width": 1,
+            "kind": "action",
+            "value": "mic"
+          },
+          {
+            "id": "enter",
+            "label": "⏎",
+            "width": 1.5,
+            "kind": "action",
+            "value": "enter"
+          }
+        ]
+      ]
+    },
+    "symbolsShift": {
+      "rows": [
+        [
+          {
+            "id": "one",
+            "label": "¹",
+            "width": 1,
+            "kind": "text",
+            "value": "¹"
+          },
+          {
+            "id": "two",
+            "label": "²",
+            "width": 1,
+            "kind": "text",
+            "value": "²"
+          },
+          {
+            "id": "three",
+            "label": "³",
+            "width": 1,
+            "kind": "text",
+            "value": "³"
+          },
+          {
+            "id": "four",
+            "label": "¼",
+            "width": 1,
+            "kind": "text",
+            "value": "¼"
+          },
+          {
+            "id": "five",
+            "label": "½",
+            "width": 1,
+            "kind": "text",
+            "value": "½"
+          },
+          {
+            "id": "six",
+            "label": "¬",
+            "width": 1,
+            "kind": "text",
+            "value": "¬"
+          },
+          {
+            "id": "seven",
+            "label": "\\",
+            "width": 1,
+            "kind": "text",
+            "value": "\\"
+          },
+          {
+            "id": "eight",
+            "label": "[",
+            "width": 1,
+            "kind": "text",
+            "value": "["
+          },
+          {
+            "id": "nine",
+            "label": "]",
+            "width": 1,
+            "kind": "text",
+            "value": "]"
+          },
+          {
+            "id": "zero",
+            "label": "{",
+            "width": 1,
+            "kind": "text",
+            "value": "{"
+          },
+          {
+            "id": "hyphen",
+            "label": "_",
+            "width": 1,
+            "kind": "text",
+            "value": "_"
+          }
+        ],
+        [
+          {
+            "id": "slash",
+            "label": "|",
+            "width": 1,
+            "kind": "text",
+            "value": "|"
+          },
+          {
+            "id": "colon",
+            "label": "°",
+            "width": 1,
+            "kind": "text",
+            "value": "°"
+          },
+          {
+            "id": "semicolon",
+            "label": "§",
+            "width": 1,
+            "kind": "text",
+            "value": "§"
+          },
+          {
+            "id": "paren-left",
+            "label": "<",
+            "width": 1,
+            "kind": "text",
+            "value": "<"
+          },
+          {
+            "id": "paren-right",
+            "label": ">",
+            "width": 1,
+            "kind": "text",
+            "value": ">"
+          },
+          {
+            "id": "at",
+            "label": "€",
+            "width": 1,
+            "kind": "text",
+            "value": "€"
+          },
+          {
+            "id": "amp",
+            "label": "$",
+            "width": 1,
+            "kind": "text",
+            "value": "$"
+          },
+          {
+            "id": "percent",
+            "label": "‰",
+            "width": 1,
+            "kind": "text",
+            "value": "‰"
+          },
+          {
+            "id": "plus",
+            "label": "±",
+            "width": 1,
+            "kind": "text",
+            "value": "±"
+          },
+          {
+            "id": "equals",
+            "label": "×",
+            "width": 1,
+            "kind": "text",
+            "value": "×"
+          },
+          {
+            "id": "hash",
+            "label": "£",
+            "width": 1,
+            "kind": "text",
+            "value": "£"
+          }
+        ],
+        [
+          {
+            "id": "shift",
+            "label": "⇧",
+            "width": 1.5,
+            "kind": "action",
+            "value": "shift"
+          },
+          {
+            "id": "asterisk",
+            "label": "~",
+            "width": 1,
+            "kind": "text",
+            "value": "~"
+          },
+          {
+            "id": "underscore",
+            "label": "}",
+            "width": 1,
+            "kind": "text",
+            "value": "}"
+          },
+          {
+            "id": "apostrophe",
+            "label": "«",
+            "width": 1,
+            "kind": "text",
+            "value": "«"
+          },
+          {
+            "id": "dquote",
+            "label": "»",
+            "width": 1,
+            "kind": "text",
+            "value": "»"
+          },
+          {
+            "id": "dot",
+            "label": "…",
+            "width": 1,
+            "kind": "text",
+            "value": "…"
+          },
+          {
+            "id": "comma",
+            "label": "№",
+            "width": 1,
+            "kind": "text",
+            "value": "№"
+          },
+          {
+            "id": "question",
+            "label": "¿",
+            "width": 1,
+            "kind": "text",
+            "value": "¿"
+          },
+          {
+            "id": "exclam",
+            "label": "–",
+            "width": 1,
+            "kind": "text",
+            "value": "–"
+          },
+          {
+            "id": "backspace",
+            "label": "⌫",
+            "width": 1.5,
+            "kind": "action",
+            "value": "backspace"
+          }
+        ],
+        [
+          {
+            "id": "base",
+            "label": "ABC",
+            "width": 1.5,
+            "kind": "action",
+            "value": "layer-base"
+          },
+          {
+            "id": "language",
+            "label": "🌐",
+            "width": 1,
+            "kind": "action",
+            "value": "language"
+          },
+          {
+            "id": "emoji",
+            "label": "😊",
+            "width": 1,
+            "kind": "action",
+            "value": "emoji"
+          },
+          {
+            "id": "space",
+            "label": "Пробел",
+            "width": 5,
+            "kind": "action",
+            "value": "space"
+          },
+          {
+            "id": "cursor-left",
+            "label": "‹",
+            "width": 1,
+            "kind": "action",
+            "value": "cursor-left"
+          },
+          {
+            "id": "cursor-right",
+            "label": "›",
+            "width": 1,
+            "kind": "action",
+            "value": "cursor-right"
+          },
+          {
+            "id": "mic",
+            "label": "🎤",
+            "width": 1,
+            "kind": "action",
+            "value": "mic"
+          },
+          {
+            "id": "enter",
+            "label": "⏎",
+            "width": 1.5,
+            "kind": "action",
+            "value": "enter"
+          }
+        ]
+      ]
+    }
+  }
+}

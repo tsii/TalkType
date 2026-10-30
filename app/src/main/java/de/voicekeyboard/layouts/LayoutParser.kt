@@ -1,0 +1,204 @@
+package de.voicekeyboard.layouts
+
+import org.json.JSONArray
+import org.json.JSONException
+import org.json.JSONObject
+
+/**
+ * Strikte, validaingsfreie (keine zusätzlichen Felder) Validierung gemäß DESIGN.md 7.2.
+ * Nutzt org.json (auf Android und via Robolectric auf der JVM verfügbar).
+ */
+object LayoutParser {
+
+    data class Result(val asset: LayoutAsset)
+
+    class LayoutException(message: String) : Exception(message)
+
+    fun parse(json: String): LayoutAsset {
+        val root = try {
+            JSONObject(json)
+        } catch (e: JSONException) {
+            throw LayoutException("Kein gültiges JSON: ${e.message}")
+        }
+        if (root.opt("schemaVersion") !is Int) {
+            throw LayoutException("schemaVersion fehlt oder ist keine Zahl")
+        }
+        val schemaVersion = root.getInt("schemaVersion")
+        if (schemaVersion != 1) {
+            throw LayoutException("Unbekannte schemaVersion: $schemaVersion (erwartet 1)")
+        }
+        requireString(root, "id")
+        val id = root.getString("id")
+        if (!Regex("^[a-z0-9-]+$").matches(id)) {
+            throw LayoutException("id '$id' entspricht nicht ^[a-z0-9-]+\$")
+        }
+        val language = parseLanguage(root.getJSONObjectOrThrow("language"))
+
+        if (!root.has("layers")) throw LayoutException("layers fehlt")
+        val layersObj = root.getJSONObject("layers")
+        val known = layerKeys(layersObj)
+        for (name in LayoutLayers.REQUIRED) {
+            if (!known.contains(name)) {
+                throw LayoutException("Ebene '$name' fehlt in layers")
+            }
+        }
+        if (known != LayoutLayers.REQUIRED.toSet()) {
+            throw LayoutException("Unbekannte Ebenen: ${(known - LayoutLayers.REQUIRED.toSet()).sorted()}")
+        }
+        val layers = LayoutLayers.REQUIRED.associateWith { name ->
+            parseLayer(name, layersObj.getJSONObject(name))
+        }
+
+        val deadKeys = parseDeadKeys(root.optJSONObject("deadKeys") ?: JSONObject())
+
+        validateSemantics(id, layers, deadKeys)
+        return LayoutAsset(1, id, language, layers, deadKeys)
+    }
+
+    private fun layerKeys(obj: JSONObject): Set<String> =
+        obj.keys().asSequence().toList().toSet()
+
+    private fun parseLanguage(obj: JSONObject): LayoutLanguage {
+        val allowed = setOf("tag", "label", "caseLocale", "direction")
+        rejectUnknown(obj, allowed, "language")
+        for (f in listOf("tag", "label", "caseLocale", "direction")) requireString(obj, f)
+        val direction = obj.getString("direction")
+        if (direction != "ltr" && direction != "rtl") {
+            throw LayoutException("direction '$direction' ist nicht ltr/rtl")
+        }
+        val tag = obj.getString("tag")
+        if (!Regex("^[a-zA-Z]{2,3}(-[a-zA-Z0-9]{2,8})*$").matches(tag)) {
+            throw LayoutException("language.tag '$tag' ist keine gültige BCP-47-Kennung")
+        }
+        return LayoutLanguage(tag, obj.getString("label"), obj.getString("caseLocale"), direction)
+    }
+
+    private fun parseLayer(name: String, obj: JSONObject): LayoutLayer {
+        rejectUnknown(obj, setOf("rows"), "layers.$name")
+        if (!obj.has("rows")) throw LayoutException("layers.$name.rows fehlt")
+        val rowsArr = obj.getJSONArray("rows")
+        if (rowsArr.length() == 0) throw LayoutException("layers.$name.rows ist leer")
+        val rows = mutableListOf<List<LayoutKey>>()
+        val ids = mutableSetOf<String>()
+        for (r in 0 until rowsArr.length()) {
+            val rowArr = rowsArr.getJSONArray(r)
+            if (rowArr.length() == 0) throw LayoutException("layers.$name.rows[$r] ist leer")
+            val row = mutableListOf<LayoutKey>()
+            for (k in 0 until rowArr.length()) {
+                val key = parseKey("$name.rows[$r][$k]", rowArr.getJSONObject(k))
+                if (!ids.add(key.id)) {
+                    throw LayoutException("Doppelte Tasten-ID '${key.id}' in Ebene '$name'")
+                }
+                row.add(key)
+            }
+            rows.add(row)
+        }
+        return LayoutLayer(name, rows)
+    }
+
+    private fun parseKey(path: String, obj: JSONObject): LayoutKey {
+        val allowed = setOf("id", "label", "width", "kind", "value", "caps", "alternates")
+        rejectUnknown(obj, allowed, path)
+        for (f in listOf("id", "label", "kind", "value")) requireString(obj, f, path)
+        if (!obj.has("width")) throw LayoutException("$path.width fehlt")
+        val width = obj.getDouble("width")
+        if (width <= 0.0) throw LayoutException("$path.width muss > 0 sein (ist $width)")
+        val kindStr = obj.getString("kind")
+        val kind = when (kindStr) {
+            "text" -> KeyKind.TEXT
+            "action" -> KeyKind.ACTION
+            "dead" -> KeyKind.DEAD
+            else -> throw LayoutException("$path.kind '$kindStr' ist unbekannt (text/action/dead)")
+        }
+        val value = obj.getString("value")
+        if (kind == KeyKind.ACTION && value !in KeyActions.ALL) {
+            throw LayoutException("$path: unbekannte Aktion '$value' (Allowlist: ${KeyActions.ALL.sorted()})")
+        }
+        val caps = if (obj.has("caps")) obj.getString("caps") else null
+        val alternates = if (obj.has("alternates")) {
+            val arr = obj.getJSONArray("alternates")
+            (0 until arr.length()).map { arr.getString(it) }
+        } else emptyList()
+        return LayoutKey(obj.getString("id"), obj.getString("label"), width, kind, value, caps, alternates)
+    }
+
+    private fun parseDeadKeys(obj: JSONObject): Map<String, DeadKey> {
+        val out = mutableMapOf<String, DeadKey>()
+        for (id in obj.keys().asSequence().toList()) {
+            val entry = obj.getJSONObject(id)
+            rejectUnknown(entry, setOf("spacing", "combining", "compose"), "deadKeys.$id")
+            if (!entry.has("spacing")) throw LayoutException("deadKeys.$id.spacing fehlt")
+            val compose = mutableMapOf<String, String>()
+            if (entry.has("compose")) {
+                val c = entry.getJSONObject("compose")
+                for (base in c.keys().asSequence().toList()) compose[base] = c.getString(base)
+            }
+            out[id] = DeadKey(
+                id,
+                entry.getString("spacing"),
+                if (entry.has("combining")) entry.getString("combining") else null,
+                compose,
+            )
+        }
+        return out
+    }
+
+    /**
+     * Semantik: Zeilensummen über alle Ebenen identisch je Zeilenindex, und
+     * Text-Keys der base-Ebene haben Shift-Gegenstücke (gleiche ID in shift-Ebene).
+     */
+    private fun validateSemantics(id: String, layers: Map<String, LayoutLayer>, deadKeys: Map<String, DeadKey>) {
+        // Zeilenanzahl und Breitensummen gelten paarweise (Schema: base/shift gleich,
+        // symbols/symbolsShift gleich — Symbolebenen dürfen eine andere Zeilenzahl und
+        // Breitenaufteilung haben als die Buchstaben, z. B. AZERTY-Varianten).
+        for ((a, b) in listOf("shift" to "base", "symbolsShift" to "symbols")) {
+            val la = layers.getValue(a)
+            val lb = layers.getValue(b)
+            if (la.rows.size != lb.rows.size) {
+                throw LayoutException(
+                    "Ebene '$a' hat ${la.rows.size} Zeilen, '$b' hat ${lb.rows.size}",
+                )
+            }
+            for (r in lb.rows.indices) {
+                val sumA = la.rows[r].sumOf { it.width }
+                val sumB = lb.rows[r].sumOf { it.width }
+                if (kotlin.math.abs(sumA - sumB) > 1e-9) {
+                    throw LayoutException(
+                        "Zeilensumme Abweichung: Ebene '$a', Zeile $r: $sumA != $sumB (Ebene '$b')",
+                    )
+                }
+            }
+        }
+        // Text-Keys in base brauchen Shift-Gegenstück mit gleicher ID.
+        val shiftIds = layers.getValue("shift").rows.flatten().map { it.id }.toSet()
+        for (key in layers.getValue("base").rows.flatten()) {
+            if (key.kind == KeyKind.TEXT && key.id !in shiftIds) {
+                throw LayoutException("Text-Taste '${key.id}' in base hat kein Shift-Gegenstück in Ebene 'shift'")
+            }
+        }
+        // Dead-Referenzen müssen auflösbar sein.
+        for (layer in layers.values) {
+            for (row in layer.rows) for (key in row) {
+                if (key.kind == KeyKind.DEAD && key.value !in deadKeys) {
+                    throw LayoutException("Deadkey '${key.value}' (Taste '${key.id}') nicht in deadKeys definiert")
+                }
+            }
+        }
+    }
+
+    private fun requireString(obj: JSONObject, field: String, path: String = field) {
+        if (!obj.has(field)) throw LayoutException("$path fehlt")
+    }
+
+    private fun rejectUnknown(obj: JSONObject, allowed: Set<String>, path: String) {
+        val unknown = obj.keys().asSequence().toList().filter { it !in allowed }
+        if (unknown.isNotEmpty()) {
+            throw LayoutException("Unbekannte Felder in $path: $unknown (erlaubt: ${allowed.sorted()})")
+        }
+    }
+
+    private fun JSONObject.getJSONObjectOrThrow(name: String): JSONObject {
+        if (!has(name)) throw LayoutException("$name fehlt")
+        return getJSONObject(name)
+    }
+}

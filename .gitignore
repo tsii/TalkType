@@ -1,9 +1,27 @@
-.venv-asr/
-.models/
-testdata/*.wav
-build/
 .gradle/
+build/
 local.properties
-*.apk
-*.aab
+keystore.properties
+.models/
+
+# Geraet- und Build-Artefakte (gehoeren nicht in ein Oeffentliches Repo)
+dist/
+.kotlin/
+.ruff_cache/
+
+# Signierschluessel — auf keinen Fall versionieren
 keystore/
+
+# Modell-Varianten und Python-Umgebung (GB-Bereich)
+.models-fp16/
+.models-fp32/
+.venv-asr/
+
+# Recognizetest-Audio (Enthaelt Sprachinhalte, Regel 9)
+testdata/
+
+# Crash-Kernabbild eines Emulator-Laufs (113 MB, nur lokal diagnostisch)
+core
+
+# Lokale Betriebsnotizen: enth\u00E4lt Komprimierungs-Snapshots der Unterhaltung
+state/

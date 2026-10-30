@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- E2 (SETUP_UI_DECISIONS.md): INTERNET + ACCESS_NETWORK_STATE stehen dauerhaft
+         im Manifest — der einzige Netzwerkzugriff ist der einmalige Modelldownload
+         (ORT-AAR fügt beide ohnehin ein). Der appinterne Netzwerk-Schalter verhindert
+         Requests nach dem Setup; die Telemetry-Provider-Entfernung (unten) BLEIBT. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+    <!-- Audio-Erfassung (Stufe 4): RECORD_AUDIO für die Aufnahme,
+         FOREGROUND_SERVICE(_MICROPHONE) für den FGS-Typ microphone
+         (TECH_FACTS §4.1: Dicke Pflicht ab targetSdk 34),
+         POST_NOTIFICATIONS für die sichtbare Aufnahme-Indikation (API 33+). -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!-- E1: dataSync-FGS für den 671-MB-Modelldownload (6-h/24-h-Limit,
+         onTimeout im Service behandelt). Nur Modelldownload, kein anderer Transfer. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+
+    <application
+        android:label="Voice Keyboard"
+        android:icon="@mipmap/ic_launcher"
+        android:theme="@style/Theme.VoiceKeyboard"
+        android:allowBackup="false">
+
+        <!-- SB1-07: ORT-AAR-Telemetry-Provider per Manifest-Merger entfernen
+             (TECH_FACTS.md §3 Konzept 3) — muss Kind von <application> sein. -->
+        <provider
+            android:name="ai.onnxruntime.TelemetryInitializer"
+            tools:node="remove" />
+
+        <activity
+            android:name=".ime.SetupActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <service
+            android:name=".ime.VoiceKeyboardService"
+            android:exported="true"
+            android:label="Voice Keyboard"
+            android:permission="android.permission.BIND_INPUT_METHOD">
+            <intent-filter>
+                <action android:name="android.view.InputMethod" />
+            </intent-filter>
+            <meta-data
+                android:name="android.view.im"
+                android:resource="@xml/method" />
+        </service>
+        <service
+            android:name=".capture.CaptureForegroundService"
+            android:exported="false"
+            android:foregroundServiceType="microphone" />
+
+        <service
+            android:name=".model.ModelDownloadService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
+    </application>
+</manifest>

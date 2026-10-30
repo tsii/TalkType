@@ -40,9 +40,15 @@
     <string name="dictation_error_permission_mic">Mikrofonfreigabe nötig – ohne sie kann nicht diktiert werden</string>
     <string name="dictation_error_permission_settings">Berechtigung nötig – in den Systemeinstellungen aktivieren</string>
     <string name="dictation_starting">Starte Aufnahme…</string>
+    <!-- F13a: Start-Frist abgelaufen (B1/A1) — Nutzer erhält eine Handlungsoption,
+         statt dass die Statuszeile einfriert. Regel 9/10: kein Pfad, kein Inhalt. -->
+    <string name="dictation_start_too_long">Start dauert zu lange – erneut versuchen.</string>
     <!-- D10-Rest §2: stumme Leerausgabe verhindern — Erklärung statt Ratlosigkeit.
          Regel 9: kein Pfad, kein Audio-/Textinhalt, nur die Aufforderung. -->
     <string name="dictation_no_text">Kein Text erkannt. Bitte erneut versuchen.</string>
+    <!-- F13d/e: Editor-Sync-Timeout — Ziel-App/Editor blockiert, NICHT der
+         Audiostart. Regel 9: kein Inhalt, kein Pfad, keine URL. -->
+    <string name="dictation_error_editor_busy">App reagiert gerade nicht – bitte erneut versuchen.</string>
     <string name="dictation_error_model_absent">Modell nicht geladen – Setup öffnen</string>
     <string name="dictation_error_model_broken">Modelldatei defekt – neu herunterladen</string>
     <string name="dictation_error_bt_lost">Bluetooth-Mikrofon getrennt</string>

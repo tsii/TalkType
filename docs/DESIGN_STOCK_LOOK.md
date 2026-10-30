@@ -236,3 +236,35 @@ halb entfernt, Diagnose verschwinden lässt oder eine heutige Taste für Stock-�
 Hell/Dunkel-/Zweitöffnungs-Screenshots auf dem Gerät; echte 48-dp-Quadrate sind nicht nachgewiesen.
 **VERIFIKATION:** Nur lesende lokale/Original-AOSP-Quellenprüfung und dieses neue Dokument;
 keine Builds, kein adb, keine parallelen Quell-/Assetdateien geändert.
+
+## D11 — Rueckmeldung gedrückte Taste (entschieden 2026-10-30)
+
+Dieser Nachtrag ersetzt die schwache Press-Deckkraft und die reine Caps-Glyphen-
+Rückmeldung aus §1; sonst bleiben Palette, Geometrie und Bedienlogik unverändert.
+Der übergebene Emulatorbefund (27/255 hell, 21/255 dunkel) trägt die Entscheidung;
+hier wurden weder neue Screenshots gemessen noch Kotlin-Dateien geändert.
+
+| Punkt | Verbindlicher Entscheid | Begründung |
+|---|---|---|
+| **1. Gedrückte Fläche** | **Ja, deutlich sichtbarer:** Hell Alpha **0x66** (40 %), Overlay **#6637474F** über **#FFECEFF1**; Dunkel Alpha **0x4D** (rund 30 %), Overlay **#4DFFFFFF** über **#FF263238**. Weiter SrcOver-Komposition zu einer deckenden Fläche; vorhandene Textfarben bleiben. | Dieselben vorhandenen RGB-Farben, nur höhere Deckkraft: das verbessert die erkennbare Druckreaktion, ohne die flache Stock-Anmutung durch Rahmen, Schatten, Rundungen oder neue Farbfamilien zu verlassen. |
+| **2. Buchstaben-Popup** | **Bewusst kein Popup** in diesem Änderungsumfang, auch kein erzwungenes Großbuchstaben-Preview. | Der stärkere Tastendruckzustand liefert die unmittelbare Rückmeldung; ein Popup der obersten Reihe könnte die Diagnose-/Infoleiste verdecken und verlangte zusätzliche Positionierungs-/Clippinglogik, deren Ungefährlichkeit bei unseren schwankenden Höhen nicht belegt ist. |
+| **3. Caps-Zustand** | **Die aktuelle reine Glyphenfärbung reicht nicht:** Bei tatsächlich eingerastetem **capsLock** wird die Shift-Tastenfläche dauerhaft mit dem vorhandenen **accent** gefüllt: Hell **#FF4DB6AC**, Dunkel **#FF80CBC4**; dazu die bereits vorhandene kontrastierende **micRecordingGlyph**-Farbe, Hell **#FF37474F**, Dunkel **#FF263238**. Der **⇪**-Caps-Marker bleibt. | Eine gefüllte bestehende Rechteckfläche mit kontrastierender Glyphe unterscheidet Caps klar vom kurzen Shift-Zustand; vorhandene Akzent-/Gegenfarben verhindern zugleich Akzent-auf-Akzent, ohne neuen Pfeilpfad, Custom-Form oder zusätzliche Farben. |
+
+Die Press-Alphas sind eine **bewusste projektspezifische Verstärkung** der zuvor
+belegten AOSP-LXX-Werte 0x26/0x19, keine Behauptung, AOSP Android 16 verwende diese
+neuen Werte exakt. Der Gboard-Vergleich ist eine Wahrnehmbarkeitsreferenz, kein
+Wechsel unseres visuellen Referenzprodukts.
+
+Caps-Füllung wird ausschließlich aus dem echten Caps-Zustand abgeleitet, nicht aus
+„letzte Eingabe war groß“: Shift+q→A allein beweist keinen eingerasteten CapsLock.
+Temporäres Shift bleibt wie bisher akzentuiert; symbolsShift ist kein Caps-Zustand.
+Gedrückt+Caps behält diese Akzentfüllung mit Gegenfarbe, ohne zusätzlichen Overlayauftrag;
+nach Loslassen bleibt sie bei Caps erhalten, nach Deaktivieren verschwindet sie. Keine Änderung an
+Doppeltipp, Eingabetext, Touchflächen oder Mic-Aufnahmepriorität.
+
+**Abnahme für GLM:** Hell/Dunkel jeweils normal/gedrückt und Caps an/aus aus derselben
+APK vergleichen: klar sichtbare flächige Druckreaktion ohne Rahmen/Schatten, kein
+Popup über der Leiste, Caps-Füllung bleibt nach UP und verschwindet nach Abschalten.
+Keine eingegebenen Inhalte in Diagnose-/Logtexten. Umsetzung klein halten: zwei
+Overlay-Alphas und zustandsabhängige Wiederverwendung vorhandener Akzent-/Gegenfarben;
+kein neuer Theme-/Window-/Layoutmechanismus. Gerätebeweis steht noch aus.

@@ -130,6 +130,23 @@ class VoiceKeyboardService : InputMethodService(), KeyboardView.Listener {
         private const val TAG = "VK-IME"
         private const val MODEL_DIR_NAME = "models"
         private const val REQUEST_DICTATION_PERMISSIONS = 4101
+
+        /**
+         * F13a/A1: Start-Frist (Watchdog). Encoder-Ladung dauert Sekunden; der
+         * Freeze-Bericht nennt 10–15 s — danach gilt der Start als gescheitert,
+         * die Statuszeile erhält die Frist-Meldung und startingUp wird frei.
+         */
+        private const val START_DEADLINE_MS = 15_000L
+
+        /**
+         * F13e: PURE Abbildung Fehlercode → String-Schlüssel (R-Konstante,
+         * JVM-testbar ohne Android-Runtime — siehe ConsumerFaultTest).
+         * null = unbekannt ⇒ generischer Fallback in mapVisibleError.
+         */
+        internal fun mapErrorTextRes(raw: String): Int? = when {
+            raw.startsWith("editor_sync_timeout") -> R.string.dictation_error_editor_busy
+            else -> null
+        }
         private const val PERMISSION_PREFS = "vk_permissions"
         private const val PERMISSION_DENIED_FOREVER_PREFIX = "denied_forever_"
 
@@ -151,6 +168,29 @@ class VoiceKeyboardService : InputMethodService(), KeyboardView.Listener {
 
     /** R-2: blockierende Meldung bleibt bis zur nächsten bewussten Aktion stehen. */
     @Volatile private var stickyError: String? = null
+
+    /**
+     * F13a/B1: TRANSIENTER Statustext (Startmeldung) — strikt getrennt vom
+     * stickyError; nie sticky, überholt bei RECORDING/FINALIZING/neuerem Fehler.
+     */
+    @Volatile private var transientStatus: String? = null
+
+    /** Zeitstempel des transienten Textes für die Klärheitsregel — elapsedRealtime
+     *  (monoton INKL. Deep-Sleep; uptimeMillis pausiert im Deep-Sleep und würde
+     *  die 15-s-Startfrist und den Klärheitsvergleich aufweichen, Review F13c P2). */
+    @Volatile private var transientSetAtMs: Long = 0L
+
+    /** Zeitstempel des zuletzt beobachteten FEHLERS (sticky/visible) — Klärheitsregel. */
+    @Volatile private var lastErrorSeenAtMs: Long = 0L
+
+    /** F13a: Nachschlage-Frist für den asynchronen Start (Watchdog-Coroutine, kein Thread). */
+    private var startDeadlineJob: kotlinx.coroutines.Job? = null
+
+    /** True, wenn die Start-Frist abgelaufen ist, bevor der Start fertig wurde. */
+    @Volatile private var startAbandoned = false
+
+    /** F13a: Einmal-Flag „abgeschlossener Erfolg" für R-2b (setzt onDictationStopped). */
+    @Volatile private var successJustFinished = false
 
     /**
      * F11 P1: Der Start laeuft jetzt im `serviceScope`, weil `engine.load()`
@@ -219,7 +259,7 @@ class VoiceKeyboardService : InputMethodService(), KeyboardView.Listener {
                 // der Rueckbutton wird nie deaktiviert.
                 val c = coordinator
                 if (c != null && c.state != de.voicekeyboard.dictation.DictationState.IDLE) {
-                    updateStatus(getString(R.string.emoji_blocked_recording))
+                    postEvent(StatusEvent.Hint(getString(R.string.emoji_blocked_recording)))
                     return
                 }
                 onTextInput(emoji) // bestehender Schreibweg: ic.commitText(text, 1)
@@ -341,6 +381,10 @@ class VoiceKeyboardService : InputMethodService(), KeyboardView.Listener {
             }
         }
         stickyError = null // R-2: bewusste neue Aktion löscht die blockierende Meldung
+        lastErrorSeenAtMs = 0L // F13a: Klärheits-Zeitstempel je Session neu
+        transientStatus = null
+        transientSetAtMs = 0L
+        successJustFinished = false
         outputCounter.reset() // D10-Rest §3: Urteil je Aufnahme (F12: nie nachwirkend)
         if (!ensurePermissions()) return
         // C-2: Modell muss bereit sein, BEVOR FGS/Coordinator starten — kein
@@ -350,7 +394,7 @@ class VoiceKeyboardService : InputMethodService(), KeyboardView.Listener {
         val modelDirFile = java.io.File(filesDir, MODEL_DIR_NAME)
         val store = de.voicekeyboard.model.ModelStore(modelDirFile)
         if (!store.isReadyQuick()) {
-            updateStatus(getString(R.string.dictation_error_model_absent))
+            postEvent(StatusEvent.Error(getString(R.string.dictation_error_model_absent)))
             Log.i(TAG, "model not ready; status=${store.statusQuick()}")
             return
         }
@@ -358,53 +402,101 @@ class VoiceKeyboardService : InputMethodService(), KeyboardView.Listener {
         // F11 P1: engine.load() laedt den ~652-MB-Encoder nativ und lief bisher
         // synchron im Touch-Listener (dieselbe ANR-Klasse wie der ModelStore-Hash).
         // Der Start arbeitet im serviceScope, die UI-Arbeit danach auf dem Main-Thread.
-        updateStatus(getString(R.string.dictation_starting))
+        // F13a/B1: Die Startmeldung ist TRANSIENT — sie landet NICHT im stickyError
+        // und verdeckt damit keine späteren Fehler/Zustände mehr.
+        postEvent(StatusEvent.Starting(getString(R.string.dictation_starting)))
         startingUp = true
+        startAbandoned = false
+        // F13a: kooperative Start-Frist als Nachschlagetimer (Coroutine, kein Thread,
+        // blockiert nichts): läuft der Start nach der Frist noch, Meldung anzeigen
+        // und startingUp freigeben, damit der nächste Mic-Druck wieder funktioniert.
+        startDeadlineJob?.cancel()
+        startDeadlineJob = serviceScope.launch {
+            kotlinx.coroutines.delay(START_DEADLINE_MS)
+            kotlinx.coroutines.withContext(Dispatchers.Main) {
+                if (startingUp) {
+                    startingUp = false
+                    startAbandoned = true
+                    cancelStartRequested = false
+                    cancelStartIsAbort = false
+                    transientStatus = null
+                    transientSetAtMs = 0L
+                    postEvent(StatusEvent.Error(getString(R.string.dictation_start_too_long)))
+                }
+            }
+        }
         serviceScope.launch {
             var started = false
             var outOfMemory = false
             var thrown: Exception? = null
-            try { // C-5: Audio-/Init-Wuerfe nie an den TouchListener durchreichen
-                if (coordinator == null) {
-                    coordinator = buildCoordinator()
-                }
-                started = coordinator?.start() ?: false
-            } catch (e: OutOfMemoryError) {
-                // A2/E5 (g): OOM ist ein Error — catch(Exception) sieht ihn nicht.
-                outOfMemory = true
-                Log.w(TAG, "start failed: OutOfMemoryError")
-            } catch (e: Exception) {
-                // S5-3/E5: Rohcode NUR ins Log, in der UI Nutzertext
-                thrown = e
-                Log.i(TAG, "start failed: ${e.javaClass.simpleName}") // nur Klasse, kein Text
-            }
-            withContext(Dispatchers.Main) {
-                startingUp = false
-                val wantedStop = cancelStartRequested
-                val wantedAbort = cancelStartIsAbort
-                cancelStartRequested = false
-                cancelStartIsAbort = false
-                if (started) {
-                    if (wantedStop) {
-                        // D10-Rest §1: nachgereichtes Loslassen — CANCEL = Abbruch
-                        // ohne Finale, UP = Stop mit Finale.
-                        if (wantedAbort) abortDictation() else stopDictationIfRunning()
-                    } else {
-                        rootView?.keyboardView?.micRecording = true // D10-Rest §2: Aufnahmezustand
+            try {
+                try { // C-5: Audio-/Init-Wuerfe nie an den TouchListener durchreichen
+                    if (coordinator == null) {
+                        coordinator = buildCoordinator()
                     }
-                    updateStatus()
-                    return@withContext
+                    started = coordinator?.start() ?: false
+                } catch (e: OutOfMemoryError) {
+                    // A2/E5 (g): OOM ist ein Error — catch(Exception) sieht ihn nicht.
+                    outOfMemory = true
+                    Log.w(TAG, "start failed: OutOfMemoryError")
+                } catch (e: Exception) {
+                    // S5-3/E5: Rohcode NUR ins Log, in der UI Nutzertext
+                    thrown = e
+                    Log.i(TAG, "start failed: ${e.javaClass.simpleName}") // nur Klasse, kein Text
                 }
-                stopFgs() // FGS-Leak verhindern
-                rootView?.keyboardView?.micRecording = false
-                updateStatus(
-                    when {
-                        outOfMemory -> getString(R.string.dictation_error_out_of_memory)
-                        thrown != null -> startErrorText(store, thrown!!)
-                        // P1 (Review F6): echter Grund statt pauschal „Audio-Start“
-                        else -> mapVisibleError(coordinator?.visibleError ?: "unknown")
-                    },
-                )
+                withContext(Dispatchers.Main) {
+                    startingUp = false
+                    val wantedStop = cancelStartRequested
+                    val wantedAbort = cancelStartIsAbort
+                    cancelStartRequested = false
+                    cancelStartIsAbort = false
+                    val abandoned = startAbandoned
+                    startAbandoned = false
+                    if (abandoned) {
+                        // F13a: Die Frist ist abgelaufen — der verspätete Start wird
+                        // NICHT zum Zombie-Diktat; FGS sauber abgebaut.
+                        if (started) {
+                            coordinator?.abort()
+                            rootView?.keyboardView?.micRecording = false
+                        }
+                        stopFgs()
+                        return@withContext // Statuszeile zeigt bereits die Frist-Meldung
+                    }
+                    if (started) {
+                        if (wantedStop) {
+                            // D10-Rest §1: nachgereichtes Loslassen — CANCEL = Abbruch
+                            // ohne Finale, UP = Stop mit Finale.
+                            if (wantedAbort) abortDictation() else stopDictationIfRunning()
+                        } else {
+                            rootView?.keyboardView?.micRecording = true // D10-Rest §2: Aufnahmezustand
+                        }
+                        updateStatus()
+                        return@withContext
+                    }
+                    stopFgs() // FGS-Leak verhindern
+                    rootView?.keyboardView?.micRecording = false
+                    updateStatus(
+                        when {
+                            outOfMemory -> getString(R.string.dictation_error_out_of_memory)
+                            thrown != null -> startErrorText(store, thrown!!)
+                            // P1 (Review F6): echter Grund statt pauschal „Audio-Start“
+                            else -> mapVisibleError(coordinator?.visibleError ?: "unknown")
+                        },
+                    )
+                }
+            } finally {
+                // F13a/A1: startingUp darf NIE haften bleiben — auch nicht bei einem
+                // Error ausserhalb der gefangenen Klassen oder bei Cancellation.
+                // UI-Flags auf Main; kein Blockieren (withContext, kein runBlocking).
+                kotlinx.coroutines.withContext(Dispatchers.Main) {
+                    startDeadlineJob?.cancel()
+                    if (startingUp) {
+                        startingUp = false
+                        startAbandoned = false
+                        cancelStartRequested = false
+                        cancelStartIsAbort = false
+                    }
+                }
             }
         }
     }
@@ -468,7 +560,7 @@ class VoiceKeyboardService : InputMethodService(), KeyboardView.Listener {
         // Regel 9: der Exporttext wird NIE geloggt — nur Format/Status.
         val text = de.voicekeyboard.debug.DebugInfoFormatter.format(snapshot)
         collector.export(text)
-        updateStatus("Diagnose kopiert — Teilen-Dialog geöffnet") // T17: kein res-Rückbau (4-Dateien-Grenze)
+        postEvent(StatusEvent.Hint("Diagnose kopiert — Teilen-Dialog geöffnet")) // F13c: Hinweis, transient
     }
 
     private fun stopDictationIfRunning() {
@@ -479,7 +571,16 @@ class VoiceKeyboardService : InputMethodService(), KeyboardView.Listener {
             finalResultExpected = true // D10-Rest: Finale erwartet → Toast/Häkchen bewerten
             c.stop() // Final-Decode bis fertig, drain (Coordinator-M4c-1)
         } else {
-            c.abort()
+            // F13b/C1: Loslassen über einer STILL GESCHEITERTEN Session (state von
+            // fail() bereits IDLE) — der Fehlercode VOR abort() sichern (abort
+            // überschreibt lastErrorCode mit "aborted"), sticky anzeigen.
+            if (c.failedThisSession) {
+                val code = c.visibleError
+                c.abort()
+                stickyError = code?.let { mapVisibleError(it) }
+            } else {
+                c.abort()
+            }
         }
         rootView?.keyboardView?.micRecording = false // D10-Rest §2: Zustandsfläche frei
         stopFgs()
@@ -552,10 +653,28 @@ class VoiceKeyboardService : InputMethodService(), KeyboardView.Listener {
      */
     private fun onDictationStopped() {
         rootView?.keyboardView?.micRecording = false
+        val c = coordinator
         val hadOutput = outputCounter.hasOutput
+        // F13d/P2-1: Die Bewertung liest NUR den StopOutcome-SNAPSHOT (im Worker
+        // direkt nach controller.stop() gebündelt) — NIE den Live-Controller-
+        // Zustand, denn ein sofortiger neuer start() nullt failedThisSession/
+        // lastErrorCode und würde Sitzung A mit Zustand von Sitzung B beurteilen.
+        val outcome = c?.lastStopOutcome
+        val finalError = (outcome as? de.voicekeyboard.dictation.StopOutcome.FinalRan)?.finalError
+        val failedWith = (outcome as? de.voicekeyboard.dictation.StopOutcome.FinalRan)?.failedWith == true
+        val noFinalCode = (outcome as? de.voicekeyboard.dictation.StopOutcome.NoFinal)?.errorCode
+        val cleanSuccess = outcome is de.voicekeyboard.dictation.StopOutcome.FinalRan &&
+            finalError == null && !failedWith
         if (finalResultExpected) {
-            if (hadOutput) {
+            if (!cleanSuccess) {
+                // Grund aus dem SNAPSHOT — bestehende Fehlermeldung, sticky (R-2).
+                val code = noFinalCode ?: finalError ?: "unknown"
+                stickyError = mapVisibleError(code)
+                updateStatus()
+            } else if (hadOutput) {
                 rootView?.keyboardView?.showMicCheck()
+                successJustFinished = true // F13a/R-2b: Erfolg darf stickyError lösen
+                updateStatus()
             } else {
                 toast(getString(R.string.dictation_no_text))
             }
@@ -648,7 +767,7 @@ class VoiceKeyboardService : InputMethodService(), KeyboardView.Listener {
                     this, REQUEST_DICTATION_PERMISSIONS, intent,
                     android.app.PendingIntent.FLAG_IMMUTABLE,
                 ).send()
-                updateStatus(getString(R.string.dictation_error_permission_mic))
+                postEvent(StatusEvent.Error(getString(R.string.dictation_error_permission_mic)))
                 false
             }
             is DictationPermissions.Decision.PermanentlyDenied -> {
@@ -663,7 +782,7 @@ class VoiceKeyboardService : InputMethodService(), KeyboardView.Listener {
                 } catch (e: Exception) {
                     Log.i(TAG, "settings intent failed: ${e.javaClass.simpleName}")
                 }
-                updateStatus(getString(R.string.dictation_error_permission_settings))
+                postEvent(StatusEvent.Error(getString(R.string.dictation_error_permission_settings)))
                 false
             }
         }
@@ -698,6 +817,9 @@ class VoiceKeyboardService : InputMethodService(), KeyboardView.Listener {
      *  Nur technisch Trennbares wird unterschieden; alles andere → audio_start. */
     private fun mapVisibleError(raw: String): String {
         Log.w(TAG, "visibleError=$raw") // Rohcode nur ins Log
+        // F13e: Editor-Sync-Timeout hat einen EIGENEN Text (Ziel-App blockiert),
+        // nicht den falschen „Audio-Start“-Fallback. Reine Abbildung s. unten.
+        mapErrorTextRes(raw)?.let { return getString(it) }
         return when {
             raw.startsWith("audioInit:SecurityException") ||
                 raw.startsWith("permission") -> getString(R.string.dictation_error_permission)
@@ -740,6 +862,26 @@ class VoiceKeyboardService : InputMethodService(), KeyboardView.Listener {
     /** Main-Handler fuer Status-Meldungen aus Worker-Kontext (F9 P0, Guertel+Traeger). */
     private val mainHandler = android.os.Handler(android.os.Looper.getMainLooper())
 
+    /**
+     * F13c/P2-3: Verdrahtungsnaht — JEDER Statusanlass des Service geht über
+     * [StatusRouting.route] (reine Tabelle, fixiert in StatusRoutingTest):
+     * Starting/Hint → transienter Kanal, Error → Sticky-Kanal. B1 (Starttext
+     * wurde sticky) war genau dieser Nahtfehler und kann jetzt nicht mehr
+     * unbemerkt zurückkommen — ein Rückfall macht den Routing-Test rot.
+     */
+    private fun postEvent(event: StatusEvent) {
+        when (StatusRouting.route(event)) {
+            StatusChannel.TRANSIENT -> {
+                // Anzeige bis zum nächsten updateStatus (überholt bei Recording/
+                // Finalizing/neuerem Fehler) — setzt KEIN stickyError.
+                transientStatus = event.text
+                transientSetAtMs = android.os.SystemClock.elapsedRealtime()
+                updateStatus()
+            }
+            StatusChannel.STICKY -> updateStatus(event.text) // R-2: sticky bis nächste Aktion
+        }
+    }
+
     private fun updateStatus(extra: String? = null) {
         // F9 P0: View-Zugriff ist main-gebunden. Jeder Callback des Coordinators oder
         // des Routers darf von einem Worker kommen - hier landet der Hop nach Main.
@@ -747,20 +889,28 @@ class VoiceKeyboardService : InputMethodService(), KeyboardView.Listener {
             mainHandler.post { updateStatus(extra) }
             return
         }
-        if (extra != null) stickyError = extra // R-2: sticky bis nächste Aktion
         val view = rootView ?: return
         val c = coordinator
-        val text = buildString {
-            when {
-                // R-2: blockierende Meldung (extra) bleibt STICKY — reines Loslassen
-                // (onMicUp) setzt sie nicht zurück; erst ein neuer Mic-Down oder ein
-                // Erfolg überschreibt. onMicUp ruft updateStatus() nur OHNE extra auf
-                // und sieht stickyError zuerst.
-                extra != null -> append(extra)
-                stickyError != null -> append(stickyError)
-                // N-4: visibleError (Audio- UND ASR-Fehler) statt lastError
-                c?.visibleError != null -> append(mapVisibleError(c.visibleError ?: "unknown"))
-                c?.state == de.voicekeyboard.dictation.DictationState.RECORDING -> {
+        val visible = c?.visibleError?.let { mapVisibleError(it) }
+        // F13a: Zeitstempel der Klärheitsregel — ein FEHLER ist nie „älter“ als ein
+        // frisch laufender transienter Starttext, wenn er danach beobachtet wurde.
+        val now = android.os.SystemClock.elapsedRealtime()
+        if ((visible != null || extra != null) && lastErrorSeenAtMs == 0L) {
+            lastErrorSeenAtMs = now
+        }
+        if (stickyError != null && lastErrorSeenAtMs == 0L) lastErrorSeenAtMs = now
+        // F13a/B1: Textauswahl über die reinlogische Funktion — der transiente
+        // Starttext setzt/verdeckt KEIN stickyError mehr; extra wird nur noch
+        // dann sticky, wenn die Funktion es als Fehler kennzeichnet.
+        val result = StatusBarText.select(
+            StatusBarText.Inputs(
+                extra = extra,
+                transientText = transientStatus,
+                stickyError = stickyError,
+                visibleError = visible,
+                recording = c?.state == de.voicekeyboard.dictation.DictationState.RECORDING,
+                finalizing = c?.state == de.voicekeyboard.dictation.DictationState.FINALIZING,
+                recordingText = buildString {
                     append("Diktat… (")
                     append(routeLabel(router?.currentRoute ?: de.voicekeyboard.audio.Route.BUILTIN_MIC))
                     append(")")
@@ -774,17 +924,25 @@ class VoiceKeyboardService : InputMethodService(), KeyboardView.Listener {
                             ).intraOpThreads,
                         )?.let { append(" · $it") }
                     }
-                }
-                c?.state == de.voicekeyboard.dictation.DictationState.FINALIZING -> append("Verarbeite…")
-                else -> {
-                    // R-2b: Erfolg löscht einen gesetzten stickyError (nur wenn
-                    // sichtbar kein Fehler mehr aktiv ist)
-                    stickyError = null
-                    append("Bereit")
-                }
-            }
+                },
+                finalizingText = "Verarbeite…",
+                idleText = "Bereit",
+                errorsNewerThanTransient = transientStatus != null &&
+                    lastErrorSeenAtMs >= transientSetAtMs && lastErrorSeenAtMs > 0,
+                success = successJustFinished,
+            ),
+        )
+        successJustFinished = false // Einmal-Flag (R-2b): nur den nächsten Aufruf bewerten
+        if (extra != null && result.extraIsSticky) {
+            stickyError = extra // R-2: NUR echte Fehler sind sticky — nie der Starttext
+            lastErrorSeenAtMs = now
         }
-        view.statusText.text = text
+        if (result.stickyConsumed) stickyError = null // R-2b: abgeschlossener Erfolg
+        if (result.transientConsumed) {
+            transientStatus = null
+            transientSetAtMs = 0L
+        }
+        view.statusText.text = result.text
         view.micButton.isEnabled = c?.state != de.voicekeyboard.dictation.DictationState.FINALIZING
         val recording = c?.state == de.voicekeyboard.dictation.DictationState.RECORDING
         view.micButton.isActivated = recording
@@ -891,7 +1049,7 @@ class VoiceKeyboardService : InputMethodService(), KeyboardView.Listener {
         val next = LanguageCycle.nextActiveLanguage(active, currentLanguage())
         if (next == null) {
             // E9.1 Regel 4: kein stiller No-Op
-            updateStatus(getString(R.string.language_switch_single_active))
+            postEvent(StatusEvent.Hint(getString(R.string.language_switch_single_active)))
             return
         }
         applyLanguage(next)
@@ -929,7 +1087,7 @@ class VoiceKeyboardService : InputMethodService(), KeyboardView.Listener {
         view.keyboardView.setLayout(repository.loadOrFallback(id), resources.displayMetrics.widthPixels)
         layoutPrefs().edit().putString(KEY_CURRENT_LANGUAGE, id).apply()
         pendingLayoutId = null // D10 §3: bewusste IDLE-Wahl ersetzt jede Vormerkung
-        updateStatus(getString(R.string.language_switched_to, LanguageCycle.endonym(id)))
+        postEvent(StatusEvent.Hint(getString(R.string.language_switched_to, LanguageCycle.endonym(id))))
     }
 
     // ---- Emoji-Panel (E9.4, M8b-2) ----
@@ -957,7 +1115,7 @@ class VoiceKeyboardService : InputMethodService(), KeyboardView.Listener {
         val view = rootView ?: return
         val c = coordinator
         if (c != null && c.state != de.voicekeyboard.dictation.DictationState.IDLE) {
-            updateStatus(getString(R.string.emoji_blocked_recording))
+            postEvent(StatusEvent.Hint(getString(R.string.emoji_blocked_recording)))
             return
         }
         view.showEmojiPanel() // idempotent: im offenen Modus kein Schliessen mehr

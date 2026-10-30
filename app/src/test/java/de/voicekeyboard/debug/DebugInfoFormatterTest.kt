@@ -32,16 +32,26 @@ class DebugInfoFormatterTest {
         audioRoute = "intern",
         audioSource = "VOICE_RECOGNITION",
         peakDbfs = -34.2,
+        // F13b2: Langzeit-Abbruch-Beweisfelder (C1) — nur Zahlen/Zustandsschlüssel
+        ctlState = "RECORDING",
+        ctlFailed = false,
+        droppedBlocks = 0,
+        hypCount = 12,
+        hypGapMs = 800,
+        audioSeconds = 9.0,
+        lastStartMs = 2144,
+        starting = false,
     )
 
     private val empty = DebugSnapshot()
 
-    // 1. max. 20 Zeilen (Kopf + 16 Zeilen = 17; F10 hat route/src/peak_dbfs ergänzt)
+    // 1. FELDZAHL (F13b2): Kopf + 24 Zeilen = 25 — die Drift-Pruefung im Formatter
+    // (`check(lines.size == KEYS.size + 1)`) muss jede Feld-Aenderung anfassen.
     @Test
-    fun `format has at most 20 lines`() {
+    fun `format hat exakt 25 Zeilen - Kopf plus 24 Felder`() {
         for (s in listOf(full, empty)) {
             val lines = DebugInfoFormatter.format(s).lines()
-            assertTrue("zu viele Zeilen: ${lines.size}", lines.size <= 20)
+            assertEquals("Kopf + KEYS.size(24) Felder", 25, lines.size)
             assertTrue("zu wenige Zeilen: ${lines.size}", lines.size >= 5)
         }
     }
@@ -60,7 +70,9 @@ class DebugInfoFormatterTest {
         assertEquals(
             listOf("app_version", "build", "api_level", "model_status", "model_variant",
                 "model_version", "model_bytes", "last_error", "rtf", "first_hyp_ms",
-                "threads", "permissions", "peak_pct", "route", "src", "peak_dbfs"),
+                "threads", "permissions", "peak_pct", "route", "src", "peak_dbfs",
+                "ctl_state", "ctl_failed", "dropped", "hyp_count", "hyp_gap_ms",
+                "audio_s", "start_ms", "starting"),
             keys,
         )
     }
@@ -102,7 +114,7 @@ class DebugInfoFormatterTest {
             lastError = "audioInit:Security\nException:secret",
         )
         val out = DebugInfoFormatter.format(dirty)
-        assertEquals("keine mehrzeilige Ausgabe", 17, out.lines().size)
+        assertEquals("keine mehrzeilige Ausgabe", 25, out.lines().size)
         for (line in out.lines().drop(1)) {
             val value = line.substringAfter(": ")
             assertFalse("Doppelpunkt im Wert: '$value'", value.contains(":"))
@@ -143,5 +155,41 @@ class DebugInfoFormatterTest {
         assertTrue(emptyText.contains("peak_dbfs: -"))
         // Der Exporttext enthaelt weiterhin keine Pfade (Regel 9).
         assertFalse(fullText.contains("/"))
+    }
+
+    // F13b2 (a-d): die 8 neuen Diagnosefelder — exakte Schluessel, exakte Werte,
+    // feste Reihenfolge am Ende, fehlende Werte als Strich (nie als Inhalt).
+    @Test
+    fun `neue Diagnosefelder ctl_state bis starting erscheinen exakt und fehlen als Strich`() {
+        val fullText = DebugInfoFormatter.format(full)
+        // (d) exakte Schluesselnamen und Werte im Voll-Snapshot:
+        assertTrue(fullText.contains("ctl_state: RECORDING"))
+        assertTrue(fullText.contains("ctl_failed: 0"))
+        assertTrue(fullText.contains("dropped: 0"))
+        assertTrue(fullText.contains("hyp_count: 12"))
+        assertTrue(fullText.contains("hyp_gap_ms: 800"))
+        assertTrue(fullText.contains("audio_s: 9.0"))
+        assertTrue(fullText.contains("start_ms: 2144"))
+        assertTrue(fullText.contains("starting: 0"))
+        // (b) fehlende Werte → "-", NIE ein Inhalt (Regel 9):
+        val emptyText = DebugInfoFormatter.format(empty)
+        for (key in listOf("ctl_state", "ctl_failed", "dropped", "hyp_count",
+                "hyp_gap_ms", "audio_s", "start_ms", "starting")) {
+            assertTrue("$key muss als Strich fehlen", emptyText.contains("$key: -"))
+        }
+        // (c) Reihenfolge exakt wie KEYS — die Beweisfelder stehen AM ENDE:
+        val keys = fullText.lines().drop(1).map { it.substringBefore(":") }
+        assertEquals(
+            listOf("ctl_state", "ctl_failed", "dropped", "hyp_count", "hyp_gap_ms",
+                "audio_s", "start_ms", "starting"),
+            keys.takeLast(8),
+        )
+        // ctl_failed/starting sind 0/1, nie yes/no oder true/false:
+        val flagged = full.copy(ctlFailed = true, starting = true)
+        val flaggedText = DebugInfoFormatter.format(flagged)
+        assertTrue(flaggedText.contains("ctl_failed: 1"))
+        assertTrue(flaggedText.contains("starting: 1"))
+        assertFalse(flaggedText.contains("ctl_failed: yes"))
+        assertFalse(flaggedText.contains("starting: true"))
     }
 }

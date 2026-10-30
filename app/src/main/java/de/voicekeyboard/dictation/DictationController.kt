@@ -10,6 +10,36 @@ import de.voicekeyboard.editor.EditorSink
 import de.voicekeyboard.editor.OwnershipTracker
 
 /**
+ * F13b/C1: Ergebnis eines stop()-Aufrufs — der Aufrufer sieht ausdrücklich,
+ * OB ein Finale gelaufen ist (klein, JVM-testbar; kein boolean-Rätsel).
+ */
+sealed class StopOutcome {
+    /** stop() ohne laufende Aufnahme und ohne Fehler: No-Op, nichts zu melden. */
+    object IdleNoOp : StopOutcome()
+
+    /**
+     * Finale lief (whole-buffer decode); finalError nur bei Finale-Fehler.
+     * F13d/P2-1: SNAPSHOT der Sitzung zum Stop-Zeitpunkt — der Aufrufer bewertet
+     * NUR dieses Objekt, nie den Live-Controller-Zustand, den der nächste
+     * start() nullt („schnell loslassen, sofort neu drücken“).
+     */
+    data class FinalRan(
+        val finalError: String? = null,
+        val failedWith: Boolean = false,
+        val droppedWith: Int = 0,
+    ) : StopOutcome()
+
+    /** KEIN Finale: die Session war bereits still gescheitert (fail() während
+     *  RECORDING) — [errorCode] nennt den bewahrten Fehlercode; [failedWith]
+     *  true (sonst wäre es IdleNoOp); [droppedWith] = verworfene Blocks. */
+    data class NoFinal(
+        val errorCode: String?,
+        val failedWith: Boolean = true,
+        val droppedWith: Int = 0,
+    ) : StopOutcome()
+}
+
+/**
  * Push-to-Talk-Zustandsmaschine (KONZEPT.md §2.1) und Diktat-Pipeline-Orchestrierung:
  *
  * AudioSource-Blöcke ([feedAudio]) → ASR ([AsrEngine], injiziert) →
@@ -41,6 +71,13 @@ class DictationController(
     private val tracker: OwnershipTracker = OwnershipTracker(),
     private val minAudioSecondsForPartials: Double = MIN_AUDIO_SECONDS_PARTIALS,
     private val sampleRateHz: Int = PcmWindow.SAMPLE_RATE_16K,
+    /**
+     * F13b2: monotone Uhr für Hypothesen-Abstände (🐞-Feld hyp_gap_ms).
+     * Default nanoTime (JVM-testbar, inkl. allem Sleep); Android kann statt
+     * dessen SystemClock.elapsedRealtime() in NANOSECONDS injizieren —
+     * NIE uptimeMillis (pausiert im Deep-Sleep, Review F13c P2).
+     */
+    private val clock: () -> Long = { System.nanoTime() },
 ) {
 
     var state: DictationState = DictationState.IDLE
@@ -53,6 +90,30 @@ class DictationController(
     /** Fehlercode des letzten Fehlers (nie Textinhalt), null im Normalfall. */
     var lastErrorCode: String? = null
         private set
+
+    /**
+     * F13b/C1: True, sobald die AKTIELLE Session über fail() gescheitert ist —
+     * bewahrt, bis ein NEUER START ihn zurücksetzt (dann wäre der Fehler
+     * unsichtbar geworden, Analyse Zeile 76). lastErrorCode bleibt unverändert.
+     */
+    var failedThisSession: Boolean = false
+        private set
+
+    /** F13b: Anzahl der Audio-Blocks, die in feedAudio verworfen wurden (🐞-Diagnose). */
+    var droppedBlocks: Int = 0
+        private set
+
+    /** F13b2: Anzahl erzeugter Hypothesen der aktuellen Sitzung (🐞: hyp_count). */
+    var hypothesesThisSession: Int = 0
+        private set
+
+    /** Zeitstempel (clock) der letzten Hypothese; 0 = noch keine. */
+    private var lastHypAt: Long = 0L
+
+    /** F13b2: Abstand seit der letzten Hypothese in ms; -1 wenn nie eine kam. */
+    fun currentHypGapMs(): Long =
+        if (lastHypAt == 0L) -1L
+        else ((clock() - lastHypAt) / 1_000_000).coerceAtLeast(0) // F13d/P2-2: nie negativ
 
     private val typer = DeltaTyper(sink)
     private var pcm = ShortArray(0)
@@ -74,6 +135,10 @@ class DictationController(
         pcm = ShortArray(0)
         totalSamples = 0
         lastErrorCode = null
+        failedThisSession = false // F13b: Fehler gilt je Session, nie nachwirkend
+        droppedBlocks = 0
+        hypothesesThisSession = 0 // F13b2: Zähler je Sitzung
+        lastHypAt = 0L
         policy.reset()
         typer.reset()
         tracker.reset()
@@ -88,7 +153,12 @@ class DictationController(
      * CommitPolicy + DeltaTyper in den Editor geschrieben.
      */
     suspend fun feedAudio(block: PcmBlock) {
-        if (state != DictationState.RECORDING) return
+        if (state != DictationState.RECORDING) {
+            // F13b/C1: nach einem stillen fail() wurde JEDE Block hier stumm
+            // verworfen — jetzt gezählt (F13b2-Diagnose: dropped_blocks).
+            droppedBlocks += 1
+            return
+        }
         if (block.samples.isEmpty()) return
         append(block.samples)
         // ASR_CONTRACT §4.4: min_audio_s ist ein Guard NUR für Partials —
@@ -96,6 +166,7 @@ class DictationController(
         if (audioSeconds >= minAudioSecondsForPartials) {
             try {
                 val hypothesis = engine.transcribe(window(), sessionId, ++runId)
+                noteHypothesis() // F13b2: erzeugte Hypothese zählen + Zeitstempel
                 applyPartial(hypothesis)
             } catch (e: OutOfMemoryError) {
                 // F3: nativer ORT-Speicherfehler während der Inferenz — Session
@@ -109,9 +180,11 @@ class DictationController(
                     // F1-Drift-Regel (REVIEW_STAGE6_FIXES): Edit-Timeout im Sink ⇒
                     // der Main-Thread ist blockiert/überlastet — weitere Revisionen
                     // würden auf demselben Driftvektor laufen (veraltete Editor-
-                    // Zustände, Geisterschreib-Risiko). Session abbrechen, Fehler
-                    // sichtbar nach oben (R-2: blockierende Statusmeldung).
-                    abort()
+                    // Zustände, Geisterschreib-Risiko). Session beenden, Fehler
+                    // sichtbar nach oben (R-2). F13d/P1: fail() statt abort() —
+                    // failedThisSession bewahrt den Grund bis zum nächsten Start
+                    // (sonst meldet stop() ein stummes IdleNoOp).
+                    fail(EDITOR_SYNC_TIMEOUT)
                     throw e
                 }
                 fail(ASR_PARTIAL_ERROR) // andere IllegalStateException: normaler Fehlerpfad
@@ -140,13 +213,29 @@ class DictationController(
      * KONZEPT §5.1) und Übergang nach IDLE. Idempotent: ohne laufende Aufnahme
      * ein No-Op. Auch kürzeste Aufnahmen werden final dekodiert (min_audio-Guard
      * gilt nicht für das Finale).
+     *
+     * F13b/C1: Rückgabe [StopOutcome] — der Aufrufer sieht, OB ein Finale
+     * gelaufen ist; eine still gescheiterte Session (fail() während RECORDING)
+     * liefert NoFinal MIT Fehlercode statt eines normalen Abschlusses.
      */
-    suspend fun stop() {
-        if (state != DictationState.RECORDING) return
+    suspend fun stop(): StopOutcome {
+        if (state != DictationState.RECORDING) {
+            // Nie-Aufnahme (IDLE): No-Op ohne Fake-Fehler — ABER: die Session war
+            // evtl. still gescheitert (state von fail() auf IDLE): NoFinal melden.
+            // F13d/P2-1: DROPPED-Wert in den Snapshot — Live-Lesen wäre rennbar.
+            return if (failedThisSession) StopOutcome.NoFinal(lastErrorCode, failedWith = true, droppedWith = droppedBlocks)
+            else StopOutcome.IdleNoOp
+        }
+        // F13d/P2-1: Snapshot zum STOP-Zeitpunkt — ein sofortiger neuer start()
+        // kann die Bewertung dieser Sitzung nicht mehr verfälschen.
+        val failedAtStop = failedThisSession
+        val droppedAtStop = droppedBlocks
         state = DictationState.FINALIZING
+        var finalError: String? = null
         if (totalSamples > 0) {
             try {
                 val hypothesis = engine.transcribe(window(), sessionId, ++runId)
+                noteHypothesis() // F13b2: auch das Finale ist eine erzeugte Hypothese
                 // Auch Finals alter Sessions verwerfen (veralteter Lauf)
                 if (hypothesis.sessionId == sessionId) {
                     writeHypothesis(hypothesis)
@@ -157,16 +246,20 @@ class DictationController(
                 throw e
             } catch (e: IllegalStateException) {
                 if (isEditorSyncTimeout(e)) {
-                    // F1-Drift-Regel: Edit-Timeout ⇒ keine weiteren Schreibversuche
-                    abort()
+                    // F1-Drift-Regel: Edit-Timeout ⇒ keine weiteren Schreibversuche.
+                    // F13d/P1: fail() statt abort() — Grund bewahrt, nie stumm.
+                    fail(EDITOR_SYNC_TIMEOUT)
                     throw e
                 }
                 fail(ASR_FINAL_ERROR)
+                finalError = ASR_FINAL_ERROR
             } catch (e: Exception) {
                 fail(ASR_FINAL_ERROR)
+                finalError = ASR_FINAL_ERROR
             }
         }
         if (state == DictationState.FINALIZING) state = DictationState.IDLE
+        return StopOutcome.FinalRan(finalError, failedWith = failedAtStop, droppedWith = droppedAtStop)
     }
 
     /**
@@ -209,9 +302,16 @@ class DictationController(
     private fun isEditorSyncTimeout(e: IllegalStateException): Boolean =
         e.message?.startsWith(EDITOR_SYNC_TIMEOUT_PREFIX) == true
 
+    /** F13b2: Zähler + Zeitstempel einer erzeugten Hypothese (nur Metadaten). */
+    private fun noteHypothesis() {
+        hypothesesThisSession += 1
+        lastHypAt = clock()
+    }
+
     /** Geordneter Fehlerpfad: nach IDLE, Fehlercode sichtbar, Text bleibt stehen. */
     private fun fail(errorCode: String) {
         lastErrorCode = errorCode
+        failedThisSession = true // F13b: bewahren, bis ein neuer Start folgt
         state = DictationState.IDLE
         policy.reset()
     }
@@ -264,6 +364,7 @@ class DictationController(
          */
         val MIN_AUDIO_SECONDS_PARTIALS: Double =
             de.voicekeyboard.asr.AsrThreadConfig.DEFAULT.hypothesisMinIntervalMs / 1000.0
+        private const val EDITOR_SYNC_TIMEOUT = "editor_sync_timeout"
         private const val ASR_PARTIAL_ERROR = "asr_partial_error"
         private const val ASR_FINAL_ERROR = "asr_final_error"
         private const val EDITOR_SYNC_TIMEOUT_PREFIX = "Editor-Sync Timeout"

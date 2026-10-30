@@ -150,6 +150,11 @@ class DictationCoordinator(
      * Idempotent: nur aus IDLE; laufend → false ohne Neustart.
      */
     fun start(): Boolean {
+        // F13b2: Start-Dauer (🐞: start_ms) und Watchdog-Indikator (🐞: starting)
+        // — inkl. engine.load(); NIE uptimeMillis (Deep-Sleep, Review F13c P2).
+        starting = true
+        val t0 = System.nanoTime()
+        try {
         if (!active.compareAndSet(false, true)) return false
         if (controller.state != DictationState.IDLE) {
             active.set(false)
@@ -199,7 +204,27 @@ class DictationCoordinator(
             start()
         }
         return controller.start()
+        } finally {
+            starting = false
+            lastStartMs = (System.nanoTime() - t0) / 1_000_000
+        }
     }
+
+    /**
+     * F13d/P1: Läuft die Capture/Session noch? Nach einem Consumer-Tod wird
+     * active=false gesetzt — der Capture-Thread produziert dann KEINE Samples
+     * mehr (Capture-Loop-While-Bedingung), der Kanal ist zu.
+     */
+    val isActive: Boolean get() = active.get()
+
+    /** F13b2: 0/1 — Coordinator-Start läuft gerade (engine.load etc.); der
+     *  Watchdog-Fall ist 1 mit ungewöhnlich hohem start_ms. */
+    @Volatile var starting: Boolean = false
+        private set
+
+    /** F13b2: Dauer des letzten Starts in ms (0 = noch nicht gemessen). */
+    @Volatile var lastStartMs: Long = 0L
+        private set
 
     /** Capture-Thread: blockiert NUR in read; verliert keine Blöcke (unbegrenzter Kanal). */
     private fun captureLoop(src: AudioSource, ch: Channel<PcmBlock>) {
@@ -278,6 +303,41 @@ class DictationCoordinator(
             active.set(false)
             channel?.close()
             controller.abort()
+            lastStopOutcome = de.voicekeyboard.dictation.StopOutcome.NoFinal(
+                "$ERR_OOM:${e.javaClass.simpleName}",
+            )
+            routeObserver?.invoke(false)
+            return
+        } catch (e: IllegalStateException) {
+            // F13d/P1: Editor-Sync-Timeout o.ä. — OHNE diesen Fang stirbt der
+            // Consumer-Job STILL, der Capture-Thread läuft weiter und der
+            // unbegrenzte Kanal wächst, ohne dass der Nutzer etwas sieht.
+            // Kontrolliertes Ende: Grund merken (Regel: kein schluckendes Fangen
+            // ohne Meldung), Sitzung abbrechen, Kanal schließen, Capture über
+            // active=false auslaufen lassen, Ausgang als StopOutcome sichtbar.
+            if (lastError == null) lastError = "consumer:" + e.javaClass.simpleName
+            active.set(false)
+            channel?.close()
+            controller.abort()
+            lastStopOutcome = de.voicekeyboard.dictation.StopOutcome.NoFinal(
+                controller.lastErrorCode ?: lastError,
+                failedWith = true,
+                droppedWith = controller.droppedBlocks,
+            )
+            routeObserver?.invoke(false)
+            return
+        } catch (e: Exception) {
+            // F13d/P1: jeder weitere gefangene Fall setzt einen SICHTBAREN Grund
+            // (kein stilles Sterben des Consumers, kein wachsender Kanal).
+            if (lastError == null) lastError = "consumer:" + e.javaClass.simpleName
+            active.set(false)
+            channel?.close()
+            controller.abort()
+            lastStopOutcome = de.voicekeyboard.dictation.StopOutcome.NoFinal(
+                controller.lastErrorCode ?: lastError,
+                failedWith = true,
+                droppedWith = controller.droppedBlocks,
+            )
             routeObserver?.invoke(false)
             return
         }
@@ -314,7 +374,7 @@ class DictationCoordinator(
         scope.launch {
             consumerJob?.join()
             try {
-                controller.stop()
+                lastStopOutcome = controller.stop() // F13b: Ausgang BEVOR onStopped läuft
             } catch (e: OutOfMemoryError) {
                 // F3-R: OOM im Final-Decode — dito flush()-Pfad
                 android.util.Log.w(TAG, "oom during final decode")
@@ -332,6 +392,34 @@ class DictationCoordinator(
         }
         routeObserver?.invoke(false)
     }
+
+    /**
+     * F13b: Ausgang des LETZTEN stop()-Finals (asynchron belegt, bevor onStopped
+     * läuft) — der Service bewertet hiermit, ob der Abschluss ein echter Erfolg
+     * war oder eine still gescheiterte Session ([StopOutcome.NoFinal]).
+     */
+    @Volatile var lastStopOutcome: de.voicekeyboard.dictation.StopOutcome =
+        de.voicekeyboard.dictation.StopOutcome.IdleNoOp
+        private set
+
+    /** F13b: Fehlerzustand der aktuellen Controller-Session (bis zum nächsten Start bewahrt). */
+    val failedThisSession: Boolean get() = controller.failedThisSession
+
+    /** F13b2: Controller-Zustand als Kurzcode (IDLE/RECORDING/FINALIZING) — der
+     *  🐞-Beweisfall C1: IDLE, während der Nutzer noch drückt. */
+    val ctlState: String get() = controller.state.name
+
+    /** F13b2: erzeugte Hypothesen der aktuellen Sitzung (🐞: hyp_count). */
+    val hypCount: Int get() = controller.hypothesesThisSession
+
+    /** F13b2: Abstand seit der letzten Hypothese in ms, -1 wenn nie (🐞: hyp_gap_ms). */
+    fun hypGapMs(): Long = controller.currentHypGapMs()
+
+    /** F13b2: aufgenommenes Audio in Sekunden (🐞: audio_s, 1 Nachkommastelle). */
+    val audioSeconds: Double get() = controller.audioSeconds
+
+    /** F13b: verworfene Audio-Blocks der aktuellen Session (🐞-Diagnose F13b2). */
+    val droppedBlocks: Int get() = controller.droppedBlocks
 
     /** Abbruch ohne Finale: geordnet nach IDLE, bereits committeter Text bleibt. */
     fun abort() {

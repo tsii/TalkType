@@ -26,7 +26,7 @@ class KeyboardThemeTest {
         val p = KeyboardTheme.LIGHT
         assertEquals(0xFFECEFF1.toInt(), p.background)      // AOSP key_background_lxx_light
         assertEquals(0xFFECEFF1.toInt(), p.keyNormal)       // identisch zum Hintergrund (flach)
-        assertEquals(0xFFD1D5D8.toInt(), p.keyPressed)      // compose(ECEFF1, Overlay 0x2637474F)
+        assertEquals(0xFFA3ABB0.toInt(), p.keyPressed)      // D11: compose(ECEFF1, Overlay 0x6637474F)
         assertEquals(0xFF00796B.toInt(), p.keyToggledGlyph) // eigene dunklere Hell-Variante (Shift/Caps)
         assertEquals(0xFF37474F.toInt(), p.textPrimary)    // AOSP key_text_color_lxx_light
         assertEquals(0xCC37474F.toInt(), p.textFunctional) // AOSP functional
@@ -41,7 +41,7 @@ class KeyboardThemeTest {
         val p = KeyboardTheme.DARK
         assertEquals(0xFF263238.toInt(), p.background)      // AOSP key_background_lxx_dark
         assertEquals(0xFF263238.toInt(), p.keyNormal)
-        assertEquals(0xFF3B464B.toInt(), p.keyPressed)     // compose(263238, Overlay 0x19FFFFFF)
+        assertEquals(0xFF676F74.toInt(), p.keyPressed)     // D11: compose(263238, Overlay 0x4DFFFFFF)
         assertEquals(0xFF80CBC4.toInt(), p.keyToggledGlyph)
         assertEquals(0xCCFFFFFF.toInt(), p.textPrimary)
         assertEquals(0xCCFFFFFF.toInt(), p.textFunctional)
@@ -110,15 +110,33 @@ class KeyboardThemeTest {
         assertEquals(0xFFECEFF1.toInt(), KeyboardTheme.compose(0xFFECEFF1.toInt(), 0x00FF0000))
         // Voll deckendes Overlay ersetzt die Basis komplett:
         assertEquals(0xFF123456.toInt(), KeyboardTheme.compose(0xFFECEFF1.toInt(), 0xFF123456.toInt()))
-        // Sol-Press: compose(Hintergrund hell, #2637474F-Overlay) == keyPressed:
+        // D11-Press: compose(Hintergrund, verstärktes Overlay 0x66/0x4D) == keyPressed:
         assertEquals(
             KeyboardTheme.LIGHT.keyPressed,
-            KeyboardTheme.compose(KeyboardTheme.LIGHT.background, 0x2637474F),
+            KeyboardTheme.compose(KeyboardTheme.LIGHT.background, 0x6637474F),
         )
         assertEquals(
             KeyboardTheme.DARK.keyPressed,
-            KeyboardTheme.compose(KeyboardTheme.DARK.background, 0x19FFFFFF),
+            KeyboardTheme.compose(KeyboardTheme.DARK.background, 0x4DFFFFFF),
         )
+        // D11-Schwellenmessung (echtes Delta ausgerechnet, je Kanal max. |Δ|):
+        // Befund war nur 27/255 (hell) bzw. 21/255 (dunkel) — der neue Press-
+        // Zustand muss deutlich darüber liegen (Ziel: > 60), sonst wäre die
+        // Verstärkung wirkungslos.
+        fun maxChannelDelta(a: Int, b: Int): Int {
+            var max = 0
+            for (shift in listOf(16, 8, 0)) {
+                val d = kotlin.math.abs(((a shr shift) and 0xFF) - ((b shr shift) and 0xFF))
+                if (d > max) max = d
+            }
+            return max
+        }
+        val deltaLight = maxChannelDelta(KeyboardTheme.LIGHT.keyNormal, KeyboardTheme.LIGHT.keyPressed)
+        val deltaDark = maxChannelDelta(KeyboardTheme.DARK.keyNormal, KeyboardTheme.DARK.keyPressed)
+        assertTrue("Hell: Press-Delta $deltaLight muss > 60 sein (vorher 27)", deltaLight > 60)
+        assertTrue("Dunkel: Press-Delta $deltaDark muss > 60 sein (vorher 21)", deltaDark > 60)
+        assertEquals("Hell: erwartetes neues Press-Delta", 73, deltaLight)
+        assertEquals("Dunkel: erwartetes neues Press-Delta", 65, deltaDark)
     }
 
     // ---- Schrift-Hierarchie: 24/22/14/12 sp als eigene Konstanten ----

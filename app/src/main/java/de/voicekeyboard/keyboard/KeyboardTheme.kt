@@ -83,7 +83,9 @@ object KeyboardTheme {
     val LIGHT = KeyboardPalette(
         background = 0xFFECEFF1.toInt(),
         keyNormal = 0xFFECEFF1.toInt(),
-        keyPressed = compose(0xFFECEFF1.toInt(), 0x2637474F),
+        // D11-Punkt 1: verstärkte Press-Deckkraft (0x66 statt 0x26 — der alte
+        // Wert war mit max. 27/255 Kanalunterschied nicht wahrnehmbar genug).
+        keyPressed = compose(0xFFECEFF1.toInt(), 0x6637474F),
         keyToggledGlyph = 0xFF00796B.toInt(),
         textPrimary = 0xFF37474F.toInt(),
         textFunctional = 0xCC37474F.toInt(),
@@ -97,7 +99,8 @@ object KeyboardTheme {
     val DARK = KeyboardPalette(
         background = 0xFF263238.toInt(),
         keyNormal = 0xFF263238.toInt(),
-        keyPressed = compose(0xFF263238.toInt(), 0x19FFFFFF),
+        // D11-Punkt 1: verstärkte Press-Deckkraft (0x4D statt 0x19 — alt: 21/255).
+        keyPressed = compose(0xFF263238.toInt(), 0x4DFFFFFF),
         keyToggledGlyph = 0xFF80CBC4.toInt(),
         textPrimary = 0xCCFFFFFF.toInt(),
         textFunctional = 0xCCFFFFFF.toInt(),

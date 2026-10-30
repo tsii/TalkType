@@ -9,7 +9,7 @@ package de.voicekeyboard.debug
  * keine URLs, kein Ziel-App-Paketname. Der Exporttext wird niemals geloggt
  * (das betrifft die aufrufende Schicht, DebugInfoCollector).
  *
- * Format: Kopfzeile mit sichtbarer Zusicherung, danach GENAU 13 Zeilen
+ * Format: Kopfzeile mit sichtbarer Zusicherung, danach GENAU 24 Zeilen
  * `schluessel: wert` in fester Reihenfolge (Determinismus), fehlende Werte
  * als `-`, Werte einzeilig sanitisiert (keine Umbrüche, keine Doppelpunkte).
  */
@@ -52,6 +52,33 @@ data class DebugSnapshot(
 
     /** Spitze in dBFS (<= 0). peak_pct ist bei sehr leiser Aufnahme nicht mehr auflösend. */
     val peakDbfs: Double? = null,
+
+    // ---- F13b2: Beweisfelder für den Langtext-Abbruch (C1) — nur Zahlen/Zustände ----
+
+    /** Zustand des Controllers als Kurzcode (IDLE/RECORDING/FINALIZING) — der
+     *  Beweisfall: IDLE während der Nutzer noch drückt ⇒ C1 (still gescheitert). */
+    val ctlState: String? = null,
+
+    /** 0/1: failedThisSession (Fehler bewahrt bis zum nächsten Start). */
+    val ctlFailed: Boolean? = null,
+
+    /** Anzahl verworfener Audio-Blocks (nach stiller fail — F13b-Drop-Zähler). */
+    val droppedBlocks: Int? = null,
+
+    /** Anzahl erzeugter Hypothesen dieser Sitzung. */
+    val hypCount: Int? = null,
+
+    /** Abstand seit der letzten Hypothese in ms; -1 wenn nie eine kam (> 4000 ms ⇒ Rückstau). */
+    val hypGapMs: Long? = null,
+
+    /** Bisher aufgenommenes Audio in Sekunden, 1 Nachkommastelle. */
+    val audioSeconds: Double? = null,
+
+    /** Dauer des letzten Starts in ms (0 = nicht gemessen). */
+    val lastStartMs: Long? = null,
+
+    /** 0/1: Start läuft gerade (Watchdog-Fall: 1 mit ungewöhnlichem start_ms). */
+    val starting: Boolean? = null,
 )
 
 object DebugInfoFormatter {
@@ -59,11 +86,13 @@ object DebugInfoFormatter {
     /** Sichtbare Regel-9-Zusicherung in der Kopfzeile. */
     private const val HEADER = "# VK-DEBUG v1 keine inhalte"
 
-    /** Feste Feld-Reihenfolge = Kap. §1-Katalog (gekürzt auf 13 Zeilen). */
+    /** Feste Feld-Reihenfolge (F13b2: +8 Beweisfelder am Ende). */
     private val KEYS = listOf(
         "app_version", "build", "api_level", "model_status", "model_variant",
         "model_version", "model_bytes", "last_error", "rtf", "first_hyp_ms",
         "threads", "permissions", "peak_pct", "route", "src", "peak_dbfs",
+        "ctl_state", "ctl_failed", "dropped", "hyp_count", "hyp_gap_ms",
+        "audio_s", "start_ms", "starting",
     )
 
     fun format(s: DebugSnapshot): String {
@@ -96,6 +125,15 @@ object DebugInfoFormatter {
         lines += "route: " + value(s.audioRoute)
         lines += "src: " + value(s.audioSource)
         lines += "peak_dbfs: " + value(s.peakDbfs?.let { "%.1f".format(it) })
+        // F13b2: Beweisfelder für den Langtext-Abbruch (C1) — Zahlen/Zustände only.
+        lines += "ctl_state: " + value(s.ctlState)
+        lines += "ctl_failed: " + value(s.ctlFailed?.let { if (it) "1" else "0" })
+        lines += "dropped: " + value(s.droppedBlocks?.toString())
+        lines += "hyp_count: " + value(s.hypCount?.toString())
+        lines += "hyp_gap_ms: " + value(s.hypGapMs?.toString())
+        lines += "audio_s: " + value(s.audioSeconds?.let { "%.1f".format(it) })
+        lines += "start_ms: " + value(s.lastStartMs?.toString())
+        lines += "starting: " + value(s.starting?.let { if (it) "1" else "0" })
         check(lines.size == KEYS.size + 1) { "Feldzahl driftet: ${lines.size}" }
         return lines.joinToString("\n")
     }

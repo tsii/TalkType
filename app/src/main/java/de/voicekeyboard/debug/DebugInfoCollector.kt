@@ -87,6 +87,16 @@ class DebugInfoCollector(private val context: Context) {
             audioRoute = audioRoute,
             audioSource = audioSource,
             peakDbfs = coordinator?.levelPeak?.dbfs(),
+            // F13b2: Beweisfelder für den Langtext-Abbruch (C1) — Coordinator ist
+            // bereits Parameter; VoiceKeyboardService bleibt unangetastet.
+            ctlState = coordinator?.ctlState,
+            ctlFailed = coordinator?.failedThisSession,
+            droppedBlocks = coordinator?.droppedBlocks,
+            hypCount = coordinator?.hypCount,
+            hypGapMs = coordinator?.hypGapMs(),
+            audioSeconds = coordinator?.audioSeconds,
+            lastStartMs = coordinator?.lastStartMs,
+            starting = coordinator?.starting,
         )
     }
 

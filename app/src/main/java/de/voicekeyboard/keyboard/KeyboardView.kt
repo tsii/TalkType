@@ -271,19 +271,24 @@ class KeyboardView @JvmOverloads constructor(
         for (key in visibleKeys()) {
             val pressed = key === pressedKey
             val isMic = key.kind == "action" && key.value == KeyActions.MIC
-            // Toggle-Zustand (Shift/Caps bzw. Symbol-Shift) — nur die GLYPHE färbt sich,
-            // die Fläche bleibt normal; gedrückt+getoggelt behält die aktive Glyphe
-            // über dem Press-Overlay (Sol §1 Farbzustände).
-            val shiftToggle = key.kind == "action" && key.value == KeyActions.SHIFT &&
-                (if (activeLayerName == "symbols" || activeLayerName == "symbolsShift") symbolShift else showShift())
-            // D10-Rest §2: Aufnahmezustand — Mikrofonzelle in der Akzentfarbe
-            // (bestehendes Token palette.accent), Icon-Farbe konträr (textPrimary).
-            // Häkchen nach erfolgreichem Abschluss: 600 ms „✓“ in der Toggle-Glyph-
-            // Farbe (palette.keyToggledGlyph) — kein Vollflächenblitz, gleiche Rects.
-            keyPaint.color = when {
-                isMic && micRecording -> palette.accent
-                pressed -> palette.keyPressed
-                else -> palette.keyNormal
+            // D11: Flächen-/Glyphen-Entscheidung über die reine Naht (KeySurface) —
+            // micRecording > Caps-Füllung (echtes capsLock, bleibt gedrückt) > pressed > normal;
+            // Glyphe konträr zur Füllung, temporäres Shift nur Glyphen-Akzent.
+            val isShiftKey = key.kind == "action" && key.value == KeyActions.SHIFT
+            val decision = KeySurface.decide(
+                istShiftKey = isShiftKey,
+                capsLock = capsLock,
+                shiftTemporary = shiftTemporary,
+                symbolShift = symbolShift,
+                pressed = pressed,
+                micRecording = isMic && micRecording,
+                activeLayerIsSymbols = activeLayerName == "symbols" || activeLayerName == "symbolsShift",
+            )
+            keyPaint.color = when (decision.surface) {
+                KeySurface.Surface.MIC_RECORDING -> palette.accent // D10-Rest §2 unverändert
+                KeySurface.Surface.CAPS_FILL -> palette.accent // D11: CapsLock-Akzentfläche
+                KeySurface.Surface.PRESSED -> palette.keyPressed
+                KeySurface.Surface.NORMAL -> palette.keyNormal
             }
             rect.set(key.left, key.top, key.right, key.bottom)
             if (cornerRadius > 0f) {
@@ -301,9 +306,13 @@ class KeyboardView @JvmOverloads constructor(
             }
             paint.color = when {
                 key.kind == "text" -> palette.textPrimary
-                isMic && micRecording -> palette.micRecordingGlyph // konträr auf Akzent (D10 §2)
-                isMic && micCheckShowing -> palette.keyToggledGlyph // D10 §2: Häkchen in Toggle-Glyph-Farbe
-                shiftToggle -> palette.keyToggledGlyph // Shift/Caps aktiv: Akzent-Glyphe
+                // D10-Rest §2 unverändert: Häkchen in der Toggle-Glyph-Farbe.
+                isMic && micCheckShowing -> palette.keyToggledGlyph
+                // D11: Glyphen-Tokens aus der Naht — Gegenfarbe (micRecordingGlyph)
+                // auf Akzentflächen (Caps/Aufnahme), Akzent (keyToggledGlyph) nur
+                // für temporäres Shift / Symbol-Shift, sonst Rollenfarbe.
+                decision.glyph == KeySurface.Glyph.CONTRAST -> palette.micRecordingGlyph
+                decision.glyph == KeySurface.Glyph.ACCENT -> palette.keyToggledGlyph
                 key.value == KeyActions.SPACE -> palette.textSecondary
                 else -> palette.textFunctional
             }

@@ -1,54 +1,79 @@
 # HANDOFF — Voice-Keyboard (Projekt-Root, aktiviert Kompaktierungs-Checkpoint)
 
-**Stand:** 2026-10-28 01:15 UTC · Details: `state/progress.md`, `docs/PROJECT_STATE.md`
+**Stand:** 2026-10-30 18:0x UTC · Details: `state/progress.md`, `docs/PROJECT_STATE.md`
 **Protokoll:** `docs/CONTINGENCY_PLAN.md` · Regeln: `reminders/ALWAYS.md`
 
 ## Rollen (fix)
 Design = GPT 6.1 Sol · Analysen/Plan/Doku = Kimi K3 · Code = GLM 5.3 · **Review jeder GLM-Arbeit = DeepSeek v4 Pro 0813**.
 Orchestrator: beauftragen + mechanisch verifizieren; keine eigene Facharbeit, keine eigenen Reviews.
 
-## Status (23:40): D1 fertig + Review gruuen, GPU/NPU entschieden, Nutzer-Diagnose offen
-## Status (10:1x): v0.1.3 ausgeliefert (40,2 MB), Rechenweg abgeschlossen, B abgelehnt
-- **v0.1.3**: `dist/voice-keyboard-0.1.3.apk`, 40 242 852 B, versionCode 4, SHA-256 `680057718c785428ea60988e73b0a8394689d4fec7553c80cb599974c9ae86f5`, arm64-only. Enthaelt: mmap-Speicherfix, Retry-Anzeige (Versuch N von M), Diagnosezeile, Varianten-Grundlage. Download: http://localhost:8736/api/file?path=Voice-Keyboard/dist/voice-keyboard-0.1.3.apk&download=1
-- **Variante B (Arm/LiteRT) abgelehnt**: 50,2 % Wort-Identitaet, CED 33,2 %, Sprachwechsel durch 400 ms Stille (`docs/VARIANT_B_QUALITY.md`). A bleibt bei 100 % auf dem deutschen Referenzmaterial. LiteRT-Code liegt in `app/src/debug/java/...`, Release faellt dokumentiert auf A (`LiteRtBridge`).
-- **Rechenweg abgeschlossen**: NPU ohne Google-Dienste nicht erreichbar (`docs/GPU_ACCELERATION_ANALYSIS.md`, `docs/RUNTIME_SWITCH_NPU_ASSESSMENT.md`, `docs/NPU_LITERT_FEASIBILITY.md`); Threads/Chunk konfigurierbar (`asr/AsrThreadConfig.kt`).
-- **Testbestand**: Debug 279 / 0, Release 263 / 0.
-- **Laeuft**: DeepSeek-Review Stufe 14; Modell-Vergleich Deutsch (`docs/ASR_MODEL_SURVEY_DE.md`).
+## Aktueller Stand (belegt)
+- **Version: v0.1.13 / versionCode 14** (`app/build.gradle.kts:14-15`); nächster Build **15 / 0.1.14**.
+- **Unit Debug 373 / 0 Fehler** (49 Ergebnis-Dateien, `app/build/test-results/testDebugUnitTest`),
+  **Release 353 / 0** (47 Ergebnis-Dateien, `app/build/test-results/testReleaseUnitTest`) —
+  gesamt **726 / 0** (neu: `app/src/test/.../keyboard/KeySurfaceTest.kt` zählt in beiden Varianten).
+- **dist/** (nur noch zwei Dateien; ältere APKs entfernt):
+  - `voice-keyboard-0.1.13.apk` — 40 327 468 B —
+    SHA-256 `20d36569f87f8d38f3c43abf9abd55737fcca0c439a5c2783f136327cc6db344`
+  - `voice-keyboard-0.1.13-diag-debug.apk` — 53 123 218 B —
+    SHA-256 `89c91aa658ef58de79ecc74717595380eca5e9055bd6970d4b134bdbbd5b76df`
+  - Download: `http://<download-server>/api/file?path=Voice-Keyboard/dist/<name>&download=1`
+    (`curl -I` → 200).
+- **GitHub:** Repo `tsii/Voice-Keyboard`, `main` = `7f917c8` (219 Dateien); Signier-Passwort
+  geschwärzt; `keystore/`, `dist/`, `state/`, `testdata/`, `.models-fp*` ignoriert;
+  11,8 GiB `.git`-Müll entfernt. **Weitere Pushes nur nach Nutzer-Freigabe (Regel 10).**
 
+## Seit dem letzten Doku-Stand fertig (Auszug)
+Stock-Optik · Info-Leiste · 48-dp-Zeile · Dunkelmodus · Fußzeile · **Haltegeste**
+(Push-to-Talk mit Sichtzuständen, Leer-Hinweis D10) · kein Erfolgshäkchen ohne Finale ·
+**Statuszeile friert nicht mehr ein** (`ime/StatusBarText.kt`, `ime/StatusRouting.kt`,
+Startfrist 15 s) · Diktat-Ausgang als `StopOutcome` (`failedThisSession`/`droppedBlocks`) ·
+fangsicherer Consumer (`ime/DictationCoordinator.kt:311`) · **8 neue Diagnosefelder**
+(`ctl_state`, `ctl_failed`, `dropped`, `hyp_count`, `hyp_gap_ms`, `audio_s`, `start_ms`,
+`starting`; `DebugInfoFormatter KEYS = 24`, Drift-Check aktiv) · 14 `dictation_`-Strings
+(neu: `dictation_error_editor_busy`).
 
-## Größter Erfolg (01:05, eigener Gerätebeweis)
-`connectedDebugAndroidTest`: **tests=6, failures=0, skipped=0** — `s1_realEngine_realWav` **PASSED**. Das Diktat schreibt aus einer echten WAV über die echte Engine den vollständigen §4.1-Goldentext. Vorher (00:36) war derselbe Test rot: `… ob die Viktifunktion auf dem T.` — ein früh committetes Fehlwort hatte den ganzen Rest blockiert. Behoben durch E8 (Commit erst ab 3 Hypothesen, letzte 2 Wörter ungeschützt, `commitUpTo` darf schrumpfen, W3c-Rollback im eigenen Bereich).
-Unit-Bestand: **204 / 0 Fehler** (7 neue E8-Tests, inkl. T1 = exakt der Gerätefall).
+## D11/F15 — Tastendruck-Optik (umgesetzt und gerätebelegt)
+Neue reine Naht `keyboard/KeySurface.kt` (keine Android-Abhängigkeit). Am Emulator gemessen
+(**Orchestrator-Messung, Screenshot-Messung außerhalb des Repos** — die Bilder sind bewusst nicht
+im Repository): gedrückte Taste Max-Kanal-Delta **73/255 (hell)** bzw. **65/255 (dunkel)** statt
+vorher 27/21; CapsLock-Fläche erreicht den Akzent `#4DB6AC` (hell) / `#80CBC4` (dunkel) mit
+Abweichung **0**. Sollwerte aus D11 stehen in `docs/DESIGN_STOCK_LOOK.md`, die Messwerte hier.
 
-## Verifizierter Stand
-- Modell-Download end-to-end echt bewiesen (671 MB, `.part`+`.etag`, Geräte-Hashes = `docs/MODEL_SHA256.txt`, Netz danach automatisch aus).
-- Thread-Invarianten: Editorzugriff zentral in `InputConnectionSink`, `onStopped` auf Main, `onDestroy` = `abort → stopFgs → stopObserving → shutdown(1×) → cancel`.
-- E5-Fehlertexte statt Rohcodes in der Statuszeile; R-3 (`setup_network_disabled`) erledigt.
-- Reviews `REVIEW_STAGE1`…`REVIEW_STAGE6`: 0 offene P0; **1 offener P1 = A1** (Fix läuft).
+## Geklärt (nicht mehr untersuchen)
+- **Mikro-Pegel am Telefon in Ordnung:** `peak_dbfs −22,0`, `peak_pct 7`, `route intern`,
+  `src VOICE_RECOGNITION` → AudioSource-Experiment hinfällig (`docs/DICTATION_RELIABILITY_PLAN.md`).
+- **Kein Sample-Verlust** bei gesundem Consumer (`Channel.UNLIMITED`).
+- **Kein `maxDuration`-Abschaltverdacht** (300 s ≠ beobachtete 10–15 s).
 
-## Offene Punkte
-| ID | Schwere | Inhalt |
-|---|---|---|
-| A1 | **P1** | Geisterschreiben nach `latch`-Timeout — Fix läuft |
-| A2 | P2 | E5-Lücken + `OutOfMemoryError` (Error, nicht Exception) — läuft |
-| C6 | P2 | `DictationController` ruft nach W3c-Rollback kein `policy.reset()` → Agreement zählt über den Rollback weiter |
-| E7 | Note | FGS-Start-Fallback-Kaskade in `model/ModelDownloadService.kt` |
-| A3 | Note | `updateStatus(extra)` ist untypisierte Rohstring-Leitung |
-| M6/M7 | offen | Release-Build lief noch nie; finaler Review durch GPT 6.1 Sol steht aus |
+## Offen — größter verbleibender Verdacht
+**C2 Engine-Rückstau** (`rtf 0,44`, erste Hypothese nach 5 339 ms): erklärt fehlenden Text
+nach 10–15 s Dauerdiktat. **Jetzt messbar, noch nicht behoben.**
+Entscheidung fällt der nächste 🐞-Export vom Telefon:
+`hyp_gap_ms > 4000` bei `ctl_state RECORDING` → Engine-/Chunk-Strategie;
+`ctl_state IDLE` + `dropped > 0` → Kontrollpfad.
+
+## Geräte-Behinderung (gilt für alle künftigen Läufe)
+**`<device>` (x86_64 + ARM-Bridge) killt den IME-Prozess beim Laden von
+`libonnxruntime.so` nativ per SIGSEGV** (dlopen/call_constructors, `am_anr 0`, nur
+Worker-Thread) → Diktat-/Engine-Lauf auf DIESEM Emulator **nicht validierbar**;
+Tasten-/Gestenzustellung schon (`q` → `qq`). Audio-Brücke ist wieder **AUS**
+(`tools/emulator_audio_down.sh`), Peak = 0.
 
 ## Nächste konkrete Schritte
-1. A1/A2 verifizieren, dann C6 und E7 als zwei Mini-Aufträge.
-2. M6: `assembleRelease` mit `keystore/release.jks` (Alias `voicekeyboard`, Pass `<in local.properties, untracked>`) → `apksigner verify` → `dist/` → Download-Link `http://<host>:8736/api/file?path=Voice-Keyboard/dist/<apk>&download=1` (mit `curl -I` prüfen).
-3. M7: GPT-6.1-Sol-Emulator-Review. Gerät ist vorbereitet: IME gesetzt, Modell aktiv („Modell aktiv – Sprachfunktion freigeschaltet.").
+1. 🐞-Export vom Telefon mit **langem** Diktat (10–15 s) einholen → C2 entscheiden.
+2. Danach: Engine-/Chunk-Strategie **oder** Kontrollpfad-Fix (je nach Messung).
+3. Rest-Screenshots (Caps, gedrückte Taste, Emoji-Panel, zweite Öffnung, hell + dunkel).
+4. fp16-Variante **pausiert** (`.models-fp16` 1,2 GB); Englisch/MULTILANG liegt auf
+   Nutzerwunsch (`docs/MULTILANG_PLAN.md`, Phase-1-Beschlüsse dort).
 
 ## Fallstricke
 - **Kein `sleep` im Turn** — `schedule_task` + Statuszeile; max. 2× `wait_all(60)`.
-- Gradle = globales Mutex; Write-only-Aufträge nur mit terminierter Verifikation.
-- `connectedDebugAndroidTest` **deinstalliert die App am Ende** → danach immer: `install -r`, `ime enable`, `ime set de.voicekeyboard/.ime.VoiceKeyboardService`.
-- **Modell ohne Download vorinstallieren** (spart 671 MB und 2 min): `run-as de.voicekeyboard mkdir -p files/models/versions/v-test`, die 4 Dateien aus `/data/local/tmp/models` per `run-as … cp` hineinkopieren, `echo -n v-test > files/models/active.txt`; App hasht beim nächsten Setup-Aufruf und meldet „Modell aktiv" (~40 s).
-- `clearPackageData` muss auf `false` bleiben, sonst löscht jeder Instrumented-Lauf den Modellbestand.
-- `adb` nicht im PATH: `export PATH=$PATH:/opt/android-sdk/platform-tools`. Emulator `<device>` läuft mit `-no-audio` → Diktat nur per WAV beweisbar.
-- `am force-stop` setzt das System-IME auf Google-Voice zurück.
-- UI-Koordinaten: Feld `(400,240)` (nach `am start -S` nur einmal tippen), Tastenreihe `y≈1783`, Push-to-Talk `(1006,1742)`, Setup-Schalter `(540,517)`, Setup-Start `(540,377)`.
-- Edit-Tool: mehrfache `edits[]`-Arrys mit eingebetteten `"`-Zeichen schlagen in diesem Client fehl → Einzel-Edits oder `write`.
-- Slots werden nur durch Dismiss im UI frei; Liveness am Dateisystem prüfen.
+- Gradle = globales Mutex. Write-only nur mit **terminierter** Verifikation.
+- Emulator-Lauf nie im Coder-Auftrag; Instrumented deinstalliert die App (`install -r` +
+  `ime enable` + `ime set` danach), `clearPackageData=false`.
+
+## Historie (überholt, nur zur Einordnung)
+- v0.1.3 galt bis 2026-10-28 als aktuell (40 242 852 B, versionCode 4) — **ersetzt**.
+- Testbestände 157 / 204 / 213 / 217 / 279 aus früheren Stufen — **überholt** (heute 368 Debug).
+- „M6 Release lief noch nie" — **falsch seit** v0.1.0; heute v0.1.13.

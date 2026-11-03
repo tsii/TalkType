@@ -12,7 +12,8 @@ T8 Y-Reihe zentriert (@→m-Menü, ⇧/⏎ umgebaut), T9 Statuszeile nur Debug; 
    P2-2 coordinator @Volatile (docs/REVIEW_A5_W.md, docs/REVIEW_V0136.md).
 2. **P2-Berichtspunkte (optional):** 3 Stück in `docs/REVIEW_A1_A3_B.md` (stale Kommentar,
    Arming-Sonderfall, redundante Baseline-Setzung).
-3. **Push nach Nutzer-Freigabe** (main `dc3b4f0`; 0.1.14–0.1.34 ungepusht; Reviews Push JA).
+3. **PUSH ERFOLGT (Nutzer-Freigabe 2026-11-03):** main `7d50174` — 0.1.32–0.1.38
+   inkl. Reviews/Doku/README-Bild hochgeladen; Regel 10 gilt wieder ab jetzt.
 4. Zurückgestelltes unverändert (MULTILANG, NPU/GPU, Variante B, fp16); alte C2-Export-
    Entscheidungsbaum-Arbeit ist durch A4-Diagnose überholt.
 

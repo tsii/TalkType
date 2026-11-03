@@ -5,7 +5,7 @@ Reviewer: DeepSeek V4 Pro 0813 (sa-4a156936), 2026-11-03 11:4x. Full text in the
 
 ## PASSED
 - No logic changes (81 diff files, literals/comments/resources only).
-- No secrets: no <internal-net> IPs, no tokens/keys; SHA256: hit = public SSH host key (harmless).
+- No secrets: no internal IP literals, no tokens/keys; SHA256: hit = public SSH host key (harmless).
 - 25 modified test files synced byte-exact to new English strings; no test asserts old literals.
 - README fully English.
 

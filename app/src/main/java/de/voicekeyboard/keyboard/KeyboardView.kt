@@ -52,6 +52,15 @@ class KeyboardView @JvmOverloads constructor(
          * information, no rework of the gesture).
          */
         fun onMicHoldEnd(cancelled: Boolean, holdDurationMs: Long) {}
+
+        /**
+         * B2w: backspace repeat in WORD mode (held ≥
+         * [BackspaceRepeat.WORD_THRESHOLD_MS] = 2000 ms) — ONE whole word per
+         * firing (3 words/s) instead of a single character. Internal gesture of
+         * the repeat timer (no layout action); the character path stays on
+         * onAction(BACKSPACE).
+         */
+        fun onBackspaceWord() {}
     }
 
     var listener: Listener? = null
@@ -857,13 +866,17 @@ class KeyboardView @JvmOverloads constructor(
 
     // ---- B2 (PLAN_V0133 §B2): backspace repeat — pure time logic + timer adapter ----
 
-    /** B2: schedule (450 ms start, 70 ms period) — JVM-testable (BackspaceTest). */
+    /** B2/B2w: schedule (450 ms start, 70 ms period; from 2000 ms whole words
+     *  every 333 ms) — JVM-testable (BackspaceTest). */
     private val backspaceRepeat = BackspaceRepeat()
 
-    /** B2: repeat firing — runs over the SAME service branch (onAction(BACKSPACE)). */
+    /** B2/B2w: repeat firing — CHARACTER over the SAME service branch
+     *  (onAction(BACKSPACE)), WORD over onBackspaceWord (same editor seam). */
     private val backspaceRepeatRunnable = Runnable {
-        if (backspaceRepeat.tick(android.os.SystemClock.elapsedRealtime())) {
-            listener?.onAction(KeyActions.BACKSPACE)
+        when (backspaceRepeat.tick(android.os.SystemClock.elapsedRealtime())) {
+            BackspaceRepeatMode.CHARACTER -> listener?.onAction(KeyActions.BACKSPACE)
+            BackspaceRepeatMode.WORD -> listener?.onBackspaceWord()
+            null -> Unit
         }
         scheduleBackspaceRepeat()
     }
@@ -886,7 +899,8 @@ class KeyboardView @JvmOverloads constructor(
                 val down = keyAtVisible(event.x, event.y)
                 pressedKey = down
                 // B2 (PLAN_V0133 §B2): backspace DOWN performs EXACTLY ONE action
-                // and arms the repeat timer (450 ms start / 70 ms period) —
+                // and arms the repeat timer (450 ms start / 70 ms period; from
+                // 2000 ms held whole words every 333 ms) —
                 // UP/CANCEL ends without a second action (no double delete).
                 if (down != null && down.kind == "action" && down.value == KeyActions.BACKSPACE) {
                     if (backspaceRepeat.down(android.os.SystemClock.elapsedRealtime())) {

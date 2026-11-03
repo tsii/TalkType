@@ -1,6 +1,6 @@
 # Voice-Keyboard project status (working file for continuation)
 
-**Status: 2026-11-03 07:50 · v0.1.41 / versionCode 42 (TalkType)** (next build 40 /
+**Status: 2026-11-03 07:50 · v0.1.42 / versionCode 43** (next build 40 /
 0.1.39). Current details see `HANDOFF.md`, verification status see
 `state/progress.md`, order see `reports/NEXT.md`.
 

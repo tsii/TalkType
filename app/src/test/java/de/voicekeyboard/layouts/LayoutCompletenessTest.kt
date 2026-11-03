@@ -533,14 +533,13 @@ class LayoutCompletenessTest {
      * F27d/F29→F36/V2 + F40 (docs/DESIGN_TASTATUR_V2.md, 1u = 108 px; user
      * feedback v0.1.27): base/shift carry the V2 grid — r0 = 10 letters at
      * 1.0 each WITHOUT ⌫; r1 = margin 0.5 + letter block 8.5u + ⌫ 1.0 (F40: at the
-     * r1 END); r2 = T8 (v0.1.38, planner approval) Y-row alignment: NO more @
-     * (reachable via the M long-press menu), the 13 7-key assets ⇧ 0.89352 +
-     * 7 at 1.10185 + ⏎ 1.39352 (Y center 13/9 = 1.44444 below A/S, M center
-     * 145/18 = 8.05556 below K/L; the block center moves 540→513 px — documented
-     * deviation in DESIGN_TASTATUR_V2 §10: user centering beats uniformity; r2 is
-     * now the widest letter row, 119-px cells); cs-cz ⇧ 1.889 + 6 at 1.03704 +
-     * ⏎ 1.88889 (6-key, no M centering — documented exception); footer r3
-     * UNCHANGED Σ13 (its own unit u_footer). Rounding: 5 decimals, sum tolerance
+     * r1 END); r2 = T11 (docs/PLAN_T11_T12.md §2, D1 = variant B) boundary grid:
+     * NO more @ (reachable via the M long-press menu), the 13 7-key assets
+     * ⇧ 1.22224 + 8 at 0.94444 (7 letters + period, 102-px cells) + ⏎ 1.22224,
+     * center chain symmetric about 5.0 (every center pair sums to 10);
+     * cs-cz (B') ⇧ 2.025 + 7 at 0.85 (6 letters + period) + ⏎ 2.025; footer r3
+     * Σ13 STAYS but the period moves up to r2 (space 6.5→7.5, 5 keys; its own
+     * unit u_footer). Rounding: 5 decimals, sum tolerance
      * 0.001u (≤ 0.11 px). Special cases: cs-cz r1 = 10 letters at 0.85 + ⌫ 1.0
      * (the same 8.5u block); ru-ru r0/r1 = margin 0.11111 (12 px) per side +
      * 11 at 0.88889 (96 px, spec §6), r2 stays the D27 full row ⇧1 + 10 at
@@ -625,53 +624,56 @@ class LayoutCompletenessTest {
                     fail("Asset '${parsed.id}' $layerName: r1 without right margin (Σ10, F36/V2)")
                 }
             }
-            // r2 T8 (v0.1.38, planner approval): @ key OUT (user order — @
-            // reachable via the M long-press menu), ⇧ narrower, ⏎ wider — Y centered
-            // below A/S, M centered below K/L (rationale of the rewrite: the
-            // old invariants ⇧1.889/0.889/@-mandatory/⏎1.0/block center 5u are
-            // incompatible with the user order; the center invariants move
-            // here AND to LetterRowAlignmentAcrossAssetsTest).
-            //  - the 13 7-key assets: ⇧ 0.89352 + 7 at 1.10185 + ⏎ 1.39352;
-            //    Y center 13/9 = 1.44444, M center 145/18 = 8.05556 (KEY_GAP=0 ⇒ px-exact:
-            //    96.5 + 7×119 + 150.5 = 1080 px).
-            //  - cs-cz (6-key, no y): ⇧ 1.88889 + 6 at 1.03704 + ⏎ 1.88889 (⇧=⏎
-            //    symmetric); M centering is arithmetically unreachable in the 6-key grid
-            //    ⇒ documented exception (structure only, no centers).
-            //  - ru-ru: the D27 full row stays (no @ on the letter layers).
+            // r2 T11 (docs/PLAN_T11_T12.md §2, D1 = VARIANT B): boundary grid —
+            // 8 equal cells (7 letters + the NEW period key id 'period' before ⏎)
+            // on the r1 boundary raster, ⇧ and ⏎ take the symmetric remainder.
+            //  - the 13 7-key assets: ⇧ 1.22224 + 8 at 0.94444 (102 px) + ⏎ 1.22224
+            //    (px: 132 + 8×102 + 132 = 1080; centers 1.69446..8.30554).
+            //  - cs-cz (B'): ⇧ 2.025 + 7 at 0.85 (6 letters + period) + ⏎ 2.025.
+            //  - period carries the F54 menu , ! ? : ; ( ) (moved up from the
+            //    footer, base AND shift); M keeps its @ alternate (T8).
+            //  - ru-ru: the D27 full row stays (no period key in r2, 6-key footer).
             val r2 = rows[2]
-            val r2Letters = r2.filter { it.kind == KeyKind.TEXT }
-            val wantShift = when { isRu -> 1.0; isCs -> 1.88889; else -> 0.89352 }
+            val r2Texts = r2.filter { it.kind == KeyKind.TEXT }
+            val wantShift = when { isRu -> 1.0; isCs -> 2.025; else -> 1.22224 }
             if (r2.isEmpty() || r2[0].kind != KeyKind.ACTION || r2[0].value != KeyActions.SHIFT ||
                 kotlin.math.abs(r2[0].width - wantShift) > 0.001
             ) {
-                fail("Asset '${parsed.id}' $layerName: r2[0] must be shift width $wantShift (T8, is " +
+                fail("Asset '${parsed.id}' $layerName: r2[0] must be shift width $wantShift (T11, is " +
                     "${r2.firstOrNull()?.let { it.value + "/" + it.width }})")
             }
             val wantL = when {
-                isRu -> 1.0     // D27: 10 at 1.0 in the Σ12 row
-                isCs -> 1.03704 // 112 px
-                else -> 1.10185 // 119 px — r2 is now the widest letter row (T8)
+                isRu -> 1.0    // D27: 10 at 1.0 in the Σ12 row
+                isCs -> 0.85   // 91.8 px
+                else -> 0.94444 // 102 px — boundary raster of the home row
             }
-            val wantNL = if (isRu) 10 else if (isCs) 6 else 7
-            if (r2Letters.size != wantNL) {
-                fail("Asset '${parsed.id}' $layerName: r2 needs $wantNL letters (has ${r2Letters.size})")
+            val wantNT = if (isRu) 10 else if (isCs) 7 else 8 // letters + period
+            if (r2Texts.size != wantNT) {
+                fail("Asset '${parsed.id}' $layerName: r2 needs $wantNT text keys incl. period (has ${r2Texts.size})")
             }
-            for (k in r2Letters) {
+            for (k in r2Texts) {
                 if (kotlin.math.abs(k.width - wantL) > 0.001) {
-                    fail("Asset '${parsed.id}' $layerName r2 '${k.id}': width ${k.width} != $wantL (T8)")
+                    fail("Asset '${parsed.id}' $layerName r2 '${k.id}': width ${k.width} != $wantL (T11)")
                 }
             }
             val enter = r2.firstOrNull { it.kind == KeyKind.ACTION && it.value == KeyActions.ENTER }
-            val wantEnter = when { isRu -> 1.0; isCs -> 1.88889; else -> 1.39352 }
+            val wantEnter = when { isRu -> 1.0; isCs -> 2.025; else -> 1.22224 }
             if (enter == null || kotlin.math.abs(enter.width - wantEnter) > 0.001) {
-                fail("Asset '${parsed.id}' $layerName: ⏎ width $wantEnter expected in r2 (T8)")
+                fail("Asset '${parsed.id}' $layerName: ⏎ width $wantEnter expected in r2 (T11)")
             }
             if (!isRu) {
-                // T8: NO more direct @ key in r2 — @ runs via the M menu.
+                // T11: NO more direct @ key in r2 — @ runs via the M menu.
                 if (r2.any { it.kind == KeyKind.TEXT && it.value == "@" }) {
-                    fail("Asset '${parsed.id}' $layerName: direct @ key forbidden in r2 (T8: @ → M menu)")
+                    fail("Asset '${parsed.id}' $layerName: direct @ key forbidden in r2 (@ → M menu)")
                 }
-                val m = r2Letters.lastOrNull()
+                // T11: the period key sits exactly 1× in r2 (slot before ⏎).
+                val period = r2.filter { it.id == "period" }
+                if (period.size != 1 || period[0].kind != KeyKind.TEXT || period[0].value != ".") {
+                    fail("Asset '${parsed.id}' $layerName: exactly 1 period key (text, '.') expected in r2 (T11)")
+                }
+                // M lookup excludes the period key (id 'period'): the M key is
+                // the LAST LETTER, not the last text key of r2.
+                val m = r2Texts.lastOrNull { it.id != "period" }
                 if (m == null || m.alternates.none { it == "@" }) {
                     fail("Asset '${parsed.id}' $layerName: the M key must carry @ in its long-press menu (T8)")
                 }
@@ -679,25 +681,18 @@ class LayoutCompletenessTest {
             if (r2.last().kind == KeyKind.MARGIN) {
                 fail("Asset '${parsed.id}' $layerName: r2 without right margin (F36/V2)")
             }
-            // T8 centers (7-key assets only; cs: 6-key exception, ru: D27): Y centered
-            // below A/S ⇒ c(r2[0]) = 13/9; M centered below K/L ⇒ c(r2[6]) = 145/18
-            // (derivation: r1 center c1(i) = 0.5 + (i+0.5)·0.94444). Replaces the
-            // F36 block center 5u — which moves to 4.75u (540→513 px, documented
-            // deviation in DESIGN_TASTATUR_V2 §10).
-            if (!isRu && !isCs) {
-                val r1Letters = rows[1].filter { it.kind == KeyKind.TEXT }
-                if (r1Letters.size != 9) {
-                    fail("Asset '${parsed.id}' $layerName: r1 needs 9 letters (has ${r1Letters.size})")
-                }
-                var x1 = 0.5
-                val c1 = r1Letters.map { x1 += it.width; x1 - it.width / 2 }
-                var x2 = r2[0].width
-                val c2 = r2Letters.map { x2 += it.width; x2 - it.width / 2 }
-                if (kotlin.math.abs(c2[0] - 13.0 / 9) > 0.01 ||
-                    kotlin.math.abs(c2[6] - 145.0 / 18) > 0.01
-                ) {
-                    fail("Asset '${parsed.id}' $layerName: T8 centers violated — " +
-                        "Y ${"%.4f".format(c2[0])} != 13/9, M ${"%.4f".format(c2[6])} != 145/18")
+            // T11 invariant (variant B): the FULL r2 center chain is symmetric
+            // about 5.0 — every center pair c[i] + c[n-1-i] = 10 (⇧ = ⏎). Replaces
+            // the T8 Y/M centering (13/9, 145/18) — documented deviation in
+            // DESIGN_TASTATUR_V2 §10.
+            if (!isRu) {
+                var x2 = 0.0
+                val c2 = r2.map { x2 += it.width; x2 - it.width / 2 }
+                for (i in c2.indices) {
+                    if (kotlin.math.abs(c2[i] + c2[c2.size - 1 - i] - 10.0) > 0.001) {
+                        fail("Asset '${parsed.id}' $layerName: T11 symmetry violated — " +
+                            "c[$i]=${"%.5f".format(c2[i])} + c[${c2.size - 1 - i}]=${"%.5f".format(c2[c2.size - 1 - i])} != 10")
+                    }
                 }
             }
         }

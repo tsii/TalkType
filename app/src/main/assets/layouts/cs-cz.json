@@ -220,21 +220,21 @@
           {
             "id": "shift",
             "label": "⇧",
-            "width": 1.88889,
+            "width": 2.025,
             "kind": "action",
             "value": "shift"
           },
           {
             "id": "x",
             "label": "x",
-            "width": 1.03704,
+            "width": 0.85,
             "kind": "text",
             "value": "x"
           },
           {
             "id": "c",
             "label": "c",
-            "width": 1.03704,
+            "width": 0.85,
             "kind": "text",
             "value": "c",
             "alternates": [
@@ -244,21 +244,21 @@
           {
             "id": "v",
             "label": "v",
-            "width": 1.03704,
+            "width": 0.85,
             "kind": "text",
             "value": "v"
           },
           {
             "id": "b",
             "label": "b",
-            "width": 1.03704,
+            "width": 0.85,
             "kind": "text",
             "value": "b"
           },
           {
             "id": "n",
             "label": "n",
-            "width": 1.03704,
+            "width": 0.85,
             "kind": "text",
             "value": "n",
             "alternates": [
@@ -268,7 +268,7 @@
           {
             "id": "m",
             "label": "m",
-            "width": 1.03704,
+            "width": 0.85,
             "kind": "text",
             "value": "m",
             "alternates": [
@@ -276,9 +276,25 @@
             ]
           },
           {
+            "id": "period",
+            "label": ".",
+            "width": 0.85,
+            "kind": "text",
+            "value": ".",
+            "alternates": [
+              ",",
+              "!",
+              "?",
+              ":",
+              ";",
+              "(",
+              ")"
+            ]
+          },
+          {
             "id": "enter",
             "label": "⏎",
-            "width": 1.88889,
+            "width": 2.025,
             "kind": "action",
             "value": "enter"
           }
@@ -308,25 +324,9 @@
           {
             "id": "space",
             "label": "Mezera",
-            "width": 6.5,
+            "width": 7.5,
             "kind": "action",
             "value": "space"
-          },
-          {
-            "id": "period",
-            "label": ".",
-            "width": 1,
-            "kind": "text",
-            "value": ".",
-            "alternates": [
-              ",",
-              "!",
-              "?",
-              ":",
-              ";",
-              "(",
-              ")"
-            ]
           },
           {
             "id": "mic",
@@ -549,21 +549,21 @@
           {
             "id": "shift",
             "label": "⇧",
-            "width": 1.88889,
+            "width": 2.025,
             "kind": "action",
             "value": "shift"
           },
           {
             "id": "x",
             "label": "X",
-            "width": 1.03704,
+            "width": 0.85,
             "kind": "text",
             "value": "X"
           },
           {
             "id": "c",
             "label": "C",
-            "width": 1.03704,
+            "width": 0.85,
             "kind": "text",
             "value": "C",
             "alternates": [
@@ -573,21 +573,21 @@
           {
             "id": "v",
             "label": "V",
-            "width": 1.03704,
+            "width": 0.85,
             "kind": "text",
             "value": "V"
           },
           {
             "id": "b",
             "label": "B",
-            "width": 1.03704,
+            "width": 0.85,
             "kind": "text",
             "value": "B"
           },
           {
             "id": "n",
             "label": "N",
-            "width": 1.03704,
+            "width": 0.85,
             "kind": "text",
             "value": "N",
             "alternates": [
@@ -597,7 +597,7 @@
           {
             "id": "m",
             "label": "M",
-            "width": 1.03704,
+            "width": 0.85,
             "kind": "text",
             "value": "M",
             "alternates": [
@@ -605,9 +605,25 @@
             ]
           },
           {
+            "id": "period",
+            "label": ".",
+            "width": 0.85,
+            "kind": "text",
+            "value": ".",
+            "alternates": [
+              ",",
+              "!",
+              "?",
+              ":",
+              ";",
+              "(",
+              ")"
+            ]
+          },
+          {
             "id": "enter",
             "label": "⏎",
-            "width": 1.88889,
+            "width": 2.025,
             "kind": "action",
             "value": "enter"
           }
@@ -637,25 +653,9 @@
           {
             "id": "space",
             "label": "Mezera",
-            "width": 6.5,
+            "width": 7.5,
             "kind": "action",
             "value": "space"
-          },
-          {
-            "id": "period",
-            "label": ".",
-            "width": 1,
-            "kind": "text",
-            "value": ".",
-            "alternates": [
-              ",",
-              "!",
-              "?",
-              ":",
-              ";",
-              "(",
-              ")"
-            ]
           },
           {
             "id": "mic",
@@ -754,6 +754,16 @@
             ]
           },
           {
+            "id": "plus",
+            "label": "+",
+            "width": 0.9,
+            "kind": "text",
+            "value": "+",
+            "alternates": [
+              "±"
+            ]
+          },
+          {
             "id": "slash",
             "label": "/",
             "width": 0.9,
@@ -763,20 +773,6 @@
               "\\",
               "|"
             ]
-          },
-          {
-            "id": "colon",
-            "label": ":",
-            "width": 0.9,
-            "kind": "text",
-            "value": ":"
-          },
-          {
-            "id": "semicolon",
-            "label": ";",
-            "width": 0.9,
-            "kind": "text",
-            "value": ";"
           },
           {
             "id": "paren-left",
@@ -831,6 +827,16 @@
             "value": "#"
           },
           {
+            "id": "percent",
+            "label": "%",
+            "width": 0.9,
+            "kind": "text",
+            "value": "%",
+            "alternates": [
+              "‰"
+            ]
+          },
+          {
             "id": "backspace",
             "label": "⌫",
             "width": 1,
@@ -847,14 +853,18 @@
             "value": "shift"
           },
           {
-            "id": "dot",
-            "label": ".",
+            "id": "colon",
+            "label": ":",
             "width": 0.75,
             "kind": "text",
-            "value": ".",
-            "alternates": [
-              "…"
-            ]
+            "value": ":"
+          },
+          {
+            "id": "semicolon",
+            "label": ";",
+            "width": 0.75,
+            "kind": "text",
+            "value": ";"
           },
           {
             "id": "comma",
@@ -862,26 +872,6 @@
             "width": 0.75,
             "kind": "text",
             "value": ","
-          },
-          {
-            "id": "question",
-            "label": "?",
-            "width": 0.75,
-            "kind": "text",
-            "value": "?",
-            "alternates": [
-              "¿"
-            ]
-          },
-          {
-            "id": "exclam",
-            "label": "!",
-            "width": 0.75,
-            "kind": "text",
-            "value": "!",
-            "alternates": [
-              "¡"
-            ]
           },
           {
             "id": "apostrophe",
@@ -911,26 +901,6 @@
             ]
           },
           {
-            "id": "percent",
-            "label": "%",
-            "width": 0.75,
-            "kind": "text",
-            "value": "%",
-            "alternates": [
-              "‰"
-            ]
-          },
-          {
-            "id": "plus",
-            "label": "+",
-            "width": 0.75,
-            "kind": "text",
-            "value": "+",
-            "alternates": [
-              "±"
-            ]
-          },
-          {
             "id": "underscore",
             "label": "_",
             "width": 0.75,
@@ -943,6 +913,36 @@
             "width": 0.75,
             "kind": "text",
             "value": "*"
+          },
+          {
+            "id": "exclam",
+            "label": "!",
+            "width": 0.75,
+            "kind": "text",
+            "value": "!",
+            "alternates": [
+              "¡"
+            ]
+          },
+          {
+            "id": "question",
+            "label": "?",
+            "width": 0.75,
+            "kind": "text",
+            "value": "?",
+            "alternates": [
+              "¿"
+            ]
+          },
+          {
+            "id": "dot",
+            "label": ".",
+            "width": 0.75,
+            "kind": "text",
+            "value": ".",
+            "alternates": [
+              "…"
+            ]
           },
           {
             "id": "enter",
@@ -1081,20 +1081,6 @@
             "value": "|"
           },
           {
-            "id": "colon",
-            "label": "°",
-            "width": 0.9,
-            "kind": "text",
-            "value": "°"
-          },
-          {
-            "id": "semicolon",
-            "label": "§",
-            "width": 0.9,
-            "kind": "text",
-            "value": "§"
-          },
-          {
             "id": "paren-left",
             "label": "<",
             "width": 0.9,
@@ -1137,6 +1123,20 @@
             "value": "±"
           },
           {
+            "id": "equals",
+            "label": "×",
+            "width": 0.9,
+            "kind": "text",
+            "value": "×"
+          },
+          {
+            "id": "hash",
+            "label": "£",
+            "width": 0.9,
+            "kind": "text",
+            "value": "£"
+          },
+          {
             "id": "backspace",
             "label": "⌫",
             "width": 1,
@@ -1153,53 +1153,18 @@
             "value": "shift"
           },
           {
-            "id": "asterisk",
-            "label": "~",
+            "id": "colon",
+            "label": "°",
             "width": 0.75,
             "kind": "text",
-            "value": "~"
+            "value": "°"
           },
           {
-            "id": "underscore",
-            "label": "}",
+            "id": "semicolon",
+            "label": "§",
             "width": 0.75,
             "kind": "text",
-            "value": "}"
-          },
-          {
-            "id": "apostrophe",
-            "label": "„",
-            "width": 0.75,
-            "kind": "text",
-            "value": "„"
-          },
-          {
-            "id": "dquote",
-            "label": "“",
-            "width": 0.75,
-            "kind": "text",
-            "value": "“"
-          },
-          {
-            "id": "dot",
-            "label": "…",
-            "width": 0.75,
-            "kind": "text",
-            "value": "…"
-          },
-          {
-            "id": "comma",
-            "label": "–",
-            "width": 0.75,
-            "kind": "text",
-            "value": "–"
-          },
-          {
-            "id": "question",
-            "label": "¿",
-            "width": 0.75,
-            "kind": "text",
-            "value": "¿"
+            "value": "§"
           },
           {
             "id": "exclam",
@@ -1209,18 +1174,53 @@
             "value": "¡"
           },
           {
-            "id": "equals",
-            "label": "×",
+            "id": "question",
+            "label": "¿",
             "width": 0.75,
             "kind": "text",
-            "value": "×"
+            "value": "¿"
           },
           {
-            "id": "hash",
-            "label": "£",
+            "id": "comma",
+            "label": "–",
             "width": 0.75,
             "kind": "text",
-            "value": "£"
+            "value": "–"
+          },
+          {
+            "id": "dot",
+            "label": "…",
+            "width": 0.75,
+            "kind": "text",
+            "value": "…"
+          },
+          {
+            "id": "dquote",
+            "label": "“",
+            "width": 0.75,
+            "kind": "text",
+            "value": "“"
+          },
+          {
+            "id": "apostrophe",
+            "label": "„",
+            "width": 0.75,
+            "kind": "text",
+            "value": "„"
+          },
+          {
+            "id": "underscore",
+            "label": "}",
+            "width": 0.75,
+            "kind": "text",
+            "value": "}"
+          },
+          {
+            "id": "asterisk",
+            "label": "~",
+            "width": 0.75,
+            "kind": "text",
+            "value": "~"
           },
           {
             "id": "enter",

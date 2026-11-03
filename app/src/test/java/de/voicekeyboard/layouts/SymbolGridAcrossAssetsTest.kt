@@ -39,10 +39,10 @@ class SymbolGridAcrossAssetsTest {
         LayoutParser.parse(java.io.File("src/main/assets/layouts/$id.json").readText())
 
     /** PLAN order symbols r1 (language-neutral, identical in all 15 assets). */
-    private val symbolsR1Order = listOf("-", "/", ":", ";", "(", ")", "&", "@", "=", "#")
+    private val symbolsR1Order = listOf("-", "+", "/", "(", ")", "&", "@", "=", "#", "%")
 
     /** PLAN order symbols r2 (language-neutral, identical in all 15 assets). */
-    private val symbolsR2Order = listOf(".", ",", "?", "!", "'", "\"", "%", "+", "_", "*")
+    private val symbolsR2Order = listOf(":", ";", ",", "'", "\"", "_", "*", "!", "?", ".")
 
     /** Anchored migration list: as-is character set (direct keys ∪ menus) per asset
      *  BEFORE the T6 migration — sorted character string, nothing lost.

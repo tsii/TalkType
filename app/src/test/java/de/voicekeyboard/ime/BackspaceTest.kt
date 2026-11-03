@@ -1,8 +1,10 @@
 package de.voicekeyboard.ime
 
 import de.voicekeyboard.keyboard.BackspaceRepeat
+import de.voicekeyboard.keyboard.BackspaceRepeatMode
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -17,6 +19,13 @@ import org.junit.Test
  *  4. Empty/null selection ⇒ stock path grapheme clusters; no double delete.
  *  5. The repeat after a dropped selection keeps deleting over the normal
  *     grapheme-cluster/fallback path.
+ *  6. B2w: from 2000 ms held on WHOLE WORDS instead of characters — char ticks
+ *     450..1990, then NO char tick anymore; the first word tick EXACTLY at
+ *     2000 ms, then every 333 ms (3 words/s); UP stops in word mode too and
+ *     a fresh gesture starts in char mode again.
+ *  7. B2w word boundaries: spaces, line start, only-spaces prefix, cursor
+ *     mid-word — pure [backspaceWordLengthOf] + the seam branch
+ *     [backspaceDeleteWordOnce].
  *
  * Pure JVM logic (no Android): schedule from [BackspaceRepeat], editor branch
  * from [backspaceDeleteOnce] across the thin [BackspaceEditor] seam.
@@ -32,7 +41,7 @@ class BackspaceTest {
         val fired = mutableListOf<Long>()
         var t = 0L
         while (t <= 1000) {
-            if (r.tick(t)) {
+            if (r.tick(t) != null) {
                 deletes++
                 fired += t
             }
@@ -47,7 +56,7 @@ class BackspaceTest {
         assertEquals("exactly 9 deletes (1 initial + 8 repeats)", 9, deletes)
         // afterwards NO more — not even with eternal continued ticking
         var after = 0
-        for (u in 1010..2000 step 10) if (r.tick(u.toLong())) after++
+        for (u in 1010..2000 step 10) if (r.tick(u.toLong()) != null) after++
         assertEquals("after UP: no further deletes", 0, after)
     }
 
@@ -56,23 +65,27 @@ class BackspaceTest {
         val r = BackspaceRepeat()
         assertTrue(r.down(0))
         var deletes = 1
-        for (t in 0..440 step 10) if (r.tick(t.toLong())) deletes++
+        for (t in 0..440 step 10) if (r.tick(t.toLong()) != null) deletes++
         assertEquals("no repeat before 450 ms", 1, deletes)
-        assertTrue("first repeat exactly at 450", r.tick(450))
+        assertEquals("first repeat exactly at 450", BackspaceRepeatMode.CHARACTER, r.tick(450))
         // UP/CANCEL/detach: deterministically finished — every later firing dead
         r.cancel()
-        assertFalse(r.tick(451))
-        assertFalse(r.tick(10_000))
+        assertNull(r.tick(451))
+        assertNull(r.tick(10_000))
         // short tap: DOWN + immediate UP ⇒ EXACTLY ONE delete
         val tap = BackspaceRepeat()
         var tapDeletes = 0
         if (tap.down(100)) tapDeletes++
         tap.cancel()
-        for (t in 110..1000 step 10) if (tap.tick(t.toLong())) tapDeletes++
+        for (t in 110..1000 step 10) if (tap.tick(t.toLong()) != null) tapDeletes++
         assertEquals("short tap: exactly ONE delete", 1, tapDeletes)
         // after cancel the schedule is armable FRESH (the next gesture starts new)
         assertTrue("re-armable after the stop", tap.down(2_000))
-        assertTrue("and fires again from 450 ms on", tap.tick(2_450))
+        assertEquals(
+            "and fires again from 450 ms on",
+            BackspaceRepeatMode.CHARACTER,
+            tap.tick(2_450),
+        )
     }
 
     // B2 red test 3: non-empty selection atomic — EXACTLY 1× commitText("",1),
@@ -123,6 +136,101 @@ class BackspaceTest {
         assertEquals("no further commitEmpty", 1, e.commitEmptyCalls)
         assertEquals("grapheme clusters keep being deleted", 3, e.deleteGraphemeCalls)
         assertEquals(0, e.deleteKeyCalls)
+    }
+
+    // B2w red test 6: switch point 2000 ms — char ticks 450..1990 (70 grid),
+    // then NO char tick anymore; the FIRST word tick EXACTLY at 2000 ms,
+    // then every 333 ms (3 words/s).
+    @Test fun `B2w after 2000ms whole words - first word tick exactly at the threshold`() {
+        val r = BackspaceRepeat()
+        assertTrue(r.down(0))
+        val chars = mutableListOf<Long>()
+        val words = mutableListOf<Long>()
+        var t = 0L
+        while (t <= 3000) {
+            when (r.tick(t)) {
+                BackspaceRepeatMode.CHARACTER -> chars += t
+                BackspaceRepeatMode.WORD -> words += t
+                null -> Unit
+            }
+            t += 1
+        }
+        assertEquals(
+            "char ticks exactly at 450..1990 in the 70 grid",
+            (0..22).map { 450L + 70L * it },
+            chars,
+        )
+        assertEquals(
+            "from the threshold on NO character tick fires anymore",
+            0,
+            chars.count { it >= BackspaceRepeat.WORD_THRESHOLD_MS },
+        )
+        assertEquals(
+            "word ticks: first EXACTLY at 2000, then every 333 ms (3 words/s)",
+            listOf(2000L, 2333L, 2666L, 2999L),
+            words,
+        )
+        r.cancel() // UP in word mode: deterministic stop
+        assertNull("after UP no further word tick", r.tick(3332))
+    }
+
+    // B2w red test 7: stop in word mode; re-arm starts FRESH in char mode.
+    @Test fun `B2w stop in word mode - re-arm fresh in char mode`() {
+        val r = BackspaceRepeat()
+        assertTrue(r.down(0))
+        assertEquals(BackspaceRepeatMode.CHARACTER, r.tick(450))
+        assertEquals("switch to word at the threshold", BackspaceRepeatMode.WORD, r.tick(2000))
+        r.cancel() // UP in word mode
+        assertNull(r.tick(2333))
+        // re-arm: the NEXT gesture starts FRESH in character mode (450/70 grid)
+        assertTrue(r.down(10_000))
+        assertEquals(BackspaceRepeatMode.CHARACTER, r.tick(10_450))
+        assertEquals("before the threshold still char mode", BackspaceRepeatMode.CHARACTER, r.tick(10_520))
+        assertEquals("word again only after 2000 ms", BackspaceRepeatMode.WORD, r.tick(12_000))
+    }
+
+    // B2w red test 8: word boundaries — pure length logic (spaces, line start,
+    // only-spaces prefix, cursor mid-word).
+    @Test fun `B2w word boundaries - spaces line start only-spaces prefix mid-word`() {
+        // word + spaces before it (normal case)
+        assertEquals("'Hallo Welt|' ⇒ ' Welt' (word + leading space)", 5, backspaceWordLengthOf("Hallo Welt"))
+        assertEquals("'Hallo|' ⇒ 'Hallo' (up to the text start)", 5, backspaceWordLengthOf("Hallo"))
+        assertEquals("'a  b|' ⇒ '  b' (ALL spaces between)", 3, backspaceWordLengthOf("a  b"))
+        // cursor MINTTEN im Wort: only the part left of the cursor
+        assertEquals("'Hal|lo' ⇒ 'Hal'", 3, backspaceWordLengthOf("Hal"))
+        // only-spaces prefix before the cursor: spaces + word in ONE tick
+        assertEquals("'abc   |' ⇒ 'abc   '", 6, backspaceWordLengthOf("abc   "))
+        assertEquals("line start: ONLY the spaces, never the '\n'", 3, backspaceWordLengthOf("abc\n   "))
+        // line start: NO deletion (the word deletion never crosses a line)
+        assertEquals("cursor directly after '\n' ⇒ 0", 0, backspaceWordLengthOf("Zeile1\n"))
+        assertEquals("'abc\ndef|' ⇒ 'def'", 3, backspaceWordLengthOf("abc\ndef"))
+        assertEquals("empty text ⇒ 0", 0, backspaceWordLengthOf(""))
+    }
+
+    // B2w red test 9: word tick over the editor seam — selection atomic, ONE
+    // deleteSurroundingText with ALL units, line start/empty = NO-OP (never
+    // a DEL key event in word mode).
+    @Test fun `B2w word tick over the editor seam - no DEL key`() {
+        val e = FakeBackspaceEditor(selected = null, before = "Hallo Welt")
+        backspaceDeleteWordOnce(e)
+        assertEquals("ONE deleteSurroundingText for the whole word", 1, e.deleteGraphemeCalls)
+        assertEquals("' Welt' = 5 UTF-16 units in ONE call", 5, e.lastDeleteUnits)
+        assertEquals(0, e.commitEmptyCalls)
+        assertEquals(0, e.deleteKeyCalls)
+        // non-empty selection stays atomic (like the character path)
+        val sel = FakeBackspaceEditor(selected = "ausgewaehlt", before = "Text davor")
+        backspaceDeleteWordOnce(sel)
+        assertEquals(1, sel.commitEmptyCalls)
+        assertEquals(0, sel.deleteGraphemeCalls)
+        assertEquals(0, sel.deleteKeyCalls)
+        // line start: NO-OP — never a DEL key event (no line crossing)
+        val lineStart = FakeBackspaceEditor(selected = null, before = "Zeile1\n")
+        backspaceDeleteWordOnce(lineStart)
+        assertEquals("line start: no operation at all", 0, lineStart.totalOps())
+        // empty buffer: also NO-OP in word mode (no DEL key fallback)
+        val empty = FakeBackspaceEditor(selected = null, before = null)
+        backspaceDeleteWordOnce(empty)
+        assertEquals("empty buffer: no DEL key in word mode", 0, empty.totalOps())
     }
 
     /** B2: fake of the editor seam — records all operations (no Android). */

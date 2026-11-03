@@ -12,32 +12,26 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
 /**
- * T8 (v0.1.38, Y-row alignment base/shift): @ key out of r2 (user
- * confirmed), ⇧ narrower, ⏎ wider — Y centered below A/S, M centered below K/L.
+ * T11 (docs/PLAN_T11_T12.md §2, decision D1 = VARIANT B): base/shift r2
+ * boundary grid — 8 equal cells (7 letters + the NEW period key before ⏎)
+ * on the r1 boundary raster, ⇧ and ⏎ take the symmetric remainder (⇧ = ⏎).
  *
- * DERIVATION of the target constants (7-key assets, r1 = 0.5 margin + 9 letters at
- * 0.94444 + ⌫ 1.0 ⇒ center of the i-th r1 letter c1(i) = 0.5 + (i+0.5)·0.94444):
- *   required  c(r2[0]) = (c1(0)+c1(1))/2 = 1.44444   (Y below A/S)
- *              c(r2[6]) = (c1(7)+c1(8))/2 = 8.05556   (M below K/L)
- *   with r2 = ⇧ + 7 letters at w + ⏎:
- *   c(r2[0]) = ⇧ + w/2,  c(r2[6]) = ⇧ + 6.5·w
- *   ⇒ w = (8.05556 − 1.44444)/6 = 1.10185
- *     ⇧ = 1.44444 − w/2 = 0.89352
- *     ⏎ = 10 − ⇧ − 7w = 1.39352
- * constant tolerance ±1e-3 (order T8).
- *
- *  - the 13 7-key assets (da-dk, de-de, el-gr, en-us, es-es, fi-fi, fr-fr, it-it,
- *    nl-nl, pl-pl, pt-pt, sv-se, tr-tr — center invariant; the order's text
- *    list named 12, da-dk/el-gr have the same 7-key structure and are
- *    measured too, see report): base AND shift r2 identical.
- *  - cs-cz (6-key x..m, no y): @ out, ⇧ 1.88889 + 6 at 1.03704 stay,
- *    ⏎ = 10 − 1.88889 − 6·1.03704 = 1.88887 (the order named 1.88875 —
- *    difference 0.00012 u ≈ 0.01 px, within ±1e-3); M centering below K/L
- *    is arithmetically unreachable in the 6-key grid ⇒ documented exception.
- *  - ru-ru: r2 without @ (D27 full row) — untouched, exception documented;
- *    no @ alternate invented (ru knows @ only via the symbol layer).
- *  - @ stays reachable: per asset the M key (last r2 letter,
- *    id per asset: m respectively el-gr μ) carries alternates ["@"] (≤ 8, no hint).
+ * TARGET CONSTANTS (variant B, replaces the T8 Y/M centering):
+ *   - 13 seven-key assets (r1 = 0.5 margin + 9 letters at 0.94444 + ⌫ 1.0,
+ *     boundaries g_i = 0.5 + i·0.94444): r2 = ⇧ 1.22224 + 8 cells à 0.94444
+ *     + ⏎ 1.22224 (px: 132 + 8×102 + 132 = 1080, Σ 10 exact).
+ *   - cs-cz (B', 6-key home row at 0.85): r2 = ⇧ 2.025 + 7 cells à 0.85
+ *     (6 letters + period) + ⏎ 2.025 (Σ 10 exact).
+ *   - period key (base AND shift): id 'period', kind text, value '.',
+ *     cell width; alternates = the EXACT F54 cells , ! ? : ; ( ) — the
+ *     footer period's menu moves up with it.
+ *   - INVARIANT (variant B): the FULL r2 center chain is symmetric about
+ *     5.0 — every center pair c[i] + c[n-1-i] = 10 (⇧ = ⏎).
+ *   - ru-ru: D27 exception, untouched (Σ 12, no period key in r2, 6-key
+ *     footer with @ on period).
+ *   - M key = the LAST LETTER of r2 (lookup excludes id 'period'); it keeps
+ *     its @ alternate (T8) in base AND shift.
+ * constant tolerance ±1e-3 (order T11).
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35])
@@ -63,72 +57,84 @@ class LetterRowAlignmentAcrossAssetsTest {
     }
 
     @Test
-    fun sevenLetterRows_YCenteredUnderAS_MCenteredUnderKL() {
+    fun sevenLetterRows_symmetricBoundaryGrid_periodBeforeEnter() {
         for (id in sevenLetterAssets) {
             for (ln in listOf("base", "shift")) {
                 val rows = asset(id).layers.getValue(ln).rows
                 val r2 = rows[2]
                 assertEquals("$id/$ln Σ r2 = 10", 10.0, r2.sumOf { it.width }, 0.001)
-                assertEquals("$id/$ln ⇧ 0.89352 (narrower)", 0.89352, r2[0].width, 0.001)
-                val letters = r2.filter { it.kind == KeyKind.TEXT }
-                assertEquals("$id/$ln 7 letters", 7, letters.size)
-                for (k in letters) {
-                    assertEquals("$id/$ln/${k.id} at 1.10185", 1.10185, k.width, 0.001)
+                assertEquals("$id/$ln ⇧ 1.22224 (variant B: ⇧ = ⏎)", 1.22224, r2[0].width, 0.001)
+                val texts = r2.filter { it.kind == KeyKind.TEXT }
+                assertEquals("$id/$ln 8 text keys (7 letters + period)", 8, texts.size)
+                for (k in texts) {
+                    assertEquals("$id/$ln/${k.id} at 0.94444", 0.94444, k.width, 0.001)
                 }
                 val enter = r2.last { it.kind == KeyKind.ACTION && it.value == KeyActions.ENTER }
-                assertEquals("$id/$ln ⏎ 1.39352 (wider)", 1.39352, enter.width, 0.001)
+                assertEquals("$id/$ln ⏎ 1.22224 (variant B: ⇧ = ⏎)", 1.22224, enter.width, 0.001)
                 assertTrue(
-                    "$id/$ln @ out of r2 (T8)",
+                    "$id/$ln @ out of r2",
                     r2.none { it.kind == KeyKind.TEXT && it.value == "@" },
                 )
-                // center invariant: r1 = 0.5 margin + 9 letters + ⌫.
-                val r1letters = rows[1].filter { it.kind == KeyKind.TEXT }
-                assertEquals("$id/$ln 9 letters in r1", 9, r1letters.size)
-                val c1 = centers(r1letters, 0.5)
-                val c2 = centers(letters, r2[0].width)
-                assertEquals("$id/$ln Y center = (A+S)/2", (c1[0] + c1[1]) / 2, c2[0], 0.001)
-                assertEquals("$id/$ln M center = (K+L)/2", (c1[7] + c1[8]) / 2, c2[6], 0.001)
+                // T11: period key directly before ⏎ with the F54 menu.
+                val period = r2.last { it.kind == KeyKind.TEXT }
+                assertEquals("$id/$ln period is the last text key before ⏎", "period", period.id)
+                assertEquals("$id/$ln period value '.'", ".", period.value)
+                assertEquals(
+                    "$id/$ln period F54 menu , ! ? : ; ( )",
+                    listOf(",", "!", "?", ":", ";", "(", ")"),
+                    period.alternates,
+                )
+                assertNull("$id/$ln/period no hint", period.hint)
+                // T11 invariant (variant B): center chain symmetric about 5.0.
+                val c = centers(r2, 0.0)
+                for (i in c.indices) {
+                    assertEquals("$id/$ln center pair c[$i]+c[${c.size - 1 - i}] = 10",
+                        10.0, c[i] + c[c.size - 1 - i], 0.001)
+                }
             }
         }
     }
 
     @Test
-    fun csAusnahme_sechserReihe_AtRaus_EnterBreiter() {
+    fun csAusnahme_siebenerZellen_mitPunkt_Symmetrisch() {
         val a = asset("cs-cz")
         for (ln in listOf("base", "shift")) {
             val r2 = a.layers.getValue(ln).rows[2]
             assertEquals("cs-cz/$ln Σ r2 = 10", 10.0, r2.sumOf { it.width }, 0.001)
-            assertEquals("cs-cz/$ln ⇧ 1.88889 stays", 1.88889, r2[0].width, 0.001)
-            val letters = r2.filter { it.kind == KeyKind.TEXT }
-            assertEquals("cs-cz/$ln 6 letters (x..m)", 6, letters.size)
-            for (k in letters) {
-                assertEquals("cs-cz/$ln/${k.id} at 1.03704 stays", 1.03704, k.width, 0.001)
+            assertEquals("cs-cz/$ln ⇧ 2.025 (B': ⇧ = ⏎)", 2.025, r2[0].width, 0.001)
+            val texts = r2.filter { it.kind == KeyKind.TEXT }
+            assertEquals("cs-cz/$ln 7 text keys (6 letters + period)", 7, texts.size)
+            for (k in texts) {
+                assertEquals("cs-cz/$ln/${k.id} at 0.85", 0.85, k.width, 0.001)
             }
             val enter = r2.last { it.kind == KeyKind.ACTION && it.value == KeyActions.ENTER }
-            assertEquals("cs-cz/$ln ⏎ 1.88889 (planner approval: ⇧=⏎ symmetric, Σ 10,00002 within tolerance)",
-                1.88889, enter.width, 0.001)
+            assertEquals("cs-cz/$ln ⏎ 2.025 (B': ⇧ = ⏎)", 2.025, enter.width, 0.001)
             assertTrue(
-                "cs-cz/$ln @ out of r2 (T8)",
+                "cs-cz/$ln @ out of r2",
                 r2.none { it.kind == KeyKind.TEXT && it.value == "@" },
             )
+            val period = r2.last { it.kind == KeyKind.TEXT }
+            assertEquals("cs-cz/$ln period before ⏎", "period", period.id)
+            assertEquals(
+                "cs-cz/$ln period F54 menu , ! ? : ; ( )",
+                listOf(",", "!", "?", ":", ";", "(", ")"),
+                period.alternates,
+            )
+            // T11 invariant (variant B): center chain symmetric about 5.0.
+            val c = centers(r2, 0.0)
+            for (i in c.indices) {
+                assertEquals("cs-cz/$ln center pair c[$i]+c[${c.size - 1 - i}] = 10",
+                    10.0, c[i] + c[c.size - 1 - i], 0.001)
+            }
         }
-        // M centering below K/L: in the 6-key grid (y sits on the HOME row, r2
-        // starts at x) arithmetically unreachable — documented exception
-        // (order T8): NOT centered, the structure stays.
-        val r2 = a.layers.getValue("base").rows[2]
-        val c1 = centers(a.layers.getValue("base").rows[1].filter { it.kind == KeyKind.TEXT }, 0.5)
-        val c2 = centers(r2.filter { it.kind == KeyKind.TEXT }, r2[0].width)
-        assertTrue(
-            "cs-cz x NOT centered below A/S (documented 6-key exception)",
-            kotlin.math.abs(c2[0] - (c1[0] + c1[1]) / 2) > 0.001,
-        )
     }
 
     @Test
     fun ruAusnahme_d27VollreiheUnangetastet() {
         val a = asset("ru-ru")
         for (ln in listOf("base", "shift")) {
-            val r2 = a.layers.getValue(ln).rows[2]
+            val rows = a.layers.getValue(ln).rows
+            val r2 = rows[2]
             assertEquals("ru-ru/$ln Σ r2 = 12 (D27)", 12.0, r2.sumOf { it.width }, 0.001)
             assertEquals("ru-ru/$ln ⇧ 1,0 (D27)", 1.0, r2[0].width, 0.001)
             val letters = r2.filter { it.kind == KeyKind.TEXT }
@@ -140,10 +146,21 @@ class LetterRowAlignmentAcrossAssetsTest {
                 "ru-ru/$ln no @ in r2 (D27, never present)",
                 r2.none { it.kind == KeyKind.TEXT && it.value == "@" },
             )
+            assertTrue(
+                "ru-ru/$ln no period key in r2 (T11 does not apply, D27)",
+                r2.none { it.id == "period" },
+            )
+            // T11 does not slim the ru footer either: 6-key footer with period.
+            val r3 = rows[3]
+            assertEquals(
+                "ru-ru/$ln footer keeps the 6-key D27 form",
+                listOf("symbols", "language", "emoji", "space", "period", "mic"),
+                r3.map { it.id },
+            )
         }
         // Nothing invented: ru does not know @ on the letter layers — the
         // M key (id em) carries NO @ alternate (reachability via the
-        // symbol layer, see report).
+        // symbol layer).
         for (ln in listOf("base", "shift")) {
             val m = a.layers.getValue(ln).rows[2].last { it.kind == KeyKind.TEXT }
             assertTrue("ru-ru/$ln m without @ alternate (nothing invented)", "@" !in m.alternates)
@@ -155,17 +172,20 @@ class LetterRowAlignmentAcrossAssetsTest {
         for (id in sevenLetterAssets + "cs-cz") {
             for (ln in listOf("base", "shift")) {
                 val r2 = asset(id).layers.getValue(ln).rows[2]
-                val m = r2.last { it.kind == KeyKind.TEXT }
+                // M lookup EXCLUDES the period key: the M key is the last
+                // LETTER of r2, not the last text key (period follows it).
+                val m = r2.last { it.kind == KeyKind.TEXT && it.id != "period" }
                 assertTrue(
-                    "$id/$ln M key '${m.id}' carries @ in its long-press menu (T8: @ out ⇒ alternate)",
+                    "$id/$ln M key '${m.id}' carries @ in its long-press menu (@ out ⇒ alternate)",
                     "@" in m.alternates,
                 )
                 assertTrue("$id/$ln/${m.id} ≤ 8 alternates", m.alternates.size <= 8)
-                assertNull("$id/$ln/${m.id} no hint (T8)", m.hint)
+                assertNull("$id/$ln/${m.id} no hint", m.hint)
                 assertEquals(
                     "$id/$ln/${m.id} no duplicates",
                     m.alternates.size, m.alternates.toSet().size,
                 )
+                assertTrue("$id/$ln period is NOT the M key", m.id != "period")
             }
             // @ reachability per asset: direct key OR alternate (here: alternate).
             val a = asset(id)

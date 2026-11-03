@@ -1604,6 +1604,16 @@ class VoiceKeyboardService : InputMethodService(), KeyboardView.Listener {
         }
     }
 
+    /**
+     * B2w: repeat firing in WORD mode (backspace held ≥ 2000 ms) — ONE whole
+     * word per firing over the SAME pure editor seam as the character path
+     * ([backspaceDeleteWordOnce]); the tap/character branch (onAction
+     * BACKSPACE → backspaceDeleteOnce) stays untouched.
+     */
+    override fun onBackspaceWord() {
+        backspaceDeleteWordOnce(inputConnectionEditor())
+    }
+
     // ---- Language switch (E9.1/E9.2, M8b-1) ----
 
     private fun layoutPrefs() = getSharedPreferences(LAYOUT_PREFS, MODE_PRIVATE)
@@ -1789,7 +1799,8 @@ interface BackspaceEditor {
     /** getTextBeforeCursor(maxChars, 0). */
     fun textBeforeCursor(maxChars: Int): CharSequence?
 
-    /** deleteSurroundingText(units, 0): ONE grapheme cluster before the cursor. */
+    /** deleteSurroundingText(units, 0): ONE grapheme cluster (character mode,
+     *  B2) or ONE whole word (word mode, B2w — several UTF-16 units) before the cursor. */
     fun deleteGraphemeBeforeCursor(units: Int)
 
     /** DEL key DOWN+UP (stock fallback for an empty buffer). */
@@ -1831,6 +1842,47 @@ fun lastGraphemeLengthOf(before: String): Int {
         return Character.charCount(cp)
     }
     return end - start
+}
+
+/** B2w: context window of the word deletion (getTextBeforeCursor) — every
+ *  real word incl. surrounding spaces fits into this; longer runs are
+ *  truncated to it (deletion stays bounded, see backspaceWordLengthOf). */
+private const val BACKSPACE_WORD_CONTEXT_UNITS = 256
+
+/**
+ * B2w: ONE word-delete action (word mode of the backspace repeat, held ≥ 2000 ms):
+ * non-empty selection ⇒ atomically replaced (like the character path),
+ * otherwise ONE whole word incl. surrounding spaces before the cursor
+ * ([backspaceWordLengthOf]). At the line/text start NOTHING happens — the
+ * word deletion NEVER crosses a line boundary and NEVER sends a DEL key
+ * event. Never throws. Pure function, no Android (rule 9: no content in logs).
+ */
+fun backspaceDeleteWordOnce(editor: BackspaceEditor) {
+    val sel = editor.selection()
+    if (!sel.isNullOrEmpty()) {
+        editor.commitEmptyReplacement()
+        return
+    }
+    val before = editor.textBeforeCursor(BACKSPACE_WORD_CONTEXT_UNITS)?.toString()
+    val units = if (before.isNullOrEmpty()) 0 else backspaceWordLengthOf(before)
+    if (units > 0) editor.deleteGraphemeBeforeCursor(units)
+}
+
+/**
+ * B2w: UTF-16 units of ONE word deletion before the cursor — the contiguous
+ * non-whitespace sequence left of the cursor INCLUDING the spaces before and
+ * after it, up to the line start ('\n') or text start. Cursor directly after
+ * '\n' (line start) or empty text ⇒ 0 (no deletion).
+ */
+fun backspaceWordLengthOf(before: String): Int {
+    val n = before.length
+    if (n == 0 || before[n - 1] == '\n') return 0
+    var i = n
+    while (i > 0 && before[i - 1] != '\n' && before[i - 1].isWhitespace()) i-- // spaces after the word
+    if (i == 0 || before[i - 1] == '\n') return n - i // only spaces up to the line/text start
+    while (i > 0 && !before[i - 1].isWhitespace()) i-- // the word itself
+    while (i > 0 && before[i - 1] != '\n' && before[i - 1].isWhitespace()) i-- // spaces before the word
+    return n - i
 }
 
 /**

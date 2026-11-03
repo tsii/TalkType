@@ -5,6 +5,20 @@ HANDOFF.md, state/progress.md and the review documents; kept current from now on
 `versionCode` in parentheses. APKs older than the current dist rotation are removed
 from `dist/` (checksums of the last rotations: `dist/SHA256SUMS-*.txt`).
 
+## [0.1.42] — 2026-11-03 (43) — new letter row & symbol page + word backspace
+- **T11 letter row rebuilt** (variant B, user choice): 8 equal keys (102 px) —
+  y x c v b n m + **new period key before ⏎** (F54 menu moved up with it) — evenly
+  distributed, shift/enter equal at 132 px, block mirror-symmetric. Footer: period
+  removed, **space widened 540 → 623 px**. cs-cz own variant (7×0.85); ru-ru exempt (D27).
+- **T12 symbol page redistributed** (all 15 languages): bottom row `: ; , ' " _ * ! ? .`
+  (period right before ⏎, mirrored), top row `- + / ( ) & @ = # %` (plus beside minus,
+  percent up); symbolsShift analog where slot ids exist. Pure permutation, char
+  inventory proven identical.
+- **T11b word backspace**: holding backspace > 2 s deletes **whole words at 3/s**
+  (was single chars); word boundaries + leading spaces handled, resets on release.
+- Review `docs/REVIEW_V0142.md`: P0=0, P1=0, push YES. Tests **617 debug + 582 release
+  = 1199/0**. Tools: `rebuild_r2_t11.py`, `rebuild_symbol_t12.py` (idempotent, guarded).
+
 ## [0.1.41] — 2026-11-03 (42) — TalkType
 - Product renamed **Voice Keyboard → TalkType**: app label centralized in
   `@string/app_name` (was hardcoded in AndroidManifest), README/HANDOFF titles,

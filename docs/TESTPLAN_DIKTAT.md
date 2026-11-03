@@ -1,148 +1,204 @@
-# Testplan Diktat – verbindliche Sol-Abnahme je Version
+# Dictation test plan – binding Sol acceptance per version
 
-**Stand: v0.1.23; zehn Kriterien K01–K10.**
+**Status: v0.1.23; ten criteria K01–K10.**
 
-## 1. Zweck, Umfang und Regeln
+## 1. Purpose, scope, and rules
 
-Regression: Capture endet, Anzeige bleibt „Diktat“, UP zeigt kurz Verarbeitung,
-danach „Bereit“, aber weder Text noch dauerhafter Fehler. Dieser Ablauf darf nie still bestehen.
-Sol prüft Diktat künftig bei jeder Abnahme; grüne Tastatur-/Layouttests ersetzen es nicht.
-Basis ist die Standardengine A, warm geladen, konstante Konfiguration und definierte Audioquelle.
-Kaltstart zusätzlich prüfen; Start-/Ladezeit separat messen, nicht in warmen Latenzen verstecken.
-Andere Engines erhalten eigene Ergebnisse und dürfen A-Erfolge nicht übernehmen.
-Alle nachfolgenden Grenzwerte sind Sollwerte, keine hier neu erbrachten Messungen.
-Keine Audioinhalte, Hypothesen oder Transkripte in diesem Plan/Protokoll/Diagnoseexport.
-Nur kontrollierte Testsignale bzw. freigegebene Offline-Fixtures; Zieltexte bleiben lokal im Test.
-Kein Rohlogcat, Ziel-App-Name, Inhalts-Screenshot oder Audioexport im Abnahmeprotokoll.
-Screenshots nur auf Status/Bedienelemente zuschneiden; editorseitig nur Zähler/Urteil erfassen.
+Regression: capture ends, the display stays "Diktat", UP briefly shows
+processing, afterwards "Bereit", but neither text nor a persistent error.
+This sequence must never persist silently.
+Sol checks dictation on every acceptance going forward; green
+keyboard/layout tests do not replace it.
+The basis is the standard engine A, warm-loaded, a constant configuration,
+and a defined audio source.
+Check the cold start additionally; measure start/loading time separately,
+not hidden inside warm latencies.
+Other engines get their own results and may not adopt A's successes.
+All limits below are target values, not measurements newly produced here.
+No audio content, hypotheses, or transcripts in this plan/protocol/diagnosis
+export.
+Only controlled test signals or approved offline fixtures; target texts stay
+local in the test.
+No raw logcat, target app name, content screenshot, or audio export in the
+acceptance protocol.
+Crop screenshots to status/controls only; on the editor side record only
+counters/verdicts.
 
-## 2. Messvertrag und Statuswahrheit
+## 2. Measurement contract and status truth
 
-Zeitmessung monoton; Fake-Uhr für JVM, echte Zeit am Gerät. Session/Engine eindeutig zuordnen.
-Bei jeder Session Startwerte zurücksetzen; Vorher-/Nachherwerte nicht aus verschiedenen Läufen mischen.
-`status_shown` ist ein von der IME gesetzter Diagnosecode, kein unabhängiger UI-Beweis.
-Deshalb immer Controller-/Ereignisspur **und tatsächlich sichtbare TextView** vergleichen.
-Der erwartete Code ist eine Zustandsabbildung, nicht rohe Stringgleichheit von IDLE und ready:
-- RECORDING und Capture aktiv → `dictat`; FINALIZING → `finalizing`.
-- IDLE nach erfolgreichem Abschluss → `ready`; sichtbarer/sticky Fehler → `error`.
-- Fehler hat Vorrang vor IDLE; STARTING wird als Start/Laden erkennbar, nicht als aktive Aufnahme.
-- Stille mit weiter eintreffenden PCM-Blöcken ist **kein Capture-Stall**.
-UI muss jeden Übergang spätestens **500 ms** nach dem Controller-/Fehlerereignis nachvollziehen.
-Ein Fehler bleibt nach UP mindestens **5 s ohne neue Nutzeraktion** sichtbar (R-2).
-Ein Zeit-/RTF-Zähler allein zählt nicht als erklärender Statuswechsel bei fehlendem Text.
-Native Inferenz darf weder UP noch den Capture-Watchdog oder UI-Fehleranzeige blockieren.
+Time measurement monotonic; a fake clock for the JVM, real time on the
+device. Unambiguously attribute session/engine.
+Reset the start values on every session; do not measure before/after values
+from different runs.
+`status_shown` is a diagnostic code set by the IME, not an independent UI
+proof.
+Therefore always compare the controller/event trace **and the actually
+visible TextView**.
+The expected code is a state mapping, not raw string equality of IDLE and
+ready:
+- RECORDING with capture active → `dictat`; FINALIZING → `finalizing`.
+- IDLE after a successful completion → `ready`; visible/sticky error →
+  `error`.
+- An error takes precedence over IDLE; STARTING must be recognizable as
+  starting/loading, not as an active recording.
+- Silence with PCM blocks still arriving is **not a capture stall**.
+The UI must follow every transition at the latest **500 ms** after the
+controller/error event.
+An error stays visible for at least **5 s after UP without a new user
+action** (R-2).
+A mere time/RTF counter does not count as an explanatory status change when
+text is missing.
+Native inference must block neither UP nor the capture watchdog or the UI
+error display.
 
-## 3. Zehn Akzeptanzkriterien
+## 3. Ten acceptance criteria
 
-| ID | Prüffall | Messbares Soll / Fehlerbedingung |
+| ID | Test case | Measurable target / error condition |
 |---|---|---|
-| K01 | **30-s-Dauerdiktat**, kontinuierliches kontrolliertes Signal | Capture über 30 s aktiv, `cap_blocks` steigt; im Erfolgsfall mindestens **8 sichtbare Textzunahmen**. Keine Textlücke >**3000 ms** ohne erklärende Verzögerungs-/Fehleranzeige binnen weiterer **500 ms**; ein bloß laufender Timer genügt nicht. Aufnahmestatus und Verzögerung dürfen sich nicht widersprechen. |
-| K02 | **2-s-Kurzdiktat**, danach UP | Innerhalb **3000 ms nach UP** mindestens eine erfolgreiche sichtbare Texteingabe **oder** dauerhafter verständlicher Fehler; bei absehbar längerem Finalisieren rechtzeitig Verarbeitung anzeigen und spätestens **5000 ms nach UP** Erfolg/Fehler. Nie leerer Abschluss mit nur `ready`; auch Timeout/Leerhypothese testen. |
-| K03 | **Statuswahrheit in jedem Übergang** | Start, Aufnahme, UP, Finalisierung, Fehler, Abbruch und neuer Start gemäß §2; **0** veraltete Anzeigen länger als 500 ms. Nach Session-Ende nie weiter `dictat`; nach Fehler kein reines `ready` ohne Hinweis. Letzte Momentaufnahme reicht nicht. |
-| K04 | **Keine Audioblöcke >3000 ms** | Bei 3000 ms noch kein vorzeitiger Stall; nach Überschreitung Watchdog, sichtbarer Fehler und Capture beendet spätestens bei **3500 ms seit letztem positiven Block**. Genau ein Abbruch; gültiger Stall-Code in `abort_reason`. Null-Reads **und dauerhaft blockierten Read** testen; UP ist dafür nicht nötig. |
-| K05 | **POST_NOTIFICATIONS fehlt, API ≥33** | Produktpolitik: vor Capture sichtbare Begründung/Einrichtungshinweis binnen **500 ms**; kein heimlicher Aufnahmestart, **0** positive Capture-Blöcke. Nach Gewährung neuer bewusster Start möglich; Verweigerung blockiert normale Tastatureingabe nicht. |
-| K06 | **UP während STARTING / wantedStop** | Verzögerten Start und UP vor/während/nach Rückkehr durchspielen: nach erfolgreichem Start genau **1 Stop**, **0 zusätzliche Aborts**, höchstens **1 Finalauftrag**; keine spätere Zombie-Aufnahme. CANCEL separat: genau **1 Abort**, **0 Finals**; Startfehler separat ohne erfundenen Erfolgs-Stop. |
-| K07 | **Fokus-/App-/IME-Wechsel beim Diktat** | Definierter Sicherheitsabschluss: **Abort ohne späte Finalausgabe**, Mic spätestens **500 ms** nach Wechsel freigegeben, `abort_reason` kontrolliert gesetzt, z. B. `editor_change`/`ime_destroy`. Vorhandenen Text erhalten, **0** Edits im neuen/verlorenen Editor; Neustart nur bewusst. |
-| K08 | **15-Minuten-Dauerlauf Speicher/Decode** | Mindestens **900 s aktive Aufnahme insgesamt**, unveränderte Parameter: wegen KONZEPT-Limit **3×300 s**, kein heimliches 900-s-Einzeldiktat. Jeder Decode inkl. Final **<1000 ms**; kein wachsender Rückstau, kein stilles Session-Ende, kein OOM. Nach gleicher Beruhigungszeit letzter Idle-PSS ≤ erster warmer Idle-PSS + **max(20 MiB,10 %)**; vergleichbares letztes Session-p95 höchstens **10 %** über erstem. |
+| K01 | **30-s continuous dictation**, a continuous controlled signal | Capture active over 30 s, `cap_blocks` rising; on success at least **8 visible text increments**. No text gap >**3000 ms** without an explanatory delay/error display within a further **500 ms**; a merely running timer does not suffice. Recording status and delay must not contradict each other. |
+| K02 | **2-s short dictation**, then UP | Within **3000 ms after UP** at least one successful visible text input **or** a persistent, understandable error; if finalizing is visibly going to take longer, show processing in time and deliver success/failure at the latest **5000 ms after UP**. Never an empty completion with just `ready`; also test timeout/empty hypothesis. |
+| K03 | **Status truth in every transition** | Start, recording, UP, finalization, error, abort, and a new start per §2; **0** stale displays longer than 500 ms. After the session ends never `dictat` again; after an error no pure `ready` without a hint. A last snapshot does not suffice. |
+| K04 | **No audio blocks >3000 ms** | At 3000 ms no premature stall; after the threshold is exceeded a watchdog, a visible error, and the capture ended at the latest at **3500 ms since the last positive block**. Exactly one abort; a valid stall code in `abort_reason`. Test null reads **and** a permanently blocking read; UP is not needed for that. |
+| K05 | **POST_NOTIFICATIONS missing, API ≥33** | Product policy: a visible justification/setup hint within **500 ms** before capture; no covert recording start, **0** positive capture blocks. After granting, a new conscious start possible; denial does not block normal keyboard input. |
+| K06 | **UP during STARTING / wantedStop** | Play through a delayed start and UP before/during/after the return: after a successful start exactly **1 stop**, **0 additional aborts**, at most **1 final request**; no later zombie recording. CANCEL separately: exactly **1 abort**, **0 finals**; start errors separately without an invented success stop. |
+| K07 | **Focus/app/IME switch during dictation** | Defined safe completion: **abort without a late final output**, the mic released at the latest **500 ms** after the switch, `abort_reason` set in a controlled way, e.g. `editor_change`/`ime_destroy`. Preserve existing text, **0** edits in the new/lost editor; restart only consciously. |
+| K08 | **15-min soak run memory/decode** | At least **900 s of active recording in total**, unchanged parameters: because of the KONZEPT limit **3×300 s**, no covert 900-s single dictation. Every decode including the final **<1000 ms**; no growing backpressure, no silent session end, no OOM. After the same settling time the last idle PSS ≤ the first warm idle PSS + **max(20 MiB,10 %)**; a comparable last session p95 at most **10 %** above the first. |
 
-### Ergänzung v0.1.23 – Diagnosezugang und Signalverlust
+### Addition v0.1.23 – diagnostic access and signal loss
 
-| Kriterium | Erwartung / Messgröße | Testart | Rolle |
+| Criterion | Expectation / measured value | Test type | Role |
 |---|---|---|---|
-| **K09 (i) Statuszeile + 🐞 immer sichtbar** | Im Grundzustand und während Diktat sowie nach erneutem Öffnen existieren **statusText, Mic-Taste und Debug-Taste**, jeweils **VISIBLE**, gemessene Höhe **>0 dp** und tatsächlich sichtbare Fläche **>0**; kein versteckender Parent oder Abschneiden. Debug-Taste bedienbar; Export liefert `status_shown` aus **ready/dictat/finalizing/error**, gemäß K03 passend. **0** verschwundene Diagnoseleisten wie in 0.1.20. | Unit/Robolectric: Root nach Layout messen, Kinder/Parent-Sichtbarkeit/Bounds und Exportcode prüfen; manuell Grundzustand/Diktat/Zweitöffnung sichtbar vergleichen. | Coder automatisiert Root-/Exportregression in CI; **Sol** prüft Sichtbarkeit/Bedienbarkeit am Gerät und protokolliert Soll/Ist. |
-| **K10 (j) Stille/Aussetzer sichtbar statt stiller Hänger** | **Fall silence:** positive Blöcke ohne Signal **>3000 ms**, Meldung **„Kein Mikrofon-Signal …“**, **ERR_SILENT/silence**, Session beendet. **Fall stall:** keine positiven Blöcke **>3000 ms**, **ERR_STALL**, sichtbarer Fehler/Session-Ende. Jeweils Ende/Fehler spätestens **3500 ms** nach Beginn des Ausfalls, danach kein `dictat`; Fehler nach UP ≥5 s stabil. Belege **cap_blocks, loud_s, cap_stall_ms, abort_reason**. | Unit mit vorhandener **FakeWavAudioSource** und Fake-Uhr: PCM-Nullsignal von ausbleibenden/0-Read-Blöcken trennen, 2999/3000/3001 ms und Signalrückkehr prüfen; manuell beide Fehlerpfade. | Coder automatisiert beide unabhängigen Watchdogfälle in CI; **Sol** prüft Meldung, Ende und 🐞-Zuordnung am Gerät. |
+| **K09 (i) status row + 🐞 always visible** | In the base state and during dictation as well as after reopening, **statusText, the mic key, and the debug key** exist, each **VISIBLE**, measured height **>0 dp**, and an actually visible area **>0**; no hiding parent or clipping. The debug key operable; the export delivers `status_shown` from **ready/dictat/finalizing/error**, matching per K03. **0** vanished diagnostic bars as in 0.1.20. | Unit/Robolectric: measure the root after a layout pass, check child/parent visibility/bounds and the export code; manually compare base state/dictation/second opening visibly. | The coder automates the root/export regression in CI; **Sol** checks visibility/operability on the device and logs target/actual. |
+| **K10 (j) silence/dropouts visible instead of a silent hang** | **Case silence:** positive blocks without a signal **>3000 ms**, message **„Kein Mikrofon-Signal …“**, **ERR_SILENT/silence**, session ended. **Case stall:** no positive blocks **>3000 ms**, **ERR_STALL**, a visible error/session end. In each case the end/error at the latest **3500 ms** after the start of the failure, afterwards no `dictat`; the error stable for ≥5 s after UP. Evidence **cap_blocks, loud_s, cap_stall_ms, abort_reason**. | Unit with the existing **FakeWavAudioSource** and a fake clock: distinguish a PCM zero signal from absent/0-read blocks, check 2999/3000/3001 ms and the signal's return; manually both error paths. | The coder automates both independent watchdog cases in CI; **Sol** checks the message, the end, and the 🐞 assignment on the device. |
 
-K10: Positive stille PCM-Blöcke erhöhen `cap_blocks`, aber nicht `loud_s`; ihr `cap_stall_ms` bleibt klein.
-Ohne Blöcke bleibt `cap_blocks` konstant und `cap_stall_ms` steigt; das ist kein silence-Fall.
-`loud_s` summiert laute Audiodauer, misst nicht die letzte Stillephase: Zählerdeltas plus monotone Uhr nötig.
-Die vorhandene Signal-Schwelle verwenden, keine neue Test-only-Schwelle; 2-s-Kurzdiktate bleiben K02 unterstellt.
+K10: Positive silent PCM blocks increase `cap_blocks` but not `loud_s`; their
+`cap_stall_ms` stays small.
+Without blocks, `cap_blocks` stays constant and `cap_stall_ms` rises; that
+is not a silence case.
+`loud_s` sums loud audio duration, it does not measure the last silence
+phase: counter deltas plus a monotonic clock are needed.
+Use the existing signal threshold, no new test-only threshold; 2-s short
+dictations stay subject to K02.
 
-K01 benötigt echte Editor-Zunahmen; `hyp_count` allein beweist keine Ausgabe/Commitannahme.
-K02: Eine fortlaufende Verarbeitungsanzeige rechtfertigt kein unbegrenztes Warten.
-K04: Ein Watchdog nur hinter einem nie zurückkehrenden read erfüllt den Blockierfall nicht.
-Ohne ersten Block zählt die Frist ab tatsächlichem Capture-Start, nicht ab langsamem Modellladen.
-Auch Fake-Uhrstart 0 und nie eintreffenden ersten Block testen; kein Sentinel darf den Stall verbergen.
-K05 ist eine bewusste App-Vorgabe; Android macht POST_NOTIFICATIONS nicht generell zur FGS-Startpflicht.
-K06 Ereignisse mit Zählern belegen; `mic_rel` hält nur den letzten Code, keine Ereignisanzahl.
-K07 passt KONZEPTs Finalisierung beim normalen UP an den verlorenen Android-Editorbesitz an.
-K08 beginnt warm nach Modellinitialisierung; gleiche Speicher-Abwartezeit jeweils **30 s**.
-K08-Peaks und p95 bei denselben Audio-/Pufferständen vergleichen, nicht kurze gegen lange Buffer.
-Ein laufender Decode ≥1000 ms ist bereits Fehler, nicht wegen fehlender fertiger Probe „0 ms“.
-Bei Unterbrechung/fehlender Probe Urteil „nicht bewiesen“, nicht „bestanden“.
+K01 needs real editor increments; `hyp_count` alone proves no output/commit
+acceptance.
+K02: A continuously running processing display does not justify unlimited
+waiting.
+K04: A watchdog only behind a never-returning read does not satisfy the
+blocking case.
+Without a first block, the deadline counts from the actual capture start,
+not from slow model loading.
+Also test fake clock start 0 and a never-arriving first block; no sentinel
+may mask the stall.
+K05 is a deliberate app policy; Android does not make POST_NOTIFICATIONS a
+general FGS start requirement.
+K06: evidence the events with counters; `mic_rel` holds only the last code,
+no event count.
+K07 adapts KONZEPT's finalization on normal UP to the lost Android editor
+ownership.
+K08 starts warm after model initialization; the same memory settling time is
+**30 s** each.
+Compare K08 peaks and p95 at the same audio/buffer levels, not short against
+long buffers.
+A running decode ≥1000 ms is already an error, not "0 ms" because of a
+missing finished sample.
+On interruption/missing sample the verdict is "not proven", not "passed".
 
-## 4. Testarten und CI-Matrix – Auftrag an den Coder
+## 4. Test types and CI matrix – task for the coder
 
-U = reine JVM mit Fakes/Uhr; R = Robolectric für Service-/TextView-/Permissionadapter.
-I = androidTest mit echtem Editor, Fake-Audio und Fake-/optional echter Engine.
-G = physisches GrapheneOS-Gerät mit realem Mikrofon; keine Emulator-Funktionsannahme.
-Alle neuen Tests zunächst rot gegen die Regression, dann grün; dieser Plan implementiert nichts.
+U = pure JVM with fakes/clock; R = Robolectric for service/TextView/permission
+adapters.
+I = androidTest with a real editor, fake audio, and a fake/optionally real
+engine.
+G = a physical GrapheneOS device with a real microphone; no emulator function
+assumption.
+All new tests first red against the regression, then green; this plan
+implements nothing.
 
-| ID | U/R: was automatisiert werden muss | I: Integration | Sol/G und CI |
+| ID | U/R: what must be automated | I: integration | Sol/G and CI |
 |---|---|---|---|
-| K01 | Fake-Audio kontinuierlich, Engine stockt/endet unerwartet; Editzähler und Statusdeadline | WAV-Injektion, echte InputConnection, Zeitstempel erfolgreicher Ausgabe ohne Inhalt | Sol 30 s sprechen, Textwachstum zählen; U/R und Fake-I in CI, echtes Modell nur opt-in gecacht |
-| K02 | 2-s-Fake, leer/Erfolg/Exception/niemals fertiges Final; Deadlines | Reale Anzeige/Editor nach UP, kein leerer stiller Erfolg | Sol mehrere kurze Läufe inkl. Kaltstart; CI U/R und Fake-I |
-| K03 | Zustandsfolgen inkl. ERROR→UP→IDLE, verspätete Callbacks, neue Generation | Tatsächliche TextView/Capturezustand je Ereignis abgleichen | Sol Statusvideo/Statuscrops; CI U/R und I, nicht nur Settercode testen |
-| K04 | Fake-Uhr 2999/3000/3001 ms; Quelle liefert 0 bzw. blockiert; Watchdog unabhängig | Capture-Abbruch/Fehleranzeige trotz laufender Fake-Inferenz | Sol Realpfad/Privacy-/Quellenunterbrechung gesondert; CI U/R und Fake-I, monotone Uhr |
-| K05 | API 32/33/aktuell, gewährt/verweigert/dauerhaft verweigert; keine Capture-Factory bei Ablehnung | Permission- und Setup-Wechsel im Emulator, danach echtes erneutes DOWN | Sol auf Ziel-OS bestätigen; CI R/I ohne Mikrofon möglich, Systempolitik nicht nur mocken |
-| K06 | Start-Latch blockieren, UP/CANCEL/Fehler in allen Reihenfolgen; Zähler/Generationen | Touch auf Mic während künstlich langsamer Initialisierung | Sol Finger vor Aufnahmebeginn loslassen; CI U/R und I |
-| K07 | Editor-/Window-Hide in RECORDING/FINALIZING/STARTING; EditSink lehnt Altgeneration ab | Zwei Host-Editoren/Activities, kein Edit nach Wechsel | Sol echte App-/Screen-off-Wechsel und Mic-Indikator; CI I nur kontrollierte Hosts |
-| K08 | Lange virtuelle Sessionfolgen, Ressourcen-/Queuezähler und Timingstatistik korrekt | Opt-in Soak mit WAV/echter Engine; PSS und Gesamt-Decode-Max erfassen | Sol 3 reale 300-s-Sessions; nur dedizierte Geräte-/Performance-CI als belastbarer Zeit-/Thermalbeweis |
-| K09 | Root-View mit Layoutdurchlauf: alle drei Elemente/Eltern sichtbar, Höhen/Visible-Rects >0, gültiger Statuscode | Optional zweite Öffnung/aktive Aufnahme gegen echte View-Hierarchie prüfen | Sol sichtbare Leiste und bedienbaren Export prüfen; R in normaler CI |
-| K10 | FakeWavAudioSource: positive stille PCM vs. fehlende Blöcke, Fake-Uhr und genau ein Fehler/Abort | Optional gleiche Fehler über Anzeige-/Controlleradapter injizieren | Sol silence/stall samt Export unterscheiden; U in CI, reale Quelle bleibt Gerätebeweis |
+| K01 | Fake audio continuous, the engine stalls/ends unexpectedly; edit counters and the status deadline | WAV injection, real InputConnection, timestamps of successful output without content | Sol speaks for 30 s, counts text growth; U/R and fake I in CI, the real model only opt-in cached |
+| K02 | 2-s fake, empty/success/exception/never-finished final; deadlines | Real display/editor after UP, no empty silent success | Sol several short runs including a cold start; CI U/R and fake I |
+| K03 | State sequences including ERROR→UP→IDLE, late callbacks, a new generation | Reconcile the actual TextView/capture state per event | Sol status video/status crops; CI U/R and I, not just testing setter code |
+| K04 | Fake clock 2999/3000/3001 ms; the source delivers 0 resp. blocks; the watchdog independent | Capture abort/error display despite a running fake inference | Sol the real path/privacy/source interruption separately; CI U/R and fake I, monotonic clock |
+| K05 | API 32/33/current, granted/denied/permanently denied; no capture factory on denial | Permission and setup changes in the emulator, then a real new DOWN | Sol confirm on the target OS; CI R/I possible without a microphone, don't just mock system policy |
+| K06 | Block the start latch, UP/CANCEL/error in all orders; counters/generations | Touch on the mic during artificially slow initialization | Sol release the finger before the recording starts; CI U/R and I |
+| K07 | Editor/window hide in RECORDING/FINALIZING/STARTING; the EditSink rejects the old generation | Two host editors/activities, no edit after the switch | Sol real app/screen-off switches and the mic indicator; CI I only with controlled hosts |
+| K08 | Long virtual session sequences, resource/queue counters, and correct timing statistics | Opt-in soak with WAV/real engine; record PSS and the total decode max | Sol 3 real 300-s sessions; only a dedicated device/performance CI is a reliable time/thermal proof |
+| K09 | Root view with a layout pass: all three elements/parents visible, heights/visible rects >0, valid status code | Optionally check a second opening/active recording against a real view hierarchy | Sol check the visible bar and the operable export; R in normal CI |
+| K10 | FakeWavAudioSource: positive silent PCM vs. missing blocks, fake clock, and exactly one error/abort | Optionally inject the same errors via display/controller adapters | Sol distinguish silence/stall including the export; U in CI, the real source stays the device proof |
 
-Robolectric ist für Zustands-/UIadapter machbar, nicht als Beweis für AudioRecord,
-Mikrofontreiber, native ASR-Geschwindigkeit, echte FGS-Lebensdauer oder thermischen Verlauf.
-Unbegrenzte Fake-Zeit belegt Logik, keine 15 realen Minuten oder native Speicherfreiheit.
-Normale PR-CI: U/R und modellfreie I, keine Großdownloads und kein echtes Mikrofon erforderlich.
-Optionaler Modelljob: gecachte, geprüfte Artefakte und bekannte Fixtures, keine Netzpflicht je Lauf.
+Robolectric is feasible for state/UI adapters, not as proof for
+AudioRecord, the microphone driver, native ASR speed, real FGS lifetime, or
+thermal behavior.
+Unlimited fake time proves logic, not 15 real minutes or native memory
+freedom.
+Normal PR CI: U/R and model-free I, no large downloads and no real microphone
+required.
+Optional model job: cached, checked artifacts and known fixtures, no network
+required per run.
 
-## 5. Rolle, Beweisfelder und Grenzen
+## 5. Role, evidence fields, and limits
 
-**Coder:** erstellt U/R/I-Tests, monotone Ereigniszähler und nötige kontrollierte Fehler-Injektionen.
-**Sol:** führt G-Abnahme je Version durch, vergleicht Soll/Ist, urteilt pro K01–K10.
-**Orchestrator:** stellt identische APK/Engine/Parameter, Freigaben und Gerätezugriff bereit.
-Sol markiert technische Grenzen als „nicht bewiesen“; kein grünes Urteil aus Unit-Testanzahl.
+**Coder:** creates the U/R/I tests, monotonic event counters, and the
+necessary controlled error injections.
+**Sol:** performs the G acceptance per version, compares target/actual,
+judges each of K01–K10.
+**Orchestrator:** provides identical APK/engine/parameters, approvals, and
+device access.
+Sol marks technical limits as "not proven"; no green verdict from unit test
+counts.
 
-| Belegfeld | Wofür belastbar / zusätzliche Beobachtung |
+| Evidence field | What it is reliable for / additional observation |
 |---|---|
-| `cap_blocks`, `cap_stall_ms`, `loud_s` | Blockzufluss vs. technischer Signalverlust: positive stille Blöcke zählen, laute Audiodauer bleibt konstant. Stallzeit kann nach Abort weiterlaufen: Auslösezeit separat messen. |
-| `mic_rel`, `abort_reason` | Ursache/letztes Endereignis; UP/CANCEL/Fokus/Stall unterscheidbar, keine freien Fehlertexte. Für „genau einmal“ separate Testzähler nötig. |
-| `status_shown`, ergänzend `ctl_state`, `ctl_failed`, `starting` | Erwarteter Status; echte TextView separat prüfen, da Export nur zuletzt gesetzten Code hält. |
-| `hyp_count`, ergänzend `hyp_gap_ms` | Enginefortschritt, nicht Editor-Commit; Texteingabezähler und Zeit letzter sichtbarer Änderung separat erforderlich. |
-| `decode_ms_max`, ergänzend `decode_ms_p95` | Decodekosten des exportierten Statistikfensters. Resets/Ringfenster beachten: Test benötigt zusätzlich laufweiten Maximalwert über alle drei Sessions. |
+| `cap_blocks`, `cap_stall_ms`, `loud_s` | Block inflow vs. technical signal loss: positive silent blocks count, loud audio duration stays constant. Stall time can keep running after an abort: measure the trigger time separately. |
+| `mic_rel`, `abort_reason` | Cause/last end event; UP/CANCEL/focus/stall distinguishable, no free-form error texts. Separate test counters are needed for "exactly once". |
+| `status_shown`, additionally `ctl_state`, `ctl_failed`, `starting` | Expected status; check the real TextView separately, since the export holds only the last code set. |
+| `hyp_count`, additionally `hyp_gap_ms` | Engine progress, not editor commit; text input counters and the time of the last visible change are additionally required. |
+| `decode_ms_max`, additionally `decode_ms_p95` | Decode cost of the exported statistics window. Watch resets/ring windows: the test additionally needs a running maximum across all three sessions. |
 
-Start/Ende und bei Abweichung Diagnose-Snapshot nur auf bewusste Aktion erfassen.
-Info-Tap/Share kann Fokus verlieren: Zeit-/Statusbeweise zuerst, Export danach;
-ein dadurch verursachter Fokusabort darf den ursprünglichen Fehler nicht verschleiern.
-Nur letzter Sessionexport genügt weder für Zustandsübergänge noch für 900-s-Maximum.
-PSS ist zusätzlicher Laufmesswert, keines der oben genannten Exportfelder ersetzt ihn.
+Record start/end and, on a deviation, a diagnostic snapshot only on a
+conscious action.
+An info tap/share can lose focus: time/status evidence first, export
+afterwards;
+a focus abort caused by it must not mask the original error.
+Only the last session export suffices neither for state transitions nor for
+the 900-s maximum.
+PSS is an additional run measurement; none of the export fields above
+replaces it.
 
-## 6. Abnahmeprotokoll-Vorlage je Version
+## 6. Acceptance protocol template per version
 
-Kopf: Version/Buildkennung, Engine, API, Geräteklasse, Quelle/Route, Threads, Warm/Kalt,
-Freigaben, Datum, Prüfer; keine Seriennummer, Ziel-App-Namen, Inhalte oder Dateipfade.
-Urteile: **bestanden / fehlgeschlagen / nicht bewiesen**; offen zählt nicht als grün.
+Header: version/build identifier, engine, API, device class,
+source/route, threads, warm/cold, approvals, date, examiner; no serial
+number, target app names, contents, or file paths.
+Verdicts: **passed / failed / not proven**; open does not count as green.
 
-| Kriterium | Erwartung | Messwert | Urteil |
+| Criterion | Expectation | Measured value | Verdict |
 |---|---|---|---|
-| K01 30 s | ≥8 Zunahmen; keine unerklärte Lücke >3 s | __ | __ |
-| K02 2 s | Text/Fehler fristgerecht; kein stilles ready | __ | __ |
-| K03 Status | Zustandsabbildung ≤500 ms, Fehler ≥5 s stabil | __ | __ |
-| K04 Stall | >3000 ms erkannt, Ende/Fehler ≤3500 ms | __ | __ |
-| K05 Notification | Hinweis ≤500 ms, 0 Capture ohne Freigabe | __ | __ |
-| K06 wantedStop | 1 Stop/0 Doppel-Aborts; CANCEL 1 Abort/0 Finals | __ | __ |
-| K07 Fokus | Mic frei ≤500 ms, Grund gesetzt, 0 Fremd-Edits | __ | __ |
-| K08 Soak | 900 s gesamt, Decode <1000 ms, Speicher/p95 innerhalb Grenze | __ | __ |
-| K09 Leiste/🐞 | statusText/Mic/Debug VISIBLE, Höhe/Fläche >0, gültiger status_shown | __ | __ |
-| K10 silence/stall | >3 s getrennt erkannt, Fehler/Ende ≤3500 ms, cap_blocks/loud_s/Stallzeit/Grund passend | __ | __ |
+| K01 30 s | ≥8 increments; no unexplained gap >3 s | __ | __ |
+| K02 2 s | Text/error on time; no silent ready | __ | __ |
+| K03 status | State mapping ≤500 ms, error stable ≥5 s | __ | __ |
+| K04 stall | >3000 ms detected, end/error ≤3500 ms | __ | __ |
+| K05 notification | Hint ≤500 ms, 0 capture without approval | __ | __ |
+| K06 wantedStop | 1 stop/0 double aborts; CANCEL 1 abort/0 finals | __ | __ |
+| K07 focus | Mic free ≤500 ms, reason set, 0 foreign edits | __ | __ |
+| K08 soak | 900 s total, decode <1000 ms, memory/p95 within the limit | __ | __ |
+| K09 bar/🐞 | statusText/mic/debug VISIBLE, height/area >0, valid status_shown | __ | __ |
+| K10 silence/stall | >3 s distinguished, error/end ≤3500 ms, cap_blocks/loud_s/stall time/reason matching | __ | __ |
 
-## 7. Dauerauftrag und heutige Automatisierungsgrenze
+## 7. Standing task and today's automation limit
 
-Jede neue Diktat-/Lifecycle-/Statusänderung wiederholt K01–K10; Fehlerrekonstruktion
-anhand Export #3 ergänzt diese Tests, ersetzt aber keines der unabhängigen Kriterien.
-Alle zehn Logikfälle sind automatisierbar; vollständige reale K01/K02/K04/K05/K07/K08/K10
-sind **heute nicht durch normale CI belegt**: Mikrofon/OS/FGS, echter Fokus und native
-Leistung/Thermik erfordern bereitgestellte Hardware und passende Messinstrumentierung.
-Auch K03/K06 brauchen zur Gerätefreigabe echte UI-/Touchbeweise, ihre Kernlogik ist Fake-testbar.
-Kein grundsätzlich unautomatisierbarer Fall: Geräte-I kann künftig auch diese Läufe ausführen.
-Dieser Auftrag liefert nur den Plan; keine Tests ausgeführt, keine Implementierung/Build/Git-Arbeit.
+Every new dictation/lifecycle/status change repeats K01–K10; error
+reconstruction from export #3 supplements these tests but replaces none of
+the independent criteria.
+All ten logic cases are automatable; complete real K01/K02/K04/K05/K07/K08/
+K10 are **today not evidenced by normal CI**: microphone/OS/FGS, real focus,
+and native performance/thermal require provided hardware and suitable
+measurement instrumentation.
+K03/K06 also need real UI/touch evidence for device release; their core
+logic is fake-testable.
+No case is fundamentally unautomatable: a device I can run these cases too
+in the future.
+This task delivers only the plan; no tests executed, no
+implementation/build/git work.

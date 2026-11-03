@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
-"""Normalisiert die Shift-Taste in den Symbolebenen aller Layout-Assets.
+"""Normalizes the shift key in the symbol layers of all layout assets.
 
-P1-03/M8c: In den Ebenen `symbols` und `symbolsShift` muss die Shift-Taste
-bei `rows[2][0]` (id "shift") exakt `kind:"action"`, `value:"shift"`,
-`label:"⇧"` haben (LAYOUT_REQUIREMENTS Regel 4a). In `symbolsShift` ist sie
-der Rueckweg nach `symbols`. Zusaetzlich bleibt `id:"base"`/`ABC`/`layer-base`
-in Reihe 3 unberuehrt (direkter Weg zu den Buchstaben).
+P1-03/M8c: in the layers `symbols` and `symbolsShift` the shift key must have
+exactly `kind:"action"`, `value:"shift"`, `label:"⇧"` at `rows[2][0]`
+(id "shift") (LAYOUT_REQUIREMENTS rule 4a). In `symbolsShift` it is the
+way back to `symbols`. Additionally `id:"base"`/`ABC`/`layer-base` stays
+untouched in row 3 (the direct way to the letters).
 
-Idempotent: veraendert NUR die Felder kind/label/value dieser einen Taste
-pro Ebene; alle anderen Felder, Tasten, Reihenfolge und Formatierung
-(2-Space-Indent, ensure_ascii=False) bleiben erhalten.
+Idempotent: changes ONLY the fields kind/label/value of this single key
+per layer; all other fields, keys, order and formatting
+(2-space indent, ensure_ascii=False) stay intact.
 """
 import json
 import pathlib
@@ -26,7 +26,7 @@ def normalize_layer_keys(rows, layer_name) -> int:
     if len(rows) > 2 and rows[2] and rows[2][0].get("id") == "shift":
         key = rows[2][0]
     else:
-        # Fallback: jede Taste mit id "shift" in dieser Ebene
+        # fallback: any key with id "shift" in this layer
         for row in rows:
             for k in row:
                 if k.get("id") == "shift":
@@ -40,7 +40,7 @@ def normalize_layer_keys(rows, layer_name) -> int:
     key["value"] = "shift"
     key["label"] = SHIFT_LABEL
     changed += 1
-    print(f"  {layer_name}: id=shift -> label={SHIFT_LABEL!r}, kind=action, value=shift (war {old})")
+    print(f"  {layer_name}: id=shift -> label={SHIFT_LABEL!r}, kind=action, value=shift (was {old})")
     return changed
 
 
@@ -65,9 +65,9 @@ def main() -> int:
             )
             total_files += 1
         else:
-            print("  bereits normalisiert (0 Aenderungen)")
+            print("  already normalized (0 changes)")
         total_keys += changed
-    print(f"Gesamt: {total_files} Datei(en), {total_keys} Taste(n) geaendert")
+    print(f"total: {total_files} file(s), {total_keys} key(s) changed")
     return 0
 
 

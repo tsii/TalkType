@@ -1,40 +1,40 @@
-# Review F28/F31 — Watchdogs, FGS-Handshake, Popup-Geometrie, F29-Layout-Gates, F30-FakeWav
+# Review F28/F31 — Watchdogs, FGS handshake, popup geometry, F29 layout gates, F30 FakeWav
 
-**Reviewer:** DeepSeek V4 Pro 0813 · **Datum:** 2026-10-30
-**Stand:** v0.1.23 / vc24 · Debug 461/0 · Release 433/0 (nicht selbst gelaufen).
+**Reviewer:** DeepSeek V4 Pro 0813 · **Date:** 2026-10-30
+**State:** v0.1.23 / vc24 · Debug 461/0 · Release 433/0 (not run myself).
 
 ---
 
-## Befundtabelle
+## Findings table
 
-| Befund | Schwere | Datei:Zeile | Fix |
+| Finding | Severity | File:Line | Fix |
 |---|---|---|---|
-| **SILENT-Watchdog bricht eine laufende, gute Session bei natürlicher Sprechpause (> 3 s) ab.** `SILENCE_RMS = 0,01` (−40 dBFS) + `STALL_LIMIT_MS = 3000`; der Silent-Zweig feuert, sobald `capBlocks > 0 && (now − lastLoudAtMs) > 3000` — also nach 3 s ohne einen Block ≥ −40 dBFS. Natürliche Pausen (Atem/Raumrauschen typ. −50…−60 dBFS) haben **keinen** solchen Block und beenden das Diktat via `errorListener.onError(ERR_SILENT)` → `abort()`. | **P1** | `DictationCoordinator.kt:87-90, 337-338` (`SILENCE_RMS`, `STALL_LIMIT_MS`, Silent-Zweig) | Silent-Schwelle auf 5000–8000 ms heben **oder** `SILENCE_RMS` auf ~−55 dBFS senken **oder** Silent nur am Ende (nach `stopAndDrain`), nicht mid-session prüfen. Minimalsicher: Silent als Warnung statt Abbruch. |
-| **FGS-Handshake kalt-startet nahe der 2-s-Frist.** `awaitFgsReady(2_000)` wartet auf das `startForeground`-Signal des FGS; bei kaltem Prozess/erstem Start kann `onStartCommand`+`startForeground` > 2 s brauchen → „no audio start" für einen eigentlich gültigen Start. Kein Deadlock (Condition-`awaitNanos` gibt die Lock frei), aber die Frist ist knapp. | P2 | `VoiceKeyboardService.kt:148, 471, 903-918` | `FGS_READY_TIMEOUT_MS` auf 3–4 s erhöhen oder einen einmaligen Retry-Handshake zulassen. |
-| **Stall- vs. Silent-Doppelfeuer ausgeschlossen, Race mit stop() bleibt harmlos.** Der Stall-Zweig feuert zuerst und `return`t (Kommentar „ERR_STALL hat Vorrang"), Silent wird nie im selben Lauf nachgezogen; ein verspäteter Watchdog gegen `stop()` liefert nur `NoFinal` (kein Datenverlust). | Note | `DictationCoordinator.kt:327-338` | — |
-| **Reset-Pfade sauber.** `capBlocks/lastBlockAtMs/lastLoudAtMs/micRelValue/statusShownValue` werden in `start()` zurückgesetzt (Z.202-211) — kein Leck in den nächsten 🐞-Export. | Note | `DictationCoordinator.kt:202-211` | — |
-| **Popup-Top negativ (r0) + `clipChildren=false`:** Überstand über die Statusleiste ist gewollt (Z.72-73, ImeRootView:159-160), aber derselbe `clipChildren=false` gilt für **alle** Root-Kinder (auch Emoji-Block) — ein künftiger Overdraw außerhalb der Bounds würde nun sichtbar. Bei 5-Zeilen-Layouts (pt-pt) ist `rowIndex==0` weiterhin die oberste Reihe, aber die Fußzeilen-Erkennung („Reihe enthält space") konnte ich **nicht** belegen (Symbol fehlt im grep) — `isFooterRow`-Quelle unklar. | P2/offen | `KeyboardView.kt:521-533`, `LongPressMenu.kt:90-94`, `ImeRootView.kt:159-160` | `isFooterRow`-Herleitung zeigen/testen (Layout ohne `space`/ru-ru-Ziffernreihe); `clipChildren=false` ggf. nur am KeyboardView statt an der Root. |
-| **F29-Gates:** die Sollwerte (space 6.5, mic 2, @-Regel, m-left 0.5, shift 1) werden vom Gate nur **summenbasiert** abgedeckt; ein „@ als eigenständige Taste UND als alternate" (Doppelpfad) würde Σ nicht verletzen und bliebe u. U. unerkannt — Prüfung der Einzelwerte fehlt im Befundmaterial. | P2/offen | `FooterAcrossAssetsTest` / `LayoutCompletenessTest` | Einzelwert-Assert (space==6,5, mic==2, @ je Ebene genau 1× ohne alternate-Doppel) statt nur Σ. |
-| **F30 FakeWavAudioSource (Debug-only):** Source-Set nicht gelesen; Zeitabhängigkeit (sleepbasiertes Vorspulen) ist ein Flakiness-Risiko, sofern sie über `System.sleep` statt injizierbare Uhr läuft. | offen | `debug/FakeWavAudioSource.kt` | Source-Set (`src/debug`) bestätigen + injizierbare Uhr statt `sleep`. |
+| **SILENT watchdog aborts a running, good session on a natural speech pause (> 3 s).** `SILENCE_RMS = 0.01` (−40 dBFS) + `STALL_LIMIT_MS = 3000`; the silent branch fires as soon as `capBlocks > 0 && (now − lastLoudAtMs) > 3000` — i.e. after 3 s without a block ≥ −40 dBFS. Natural pauses (breathing/room noise typically −50…−60 dBFS) have **no** such block and end the dictation via `errorListener.onError(ERR_SILENT)` → `abort()`. | **P1** | `DictationCoordinator.kt:87-90, 337-338` (`SILENCE_RMS`, `STALL_LIMIT_MS`, silent branch) | Raise the silent threshold to 5000–8000 ms **or** lower `SILENCE_RMS` to ~−55 dBFS **or** check silent only at the end (after `stopAndDrain`), not mid-session. Minimally safe: silent as a warning instead of an abort. |
+| **FGS handshake cold-starts near the 2-s deadline.** `awaitFgsReady(2_000)` waits for the FGS's `startForeground` signal; on a cold process/first start `onStartCommand`+`startForeground` can take > 2 s → "no audio start" for an otherwise valid start. No deadlock (the Condition `awaitNanos` releases the lock), but the deadline is tight. | P2 | `VoiceKeyboardService.kt:148, 471, 903-918` | Increase `FGS_READY_TIMEOUT_MS` to 3–4 s or allow a one-time retry handshake. |
+| **Stall vs. silent double firing ruled out, race with stop() remains harmless.** The stall branch fires first and `return`s (comment "ERR_STALL hat Vorrang"), silent is never re-checked in the same run; a late watchdog against `stop()` only yields `NoFinal` (no data loss). | Note | `DictationCoordinator.kt:327-338` | — |
+| **Reset paths clean.** `capBlocks/lastBlockAtMs/lastLoudAtMs/micRelValue/statusShownValue` are reset in `start()` (lines 202-211) — no leak into the next 🐞 export. | Note | `DictationCoordinator.kt:202-211` | — |
+| **Popup top negative (r0) + `clipChildren=false`:** overhang beyond the status bar is intended (lines 72-73, ImeRootView:159-160), but the same `clipChildren=false` applies to **all** root children (including the emoji block) — a future overdraw outside the bounds would now become visible. With 5-row layouts (pt-pt), `rowIndex==0` is still the top row, but I could **not** prove the footer detection ("row contains space") (symbol missing in grep) — source of `isFooterRow` unclear. | P2/open | `KeyboardView.kt:521-533`, `LongPressMenu.kt:90-94`, `ImeRootView.kt:159-160` | Show/test the `isFooterRow` derivation (layout without `space`/ru-ru digit row); if needed set `clipChildren=false` only on the KeyboardView instead of the root. |
+| **F29 gates:** the target values (space 6.5, mic 2, @ rule, m-left 0.5, shift 1) are covered by the gate only on a **sum basis**; an "@ as a standalone key AND as an alternate" (dual path) would not violate Σ and might go undetected — a check of the individual values is missing from the findings material. | P2/open | `FooterAcrossAssetsTest` / `LayoutCompletenessTest` | Individual-value asserts (space==6.5, mic==2, @ exactly 1× per layer without an alternate duplicate) instead of Σ only. |
+| **F30 FakeWavAudioSource (debug-only):** source set not read; time dependency (sleep-based fast-forward) is a flakiness risk if it runs via `System.sleep` instead of an injectable clock. | open | `debug/FakeWavAudioSource.kt` | Confirm source set (`src/debug`) + injectable clock instead of `sleep`. |
 
 ---
 
-## Gesamturteil
+## Overall verdict
 
-**P0 = 0 · P1 = 1 · P2 = 3** (Gesamt; die drei P2 sind FGS-Kaltstart-Frist, Popup-Clip/Footer-Erkennung ungeklärt, F29-Gates summenbasiert).
+**P0 = 0 · P1 = 1 · P2 = 3** (overall; the three P2s are the FGS cold-start deadline, popup clip/footer detection unresolved, F29 gates sum-based).
 
-**Push-fähig?** **Nein — nur nach Fix des P1.** Der SILENT-Watchdog (3 s / −40 dBFS) beendet ein Diktat bei einer natürlichen Sprechpause > 3 s — das ist ein Fehlabbruch im Normalfall und darf nicht in v0.1.24. Mindestfix: Silent-Schwelle auf ≥ 5 s heben oder `SILENCE_RMS` auf ~−55 dBFS senken (oder Silent erst am Session-Ende prüfen). Die drei P2 sind nicht push-blockierend, gehören aber vor 0.1.25.
+**Pushable?** **No — only after fixing the P1.** The SILENT watchdog (3 s / −40 dBFS) ends a dictation on a natural speech pause > 3 s — that is a false abort in the normal case and must not go into v0.1.24. Minimum fix: raise the silent threshold to ≥ 5 s or lower `SILENCE_RMS` to ~−55 dBFS (or check silent only at session end). The three P2s are not push-blocking but belong before 0.1.25.
 
-**Nicht selbst belegt (offen):** Testläufe (461/433), `isFooterRow`-Herleitung, `FakeWavAudioSource`-Source-Set/Uhr, F29-Einzelwert-Gates, Permission-Gate ab api 33 (nur Signatur gesehen).
+**Not proven myself (open):** test runs (461/433), `isFooterRow` derivation, `FakeWavAudioSource` source set/clock, F29 individual-value gates, permission gate from api 33 (signature seen only).
 
 ---
 
-## Nachtrag F31b (P1-Fix)
+## Addendum F31b (P1 fix)
 
-1. **P1 ist GESCHLOSSEN.** `everLoud` (DictationCoordinator:218/300/330-332) ist ein Einmal-Latch: Sobald der erste laute Block (`rms ≥ SILENCE_RMS`) kam, feuert SILENT **nie wieder** (`:361-362` `!everLoud`-Gate). Eine natürliche Sprechpause nach erstem Ton bricht nichts mehr ab. **Rest (Note, kein P1):** `everLoud` ist irreversibel — ein einzelner lauter Störknack am Start schaltet die „Mikrofon stumm"-Diagnose dauerhaft ab; der Fall bleibt am `Kein Text erkannt`-Toast bei stop() erkennbar (kein Datenverlust, nur schwächere Frühdiagnose).
-2. **4-s-FGS-Frist ausreichend, nicht zu großzügig.** Im Normalfall signalisiert `markFgsReady` in <100 ms; die 4 s greifen nur im Fehler-/Kaltstart (sichtbare Obergrenze, keine Latenz im Normalfall; `VoiceKeyboardService:149,472`).
-3. **Einzelwert-Gates decken die Sollwerte jetzt ab.** `r1[0]=0,5`, genau ein `@`, ru-ru ohne `@` + `period.alternates[0]="@"`, `r2[0] shift=1`, `space 6,5`/`mic 2`/`period 1` werden einzeln assertiert — der „summenbasiert zu weich"-P2 ist erledigt; auch der `@`-Doppelpfad (Taste + alternate) ist über „genau ein at" + `period.alternates[0]` abgedeckt.
+1. **The P1 is CLOSED.** `everLoud` (DictationCoordinator:218/300/330-332) is a one-shot latch: as soon as the first loud block (`rms ≥ SILENCE_RMS`) arrived, SILENT **never fires again** (`:361-362` `!everLoud` gate). A natural speech pause after first sound no longer aborts anything. **Remainder (note, no P1):** `everLoud` is irreversible — a single loud crackle at the start permanently disables the "mic muted" diagnosis; the case remains detectable via the `Kein Text erkannt` toast at stop() (no data loss, only weaker early diagnosis).
+2. **4-s FGS deadline sufficient, not too generous.** In the normal case `markFgsReady` signals in <100 ms; the 4 s only take effect in the error/cold-start case (visible upper bound, no latency in the normal case; `VoiceKeyboardService:149,472`).
+3. **Individual-value gates now cover the target values.** `r1[0]=0.5`, exactly one `@`, ru-ru without `@` + `period.alternates[0]="@"`, `r2[0] shift=1`, `space 6.5`/`mic 2`/`period 1` are asserted individually — the "sum-based too soft" P2 is resolved; the `@` dual path (key + alternate) is also covered via "exactly one at" + `period.alternates[0]`.
 
-**Aktualisiert: P0 = 0 · P1 = 0 · P2 = 1** (verbleibend: Popup-Clip/`isFooterRow` offen) · 1 Note (`everLoud`-Latch).
+**Updated: P0 = 0 · P1 = 0 · P2 = 1** (remaining: popup clip/`isFooterRow` open) · 1 note (`everLoud` latch).
 
-**Push-fähig: JA** — der einzige P1 ist durch das `!everLoud`-Gate sauber behoben; der Rest sind Nicht-Blocker.
+**Pushable: YES** — the only P1 is cleanly fixed via the `!everLoud` gate; the rest are non-blockers.

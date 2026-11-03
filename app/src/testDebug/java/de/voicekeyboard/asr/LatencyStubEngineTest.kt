@@ -8,49 +8,49 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * AP1 (docs/PLAN_C2_FABLE_R2.md §1.2): Smoke-Test der LatencyStubEngine —
- * Geometrie des Pseudo-Texts (Länge ∝ Puffer, Satzzeichen alle 8 Wörter,
- * Präfixstabilität des wachsenden Puffers). Die Latenz selbst (Echtzeituhr,
- * Thread.sleep) wird bewusst NICHT gemessen — kein sleep-basiertes Timing im
- * Unit-Test (Harness-Disziplin); α=0 im Test.
+ * AP1 (docs/PLAN_C2_FABLE_R2.md §1.2): smoke test of the LatencyStubEngine —
+ * geometry of the pseudo text (length ∝ buffer, punctuation every 8 words,
+ * prefix stability of the growing buffer). The latency itself (real-time clock,
+ * Thread.sleep) is deliberately NOT measured — no sleep-based timing in a
+ * unit test (harness discipline); α=0 in the test.
  */
 class LatencyStubEngineTest {
 
     private fun window(seconds: Int) = PcmWindow(ShortArray(seconds * 16_000), 16_000)
 
     @Test
-    fun `Textlaenge waechst proportional zum Puffer`() = runBlocking {
+    fun `text length grows proportionally to the buffer`() = runBlocking {
         val engine = LatencyStubEngine(alphaMsPerSecond = 0.0, baseMs = 0L)
         val t2 = engine.transcribe(window(2), sessionId = 1, runId = 1).text
         val t4 = engine.transcribe(window(4), sessionId = 1, runId = 2).text
-        // 2 Wörter pro Sekunde: 2 s → 4 Wörter, 4 s → 8 Wörter (8. Wort trägt
-        // den Satzpunkt — Satzzeichen alle 8 Wörter, s. Test unten).
+        // 2 words per second: 2 s → 4 words, 4 s → 8 words (the 8th word carries
+        // the period — punctuation every 8 words, see test below).
         assertEquals(listOf("wort1", "wort2", "wort3", "wort4"), t2.split(" "))
         assertEquals(listOf("wort1", "wort2", "wort3", "wort4", "wort5", "wort6", "wort7", "wort8."), t4.split(" "))
-        assertTrue("Länge ∝ buffer_s", t4.length > t2.length)
+        assertTrue("length ∝ buffer_s", t4.length > t2.length)
     }
 
     @Test
-    fun `Praefixstabilitaet - wachsender Puffer erweitert den Text`() = runBlocking {
+    fun `prefix stability - a growing buffer extends the text`() = runBlocking {
         val engine = LatencyStubEngine(alphaMsPerSecond = 0.0, baseMs = 0L)
         val t2 = engine.transcribe(window(2), sessionId = 1, runId = 1).text
         val t4 = engine.transcribe(window(4), sessionId = 1, runId = 2).text
-        // Commit/Agreement-Voraussetzung: die zweite Hypothese ERWEITERT die erste.
-        assertTrue("t4 ist Erweiterung von t2", t4.startsWith(t2) || t4.startsWith("$t2 "))
+        // commit/agreement prerequisite: the second hypothesis EXTENDS the first.
+        assertTrue("t4 is an extension of t2", t4.startsWith(t2) || t4.startsWith("$t2 "))
     }
 
     @Test
-    fun `Satzzeichen alle 8 Woerter - Punkt nur am 8ten Wort`() = runBlocking {
+    fun `punctuation every 8 words - period only on the 8th word`() = runBlocking {
         val engine = LatencyStubEngine(alphaMsPerSecond = 0.0, baseMs = 0L)
-        val t4 = engine.transcribe(window(4), sessionId = 1, runId = 1).text // 8 Wörter
-        assertEquals("Punkt am 8. Wort (füttert Segmentregel a)", "wort8.", t4.split(" ").last())
-        assertTrue("Hypothese endet mit Punkt", t4.endsWith("."))
-        val t2 = engine.transcribe(window(2), sessionId = 1, runId = 2).text // 4 Wörter
-        assertFalse("kein Punkt vor dem 8. Wort", t2.contains("."))
+        val t4 = engine.transcribe(window(4), sessionId = 1, runId = 1).text // 8 words
+        assertEquals("period on the 8th word (feeds segment rule a)", "wort8.", t4.split(" ").last())
+        assertTrue("the hypothesis ends with a period", t4.endsWith("."))
+        val t2 = engine.transcribe(window(2), sessionId = 1, runId = 2).text // 4 words
+        assertFalse("no period before the 8th word", t2.contains("."))
     }
 
     @Test
-    fun `runId und sessionId werden monoton durchgereicht`() = runBlocking {
+    fun `runId and sessionId are passed through monotonically`() = runBlocking {
         val engine = LatencyStubEngine(alphaMsPerSecond = 0.0, baseMs = 0L)
         val h = engine.transcribe(window(1), sessionId = 7, runId = 42)
         assertEquals(7L, h.sessionId)

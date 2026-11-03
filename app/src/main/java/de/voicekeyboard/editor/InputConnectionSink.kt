@@ -2,76 +2,76 @@ package de.voicekeyboard.editor
 
 import android.view.inputmethod.InputConnection
 
-/** InputConnection nicht (mehr) verfügbar — geordneter Abbruch statt Crash. */
+/** InputConnection not (any longer) available — orderly abort instead of a crash. */
 class EditorUnavailableException(message: String) : IllegalStateException(message)
 
-/** Editor hat eine Teilschritt des Edits abgelehnt — kein blindes Retry (DESIGN §6). */
+/** The editor rejected a partial step of the edit — no blind retry (DESIGN §6). */
 class EditorWriteException(message: String) : IllegalStateException(message)
 
 /**
- * Android-Anbindung von [EditorSink] über die [InputConnection] der laufenden
- * IME-Sitzung (DESIGN.md §6).
+ * Android binding of [EditorSink] via the [InputConnection] of the running
+ * IME session (DESIGN.md §6).
  *
- * - [replaceBeforeCursor] klappt `beginBatchEdit` … `endBatchEdit` um
- *   `deleteSurroundingText` + `commitText` (kein `setComposingText`-Missbrauch,
- *   kein `setText`, keine Zwischenablage).
- * - `deleteSurroundingText` zählt **UTF-16-Codeeinheiten**; die Löschlänge wird
- *   zusätzlich per [Graphemes] an Graphemclustergrenzen zurückgestuft, damit nie
- *   ein `ä` (a + U+0308), Surrogatpaar oder Emoji-ZWJ zerteilt wird. Der
- *   ungelöschte Rest wird dem neuen Text vorangestellt — das Ergebnis ist identisch.
- * - Null-InputConnection (Editor weg/App-Wechsel): definierter Fehler
- *   ([EditorUnavailableException]) bzw. null bei Lesern — kein Crash.
- * - Keine Logs von Textinhalten (Privatsphäre, DESIGN §6).
+ * - [replaceBeforeCursor] wraps `beginBatchEdit` … `endBatchEdit` around
+ *   `deleteSurroundingText` + `commitText` (no `setComposingText` misuse,
+ *   no `setText`, no clipboard).
+ * - `deleteSurroundingText` counts **UTF-16 code units**; the delete length is
+ *   additionally stepped back to grapheme cluster boundaries via [Graphemes], so that never
+ *   an `ä` (a + U+0308), surrogate pair or emoji-ZWJ is split. The
+ *   undeleted remainder is prepended to the new text — the result is identical.
+ * - Null InputConnection (editor gone/app change): defined error
+ *   ([EditorUnavailableException]) resp. null for readers — no crash.
+ * - No logs of text contents (privacy, DESIGN §6).
  */
 class InputConnectionSink(
     private val connectionProvider: () -> InputConnection?,
-    /** Führt Editor-Operationen aus (Produktion: Main-Thread; Tests: Direkt). N-1. */
+    /** Performs editor operations (production: main thread; tests: direct). N-1. */
     private val editExecutor: java.util.concurrent.Executor = MAIN_EXECUTOR,
 ) : EditorSink {
 
-    /** Standard-Executor: Main-Thread über den Haupt-Looper (N-1, DESIGN §2.3-1).
-     *  Invariante: JEDE InputConnection-Operation läuft auf diesem Executor;
-     *  der ASR-Worker dekodiert nur und ruft den Editor-Sync. JVM-Fallback inline,
-     *  damit der Sink auch ohne Android-Looper (Unit-Test) funktioniert. */
+    /** Default executor: main thread via the main looper (N-1, DESIGN §2.3-1).
+     *  Invariant: EVERY InputConnection operation runs on this executor;
+     *  the ASR worker only decodes and calls the editor sync. JVM fallback inline,
+     *  so that the sink also works without an Android looper (unit test). */
     companion object {
-        // lazy: im Unit-Test ohne Android-Runner wird Looper nicht berührt
+        // lazy: in the unit test without an Android runner, Looper is not touched
         private val MAIN_EXECUTOR: java.util.concurrent.Executor by lazy {
             runCatching { android.os.Looper.getMainLooper() }.getOrNull()?.let { looper ->
                 java.util.concurrent.Executor { runnable -> android.os.Handler(looper).post(runnable) }
-            } ?: java.util.concurrent.Executor { it.run() } // JVM-Fallback (kein Looper)
+            } ?: java.util.concurrent.Executor { it.run() } // JVM fallback (no looper)
         }
 
-        /** Test-Direkt-Executor: gleiche Aufrufsemantik ohne Looper. */
+        /** Test direct executor: same call semantics without a looper. */
         val DIRECT_EXECUTOR: java.util.concurrent.Executor = java.util.concurrent.Executor { it.run() }
 
-        /** S5-2: endliche Wartefrist für den Editor-Sync (siehe onEditExecutor). */
+        /** S5-2: finite wait deadline for the editor sync (see onEditExecutor). */
         private const val EDIT_TIMEOUT_MS = 2_000L
     }
 
-    /** Führt [block] auf dem Edit-Executor aus und WARTET (EditorSink ist synchron).
+    /** Executes [block] on the edit executor and WAITS (EditorSink is synchronous).
      *
-     *  S5-2 Deadlock-Schutz: Ruft der Aufrufer bereits auf dem Main-Looper, wird
-     *  der Block INLINE ausgeführt (ein Post an denselben Looper würde nie
-     *  abgearbeitet, bevor wir mit await() blockieren → garantiertes Deadlock).
-     *  Andernfalls Post + endliches Warten: EDIT_TIMEOUT_MS = 2000 ms — bemessen
-     *  als Vielfaches der beobachteten Edit-Dauer (µs-Bereich) plus Reserve für
-     *  einen blockierten Main-Thread unter Last (ANR-Schwelle liegt bei 5 s,
-     *  wir melden also deutlich vor dem System). Bei Timeout typisierter Fehler
-     *  (IllegalStateException), niemals unbegrenztes await().
+     *  S5-2 deadlock protection: if the caller is already on the main looper, the
+     *  block is executed INLINE (a post to the same looper would never be
+     *  processed before we block on await() → guaranteed deadlock).
+     *  Otherwise post + finite waiting: EDIT_TIMEOUT_MS = 2000 ms — sized
+     *  as a multiple of the observed edit duration (µs range) plus reserve for
+     *  a blocked main thread under load (the ANR threshold is at 5 s,
+     *  so we report well before the system). On timeout a typed error
+     *  (IllegalStateException), never an unbounded await().
      *
-     *  A1 Geisterschreiben (REVIEW_STAGE6): Der gepostete Block ist per Handler
-     *  nicht stornierbar — nach dem Timeout läuft er später auf dem Main-Thread.
-     *  Deshalb prüft er VOR jeder Editorberührung das pro-Aufruf-[abandoned]-Flag
-     *  und wird zum No-op, wenn der Aufrufer aufgegeben hat.
+     *  A1 ghost writing (REVIEW_STAGE6): the posted block cannot be cancelled
+     *  via the Handler — after the timeout it runs later on the main thread.
+     *  Therefore it checks the per-call [abandoned] flag BEFORE every editor
+     *  touch and becomes a no-op if the caller has given up.
      *
-     *  Invariante (A1, verbindlich): Nach Timeout wird der Block zum No-op; es
-     *  gibt GENAU NULL Editorberührungen nach dem Aufgeben (kein
-     *  deleteSurroundingText, kein commitText, kein getTextBeforeCursor, kein
-     *  connectionProvider()-Aufruf — der Block liest dann nichts mehr).
-     *  JEDE Wartezeit bleibt endlich; ein hängender Main-Thread führt zu einem
-     *  sichtbaren Fehler, nie zu einem eingefrorenen Worker-Thread. */
+     *  Invariant (A1, binding): after the timeout the block becomes a no-op; there
+     *  are EXACTLY ZERO editor touches after giving up (no
+     *  deleteSurroundingText, no commitText, no getTextBeforeCursor, no
+     *  connectionProvider() call — the block then reads nothing anymore).
+     *  EVERY wait stays finite; a hung main thread leads to a visible
+     *  error, never to a frozen worker thread. */
     private fun <T> onEditExecutor(block: () -> T): T {
-        if (isOnMainLooper()) return block() // (a) Reentranz: inline statt Post
+        if (isOnMainLooper()) return block() // (a) reentrancy: inline instead of post
         val latch = java.util.concurrent.CountDownLatch(1)
         val abandoned = java.util.concurrent.atomic.AtomicBoolean(false)
         var result: T? = null
@@ -79,20 +79,20 @@ class InputConnectionSink(
         editExecutor.execute {
             try {
                 if (abandoned.get()) {
-                    // A1: Aufrufer hat aufgegeben → NULL Editorberührungen
+                    // A1: caller has given up → ZERO editor touches
                     android.util.Log.w("VK-IME", "edit abandoned (timeout) — no-op")
                     return@execute
                 }
                 result = block()
             } catch (t: Throwable) {
-                if (!abandoned.get()) error = t // Fehler nach Aufgeben: niemand wartet
+                if (!abandoned.get()) error = t // error after giving up: nobody is waiting
             } finally {
                 latch.countDown()
             }
         }
-        // (b) endliche Frist statt latch.await() ohne Grenze
+        // (b) finite deadline instead of an unbounded latch.await()
         if (!latch.await(EDIT_TIMEOUT_MS, java.util.concurrent.TimeUnit.MILLISECONDS)) {
-            abandoned.set(true) // A1: VOR dem Werfen markieren — Block wird No-op
+            abandoned.set(true) // A1: mark BEFORE throwing — block becomes a no-op
             throw IllegalStateException(
                 "Editor-Sync Timeout: Main-Thread hat den Edit nicht in " +
                     EDIT_TIMEOUT_MS + " ms ausgeführt (blockiert/überlastet?)"
@@ -109,20 +109,20 @@ class InputConnectionSink(
         return mine != null && mine === looper
     }
 
-    /** Eigener Span in UTF-16-Codeeinheiten (nur Länge/Struktur, nie geloggt).
-     *  AP7-E1c: @Volatile — ownText() wird auch außerhalb des Edit-Threads
-     *  gelesen (Re-Baseline-Diagnosefelder); der Schreibsatz selbst bleibt
-     *  Edit-Thread-serialisiert. */
+    /** Own span in UTF-16 code units (length/structure only, never logged).
+     *  AP7-E1c: @Volatile — ownText() is also read outside the edit thread
+     *  (re-baseline diagnostics fields); the write set itself stays
+     *  edit-thread-serialized. */
     @Volatile private var ownSpan: String = ""
 
-    /** A5 (v0.1.34): Sitzungswechsel — ownSpan-Leiche beseitigen (Toggle-W1:
-     *  Coordinator+Sink werden über Sitzungen hinweg wiederverwendet, die
-     *  Spanne der Vorgänger-Sitzung fälscht ab der zweiten Hypothese der
-     *  Folgesitzung den Besitzbeweis in DeltaTyper.ownershipVerified).
-     *  Direkte @Volatile-Zuweisung, synchron — es gibt keine Ableitungen von
-     *  ownSpan; der Schreibsatz selbst bleibt Edit-Thread-serialisiert, und
-     *  der Aufrufer (DictationController.start()) serialisiert die
-     *  Sitzungsgrenze ohnehin (ein Orchestrierungs-Thread). */
+    /** A5 (v0.1.34): session change — eliminate the ownSpan corpse (toggle W1:
+     *  coordinator + sink are reused across sessions, the
+     *  span of the previous session fakes the ownership proof from the second
+     *  hypothesis of the follow-up session in DeltaTyper.ownershipVerified).
+     *  Direct @Volatile assignment, synchronous — there are no derivations of
+     *  ownSpan; the write set itself stays edit-thread-serialized, and
+     *  the caller (DictationController.start()) serializes the
+     *  session boundary anyway (one orchestration thread). */
     override fun resetSession() {
         ownSpan = ""
     }
@@ -134,8 +134,8 @@ class InputConnectionSink(
     private fun replaceBeforeCursorSync(replaceLength: Int, newText: String) {
         val ic = connectionProvider()
             ?: throw EditorUnavailableException("InputConnection nicht verfügbar")
-        // Löschlänge an Graphemgrenze ausrichten (UTF-16-Einheiten bleiben erhalten,
-        // nur die Grenze verschiebt sich ggf. nach vorne; Rest wandert in den Text).
+        // Align the delete length with a grapheme boundary (UTF-16 units stay preserved,
+        // only the boundary may move forward; the remainder migrates into the text).
         var deleteLength = replaceLength
         while (deleteLength > 0 && !Graphemes.isBoundary(ownSpan, ownSpan.length - deleteLength)) {
             deleteLength--
@@ -147,7 +147,7 @@ class InputConnectionSink(
         }
         val effectiveText = keptPrefix + newText
 
-        ic.beginBatchEdit() // gruppiert die Anzeige, ist keine Transaktion (DESIGN §6)
+        ic.beginBatchEdit() // groups the display update, is not a transaction (DESIGN §6)
         try {
             if (deleteLength > 0 && !ic.deleteSurroundingText(deleteLength, 0)) {
                 throw EditorWriteException("deleteSurroundingText wurde abgelehnt")
@@ -164,12 +164,12 @@ class InputConnectionSink(
     override fun textBeforeCursor(maxChars: Int): CharSequence? =
         onEditExecutor {
             val ic = connectionProvider() ?: return@onEditExecutor null
-            // 0 = keine Text-Flags: roher Text, kein Meta-Text
+            // 0 = no text flags: raw text, no meta text
             ic.getTextBeforeCursor(maxChars, 0)
         }
 
     override fun ownLength(): Int = ownSpan.length
 
-    // AP7-E1c: synchroner Eigen-Text aus der commit-Runde (siehe EditorSink).
+    // AP7-E1c: synchronous own text from the commit round (see EditorSink).
     override fun ownText(): String = ownSpan
 }

@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
-"""Referenz-Decoder fuer parakeet-tdt-0.6b-v3 (ONNX int8) — Golden-Test-Erzeuger.
+"""Reference decoder for parakeet-tdt-0.6b-v3 (ONNX int8) — golden test generator.
 
-Zweck: unabhaengig von der Android-Implementierung beweisen, wie der TDT-Greedy-
-Decode fuer den gepinnten Export auszusehen hat, und Golden-Text fuer Test-WAVs
-erzeugen.  Aufruf:  .venv-asr/bin/python tools/reference_decode.py [audio.wav]
+Purpose: prove, independently of the Android implementation, how the TDT
+ greedy decode must look for the pinned export, and produce golden text for
+test WAVs.  Usage:  .venv-asr/bin/python tools/reference_decode.py [audio.wav]
 
-Verifizierter Tensorvertrag (gemessen 2026-10-27, onnxruntime 1.31.1):
+Verified tensor contract (measured 2026-10-27, onnxruntime 1.31.1):
   nemo128.onnx
-    waveforms      float32 [B, N]        (16 kHz roh, [-1,1])
+    waveforms      float32 [B, N]        (16 kHz raw, [-1,1])
     waveforms_lens int64   [B]
     -> features      float32 [B, 128, T]
     -> features_lens int64   [B]
@@ -22,37 +22,38 @@ Verifizierter Tensorvertrag (gemessen 2026-10-27, onnxruntime 1.31.1):
     target_length   int32   [B]
     input_states_1  float32 [2, B, 640]
     input_states_2  float32 [2, B, 640]
-    -> outputs          float32 [B, T, U, 8198]   (T = Encoderframes, U = Labels,
-                                                   hier immer [B, 1, 1, 8198])
+    -> outputs          float32 [B, T, U, 8198]   (T = encoder frames, U = labels,
+                                                   here always [B, 1, 1, 8198])
     -> prednet_lengths  int32   [B]
     -> output_states_1  float32 [2, B, 640]
     -> output_states_2  float32 [2, B, 640]
 
-8198 = 8193 Vokabeln (0..8192, <blk> = 8192) + 5 Durationklassen {0,1,2,3,4}.
+8198 = 8193 vocabulary entries (0..8192, <blk> = 8192) + 5 duration classes {0,1,2,3,4}.
 
-KORREKTUREN gegenueber der ersten Fassung (2026-10-27, Review):
-1. FEHLER: Die PredNet-States wurden bei *jedem* Schritt uebernommen, auch bei
-   Blank.  Referenz (istupakov/onnx-asr, `_AsrWithTransducerDecoding._decoding`,
-   und NeMo TDT-Greedy) ist: der State wird NUR bei einem emittierten Nicht-Blank
-   fortgeschrieben; bei Blank wird derselbe State erneut gefuettert.  Auswirkung
-   messbar: de_pause verlor "nach", de_part1 zerfiel in "ersteil ... Dikt Arts".
-   Jetzt referenzkonform.
-2. FEHLER: MAX_SYMBOLS_PER_FRAME war als globales Limit (10 * frames Tokens)
-   implementiert und nur im dur==0-Zweig geprueft -> pro Frame konnten bis zu
-   10*frames Symbole entstehen.  Jetzt echter Zaehler pro Encoderframe, bei
-   Erreichen Zwangsvorschub +1 Frame (identisch zur Referenz).
-3. FEHLER: Sondertokens wurden nicht gefiltert; <unk>/<|nospeech|>/<|pnc|> usw.
-   waeren als Klartext im Ergebnis gelandet.  Jetzt gefiltert ueber das
-   Token-Muster (siehe is_special) — NICHT ueber "id < N", weil die Ziffern
-   "0".."9" als IDs 234..243 mitten zwischen den Sondertokens liegen.
-4. Robustheit: Waveform-/SR-Pruefung ohne `assert` (asserts verschwinden unter
-   `python -O`), Fehlermeldungen statt Tracebacks, Schutz gegen leeres Audio,
-   NaN/Inf, sehr langes Audio (> --max-seconds), encoded_lengths > Tensorbreite
-   und Endlosschleifen; Modelle relativ zum Repo (nicht zum CWD); Threads
-   konfigurierbar; Detok exakt wie die Referenz (Regex statt nur strip()).
-   Die Detok-Regel aendert fuer die vorhandenen Golden-WAVs nichts (geprueft).
+CORRECTIONS versus the first version (2026-10-27, review):
+1. BUG: the PredNet states were adopted at *every* step, including blanks.
+   Reference (istupakov/onnx-asr, `_AsrWithTransducerDecoding._decoding`,
+   and NeMo TDT greedy) is: the state is advanced ONLY on an emitted non-blank;
+   on blank the same state is fed again.  Impact measurable: de_pause lost
+   "nach", de_part1 broke apart into "ersteil ... Dikt Arts".
+   Now reference-conformant.
+2. BUG: MAX_SYMBOLS_PER_FRAME was implemented as a global limit (10 * frames
+   tokens) and only checked in the dur==0 branch -> up to 10*frames symbols
+   could arise per frame.  Now a real counter per encoder frame; on reaching
+   it a forced advance of +1 frame (identical to the reference).
+3. BUG: special tokens were not filtered; <unk>/<|nospeech|>/<|pnc|> etc.
+   would have landed as plain text in the result.  Now filtered via the
+   token pattern (see is_special) — NOT via "id < N", because the digits
+   "0".."9" as IDs 234..243 lie right among the special tokens.
+4. Robustness: waveform/SR check without `assert` (asserts disappear under
+   `python -O`), error messages instead of tracebacks, protection against
+   empty audio,
+   NaN/Inf, very long audio (> --max-seconds), encoded_lengths > tensor width
+   and infinite loops; models relative to the repo (not to the CWD); threads
+   configurable; detok exactly like the reference (regex instead of only strip()).
+   The detok rule changes nothing for the existing golden WAVs (checked).
 
-Referenz-Greedy (1 Frame pro Schritt, "t" = Encoderframe-Index):
+Reference greedy (1 frame per step, "t" = encoder frame index):
     state1 = state2 = 0; last = <blk>; t = 0; emitted_this_frame = 0
     while t < frames:
         logits, s1', s2' = dec(enc[:, :, t], last, state1, state2)
@@ -61,7 +62,7 @@ Referenz-Greedy (1 Frame pro Schritt, "t" = Encoderframe-Index):
         if token != <blk>:
             state1, state2 = s1', s2'      # NUR hier
             emit(token); last = token; emitted_this_frame += 1
-        if dur > 0:                       # gilt auch bei Blank (Silence-Skip)
+        if dur > 0:                       # also applies on blank (silence skip)
             t += dur; emitted_this_frame = 0
         elif token == <blk> or emitted_this_frame >= MAX_SYMBOLS_PER_FRAME:
             t += 1; emitted_this_frame = 0
@@ -80,15 +81,15 @@ import onnxruntime as ort
 import soundfile as sf
 
 BLANK_ID = 8192
-VOCAB_SIZE = 8193          # 0..8192, inkl. <blk>
+VOCAB_SIZE = 8193          # 0..8192, incl. <blk>
 NUM_DURATIONS = 5
-MAX_SYMBOLS_PER_FRAME = 10  # == max_tokens_per_step (config.json setzt ihn nicht -> Default 10)
+MAX_SYMBOLS_PER_FRAME = 10  # == max_tokens_per_step (config.json does not set it -> default 10)
 
-# Sondertokens sind "<...>"-Strings (0..233, 244..273) plus <blk>; die Ziffern
-# "0".."9" (IDs 234..243) sind regulaeres Vokabular und duerfen NICHT gefiltert werden.
+# special tokens are "<...>" strings (0..233, 244..273) plus <blk>; the digits
+# "0".."9" (IDs 234..243) are regular vocabulary and must NOT be filtered.
 SPECIAL_TOKEN_RE = re.compile(r"^<[^<>]*>$")
-# Detokenisierung wie onnx-asr (`_AsrWithDecoding.DECODE_SPACE_PATTERN`): fuehrendes
-# Leerzeichen, Leerzeichen vor Satzzeichen und vor dem Wortende entfernen.
+# detokenization like onnx-asr (`_AsrWithDecoding.DECODE_SPACE_PATTERN`): remove
+# leading spaces, spaces before punctuation and before the word end.
 SPACE_RE = re.compile(r"\A\s|\s\B|(\s)\b")
 
 DEFAULT_MODELS = Path(__file__).resolve().parent.parent / ".models"
@@ -102,7 +103,7 @@ def die(msg: str, code: int = 2) -> None:
 
 def load_vocab(path: Path) -> dict[int, str]:
     if not path.is_file():
-        die(f"vocab.txt nicht gefunden: {path} (--models angeben)")
+        die(f"vocab.txt not found: {path} (specify --models)")
     table: dict[int, str] = {}
     with path.open(encoding="utf-8") as fh:
         for lineno, line in enumerate(fh, 1):
@@ -110,16 +111,16 @@ def load_vocab(path: Path) -> dict[int, str]:
             if not line:
                 continue
             tok, _, idx = line.rpartition(" ")
-            # Format: "<token> <id>"; Token kann nicht-leere Zeichenketten wie "<|de|>" sein
+            # Format: "<token> <id>"; the token can be non-empty strings like "<|de|>"
             try:
                 table[int(idx)] = tok
             except ValueError:
-                die(f"vocab.txt Zeile {lineno} unlesbar: {line!r}")
+                die(f"vocab.txt line {lineno} unreadable: {line!r}")
     if BLANK_ID not in table:
-        die(f"vocab.txt ohne <blk> (id {BLANK_ID}) — falsches Vokabular?")
+        die(f"vocab.txt without <blk> (id {BLANK_ID}) — wrong vocabulary?")
     if len(table) != VOCAB_SIZE:
         print(
-            f"reference_decode: WARNUNG vocab-Groesse {len(table)} != {VOCAB_SIZE}",
+            f"reference_decode: WARNING vocab size {len(table)} != {VOCAB_SIZE}",
             file=sys.stderr,
         )
     return table
@@ -131,20 +132,20 @@ def is_special(token: str) -> bool:
 
 def load_waveform(path: Path, expected_sr: int = 16000) -> np.ndarray:
     if not path.is_file():
-        die(f"Audio nicht gefunden: {path}")
+        die(f"audio not found: {path}")
     try:
         data, sr = sf.read(str(path), dtype="float32", always_2d=False)
-    except (RuntimeError, OSError, ValueError) as exc:  # soundfile/LibsndfileError, IO-Fehler
-        die(f"Audio nicht lesbar: {path}: {exc}")
+    except (RuntimeError, OSError, ValueError) as exc:  # soundfile/LibsndfileError, IO error
+        die(f"audio unreadable: {path}: {exc}")
     if data.size == 0:
-        die(f"Audio ist leer: {path}")
+        die(f"audio is empty: {path}")
     audio = data.mean(axis=1) if data.ndim > 1 else data
     audio = np.asarray(audio, dtype=np.float32).ravel()
     if sr != expected_sr:
-        die(f"{path}: {sr} Hz, erwartet {expected_sr} Hz "
-            f"(z. B. ffmpeg -i in -ar 16000 -ac 1 out.wav)")
+        die(f"{path}: {sr} Hz, expected {expected_sr} Hz "
+            f"(e. g. ffmpeg -i in -ar 16000 -ac 1 out.wav)")
     if not np.all(np.isfinite(audio)):
-        die(f"{path}: nicht-finite Samples (NaN/Inf) im Audio")
+        die(f"{path}: non-finite samples (NaN/Inf) in the audio")
     return audio
 
 
@@ -164,12 +165,12 @@ class TdtReference:
     def _session(self, name: str) -> ort.InferenceSession:
         path = self._models / name
         if not path.is_file():
-            die(f"Modell fehlt: {path} (siehe docs/TECH_FACTS.md §2)")
+            die(f"model missing: {path} (see docs/TECH_FACTS.md §2)")
         return ort.InferenceSession(str(path), self._so, providers=["CPUExecutionProvider"])
 
     def detokenize(self, ids: list[int]) -> str:
-        # Sondertokens vor der ▁-Ersetzung ausfiltern (ihr Name enthaelt kein ▁,
-        # aber die Pruefung soll am Original-Token erfolgen).
+        # filter special tokens before the ▁ replacement (their name contains no ▁,
+        # but the check should happen on the original token).
         tokens = [self.vocab[i] for i in ids if i in self.vocab and not is_special(self.vocab[i])]
         text = "".join(tokens).replace("\u2581", " ")
         return SPACE_RE.sub(lambda m: " " if m.group(1) else "", text).strip()
@@ -186,8 +187,8 @@ class TdtReference:
         enc_out, enc_len = self.enc.run(None, {"audio_signal": feats, "length": feat_len})
         t_enc = time.perf_counter() - t0
 
-        # encoded_lengths kann bei manchen Exporten/Praezisionen die Tensorbreite
-        # ueberschreiten -> clampen, sonst leerer Slice (Invalid rank).
+        # encoded_lengths can exceed the tensor width for some exports/precisions
+        # -> clamp, otherwise empty slice (invalid rank).
         frames = max(0, min(int(enc_len[0]), int(enc_out.shape[2])))
         if frames == 0:
             return {"tokens": [], "times": [], "steps": 0, "frames": 0, "mel_frames": int(feats.shape[2]),
@@ -195,12 +196,12 @@ class TdtReference:
 
         state1 = np.zeros((2, 1, 640), dtype=np.float32)
         state2 = np.zeros((2, 1, 640), dtype=np.float32)
-        last_label = BLANK_ID          # TDT startet mit <blk>
+        last_label = BLANK_ID          # TDT starts with <blk>
         tokens: list[int] = []
         times: list[int] = []
 
         t, steps, emitted = 0, 0, 0
-        guard = 4 * frames * (max_symbols_per_frame + 1) + 1000  # theoretische Obergrenze
+        guard = 4 * frames * (max_symbols_per_frame + 1) + 1000  # theoretical upper bound
         truncated = False
         t0 = time.perf_counter()
         while t < frames:
@@ -218,7 +219,7 @@ class TdtReference:
             dur = int(np.argmax(flat[VOCAB_SIZE:VOCAB_SIZE + NUM_DURATIONS]))
 
             if token != BLANK_ID:
-                # Reference: PredNet-State NUR nach Nicht-Blank fortschreiben.
+                # Reference: advance the PredNet state ONLY after a non-blank.
                 state1, state2 = new1, new2
                 tokens.append(token)
                 times.append(t)
@@ -226,19 +227,19 @@ class TdtReference:
                 emitted += 1
 
             if dur > 0:
-                # gilt auch bei Blank: Durations sind hier auch fuer Silence
-                # bedeutungstragend (Skip); t += 1 bei Blank liefert messbar
-                # schlechtere Texte (siehe docs/ASR_CONTRACT.md §3).
+                # also applies on blank: durations are meaning-bearing for silence
+                # here too (skip); t += 1 on blank yields measurably
+                # worse texts (see docs/ASR_CONTRACT.md §3).
                 t += dur
                 emitted = 0
             elif token == BLANK_ID or emitted >= max_symbols_per_frame:
-                t += 1                                  # Blank bzw. Symbolbudget: immer Fortschritt
+                t += 1                                  # blank resp. symbol budget: always progress
                 emitted = 0
 
             if steps > guard:
                 truncated = True
-                print(f"reference_decode: WARNUNG Decode-Guard nach {steps} Schritten "
-                      f"(frames={frames}) — Ergebnis unvollstaendig", file=sys.stderr)
+                print(f"reference_decode: WARNING decode guard after {steps} steps "
+                      f"(frames={frames}) — result incomplete", file=sys.stderr)
                 break
         t_dec = time.perf_counter() - t0
 
@@ -250,16 +251,16 @@ class TdtReference:
 
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
-    p = argparse.ArgumentParser(description="TDT-Referenzdecoder (Golden-Test-Erzeuger)")
-    p.add_argument("audio", nargs="?", default=str(DEFAULT_AUDIO), help="16-kHz-mono-WAV")
-    p.add_argument("--models", default=str(DEFAULT_MODELS), help="Verzeichnis mit ONNX+vocab.txt")
+    p = argparse.ArgumentParser(description="TDT reference decoder (golden test generator)")
+    p.add_argument("audio", nargs="?", default=str(DEFAULT_AUDIO), help="16 kHz mono WAV")
+    p.add_argument("--models", default=str(DEFAULT_MODELS), help="directory with ONNX+vocab.txt")
     p.add_argument("--threads", type=int, default=min(8, len(__import__("os").sched_getaffinity(0))),
-                   help="intra_op_num_threads (Default: min(8, verfuegbare Kerne))")
+                   help="intra_op_num_threads (default: min(8, available cores))")
     p.add_argument("--max-symbols-per-frame", type=int, default=MAX_SYMBOLS_PER_FRAME,
-                   help="max_tokens_per_step des Exports (Default 10)")
+                   help="max_tokens_per_step of the export (default 10)")
     p.add_argument("--max-seconds", type=float, default=600.0,
-                   help="harte Obergrenze fuer die Audiolaenge (Default 600 s)")
-    p.add_argument("--json", action="store_true", help="Maschinenlesbare Ausgabe inkl. Timestamps")
+                   help="hard upper bound for the audio length (default 600 s)")
+    p.add_argument("--json", action="store_true", help="machine-readable output incl. timestamps")
     return p.parse_args(argv)
 
 
@@ -269,8 +270,8 @@ def main(argv: list[str]) -> int:
     audio = load_waveform(path)
     dur_s = audio.shape[0] / 16000.0
     if dur_s > args.max_seconds:
-        die(f"Audio {dur_s:.1f}s > --max-seconds {args.max_seconds:.0f}s; "
-            f"Referenzdecoder arbeitet bewusst whole-buffer (siehe ASR_CONTRACT §4)")
+        die(f"audio {dur_s:.1f}s > --max-seconds {args.max_seconds:.0f}s; "
+            f"the reference decoder deliberately works whole-buffer (see ASR_CONTRACT §4)")
 
     engine = TdtReference(Path(args.models), args.threads)
     res = engine.run(audio, args.max_symbols_per_frame)

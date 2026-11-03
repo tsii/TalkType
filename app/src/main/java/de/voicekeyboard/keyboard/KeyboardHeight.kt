@@ -4,64 +4,64 @@ import kotlin.math.max
 import kotlin.math.min
 
 /**
- * T20/S1 — Höhenvertrag OHNE Row-Drop (korrigiert T19; docs/DESIGN_STOCK_LOOK.md
- * §3 „Ein einziger Höhenhaushalt"): Reine JVM-Logik, kein Android-Import.
+ * T20/S1 — height contract WITHOUT row drop (corrects T19; docs/DESIGN_STOCK_LOOK.md
+ * §3 „Ein einziger Höhenhaushalt"): pure JVM logic, no Android import.
  *
- * VERTRAG (S1):
- *  - ALLE vorhandenen Reihen bleiben erhalten — eine Reihe, die nicht passt,
- *    wird SKALIERT (kleinere Reihenhöhe), niemals halb gezeichnet und niemals
- *    entfernt („Row-Drop ist kein akzeptierter Fix").
- *  - Skala = min(1, (Angebot − Status − Navigation) / gewünschter Bedarf).
- *    Tastenbreiten bleiben proportional (Breite ist nicht Teil dieses Vertrags),
- *    die Beschriftungsgröße skaliert mit (untere Grenze = Parameter).
- *  - Statuszeile und Navigationsinset werden JE GENAU EINMAL abgezogen —
- *    Root-Padding und Child dürfen nicht beide abziehen (Doku-ANNAHME §3).
- *  - Nie höher als das Angebot (außer: Mindest-Tastenhöhe gewinnt) und nie
- *    höher als maxPx (Design-Kappe, z. B. 276 dp ≈ 725 px mit Navigation,
- *    268 dp ≈ 704 px ohne — density 420 = 2,625 px/dp; 276 dp = 724,5 px).
- *  - Angebot ≤ 0 (MeasureSpec.UNSPECIFIED) gilt als unbegrenzt: maxPx entscheidet.
- *  - Bei extrem kleinem Angebot wird die Mindest-Tastenhöhe GEHALTEN und das
- *    unterschrittene Angebot als [HeightFit.deficitPx] GEMELDET, nicht verschluckt.
- *  - Ergebnisse sind ganzzahlig (1-px-genau), Rundungsreste werden einmal auf
- *    die Reihen verteilt; die letzte Unterkante ist exakt das Inhaltsende.
+ * CONTRACT (S1):
+ *  - ALL existing rows are kept — a row that does not fit is
+ *    SCALED (smaller row height), never half-drawn and never
+ *    removed ("row drop is not an accepted fix").
+ *  - Scale = min(1, (offered − status − navigation) / desired need).
+ *    Key widths stay proportional (width is not part of this contract),
+ *    the label size scales along (lower bound = parameter).
+ *  - Status row and navigation inset are subtracted EXACTLY ONCE —
+ *    root padding and child must not both subtract (documentation ASSUMPTION §3).
+ *  - Never higher than the offer (except: minimum key height wins) and never
+ *    higher than maxPx (design cap, e. g. 276 dp ≈ 725 px with navigation,
+ *    268 dp ≈ 704 px without — density 420 = 2.625 px/dp; 276 dp = 724.5 px).
+ *  - Offer ≤ 0 (MeasureSpec.UNSPECIFIED) counts as unlimited: maxPx decides.
+ *  - With an extremely small offer the minimum key height is HELD and the
+ *    undershot offer is REPORTED as [HeightFit.deficitPx], not swallowed.
+ *  - Results are integers (1-px exact), rounding remainders are distributed once
+ *    over the rows; the last bottom edge is exactly the content end.
  */
 object KeyboardHeight {
 
-    /** S1-Ergebnistyp: skalierte Höhe für ALLE Reihen (kein Row-Drop). */
+    /** S1 result type: scaled height for ALL rows (no row drop). */
     data class HeightFit(
-        /** Anzahl belegter Reihen — immer ALLE (kein Row-Drop). */
+        /** Number of occupied rows — always ALL (no row drop). */
         val rows: Int,
-        /** Skalierte Reihenhöhe (px). */
+        /** Scaled row height (px). */
         val rowPx: Int,
-        /** Skalierte Reihenlücke (px). */
+        /** Scaled row gap (px). */
         val rowGapPx: Int,
-        /** rows*rowPx + (rows−1)*rowGapPx — Unterkante der letzten Reihe. */
+        /** rows*rowPx + (rows−1)*rowGapPx — bottom edge of the last row. */
         val keysHeightPx: Int,
-        /** status + nav + keysHeightPx — Gesamthöhe der View inkl. der einen Abzüge. */
+        /** status + nav + keysHeightPx — total height of the view incl. the single subtractions. */
         val viewHeightPx: Int,
-        /** Skala ≤ 1 (1 = unskaliert). */
+        /** Scale ≤ 1 (1 = unscaled). */
         val scale: Float,
-        /** True, wenn die Mindest-Tastenhöhe das Budget überschrieben hat. */
+        /** True if the minimum key height overrode the budget. */
         val minKeyHeld: Boolean,
-        /** > 0: Budget wird unterschritten (Mindest-Tastenhöhe gehalten) — gemeldet. */
+        /** > 0: budget is undershot (minimum key height held) — reported. */
         val deficitPx: Int,
-        /** Skalierte Beschriftungsgröße (px); 0 = keine skalierte Beschriftung gefordert. */
+        /** Scaled label size (px); 0 = no scaled label requested. */
         val labelPx: Int,
     )
 
     /**
-     * S1-Kernfunktion: berechnet den Höhen-Fit für ALLE [rows] Reihen.
+     * S1 core function: computes the height fit for ALL [rows] rows.
      *
-     * @param offeredPx       Root-Angebot (px; ≤ 0 = unbegrenzt → maxPx entscheidet).
-     * @param rows            vorhandene Reihenzahl — alle bleiben erhalten.
-     * @param desiredRowPx    gewünschte Reihenhöhe (px, > 0), z. B. 55 dp ≈ 144 px.
-     * @param desiredRowGapPx gewünschte Reihenlücke (px, ≥ 0; Stock-Stil: 0).
-     * @param statusLinePx    Statuszeile (px, ≥ 0) — GENAU EINMAL abgezogen.
-     * @param navInsetPx      Navigationsinset (px, ≥ 0) — GENAU EINMAL abgezogen.
-     * @param maxPx           Design-Kappe (px, > 0).
-     * @param minKeyHeightPx  Mindest-Tastenhöhe (px, > 0 — Parameter, nie 0).
-     * @param desiredLabelPx  gewünschte Beschriftungsgröße (px; 0 = nicht gefordert).
-     * @param minLabelPx      untere Grenze der Beschriftung (px, ≥ 0).
+     * @param offeredPx       root offer (px; ≤ 0 = unlimited → maxPx decides).
+     * @param rows            existing row count — all are kept.
+     * @param desiredRowPx    desired row height (px, > 0), e. g. 55 dp ≈ 144 px.
+     * @param desiredRowGapPx desired row gap (px, ≥ 0; stock style: 0).
+     * @param statusLinePx    status row (px, ≥ 0) — subtracted EXACTLY ONCE.
+     * @param navInsetPx      navigation inset (px, ≥ 0) — subtracted EXACTLY ONCE.
+     * @param maxPx           design cap (px, > 0).
+     * @param minKeyHeightPx  minimum key height (px, > 0 — parameter, never 0).
+     * @param desiredLabelPx  desired label size (px; 0 = not requested).
+     * @param minLabelPx      lower bound of the label (px, ≥ 0).
      */
     fun fitHeight(
         offeredPx: Int,
@@ -82,24 +82,24 @@ object KeyboardHeight {
         require(minLabelPx >= 0) { "minLabelPx >= 0" }
         require(maxPx > 0) { "maxPx muss > 0 sein" }
 
-        // Haushalt: Angebot (unbegrenzt → maxPx), gekappt durch maxPx.
+        // Budget: offer (unlimited → maxPx), capped by maxPx.
         val budget = if (offeredPx <= 0) maxPx else min(offeredPx, maxPx)
-        // Status UND Navigation JE GENAU EINMAL abziehen.
+        // Subtract status AND navigation EXACTLY ONCE each.
         val keysBudget = budget - statusLinePx - navInsetPx
-        // Gewünschter Bedarf aller vorhandenen Reihen.
+        // Desired need of all existing rows.
         val need = rows * desiredRowPx + (rows - 1) * desiredRowGapPx
-        // Skala = min(1, Haushalt / Bedarf) — NIE hochskalieren.
+        // Scale = min(1, budget / need) — NEVER scale up.
         val scale = if (need <= 0) 1f else min(1f, keysBudget.toFloat() / need.toFloat())
 
-        var rowPx = (desiredRowPx * scale).toInt() // abrunden — nie hoch über Budget
+        var rowPx = (desiredRowPx * scale).toInt() // round down — never above budget
         val rowGapPx = (desiredRowGapPx * scale).toInt()
         var minKeyHeld = false
         if (rowPx < minKeyHeightPx) {
-            rowPx = minKeyHeightPx // Minimum GEHALTEN; Defizit wird unten gemeldet
+            rowPx = minKeyHeightPx // minimum HELD; deficit is reported below
             minKeyHeld = true
         } else if (scale < 1f) {
-            // Rundungsreste einmal auf die Reihen verteilen (letzte Unterkante
-            // möglichst am Inhaltsende), ohne das Budget zu überschreiten.
+            // Distribute rounding remainders once over the rows (last bottom edge
+            // as close to the content end as possible) without exceeding the budget.
             val rem = keysBudget - (rows * rowPx + (rows - 1) * rowGapPx)
             if (rem > 0) rowPx += rem / rows
         }

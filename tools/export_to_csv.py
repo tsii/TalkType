@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""AP4 — Export-Parser/CSV-Haenger (PLAN_C2_FABLE_R2 §1.3 Schritt 11).
+"""AP4 — export parser/CSV appender (PLAN_C2_FABLE_R2 §1.3 step 11).
 
-Liest einen 🐞/debug_export-Text (key: value Zeilen, HTML-escaped erlaubt),
-extrahiert die C2-Felder und haengt eine CSV-Zeile an reports/c2_runs.csv an.
-Regel 9: NUR Felder/Zahlen; keine Text-/Audioinhalte.
+Reads a 🐞/debug_export text (key: value lines, HTML-escaped allowed),
+extracts the C2 fields and appends a CSV row to reports/c2_runs.csv.
+Rule 9: ONLY fields/numbers; no text/audio contents.
 
-Aufruf: tools/export_to_csv.py <export-datei> [--tag label] [--csv reports/c2_runs.csv]
+Usage: tools/export_to_csv.py <export-file> [--tag label] [--csv reports/c2_runs.csv]
 """
 import argparse, csv, html, re, sys
 from pathlib import Path
@@ -37,7 +37,7 @@ def main() -> int:
     raw = Path(a.export_file).read_text(errors="replace")
     rec = parse(raw)
     if "audio_s" not in rec:
-        print("Kein Export erkannt (audio_s fehlt) — nichts angehaengt.", file=sys.stderr)
+        print("No export recognized (audio_s missing) — nothing appended.", file=sys.stderr)
         return 1
     rec["run_tag"] = a.tag
     rec["ts"] = __import__("datetime").datetime.now().isoformat(timespec="seconds")
@@ -49,7 +49,7 @@ def main() -> int:
         if new:
             w.writeheader()
         w.writerow(rec)
-    print("angehaengt:", {k: rec[k] for k in FIELDS if k in rec})
+    print("appended:", {k: rec[k] for k in FIELDS if k in rec})
     return 0
 
 

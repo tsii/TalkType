@@ -10,13 +10,13 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * E8-Testfälle T1–T6 aus docs/COMMIT_RULE_DECISION_2.md §5 — reine JVM,
- * Pipeline CommitPolicy + DeltaTyper (ohne Emulator). T1 ist der gemessene
- * Gerätefall (s1_realEngine_realWav).
+ * E8 test cases T1–T6 from docs/COMMIT_RULE_DECISION_2.md §5 — pure JVM,
+ * pipeline CommitPolicy + DeltaTyper (without emulator). T1 is the measured
+ * device case (s1_realEngine_realWav).
  */
 class CommitE8Test {
 
-    /** Fake-Sink wie DeltaTyperTest: bildet Deltas am Cursor ab. */
+    /** Fake sink as in DeltaTyperTest: applies deltas at the cursor. */
     private open class FakeSink : EditorSink {
         var text: String = ""
         val calls = mutableListOf<TextDelta>()
@@ -32,7 +32,7 @@ class CommitE8Test {
         override fun ownLength(): Int = text.length
     }
 
-    /** Kleiner Pipeline-Wrapper: eine Hypothese → Policy → Typer (wie Controller). */
+    /** Small pipeline wrapper: one hypothesis → policy → typer (like the controller). */
     private class Pipeline(
         val sink: FakeSink = FakeSink(),
         val policy: CommitPolicy = CommitPolicy(),
@@ -51,44 +51,44 @@ class CommitE8Test {
     private val GOLDEN =
         "So, jetzt bin ich gespannt, ob die Dikti-Funktion auf dem Telefon funktioniert."
 
-    // T1 — der gemessene Gerätefall: „… Vikti" zweimal, dann korrekt bis Golden.
-    // Erwartung: Endtext = Golden; kein null-Stau; Rollback ≤ 60 Codepoints.
+    // T1 — the measured device case: "… Vikti" twice, then correct up to Golden.
+    // Expectation: final text = Golden; no null stall; rollback ≤ 60 codepoints.
     @Test fun t1_viktiCaseEndsAtGolden() {
         val p = Pipeline()
-        // Aufbau-Phase wie gemessen: der Fehler wird erst geschrieben …
+        // build-up phase as measured: the error is written first …
         p.feed("So, jetzt bin ich gespannt, ob die Vikti")
         p.feed("So, jetzt bin ich gespannt, ob die Vikti-Funktion")
         p.feed("So, jetzt bin ich gespannt, ob die Vikti-Funktion auf dem")
-        // … und später vom Modell korrigiert:
+        // … and later corrected by the model:
         p.feed("So, jetzt bin ich gespannt, ob die Dikti-Funktion auf dem")
         p.feed("So, jetzt bin ich gespannt, ob die Dikti-Funktion auf dem Telefon")
         p.feed(GOLDEN)
         p.feed(GOLDEN)
         assertEquals(GOLDEN, p.sink.text)
-        // kein Divergenz-Endzustand
+        // no divergence end state
         assertFalse(p.typer.divergent)
     }
 
-    // T1-Zusatz: Rollback existiert wirklich (W3c) — Divergenz wird in EINEM
-    // Delta korrigiert, committedLength schrumpft auf common.
+    // T1 addendum: the rollback really exists (W3c) — divergence is corrected in ONE
+    // delta, committedLength shrinks to the common prefix.
     @Test fun t1_rollbackIsAtomicAndAllowsShrinking() {
         val sink = FakeSink()
         val typer = DeltaTyper(sink)
         typer.reviseOutcome("ob die Vikti-Funktion")
-        typer.commitUpTo("ob die Vikti-".length) // Fehlcommit (D2/Schumpfen nötig)
+        typer.commitUpTo("ob die Vikti-".length) // faulty commit (D2/shrinking needed)
         assertTrue(typer.committedLength > 0)
-        // korrekte Hypothese divergiert im committeten Bereich:
+        // correct hypothesis diverges within the committed area:
         val outcome = typer.reviseOutcome("ob die Dikti-Funktion")
-        assertEquals("W3c: Rollback schreibt (kein Stau)", ReviseKind.DELTA, outcome.kind)
+        assertEquals("W3c: rollback writes (no stall)", ReviseKind.DELTA, outcome.kind)
         assertEquals("ob die Dikti-Funktion", sink.text)
-        assertEquals(7, typer.committedLength) // W3a: geschrumpft auf common=7
+        assertEquals(7, typer.committedLength) // W3a: shrunk to common=7
         assertFalse(typer.divergent)
-        // EIN Delta: replaceLength = entfernter UTF-16-Bestand
+        // ONE delta: replaceLength = removed UTF-16 portion
         val last = sink.calls.last()
         assertEquals("Vikti-Funktion".length, last.replaceLength)
     }
 
-    // T2 — Nutzer tippt dazwischen (Besitz verloren): kein Schreiben mehr (W1)
+    // T2 — user types in between (ownership lost): no more writing (W1)
     @Test fun t2_ownershipLostWritesNothing() {
         val sink = object : FakeSink() {
             var lost = false
@@ -97,99 +97,99 @@ class CommitE8Test {
         val typer = DeltaTyper(sink)
         typer.reviseOutcome("So, jetzt bin")
         val callsBefore = sink.calls.size
-        sink.lost = true // Fremdtext: Besitz weg
+        sink.lost = true // foreign text: ownership gone
         assertEquals(ReviseKind.W1, typer.reviseOutcome("So, jetzt bin ich").kind)
-        assertEquals(callsBefore, sink.calls.size) // nichts geschrieben
+        assertEquals(callsBefore, sink.calls.size) // nothing written
         assertTrue(typer.divergent)
-        assertEquals("So, jetzt bin", sink.text) // unverändert
+        assertEquals("So, jetzt bin", sink.text) // unchanged
     }
 
-    // T3 — Divergenz mit 75 Codepoints: kein Rollback (W3d), divergent=true
+    // T3 — divergence of 75 codepoints: no rollback (W3d), divergent=true
     @Test fun t3_tooLargeDivergenceLeavesText() {
         val sink = FakeSink()
         val typer = DeltaTyper(sink)
         typer.reviseOutcome("a".repeat(75))
         typer.commitUpTo(70)
-        assertEquals("W3d: 70 > 60 ⇒ kein Rollback", ReviseKind.W3d, typer.reviseOutcome("b".repeat(75)).kind)
+        assertEquals("W3d: 70 > 60 ⇒ no rollback", ReviseKind.W3d, typer.reviseOutcome("b".repeat(75)).kind)
         assertTrue(typer.divergent)
-        assertEquals("a".repeat(75), sink.text) // Text bleibt
+        assertEquals("a".repeat(75), sink.text) // text stays
     }
 
-    // T4 — 2 Übereinstimmungen auf falschem Wort, 3. korrekt:
-    //      C1 (N=3) verhindert, dass „Vikti" je committet wird.
+    // T4 — 2 agreements on a wrong word, 3rd correct:
+    //      C1 (N=3) prevents "Vikti" from ever being committed.
     @Test fun t4_twoAgreementsDoNotCommitWrongWord() {
         val p = Pipeline()
         p.feed("ob die Vikti")
-        p.feed("ob die Vikti-Funktion") // 2. Übereinstimmung — ALT würde committen
-        assertEquals(0, p.typer.committedLength) // C1 (N=3): „Vikti" ist NICHT committet
+        p.feed("ob die Vikti-Funktion") // 2nd agreement — the OLD behavior would commit
+        assertEquals(0, p.typer.committedLength) // C1 (N=3): "Vikti" is NOT committed
         p.feed("ob die Vikti-Funktion auf")
-        // korrekte Hypothesen folgen; der Fehler wurde nie fest — kein Rollback nötig
+        // correct hypotheses follow; the error was never pinned — no rollback needed
         p.feed("ob die Dikti-Funktion auf")
         p.feed("ob die Dikti-Funktion auf")
         assertEquals("ob die Dikti-Funktion auf", p.sink.text)
         assertFalse(p.typer.divergent)
-        // „Vikti" lag NIE im geschützten Bereich — committet ist höchstens „ob "
+        // "Vikti" was NEVER in the protected area — at most "ob " is committed
         assertTrue(p.typer.committedLength <= "ob ".length)
     }
 
-    // T5 — stabile Kante mit 3 Wörtern: nur das 1. Wort committed (C2/C3)
+    // T5 — stable edge with 3 words: only the 1st word committed (C2/C3)
     @Test fun t5_holdbackKeepsLastTwoWordsUncommitted() {
         val p = Pipeline()
-        // 3 identische Hypothesen mit 3 Wörtern
+        // 3 identical hypotheses with 3 words
         p.feed("eins zwei drei")
         p.feed("eins zwei drei")
         p.feed("eins zwei drei")
-        // C2 (M=2) + C3 (≥3 Wörter): committet wird nur „eins "
-        assertEquals(5, p.typer.committedLength) // „eins "
-        // die letzten 2 Wörter bleiben revidierbar:
+        // C2 (M=2) + C3 (≥3 words): only "eins " is committed
+        assertEquals(5, p.typer.committedLength) // "eins "
+        // the last 2 words remain revisable:
         p.feed("eins zwei vier")
         assertEquals("eins zwei vier", p.sink.text)
     }
 
-    // T6 — Rollback über einen Satzpunkt: kein Rollback (W3d-Grenze)
+    // T6 — rollback across a sentence terminator: no rollback (W3d boundary)
     @Test fun t6_noRollbackAcrossSentenceTerminator() {
         val sink = FakeSink()
         val typer = DeltaTyper(sink)
         typer.reviseOutcome("Das ist der erste Teil. Und noch")
-        typer.commitUpTo("Das ist der erste Teil. Un".length) // Fehlcommit MIT Punkt
-        // korrekte Hypothese divergiert VOR dem Satzpunkt (common < committed):
+        typer.commitUpTo("Das ist der erste Teil. Un".length) // faulty commit WITH terminator
+        // correct hypothesis diverges BEFORE the sentence terminator (common < committed):
         assertEquals(
-            "Satzpunkt im Löschbereich ⇒ W3d",
+            "sentence terminator inside the deletion area ⇒ W3d",
             ReviseKind.W3d,
             typer.reviseOutcome("Das ist der erste Teil! Und noch mehr").kind,
         )
         assertTrue(typer.divergent)
-        assertEquals("Das ist der erste Teil. Und noch", sink.text) // bleibt
+        assertEquals("Das ist der erste Teil. Und noch", sink.text) // stays
     }
-    // T7 — Einheiten (B1): Grenze in CODEPOINTS, delete-Länge in UTF-16.
-    // own = 15×😀 (30 UTF-16) + 45 BMP = 60 Codepoints / 75 UTF-16-Einheiten.
-    // Divergenz am Anfang ⇒ Rollback erlaubt (60 ≤ 60), replaceLength == 75.
+    // T7 — units (B1): limit in CODEPOINTS, delete length in UTF-16.
+    // own = 15×😀 (30 UTF-16) + 45 BMP = 60 codepoints / 75 UTF-16 units.
+    // Divergence at the start ⇒ rollback allowed (60 ≤ 60), replaceLength == 75.
     @Test fun t7_emojiUnitsCodepointLimitUtf16Delete() {
         val sink = FakeSink()
         val typer = DeltaTyper(sink)
         val emoji = "\uD83D\uDE00" // 😀 = 2 UTF-16
         val own = emoji.repeat(15) + "a".repeat(45) // 60 Codepoints, 75 UTF-16
         typer.reviseOutcome(own)
-        typer.commitUpTo(own.length) // alles committet
-        val target = "b" + own.substring(1) // Divergenz am Anfang
+        typer.commitUpTo(own.length) // everything committed
+        val target = "b" + own.substring(1) // divergence at the start
         val outcome = typer.reviseOutcome(target)
-        assertEquals("60 Codepoints <= 60 ⇒ W3c erlaubt", ReviseKind.DELTA, outcome.kind)
-        assertEquals(75, outcome.delta!!.replaceLength) // UTF-16-Einheiten, nicht Codepoints
+        assertEquals("60 codepoints <= 60 ⇒ W3c allowed", ReviseKind.DELTA, outcome.kind)
+        assertEquals(75, outcome.delta!!.replaceLength) // UTF-16 units, not codepoints
         assertEquals(target, sink.text)
     }
 
-    // T8 — Kurze Session (B3): 1 Wort, nie committed; Final schreibt exakt einmal.
+    // T8 — short session (B3): 1 word, never committed; final writes exactly once.
     @Test fun t8_shortSessionFinalWritesExactlyOnce() {
         val p = Pipeline()
         p.feed("Danke.")
-        assertEquals(0, p.typer.committedLength) // C3: <3 Wörter ⇒ nie committet
+        assertEquals(0, p.typer.committedLength) // C3: <3 words ⇒ never committed
         assertEquals("Danke.", p.sink.text)
-        // Finaldecode (gleicher Text, gleicher Stand): kein Duplikat, kein Rest
+        // final decode (same text, same state): no duplicate, no remainder
         p.feed("Danke.")
         assertEquals("Danke.", p.sink.text)
     }
 
-    // T9 (korrekt gebaut): Sink mit Fremdtext-Präfix; ownLength zählt nur eigene Spanne
+    // T9 (correctly built): sink with foreign-text prefix; ownLength counts only the own span
     private class ForeignPrefixSink : EditorSink {
         var foreign = ""
         var own = ""
@@ -206,14 +206,14 @@ class CommitE8Test {
     @Test fun t9_rollbackDeletesOnlyOwnChars() {
         val sink = ForeignPrefixSink()
         val typer = DeltaTyper(sink)
-        typer.reviseOutcome("Vikti-Funktion") // eigener Bereich
+        typer.reviseOutcome("Vikti-Funktion") // own area
         typer.commitUpTo("Vikti-".length)
-        sink.foreign = "Hallo " // Nutzer tippt LINKS davor — ownStart verschiebt sich
-        // Besitz bleibt gültig: ownLength == own.length, Kontext-Suffix passt
+        sink.foreign = "Hallo " // user types to the LEFT of it — ownStart shifts
+        // ownership stays valid: ownLength == own.length, the context suffix matches
         val outcome = typer.reviseOutcome("Dikti-Funktion")
-        assertEquals("W3c trotz Fremdtext davor", ReviseKind.DELTA, outcome.kind)
+        assertEquals("W3c despite foreign text before it", ReviseKind.DELTA, outcome.kind)
         assertEquals("Hallo Dikti-Funktion", sink.foreign + sink.own)
-        // Rollback hat ausschließlich eigene Zeichen gelöscht:
+        // the rollback deleted exclusively own characters:
         assertEquals("Hallo ", sink.foreign)
         assertEquals("Dikti-Funktion", sink.own)
         assertEquals("Vikti-Funktion".length, outcome.delta!!.replaceLength)

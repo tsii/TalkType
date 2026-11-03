@@ -1,85 +1,83 @@
-# Nächste Aufgaben (Reihenfolge)
+# Next tasks (order)
 
-**Stand 2026-11-03 · v0.1.38 / versionCode 39 ausgeliefert + auf Telefon installiert** (07:50;
-T8 Y-Reihe zentriert (@→m-Menü, ⇧/⏎ umgebaut), T9 Statuszeile nur Debug; Tests
-**604/0 + 569/0 = 1173/0**; Review `docs/REVIEW_V0138.md` P0/P1=0 Push JA; nächster Bau **40 / 0.1.39**.
+**Status 2026-11-03 · v0.1.39 / versionCode 40 delivered** (11:00): repo translated DE→EN (docs + comments + assertion messages; UI stays German), new adaptive shield+waveform icon, T10 auto-space after dictation-ending punctuation; tests **613/0 + 578/0 = 1191/0**; next build **41 / 0.1.40**.md` P0/P1=0 Push YES; next build **41 / 0.1.40**.
 
-1. **Telefon-Beweise 0.1.38 (höchste Priorität):** Halte-Lauf 60-90 s (offen — Feldtest
-   endete mit michold_cancel; Tap-Kette 2× BESTANDEN 22:30 /tmp/vk_phone_e3.log), 🐞-Export
-   (warm_hit/engine_load_ms); vc34-Kriterien bleiben (write=delta, kein w1-Corpse,
-   start_ms<250). ADB-Port dreht — vom Nutzer erfragen (34147 zuletzt).
-   Follow-ups: P2 Anker-Provenienz (git), SegmentFinalizeTest lastflaky, P2-1 Längen-Guard,
+1. **Phone evidence 0.1.38 (highest priority):** hold run 60–90 s (open — the field test
+   ended with michold_cancel; tap chain 2× PASSED 22:30 /tmp/vk_phone_e3.log), 🐞 export
+   (warm_hit/engine_load_ms); vc34 criteria remain (write=delta, no w1 corpse,
+   start_ms<250). ADB port rotates — ask the user (34147 most recently).
+   Follow-ups: P2 anchor provenance (git), SegmentFinalizeTest lastflaky, P2-1 length guard,
    P2-2 coordinator @Volatile (docs/REVIEW_A5_W.md, docs/REVIEW_V0136.md).
-2. **P2-Berichtspunkte (optional):** 3 Stück in `docs/REVIEW_A1_A3_B.md` (stale Kommentar,
-   Arming-Sonderfall, redundante Baseline-Setzung).
-3. **PUSH ERFOLGT (Nutzer-Freigabe 2026-11-03):** main `7d50174` — 0.1.32–0.1.38
-   inkl. Reviews/Doku/README-Bild hochgeladen; Regel 10 gilt wieder ab jetzt.
-4. Zurückgestelltes unverändert (MULTILANG, NPU/GPU, Variante B, fp16); alte C2-Export-
-   Entscheidungsbaum-Arbeit ist durch A4-Diagnose überholt.
+2. **P2 report points (optional):** 3 of them in `docs/REVIEW_A1_A3_B.md` (stale comment,
+   arming special case, redundant baseline setting).
+3. **PUSH DONE (user approval 2026-11-03):** main `7d50174` — 0.1.32–0.1.38
+   incl. reviews/docs/README image uploaded; rule 10 applies again from now.
+4. Deferred items unchanged (MULTILANG, NPU/GPU, Variant B, fp16); old C2 export
+   decision-tree work is superseded by the A4 diagnostics.
 
 ---
-# Archiv (Stand 0.1.31, erledigt)
+# Archive (status 0.1.31, done)
 
-1. **C2 = Diktat-Abbruch: OFFEN (höchste Priorität).** Längere Aufnahmen bleiben
-   unvollständig (Ursache nicht lokal erklärt); die **Varianz ist jetzt messbar** via
-   F42-Felder `had_output`/`output_chars` (+ `first_loud_ms`, `first3s_*`, `fgs_stopped_by`,
-   jetzt `status_res`).
-   Nächster Beweis: **🐞-Export #3 vom Telefon mit 0.1.30-diag** — lang halten, 🐞 drücken,
-   einsenden; Auswertung nach dem Entscheidungsbaum `docs/ANALYSE_DIKTAT_ABBRUCH_2.md`
-   §9 (Schichten: `cap_blocks`/`loud_s` → `hyp_count` → Commit → UI). Beweispunkte:
-   `status_res`, **`fgs_stopped_by`** (bei Halten `up`), **Halte-Beweisführung**.
-   Mit 0.1.31 ist der **Segmenter (F53)** drin: lange Aufnahmen dekodieren segmentiert
-   (Fenster ≤ 35 s, Hyp-Latenz ≤ ~1,4 s) — der Export zeigt, ob die Schicht Engine oder
-   Kontrollpfad war. F43-Auto-Stop (2,5 s, bei Halten via F49 unterdrückt), F45-FGS-Fix,
-   F49–F53 sind IN; windowed-Streaming (`KONZEPT` §5.1) bleibt **gesperrt**
-   bis Export #3 die Schicht zuordnet. Die 0.1.15-Auswerte-Regeln (F21-Milderung/Takt
-   via `decode_skips`/`decode_pace_ms`, quadratisches Neudekodieren via
-   `decode_ms_max`/`buffer_s`, `hyp_gap_ms`/`ctl_state`-Lesarten) gelten weiterhin als
-   Hintergrund. Grundlage: `docs/STREAMING_FREEZE_ANALYSE.md`.
-2. **0.1.32-TODOs (Bau 33):** **`hint:<res-name>`** (StatusEvent.Hint-Codefeld —
-   P2-Follow-up aus Review A1–A3), Rest-P2-Follow-ups; **I5 Hold-600-s-Lauf MUSS als
-   ERSTE Session nach Kaltstart laufen** (Emulator-Audio-GESETZ, s. Item 5).
-3. **F37 = Clock-Injektion im Coordinator** (Follow-up aus F35): die Controller-Uhr ist
-   **nicht injizierbar** → erst mit ihr läuft **Weg B** (Korpus + echte Engine,
-   Emulator/Phone) deterministisch. Plan: `docs/KORPUS_DIKTAT_TESTPLAN.md` §5.
-4. **Push erst nach Nutzer-Freigabe (Regel 10):** `main` = `dc3b4f0`; **v0.1.14 … v0.1.31
-   sind nicht gepusht** (Reviews F35/F36/F38–F53: P0/P1 = 0, jeweils Push-Empfehlung JA).
-5. **Emulator-Blocker dokumentiert lassen:** `<device>` killt den IME-Prozess beim
-   Laden von `libonnxruntime.so` (SIGSEGV) → Diktat dort nicht validierbar (hängt auch
-   an F32-B); Tasten/Gesten weiterhin prüfbar. Audio-Brücke bleibt **AUS**
-   (`tools/emulator_audio_down.sh`). **Emulator-Audio-GESETZ (0.1.31, für ALLE Audio-/Halte-
-   Läufe verbindlich):** **nur die ERSTE App-Session nach Kaltstart liefert Ton** (jede
-   weitere: App-Stream −84 dBFS; tinycap/host OK; audioserver-Neustart/`emu mic`
-   wirkungslos) → lange Halte-Beweise nur als **Erste Session** planbar (92-s-Beweis
-   deshalb nicht erbracht; vc32-Erste-Session lief real: 93 Zeichen, peak −17 dBFS,
-   `cap_blocks` 280). Google-Onboarding: `messaging`/`gms`/`calendar`/`quicksearchbox`
-   jetzt `disabled-user`.
-6. **Zurückgestellt, nicht anfassen ohne Nutzerfreigabe:** MULTILANG-Phase 1
-   (`docs/MULTILANG_PLAN.md`), NPU/GPU (abgeschlossen: nicht erreichbar), Variante B
-   (abgelehnt). fp16 **geprüft und verworfen** (`docs/FP16_ABWEGUNG.md`: identische
-   Token-IDs, aber 1,90× Download / 1,30× Rechenzeit / 2,13× Startzeit / 4,2× Speicher).
+1. **C2 = dictation abort: OPEN (highest priority).** Longer recordings remain
+   incomplete (cause not locally explained); the **variance is now measurable** via
+   F42 fields `had_output`/`output_chars` (+ `first_loud_ms`, `first3s_*`, `fgs_stopped_by`,
+   now `status_res`).
+   Next evidence: **🐞 export #3 from the phone with 0.1.30-diag** — hold long, press 🐞,
+   submit; evaluation according to the decision tree `docs/ANALYSE_DIKTAT_ABBRUCH_2.md`
+   §9 (layers: `cap_blocks`/`loud_s` → `hyp_count` → commit → UI). Evidence points:
+   `status_res`, **`fgs_stopped_by`** (with hold `up`), **hold evidence chain**.
+   With 0.1.31 the **segmenter (F53)** is in: long recordings decode segmented
+   (window ≤ 35 s, hypothesis latency ≤ ~1.4 s) — the export shows whether the layer was
+   engine or control path. F43 auto-stop (2.5 s, suppressed during hold via F49), F45 FGS fix,
+   F49–F53 are IN; windowed streaming (`KONZEPT` §5.1) remains **locked**
+   until export #3 assigns the layer. The 0.1.15 evaluation rules (F21 mitigation/pacing
+   via `decode_skips`/`decode_pace_ms`, quadratic re-decoding via
+   `decode_ms_max`/`buffer_s`, `hyp_gap_ms`/`ctl_state` readings) remain valid as
+   background. Basis: `docs/STREAMING_FREEZE_ANALYSE.md`.
+2. **0.1.32 TODOs (build 33):** **`hint:<res-name>`** (StatusEvent.Hint code field —
+   P2 follow-up from review A1–A3), remaining P2 follow-ups; **I5 hold 600-s run MUST run
+   as the FIRST session after cold start** (emulator audio LAW, see item 5).
+3. **F37 = clock injection in the coordinator** (follow-up from F35): the controller clock is
+   **not injectable** → only with it does **Route B** (corpus + real engine,
+   emulator/phone) run deterministically. Plan: `docs/KORPUS_DIKTAT_TESTPLAN.md` §5.
+4. **Push only after user approval (rule 10):** `main` = `dc3b4f0`; **v0.1.14 … v0.1.31
+   are not pushed** (reviews F35/F36/F38–F53: P0/P1 = 0, each push recommendation YES).
+5. **Keep the emulator blocker documented:** `<device>` kills the IME process when
+   loading `libonnxruntime.so` (SIGSEGV) → dictation not validatable there (also depends
+   on F32-B); keys/gestures still checkable. Audio bridge remains **OFF**
+   (`tools/emulator_audio_down.sh`). **Emulator audio LAW (0.1.31, binding for ALL
+   audio/hold runs):** **only the FIRST app session after cold start delivers sound**
+   (every further one: app stream −84 dBFS; tinycap/host OK; audioserver restart/`emu mic`
+   ineffective) → long hold evidence only plannable as a **first session** (the 92-s
+   evidence therefore not delivered; vc32 first session ran real: 93 characters, peak −17 dBFS,
+   `cap_blocks` 280). Google onboarding: `messaging`/`gms`/`calendar`/`quicksearchbox`
+   now `disabled-user`.
+6. **Deferred, do not touch without user approval:** MULTILANG phase 1
+   (`docs/MULTILANG_PLAN.md`), NPU/GPU (completed: not reachable), Variant B
+   (rejected). fp16 **checked and rejected** (`docs/FP16_ABWEGUNG.md`: identical token IDs,
+   but 1.90× download / 1.30× compute time / 2.13× start time / 4.2× memory).
 
-## Betrieb (verbindlich, `docs/CONTINGENCY_PLAN.md` §12/§13)
-- ≤ 4 Dateien / ≤ 2 Builds / ≤ 10 min pro Coder-Auftrag; Instrumented-Test nie im Coder-Auftrag.
-- Kein `sleep` im Turn — `schedule_task` (≥ 60 s) bzw. max. 2× `wait_all(60)`.
-- Gradle = globales Mutex; Emulator exklusiv; `claim_files` vor Multi-Datei-Aufträgen.
-- ≤ 6 lebende Subagenten; Slot-Recycling per `steer`; fertige Sessions dismissen.
-- Liveness am Dateisystem messen (mtime/`git status`), nicht am Session-Output.
-- Vor jeder Kompaktierung: `HANDOFF.md` + `state/progress.md` + `reports/NEXT.md` aktualisieren.
-- **Push nur nach Nutzer-Freigabe (Regel 10)**; `main` steht auf `dc3b4f0`;
-  **v0.1.14 … v0.1.31 sind nicht gepusht.**
+## Operations (binding, `docs/CONTINGENCY_PLAN.md` §12/§13)
+- ≤ 4 files / ≤ 2 builds / ≤ 10 min per coder task; instrumented test never in a coder task.
+- No `sleep` in a turn — `schedule_task` (≥ 60 s) or max. 2× `wait_all(60)`.
+- Gradle = global mutex; emulator exclusive; `claim_files` before multi-file tasks.
+- ≤ 6 live subagents; slot recycling via `steer`; dismiss finished sessions.
+- Measure liveness on the file system (mtime/`git status`), not on session output.
+- Before every compaction: update `HANDOFF.md` + `state/progress.md` + `reports/NEXT.md`.
+- **Push only after user approval (rule 10)**; `main` stands at `dc3b4f0`;
+  **v0.1.14 … v0.1.31 are not pushed.**
 
-## Historie (erledigt, nicht wieder aufnehmen)
-- „Build wieder vollständig grün (157 Tests)“ → 726/0 (0.1.13) → 734/0 (0.1.14, überholt)
-  → 818/0 (0.1.15, überholt) → 819/0 (F24d, überholt) → 828/0 (F24e, überholt) → … →
-  897/0 (0.1.24, überholt) → (0.1.27: 475 Debug, Release-Messung folgt, überholt) →
-  935/0 (0.1.29, überholt) → 961/0 (0.1.30, überholt) → aktuell **995 / 0** (Debug **513**
-  laut `app/build/test-results/testDebugUnitTest`, Release **482** laut `testReleaseUnitTest`).
-- „DeepSeek-Review M4b + M5a" → abgeschlossen (`REVIEW_STAGE4B`/`4C`/`6`).
-- „M4c IME-Verdrahtung“, „M4d WAV-Test“, „M5b Setup-UI“, „M6 Release“, „M7 Review“ →
-  **alle umgesetzt**; aktuell signiert: Release **v0.1.31** (SHA-256 `367165ea…`,
-  Diag `2ee37322…`); Historie u. a. v0.1.30 (`34edb6d7…`), v0.1.29 (`1cdb1801…`),
+## History (done, do not pick up again)
+- „Build wieder vollständig grün (157 Tests)“ → 726/0 (0.1.13) → 734/0 (0.1.14, superseded)
+  → 818/0 (0.1.15, superseded) → 819/0 (F24d, superseded) → 828/0 (F24e, superseded) → … →
+  897/0 (0.1.24, superseded) → (0.1.27: 475 debug, release measurement to follow, superseded) →
+  935/0 (0.1.29, superseded) → 961/0 (0.1.30, superseded) → currently **995 / 0** (debug **513**
+  per `app/build/test-results/testDebugUnitTest`, release **482** per `testReleaseUnitTest`).
+- „DeepSeek-Review M4b + M5a“ → completed (`REVIEW_STAGE4B`/`4C`/`6`).
+- „M4c IME wiring“, „M4d WAV test“, „M5b setup UI“, „M6 release“, „M7 review“ →
+  **all implemented**; currently signed: release **v0.1.31** (SHA-256 `367165ea…`,
+  diag `2ee37322…`); history incl. v0.1.30 (`34edb6d7…`), v0.1.29 (`1cdb1801…`),
   v0.1.14 (`cdb1606c…f462`).
-- **D11/F15 Tastendruck-Optik** umgesetzt und gerätebelegt (Naht `keyboard/KeySurface.kt`;
-  Delta 73/255 hell / 65/255 dunkel, CapsLock-Akzent `#4DB6AC`/`#80CBC4`, Abweichung 0 —
-  Orchestrator-Messung, Screenshot-Messung außerhalb des Repos).
+- **D11/F15 key-press look** implemented and device-evidenced (seam `keyboard/KeySurface.kt`;
+  delta 73/255 light / 65/255 dark, CapsLock accent `#4DB6AC`/`#80CBC4`, deviation 0 —
+  orchestrator measurement, screenshot measurement outside the repo).

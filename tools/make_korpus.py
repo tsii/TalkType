@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
-"""AP4 — Diktat-Korpus-Generator (PLAN_C2_FABLE_R2 §1.5).
+"""AP4 — dictation corpus generator (PLAN_C2_FABLE_R2 §1.5).
 
-Erzeugt zeitgetreue Sprech-Korpora (espeak-ng de, Fallback piper) mit
-definierten Pausen und Sidecar-JSON (Satzgrenzen, Pausen, Golden-Länge).
-Pegel: -17 dBFS Spitzen, Pausen mit -60 dBFS Rauschen (nie digital still).
+Creates time-true speech corpora (espeak-ng de, fallback piper) with
+defined pauses and sidecar JSON (sentence boundaries, pauses, golden length).
+Level: -17 dBFS peak, pauses with -60 dBFS noise (never digitally silent).
 
-Aufruf:  tools/make_korpus.py --seconds 600 --out testdata/c2/k600.wav
-Varianten: 120 (Bisect) / 600 (Hauptlauf) / 900 (Cap-Test).
-Regel 9: nur generische Muster-Saetze, keine Nutzer-/realen Inhalte.
+Usage:  tools/make_korpus.py --seconds 600 --out testdata/c2/k600.wav
+Variants: 120 (bisect) / 600 (main run) / 900 (cap test).
+Rule 9: only generic pattern sentences, no user/real contents.
 """
 import argparse, json, math, random, shutil, struct, subprocess, sys, wave
 from pathlib import Path
@@ -25,7 +25,7 @@ SENTENCES = [
     "Segmentgrenzen sollen sauber erkannt werden",
     "danach folgt sogleich der nächste satz",
     "bitte keine Satzzeichen vergessen",
-]  # 12 generische Muster (Regel 9)
+]  # 12 generic patterns (rule 9)
 
 
 def synth_espeak(text: str, out_wav: Path) -> None:
@@ -61,11 +61,11 @@ def main() -> int:
     args = ap.parse_args()
     random.seed(args.seed)
     if not shutil.which("espeak-ng"):
-        print("espeak-ng fehlt", file=sys.stderr)
+        print("espeak-ng is missing", file=sys.stderr)
         return 2
     sr = 16000
-    peak = int(32767 * (10 ** (-17 / 20.0)))   # -17 dBFS Skalierung
-    noise_amp = 10 ** (-60 / 20.0) / 0.577      # RMS->Amp grob, Klirrfaktor egal
+    peak = int(32767 * (10 ** (-17 / 20.0)))   # -17 dBFS scaling
+    noise_amp = 10 ** (-60 / 20.0) / 0.577      # RMS->amp roughly, distortion irrelevant
     total = bytearray()
     sidecar = {"sentences": [], "pauses": [], "golden_chars": 0, "seconds": 0.0}
     pos_s = 0.0

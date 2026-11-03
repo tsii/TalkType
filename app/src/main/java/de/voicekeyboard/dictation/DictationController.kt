@@ -12,28 +12,31 @@ import de.voicekeyboard.editor.ReviseKind
 import de.voicekeyboard.editor.ReviseOutcome
 
 /**
- * F13b/C1: Ergebnis eines stop()-Aufrufs — der Aufrufer sieht ausdrücklich,
- * OB ein Finale gelaufen ist (klein, JVM-testbar; kein boolean-Rätsel).
+ * F13b/C1: result of a stop() call — the caller explicitly sees
+ * WHETHER a final ran (small, JVM-testable; no boolean riddle).
  */
 sealed class StopOutcome {
-    /** stop() ohne laufende Aufnahme und ohne Fehler: No-Op, nichts zu melden. */
+    /** stop() without a running recording and without an error: no-op, nothing to report. */
     object IdleNoOp : StopOutcome()
 
     /**
-     * Finale lief (whole-buffer decode); finalError nur bei Finale-Fehler.
-     * F13d/P2-1: SNAPSHOT der Sitzung zum Stop-Zeitpunkt — der Aufrufer bewertet
-     * NUR dieses Objekt, nie den Live-Controller-Zustand, den der nächste
-     * start() nullt („schnell loslassen, sofort neu drücken“).
+     * Final ran (whole-buffer decode); finalError only on a final error.
+     * F13d/P2-1: SNAPSHOT of the session at stop time — the caller evaluates
+     * ONLY this object, never the live controller state that the next
+     * start() nulls ("quick release, immediately press again").
      */
     data class FinalRan(
         val finalError: String? = null,
         val failedWith: Boolean = false,
         val droppedWith: Int = 0,
+        /** T10 (v0.1.39): hat das Session-Finale ein Leerzeichen hinter
+         *  Satzzeichen-Ende angehängt (VK-SESS-Feld trail_sp=0|1, Regel 9)? */
+        val trailingSpace: Boolean = false,
     ) : StopOutcome()
 
-    /** KEIN Finale: die Session war bereits still gescheitert (fail() während
-     *  RECORDING) — [errorCode] nennt den bewahrten Fehlercode; [failedWith]
-     *  true (sonst wäre es IdleNoOp); [droppedWith] = verworfene Blocks. */
+    /** NO final: the session had already failed silently (fail() during
+     *  RECORDING) — [errorCode] names the preserved error code; [failedWith]
+     *  true (otherwise it would be IdleNoOp); [droppedWith] = dropped blocks. */
     data class NoFinal(
         val errorCode: String?,
         val failedWith: Boolean = true,
@@ -42,62 +45,62 @@ sealed class StopOutcome {
 }
 
 /**
- * A2b (PLAN_V0133 §A2b): unveränderlicher Diagnose-Snapshot EINES Decode-
- * Fensters (Partial, Mini-Finale, Session-Finale) — nur Zahlen/Codes
- * (Regel 9), kein UI-/Android-Typ. Der Coordinator reichert ihn um seine
- * Session-Forensik an (DecodeWindowDiagnosis) und reicht ihn nach außen.
+ * A2b (PLAN_V0133 §A2b): immutable diagnostic snapshot of ONE decode
+ * window (partial, mini-final, session final) — numbers/codes only
+ * (rule 9), no UI/Android type. The coordinator enriches it with its
+ * session forensics (DecodeWindowDiagnosis) and passes it outward.
  */
 data class DecodeWindowStats(
-    /** Session-Audiolänge beim Fensterende (s). */
+    /** Session audio length at window end (s). */
     val audioS: Double,
-    /** Dauer des Decode-Laufs (ms). */
+    /** Duration of the decode run (ms). */
     val decodeMs: Long,
-    /** Aktuell geltendes Partial-Intervall (ms); 0 = Pacing aus. */
+    /** Currently effective partial interval (ms); 0 = pacing off. */
     val paceMs: Long,
-    /** Wegen Takt übersprungene Partial-Decodes dieser Session. */
+    /** Partial decodes skipped due to pacing in this session. */
     val skips: Int,
-    /** Länge der Hypothese (Zeichen). */
+    /** Length of the hypothesis (characters). */
     val hypLen: Int,
-    /** Länge des eigenen Stands nach dem Fenster (Zeichen). */
+    /** Length of our own state after the window (characters). */
     val currentLen: Int,
-    /** Committete Präfixlänge nach dem Fenster. */
+    /** Committed prefix length after the window. */
     val committedLen: Int,
-    /** Schreib-Ergebnis des Fensters (same|w1|w3d|delta|-). */
+    /** Write result of the window (same|w1|w3d|delta|-). */
     val write: String,
-    /** Abstand seit der letzten Hypothese (ms); -1 = nie. */
+    /** Gap since the last hypothesis (ms); -1 = never. */
     val hypGapMs: Long,
-    /** Größte Decode-Dauer der Stichprobe (ms). */
+    /** Largest decode duration in the sample (ms). */
     val decodeMsMax: Long,
-    /** p95 der Decode-Dauer (ms). */
+    /** p95 of the decode duration (ms). */
     val decodeMsP95: Long,
-    /** Länge des dekodierten Fensters (s). */
+    /** Length of the decoded window (s). */
     val bufferS: Double,
 )
 
 /**
- * Push-to-Talk-Zustandsmaschine (KONZEPT.md §2.1) und Diktat-Pipeline-Orchestrierung:
+ * Push-to-talk state machine (KONZEPT.md §2.1) and dictation pipeline orchestration:
  *
- * AudioSource-Blöcke ([feedAudio]) → ASR ([AsrEngine], injiziert) →
+ * AudioSource blocks ([feedAudio]) → ASR ([AsrEngine], injected) →
  * [CommitPolicy]/LocalAgreement → [DeltaTyper] → [EditorSink].
  *
- * Regeln (alle über injizierte, frameworkfreie Interfaces — JVM-testbar):
- * - **Idempotenz:** doppeltes [start] während RECORDING ist ein No-Op (false),
- *   [stop] ohne laufende Aufnahme ist ein No-Op (KONZEPT §2.1).
- * - **Session-Isolation:** jede Aufnahme erhöht [sessionId]; Hypothesen einer
- *   alten Session (oder nach Zustandswechsel) werden verworfen — verspätete
- *   ASR-Ergebnisse schreiben niemals in eine neue Sitzung ([applyPartial]).
- * - **min_audio_s = 2.0** (ASR_CONTRACT.md §4.4) gilt **nur für Partials**
- *   (Halluzinationsschutz, KONZEPT §3.4); bei [stop] wird immer final über den
- *   Gesamtpuffer dekodiert.
- * - **Besitz:** jede Schreibabsicht wird über [OwnershipTracker.isOwned]
- *   geprüft; nach Fremdeingabe wird nichts mehr geschrieben (DESIGN §6).
- * - **Fehlerpfad:** Engine-/Sink-Fehler führen über [fail] geordnet nach
- *   IDLE; bereits geschriebener Text bleibt stehen, Fehlercode (nie Textinhalt)
- *   wird in [lastErrorCode] sichtbar.
+ * Rules (all via injected, framework-free interfaces — JVM-testable):
+ * - **Idempotency:** a double [start] during RECORDING is a no-op (false),
+ *   [stop] without a running recording is a no-op (KONZEPT §2.1).
+ * - **Session isolation:** every recording increments [sessionId]; hypotheses of an
+ *   old session (or after a state change) are discarded — late
+ *   ASR results never write into a new session ([applyPartial]).
+ * - **min_audio_s = 2.0** (ASR_CONTRACT.md §4.4) applies **only to partials**
+ *   (hallucination protection, KONZEPT §3.4); on [stop] the final always decodes
+ *   over the entire buffer.
+ * - **Ownership:** every write intent is checked via [OwnershipTracker.isOwned];
+ *   after foreign input nothing is written anymore (DESIGN §6).
+ * - **Error path:** engine/sink errors go via [fail] in an orderly way back to
+ *   IDLE; text already written stays in place, the error code (never text content)
+ *   becomes visible in [lastErrorCode].
  *
- * Aufrufer serialisieren die Zugriffe (ein Orchestrierungs-Thread; auf Android:
- * Service-Coroutine). [onUpdateSelection]-Signale vom UI-Thread sind über den
- * intern synchronisierten Tracker abgesichert.
+ * Callers serialize the accesses (one orchestration thread; on Android:
+ * the service coroutine). [onUpdateSelection] signals from the UI thread are
+ * guarded by the internally synchronized tracker.
  */
 class DictationController(
     private val engine: AsrEngine,
@@ -107,16 +110,16 @@ class DictationController(
     private val minAudioSecondsForPartials: Double = MIN_AUDIO_SECONDS_PARTIALS,
     private val sampleRateHz: Int = PcmWindow.SAMPLE_RATE_16K,
     /**
-     * F13b2: monotone Uhr für Hypothesen-Abstände (🐞-Feld hyp_gap_ms).
-     * Default nanoTime (JVM-testbar, inkl. allem Sleep); Android kann statt
-     * dessen SystemClock.elapsedRealtime() in NANOSECONDS injizieren —
-     * NIE uptimeMillis (pausiert im Deep-Sleep, Review F13c P2).
+     * F13b2: monotonic clock for hypothesis gaps (🐞 field hyp_gap_ms).
+     * Default nanoTime (JVM-testable, including all sleep); Android can
+     * instead inject SystemClock.elapsedRealtime() in NANOSECONDS —
+     * NEVER uptimeMillis (pauses in deep sleep, review F13c P2).
      */
     private val clock: () -> Long = { System.nanoTime() },
     /**
-     * F21: cost-aware Partial-Takt ([DecodePace], C2-Milderung, Nutzerfreigabe
-     * 2026-10-30). Default false = Verhalten wie bisher (jeder Block dekodiert);
-     * Produktion setzt true (DictationCoordinator). Das Finale ist NIE betroffen.
+     * F21: cost-aware partial pacing ([DecodePace], C2 mitigation, user approval
+     * 2026-10-30). Default false = behavior as before (every block decoded);
+     * production sets true (DictationCoordinator). The final is NEVER affected.
      */
     private val decodePacing: Boolean = false,
 ) {
@@ -124,126 +127,126 @@ class DictationController(
     var state: DictationState = DictationState.IDLE
         private set
 
-    /** Monoton steigende Kennung der aktuellen/letzten Aufnahme-Sitzung. */
+    /** Monotonically increasing identifier of the current/last recording session. */
     var sessionId: Long = 0L
         private set
 
-    /** Fehlercode des letzten Fehlers (nie Textinhalt), null im Normalfall. */
+    /** Error code of the last error (never text content), null in the normal case. */
     var lastErrorCode: String? = null
         private set
 
     /**
-     * F13b/C1: True, sobald die AKTIELLE Session über fail() gescheitert ist —
-     * bewahrt, bis ein NEUER START ihn zurücksetzt (dann wäre der Fehler
-     * unsichtbar geworden, Analyse Zeile 76). lastErrorCode bleibt unverändert.
+     * F13b/C1: true as soon as the CURRENT session has failed via fail() —
+     * preserved until a NEW START resets it (otherwise the error would
+     * have become invisible, analysis line 76). lastErrorCode stays unchanged.
      */
     var failedThisSession: Boolean = false
         private set
 
-    /** F13b: Anzahl der Audio-Blocks, die in feedAudio verworfen wurden (🐞-Diagnose). */
+    /** F13b: number of audio blocks dropped in feedAudio (🐞 diagnostics). */
     var droppedBlocks: Int = 0
         private set
 
-    /** F13b2: Anzahl erzeugter Hypothesen der aktuellen Sitzung (🐞: hyp_count). */
+    /** F13b2: number of hypotheses generated in the current session (🐞: hyp_count). */
     var hypothesesThisSession: Int = 0
         private set
 
-    /** Zeitstempel (clock) der letzten Hypothese; 0 = noch keine. */
+    /** Timestamp (clock) of the last hypothesis; 0 = none yet. */
     private var lastHypAt: Long = 0L
 
-    // ---- F17b/C2: Decode-Zeit-Diagnose (nur Zahlen, Regel 9) ----
-    // Ringpuffer fester Größe: letzte DECODE_SAMPLE_CAP Messwerte, wächst nie.
+    // ---- F17b/C2: decode-time diagnostics (numbers only, rule 9) ----
+    // Fixed-size ring buffer: the last DECODE_SAMPLE_CAP measurements, never grows.
     private val decodeTimesMs = LongArray(DECODE_SAMPLE_CAP)
-    // @Volatile: Main liest beim 🐞-Tippen, Worker schreibt — der volatile-Count-Write
-    // erzählt das Happens-before für die zuvor geschriebenen Array-Slots.
-    @Volatile private var decodeSamples = 0 // gespeicherte Messwerte (≤ CAP)
-    // decodeSeq: Main setzt ihn beim Start zurück (resetDecodeStats aus start(),
-    // Coordinator Z. 206), der Worker erhöht ihn — daher @Volatile (F20-K).
-    @Volatile private var decodeSeq = 0L // Schreibzähler für den Ringindex
-    /** Pufferlänge (audioSeconds) beim letzten Dekodierlauf; 0 = nie dekodiert. */
-    /** Pufferlänge (audioSeconds) beim letzten Dekodierlauf; 0 = nie dekodiert. */
+    // @Volatile: main reads on 🐞 tap, worker writes — the volatile count write
+    // conveys the happens-before for the array slots written before it.
+    @Volatile private var decodeSamples = 0 // stored measurements (≤ CAP)
+    // decodeSeq: main resets it at start (resetDecodeStats from start(),
+    // coordinator line 206), the worker increments it — hence @Volatile (F20-K).
+    @Volatile private var decodeSeq = 0L // write counter for the ring index
+    /** Buffer length (audioSeconds) at the last decode run; 0 = never decoded. */
+    /** Buffer length (audioSeconds) at the last decode run; 0 = never decoded. */
     @Volatile private var lastDecodeBufferSeconds = 0.0
 
-    /** F26b (C2-Export): Bufferstand (s) zum Zeitpunkt der LETZTEN akzeptierten
-     * Hypothese — Beweis, dass der Puffer waehrend des Abbruchs wuchs. Je Session. */
+    /** F26b (C2 export): buffer level (s) at the time of the LAST accepted
+     * hypothesis — proof that the buffer grew during the abort. Per session. */
     @Volatile var lastHypothesisBufferSeconds: Float = 0f
 
-    /** AP3: Anzahl verweigeter Schreibabsichten (Besitz nicht bewiesen). */
+    /** AP3: number of denied write intents (ownership not proven). */
     @Volatile var ownershipDeniedCount: Int = 0
 
-    /** AP3: erster Besitzverlust-Moment (Session-Audio-Sekunden); -1.0 = nie. */
+    /** AP3: first ownership-loss moment (session audio seconds); -1.0 = never. */
     @Volatile var ownershipDeniedAtS: Double = -1.0
         private set
-    /** F21: Dauer des letzten Decode-Laufs in ms (Eingang des Takts, nie Inhalt).
-     *  A2b: öffentlich lesbar (🐞: last_decode_ms, Zahlen/Codes — Regel 9). */
+    /** F21: duration of the last decode run in ms (input of the pacing, never content).
+     *  A2b: publicly readable (🐞: last_decode_ms, numbers/codes — rule 9). */
     @Volatile var lastDecodeMs: Long = 0L
         private set
-    /** F21: wegen Takt übersprungene Partial-Decodes dieser Session (🐞: decode_skips). */
+    /** F21: partial decodes skipped due to pacing in this session (🐞: decode_skips). */
     @Volatile private var decodeSkipsCount = 0
 
-    // ---- A2b (PLAN_V0133 §A2b): Schreib-Diagnose (nur Zahlen/Codes, Regel 9) ----
+    // ---- A2b (PLAN_V0133 §A2b): write diagnostics (numbers/codes only, rule 9) ----
 
-    /** A2b: Schreib-Ergebnisse dieser Session, monoton (🐞: write_same). */
+    /** A2b: write results in this session, monotonic (🐞: write_same). */
     @Volatile var writeSameCount: Int = 0
         private set
 
-    /** A2b: verweigerte Schreibabsichten (🐞: write_w1). */
+    /** A2b: denied write intents (🐞: write_w1). */
     @Volatile var writeW1Count: Int = 0
         private set
 
-    /** A2b: blockierte Rollbacks — einmalig sichtbar (🐞: write_w3d). */
+    /** A2b: blocked rollbacks — visible once (🐞: write_w3d). */
     @Volatile var writeW3dCount: Int = 0
         private set
 
-    /** A2b: ausgeführte Schreibschritte (🐞: write_delta). */
+    /** A2b: executed write steps (🐞: write_delta). */
     @Volatile var writeDeltaCount: Int = 0
         private set
 
-    /** A2b: Session-Audio-Sekunden des letzten DELTA; -1 = noch keins
+    /** A2b: session audio seconds of the last DELTA; -1 = none yet
      *  (🐞: last_write_audio_s). */
     @Volatile var lastWriteAudioS: Double = -1.0
         private set
 
-    /** A2b: letzter Schreib-Code (same|w1|w3d|delta; "-" = noch keiner). */
+    /** A2b: last write code (same|w1|w3d|delta; "-" = none yet). */
     @Volatile var writeReason: String = "-"
         private set
 
-    /** A2b: Länge der letzten Hypothese (🐞: hyp_len). */
+    /** A2b: length of the last hypothesis (🐞: hyp_len). */
     @Volatile var hypLen: Int = 0
         private set
 
-    /** A2b: eigene Standlänge nach dem letzten Fenster (🐞: current_len). */
+    /** A2b: our own state length after the last window (🐞: current_len). */
     @Volatile var currentLen: Int = 0
         private set
 
-    /** A2b: committete Präfixlänge nach dem letzten Fenster (🐞: committed_len). */
+    /** A2b: committed prefix length after the last window (🐞: committed_len). */
     @Volatile var committedLen: Int = 0
         private set
 
     /**
-     * A2b: Callback nach JEDEM Decode-Fenster (Snapshot [DecodeWindowStats],
-     * unveränderlich, nur Zahlen/Codes). null = keiner. Aufrufer: Coordinator
-     * (reichert an und reicht nach außen; A4b verdrahtet den Service).
+     * A2b: callback after EVERY decode window (snapshot [DecodeWindowStats],
+     * immutable, numbers/codes only). null = none. Caller: the coordinator
+     * (enriches it and passes it outward; A4b wires the service).
      */
     @Volatile var onDecodeWindow: ((DecodeWindowStats) -> Unit)? = null
 
-    /** Größter bisher gemessener Decode-Lauf in ms; 0, wenn nie dekodiert.
-     *  Count EINMAL in ein Lokal lesen (F20): sonst kann die Schleifengrenze
-     *  zwischen Prüfung und Index zwei verschiedene Werte sehen → IOOBE. */
+    /** Largest decode run measured so far in ms; 0 if never decoded.
+     *  Read the count ONCE into a local (F20): otherwise the loop bound
+     *  can see two different values between check and index → IOOBE. */
     fun decodeMsMax(): Long {
-        val n = decodeSamples // EINMAL lesen (F20)
+        val n = decodeSamples // read ONCE (F20)
         var m = 0L
         for (i in 0 until n) m = maxOf(m, decodeTimesMs[i])
         return m
     }
 
     /**
-     * p95 der Decode-Läufe in ms — deterministisch: sortierte Stichprobe,
-     * Index ceil(0.95·n)−1. leer → 0; ein Lauf → max == p95. Die Stichprobe
-     * umfasst die letzten ≤ 64 Läufe (Ringpuffer), nicht die ganze Sitzung.
+     * p95 of the decode runs in ms — deterministic: sorted sample,
+     * index ceil(0.95·n)−1. empty → 0; one run → max == p95. The sample
+     * covers the last ≤ 64 runs (ring buffer), not the whole session.
      */
     fun decodeMsP95(): Long {
-        val n = decodeSamples // EINMAL lesen (F20, IOOBE-Hebel)
+        val n = decodeSamples // read ONCE (F20, IOOBE lever)
         if (n == 0) return 0L
         val sorted = decodeTimesMs.copyOf(n)
         sorted.sort()
@@ -251,95 +254,95 @@ class DictationController(
         return sorted[idx]
     }
 
-    /** Aufgenommenes Audio (s) beim letzten Dekodierlauf; 0,0 wenn nie dekodiert. */
+    /** Recorded audio (s) at the last decode run; 0.0 if never decoded. */
     fun bufferSeconds(): Double = lastDecodeBufferSeconds
 
-    /** F21: aktuell geltendes Partial-Intervall in ms; 0 = Pacing aus (Default). */
+    /** F21: currently effective partial interval in ms; 0 = pacing off (default). */
     fun decodePaceMs(): Long =
         if (!decodePacing) 0L
         else DecodePace.intervalMs(
             lastDecodeMs, (audioSeconds * 1000).toLong(), PACE_BASE_MS, PACE_MAX_MS,
         )
 
-    /** F21: wegen Takt übersprungene Partial-Decodes dieser Session; 0 wenn Pacing aus. */
+    /** F21: partial decodes skipped due to pacing in this session; 0 if pacing off. */
     fun decodeSkips(): Int = decodeSkipsCount
 
-    /** F21: darf der nächste Partial jetzt laufen? (Finale wird hier nie geprüft.) */
+    /** F21: may the next partial run now? (The final is never checked here.) */
     private fun paceAllowsDecode(): Boolean {
-        val secs = audioSeconds // EINMAL lesen (abgeleiteter Getter)
+        val secs = audioSeconds // read ONCE (derived getter)
         val intervalMs = DecodePace.intervalMs(
             lastDecodeMs, (secs * 1000).toLong(), PACE_BASE_MS, PACE_MAX_MS,
         )
         return (secs - lastDecodeBufferSeconds) * 1000.0 >= intervalMs
     }
 
-    /** Ein Decode-Lauf: verstrichene ms (Ring) + Pufferlänge zum Decode-Zeitpunkt. */
+    /** One decode run: elapsed ms (ring) + buffer length at decode time. */
     private fun noteDecode(startNs: Long) {
-        val ms = ((clock() - startNs) / 1_000_000).coerceAtLeast(0L) // nie negativ
+        val ms = ((clock() - startNs) / 1_000_000).coerceAtLeast(0L) // never negative
         decodeTimesMs[(decodeSeq % DECODE_SAMPLE_CAP).toInt()] = ms
         decodeSeq += 1
         if (decodeSamples < DECODE_SAMPLE_CAP) decodeSamples += 1
-        lastDecodeMs = ms // F21: Eingang des cost-aware Takts
+        lastDecodeMs = ms // F21: input of the cost-aware pacing
         lastDecodeBufferSeconds = audioSeconds
     }
 
-    /** F13b2: Abstand seit der letzten Hypothese in ms; -1 wenn nie eine kam. */
+    /** F13b2: gap since the last hypothesis in ms; -1 if none ever arrived. */
     fun currentHypGapMs(): Long =
         if (lastHypAt == 0L) -1L
-        else ((clock() - lastHypAt) / 1_000_000).coerceAtLeast(0) // F13d/P2-2: nie negativ
+        else ((clock() - lastHypAt) / 1_000_000).coerceAtLeast(0) // F13d/P2-2: never negative
 
     private val typer = DeltaTyper(sink)
-    /** F17b/C2: pro Session gezählt (wie droppedBlocks/hyp_count) — in start() nullt. */
+    /** F17b/C2: counted per session (like droppedBlocks/hyp_count) — nulled in start(). */
     private fun resetDecodeStats() {
         decodeSamples = 0
         decodeSeq = 0L
         lastDecodeBufferSeconds = 0.0
-        lastDecodeMs = 0L // F21: Takt-Eingang je Session zurück
+        lastDecodeMs = 0L // F21: reset the pacing input per session
         decodeSkipsCount = 0
     }
     private var pcm = ShortArray(0)
     private var totalSamples = 0
     private var runId = 0L
 
-    // ---- B1 (Segmenter-Kern): Text-Naht über Segmentgrenzen ----
+    // ---- B1 (segmenter core): text seam across segment boundaries ----
 
-    /** B1: Akkumulierter PERMANENT committeter Text aller abgeschlossenen
-     *  Segmente (Präfix für Hypothesen des AKTIVEN Segments — der Segment-Decode
-     *  liefert nur Segment-Text; writeHypothesis rekonstruiert daraus den
-     *  Session-Transkript). Leer = keine Segmentgrenze bisher (Bestandsverhalten
-     *  identisch: whole_buffer von 0). Consumer-Thread schreibt; @Volatile für
-     *  den Export-Leser (B1-Fix P2a: Session-Länge über [segmentBaseSamples]). */
+    /** B1: accumulated PERMANENT committed text of all completed
+     *  segments (prefix for hypotheses of the ACTIVE segment — the segment decode
+     *  yields only segment text; writeHypothesis reconstructs the full
+     *  session transcript from it). Empty = no segment boundary so far (behavior
+     *  identical to the existing one: whole_buffer from 0). Consumer thread writes; @Volatile for
+     *  the export reader (B1 fix P2a: session length via [segmentBaseSamples]). */
     @Volatile private var segmentPrefix = ""
 
-    /** B1: Samples aller abgeschlossenen Segmente (Agreement/Policy sehen die
-     *  SESSION-Audiolänge, nicht die Segment-Länge — Semantik des vollTexts).
-     *  @Volatile: Consumer schreibt, Main-Thread liest die Export-Länge
-     *  ([sessionAudioSeconds], B1-Fix P2a) — ohne Sichtbarkeitsgarantie las
-     *  der Export stattdessen den segment-lokalen Puffer (Befund Test 6). */
+    /** B1: samples of all completed segments (agreement/policy see the
+     *  SESSION audio length, not the segment length — semantics of fullText).
+     *  @Volatile: consumer writes, main thread reads the export length
+     *  ([sessionAudioSeconds], B1 fix P2a) — without a visibility guarantee the
+     *  export instead read the segment-local buffer (finding of test 6). */
     @Volatile private var segmentBaseSamples = 0L
 
-    /** B1: Endet die letzte Hypothese auf Satzzeichen (. ! ?) — Eingang der
-     *  weichen Segmentregel (a); @Volatile: Capture-Thread liest (Regel 9:
-     *  nur Boolean, nie Text). */
+    /** B1: does the last hypothesis end with punctuation (. ! ?) — input of
+     *  the soft segment rule (a); @Volatile: capture thread reads (rule 9:
+     *  boolean only, never text). */
     @Volatile private var lastHypPunct = false
 
     val audioSeconds: Double
         get() = if (sampleRateHz <= 0) 0.0 else totalSamples.toDouble() / sampleRateHz
 
     /**
-     * B1-Fix (Review P2a): SESSION-Audiolänge = abgeschlossene Segmente plus
-     * aktuelles Pufferstück — der 🐞-Export (audio_s/buffer_s) zeigt nach
-     * Segmenten den NACHGEFÜHRTEN Session-Wert statt des segment-lokalen
-     * Puffers (der nach jedem Mini-Finale auf 0 zurückfällt). Ohne Segmenter
-     * identisch mit [audioSeconds] (Bestandsverhalten).
+     * B1 fix (review P2a): SESSION audio length = completed segments plus
+     * the current buffer piece — after segments the 🐞 export (audio_s/buffer_s)
+     * shows the CARRIED-OVER session value instead of the segment-local
+     * buffer (which falls back to 0 after each mini-final). Without the segmenter
+     * identical to [audioSeconds] (existing behavior).
      */
     val sessionAudioSeconds: Double
         get() = if (sampleRateHz <= 0) 0.0
             else (segmentBaseSamples + totalSamples).toDouble() / sampleRateHz
 
     /**
-     * Beginn einer Aufnahme-Sitzung. Idempotent: während IDLE→true und Zustand
-     * RECORDING; bereits laufend → false (kein Neustart, KONZEPT §2.1).
+     * Start of a recording session. Idempotent: during IDLE→true and state
+     * RECORDING; already running → false (no restart, KONZEPT §2.1).
      */
     fun start(): Boolean {
         if (state != DictationState.IDLE) return false
@@ -349,86 +352,88 @@ class DictationController(
         pcm = ShortArray(0)
         totalSamples = 0
         lastErrorCode = null
-        failedThisSession = false // F13b: Fehler gilt je Session, nie nachwirkend
+        failedThisSession = false // F13b: the error applies per session, never carries over
         droppedBlocks = 0
-        hypothesesThisSession = 0 // F13b2: Zähler je Sitzung
+        hypothesesThisSession = 0 // F13b2: counters per session
         lastHypAt = 0L
-        lastHypothesisBufferSeconds = 0f // F26b: je Sitzung neu
-        ownershipDeniedCount = 0 // AP3: Besitz-Forensik je Sitzung
+        lastHypothesisBufferSeconds = 0f // F26b: fresh per session
+        ownershipDeniedCount = 0 // AP3: ownership forensics per session
         ownershipDeniedAtS = -1.0
-        // A2b: Schreib-Diagnose je Sitzung genullt (monoton danach)
+        // A2b: write diagnostics nulled per session (monotonic afterwards)
         writeSameCount = 0
         writeW1Count = 0
         writeW3dCount = 0
         writeDeltaCount = 0
-        lastWriteAudioS = -1.0 // -1 vor dem ersten DELTA
+        lastWriteAudioS = -1.0 // -1 before the first DELTA
         writeReason = "-"
         hypLen = 0
         currentLen = 0
         committedLen = 0
-        resetDecodeStats() // F17b: Decode-Diagnose je Sitzung (Muster wie oben)
+        resetDecodeStats() // F17b: decode diagnostics per session (same pattern as above)
         policy.reset()
         typer.reset()
         tracker.reset()
-        sink.resetSession() // A5 (v0.1.34): ownSpan-Leiche der Vorgänger-Sitzung verwerfen
-        // B1: Segment-Naht je Sitzung neu — ganze Session = EIN whole_buffer,
-        // wenn der Segmenter aus bleibt (segmentFinalizeMs=0, Bestand).
+        sink.resetSession() // A5 (v0.1.34): discard the ownSpan leftover of the previous session
+        // B1: segment seam fresh per session — the whole session = ONE whole_buffer,
+        // if the segmenter stays off (segmentFinalizeMs=0, existing behavior).
         segmentPrefix = ""
         segmentBaseSamples = 0L
         lastHypPunct = false
+        trailingSpaceCommitted = false // T10: trail_sp-Flag per Session zurück
         state = DictationState.RECORDING
         return true
     }
 
     /**
-     * Neuer Audio-Block aus der Capture-Queue (KONZEPT §2.3: entkoppelt).
-     * Ignoriert außerhalb von RECORDING. Erreicht der Puffer die Mindestlänge
-     * für Partials (2.0 s), wird er transkribiert und das Ergebnis über
-     * CommitPolicy + DeltaTyper in den Editor geschrieben.
+     * New audio block from the capture queue (KONZEPT §2.3: decoupled).
+     * Ignored outside of RECORDING. Once the buffer reaches the minimum length
+     * for partials (2.0 s), it is transcribed and the result is written
+     * into the editor via CommitPolicy + DeltaTyper.
      */
     suspend fun feedAudio(block: PcmBlock) {
         if (state != DictationState.RECORDING) {
-            // F13b/C1: nach einem stillen fail() wurde JEDE Block hier stumm
-            // verworfen — jetzt gezählt (F13b2-Diagnose: dropped_blocks).
+            // F13b/C1: after a silent fail() EVERY block was silently
+            // dropped here — now counted (F13b2 diagnostics: dropped_blocks).
             droppedBlocks += 1
             return
         }
         if (block.samples.isEmpty()) return
         append(block.samples)
-        // ASR_CONTRACT §4.4: min_audio_s ist ein Guard NUR für Partials —
-        // kurze Audiostände werden nicht (halluzinationsgefährdet) dekodiert.
+        // ASR_CONTRACT §4.4: min_audio_s is a guard ONLY for partials —
+        // short audio levels are not decoded (hallucination-prone).
         if (audioSeconds >= minAudioSecondsForPartials) {
-            // F21: cost-aware Takt NUR für Partials — das Finale (stop) läuft immer.
+            // F21: cost-aware pacing ONLY for partials — the final (stop) always runs.
             if (decodePacing && !paceAllowsDecode()) {
-                decodeSkipsCount += 1 // kein Fehler, kein fail(): nur ein übersprungener Lauf
+                decodeSkipsCount += 1 // no error, no fail(): just a skipped run
                 return
             }
             try {
-                val decodeStartNs = clock() // F17b/C2: Decode-Zeit mit injizierter Uhr
+                val decodeStartNs = clock() // F17b/C2: decode time with the injected clock
                 val hypothesis = engine.transcribe(window(), sessionId, ++runId)
-                noteDecode(decodeStartNs) // F17b: nur Diagnose-Zahlen, kein Verhalten
-                noteHypothesis() // F13b2: erzeugte Hypothese zählen + Zeitstempel
+                noteDecode(decodeStartNs) // F17b: diagnostic numbers only, no behavior change
+                noteHypothesis() // F13b2: count generated hypothesis + timestamp
                 applyPartial(hypothesis)
             } catch (e: OutOfMemoryError) {
-                // F3: nativer ORT-Speicherfehler während der Inferenz — Session
-                // kontrolliert beenden (abort-Semantik), Fehler NACH OBEN melden
-                // (kein schluckendes catch), damit die IM dictation_error_out_of_memory
-                // zeigen kann. NUR OOM; andere Error bleiben bewusst ungefangen.
+                // F3: native ORT memory error during inference — end the session
+                // in a controlled way (abort semantics), report the error UPWARD
+                // (no swallowing catch), so that the IM can show
+                // dictation_error_out_of_memory. ONLY OOM; other Errors deliberately
+                // remain uncaught.
                 abort()
                 throw e
             } catch (e: IllegalStateException) {
                 if (isEditorSyncTimeout(e)) {
-                    // F1-Drift-Regel (REVIEW_STAGE6_FIXES): Edit-Timeout im Sink ⇒
-                    // der Main-Thread ist blockiert/überlastet — weitere Revisionen
-                    // würden auf demselben Driftvektor laufen (veraltete Editor-
-                    // Zustände, Geisterschreib-Risiko). Session beenden, Fehler
-                    // sichtbar nach oben (R-2). F13d/P1: fail() statt abort() —
-                    // failedThisSession bewahrt den Grund bis zum nächsten Start
-                    // (sonst meldet stop() ein stummes IdleNoOp).
+                    // F1 drift rule (REVIEW_STAGE6_FIXES): edit timeout in the sink ⇒
+                    // the main thread is blocked/overloaded — further revisions
+                    // would run on the same drift vector (stale editor
+                    // states, ghost-write risk). End the session, surface the
+                    // error upward (R-2). F13d/P1: fail() instead of abort() —
+                    // failedThisSession preserves the reason until the next start
+                    // (otherwise stop() reports a silent IdleNoOp).
                     fail(EDITOR_SYNC_TIMEOUT)
                     throw e
                 }
-                fail(ASR_PARTIAL_ERROR) // andere IllegalStateException: normaler Fehlerpfad
+                fail(ASR_PARTIAL_ERROR) // other IllegalStateException: normal error path
             } catch (e: Exception) {
                 fail(ASR_PARTIAL_ERROR)
             }
@@ -436,12 +441,12 @@ class DictationController(
     }
 
     /**
-     * Wendet eine partielle Hypothese an (auch vom externen Scheduler aufrufbar).
-     * Verwirft Ergebnisse, die nicht zur AKTUELLEN Session und zum Zustand
-     * RECORDING passen — so können verspätete Ergebnisse einer alten Session
-     * keinen Text mehr einfügen.
+     * Applies a partial hypothesis (can also be called from the external scheduler).
+     * Discards results that do not match the CURRENT session and the state
+     * RECORDING — this way late results of an old session can no longer
+     * insert any text.
      *
-     * @return true, wenn die Hypothese der aktuellen Session zugeordnet wurde.
+     * @return true if the hypothesis was assigned to the current session.
      */
     fun applyPartial(hypothesis: Hypothesis): Boolean {
         if (state != DictationState.RECORDING) return false
@@ -450,49 +455,49 @@ class DictationController(
     }
 
     /**
-     * Taste losgelassen: finales Decode des GESAMTEN Puffers (whole-buffer,
-     * KONZEPT §5.1) und Übergang nach IDLE. Idempotent: ohne laufende Aufnahme
-     * ein No-Op. Auch kürzeste Aufnahmen werden final dekodiert (min_audio-Guard
-     * gilt nicht für das Finale).
+     * Key released: final decode of the ENTIRE buffer (whole-buffer,
+     * KONZEPT §5.1) and transition to IDLE. Idempotent: without a running recording
+     * a no-op. Even the shortest recordings are decoded finally (the min_audio guard
+     * does not apply to the final).
      *
-     * F13b/C1: Rückgabe [StopOutcome] — der Aufrufer sieht, OB ein Finale
-     * gelaufen ist; eine still gescheiterte Session (fail() während RECORDING)
-     * liefert NoFinal MIT Fehlercode statt eines normalen Abschlusses.
+     * F13b/C1: returns [StopOutcome] — the caller sees WHETHER a final
+     * ran; a session that failed silently (fail() during RECORDING)
+     * yields NoFinal WITH error code instead of a normal completion.
      */
     suspend fun stop(): StopOutcome {
         if (state != DictationState.RECORDING) {
-            // Nie-Aufnahme (IDLE): No-Op ohne Fake-Fehler — ABER: die Session war
-            // evtl. still gescheitert (state von fail() auf IDLE): NoFinal melden.
-            // F13d/P2-1: DROPPED-Wert in den Snapshot — Live-Lesen wäre rennbar.
+            // Never-recorded (IDLE): no-op without a fake error — BUT: the session
+            // may have failed silently (fail() set state to IDLE): report NoFinal.
+            // F13d/P2-1: DROPPED value into the snapshot — reading live would be racy.
             return if (failedThisSession) StopOutcome.NoFinal(lastErrorCode, failedWith = true, droppedWith = droppedBlocks)
             else StopOutcome.IdleNoOp
         }
-        // F13d/P2-1: Snapshot zum STOP-Zeitpunkt — ein sofortiger neuer start()
-        // kann die Bewertung dieser Sitzung nicht mehr verfälschen.
+        // F13d/P2-1: snapshot at STOP time — an immediately following start()
+        // can no longer falsify the evaluation of this session.
         val failedAtStop = failedThisSession
         val droppedAtStop = droppedBlocks
         state = DictationState.FINALIZING
         var finalError: String? = null
         if (totalSamples > 0) {
             try {
-                val decodeStartNs = clock() // F17b/C2: Decode-Zeit mit injizierter Uhr
+                val decodeStartNs = clock() // F17b/C2: decode time with the injected clock
                 val hypothesis = engine.transcribe(window(), sessionId, ++runId)
-                noteDecode(decodeStartNs) // F17b: nur Diagnose-Zahlen, kein Verhalten
-                noteHypothesis() // F13b2: auch das Finale ist eine erzeugte Hypothese
-                // Auch Finals alter Sessions verwerfen (veralteter Lauf)
+                noteDecode(decodeStartNs) // F17b: diagnostic numbers only, no behavior change
+                noteHypothesis() // F13b2: the final is also a generated hypothesis
+                // Also discard finals of old sessions (stale run)
                 if (hypothesis.sessionId == sessionId) {
-                    // A2b: Finale über reviseFinal — besitzgesicherte
-                    // GESAMTREVISION der eigenen Spanne (kein W3d-Block).
+                    // A2b: final via reviseFinal — ownership-secured
+                    // FULL revision of our own span (no W3d block).
                     writeHypothesis(hypothesis, final = true)
                 }
             } catch (e: OutOfMemoryError) {
-                // F3: OOM auch im Final-Decode — abort + nach oben (s. feedAudio)
+                // F3: OOM also in the final decode — abort + upward (see feedAudio)
                 abort()
                 throw e
             } catch (e: IllegalStateException) {
                 if (isEditorSyncTimeout(e)) {
-                    // F1-Drift-Regel: Edit-Timeout ⇒ keine weiteren Schreibversuche.
-                    // F13d/P1: fail() statt abort() — Grund bewahrt, nie stumm.
+                    // F1 drift rule: edit timeout ⇒ no further write attempts.
+                    // F13d/P1: fail() instead of abort() — reason preserved, never silent.
                     fail(EDITOR_SYNC_TIMEOUT)
                     throw e
                 }
@@ -502,14 +507,41 @@ class DictationController(
                 fail(ASR_FINAL_ERROR)
                 finalError = ASR_FINAL_ERROR
             }
+        } else {
+            // T10 (v0.1.39): Session-Ende OHNE Rest-Finale — leeres Rest-Buffer
+            // (z. B. direkt nach einer Zwischensegment-Finalisierung, F53): das
+            // echo Session-Finale hängt das Leerzeichen trotzdem an den bereits
+            // committeten Text (ownership-gesichert wie jede Revision; die
+            // Zwischensegment-Finalisierung SELBST bleibt ohne Space).
+            appendTrailingSpaceAtSessionEnd()
         }
         if (state == DictationState.FINALIZING) state = DictationState.IDLE
-        return StopOutcome.FinalRan(finalError, failedWith = failedAtStop, droppedWith = droppedAtStop)
+        return StopOutcome.FinalRan(
+            finalError,
+            failedWith = failedAtStop,
+            droppedWith = droppedAtStop,
+            trailingSpace = trailingSpaceCommitted, // T10: trail_sp-Snapshot im Finale
+        )
     }
 
     /**
-     * Abbruch ohne finales Decode: geordnet nach IDLE (DESIGN §2.4 CANCELLING);
-     * bereits committeter Text bleibt stehen.
+     * T10 (v0.1.39): Leerzeichen-Anhang am SESSION-Ende ohne Rest-Finale
+     * (leeres Rest-Buffer nach seg_final) — gleiche reine Regel
+     * ([TrailingSpace.rule]), gleicher Ownership-Gate und gleiche Typer-
+     * Buchhaltung wie das finale writeHypothesis; setzt [trailingSpaceCommitted].
+     */
+    private fun appendTrailingSpaceAtSessionEnd() {
+        val text = typer.currentText
+        if (!TrailingSpace.rule(text, text.lastOrNull())) return // leere Session: nichts
+        if (!tracker.isOwned(typer.currentText, contextForOwnText())) return // nicht unser Span: kein Write
+        val outcome = typer.reviseFinal(text + " ")
+        noteWrite(outcome.kind, text + " ")
+        trailingSpaceCommitted = true
+    }
+
+    /**
+     * Abort without a final decode: orderly transition to IDLE (DESIGN §2.4 CANCELLING);
+     * text already committed stays in place.
      */
     fun abort() {
         if (state == DictationState.IDLE) return
@@ -517,16 +549,16 @@ class DictationController(
         state = DictationState.IDLE
     }
 
-    /** Selektions-Signal vom UI-Thread (InputMethodService.onUpdateSelection). */
+    /** Selection signal from the UI thread (InputMethodService.onUpdateSelection). */
     fun onUpdateSelection(oldSelStart: Int, oldSelEnd: Int, newSelStart: Int, newSelEnd: Int) {
         tracker.onUpdateSelection(oldSelStart, oldSelEnd, newSelStart, newSelEnd)
     }
 
     /**
-     * Editor-/App-Wechsel (A-1): bricht eine laufende Aufnahme kontrolliert ab —
-     * KEIN Final-Commit in den neuen Editor, kein weiteres Partialschreiben.
-     * Besitz wird verworfen (neue Generation), Zustand → IDLE; bereits
-     * committeter Text bleibt im ALTEN Editor stehen.
+     * Editor/app switch (A-1): aborts a running recording in a controlled way —
+     * NO final commit into the new editor, no further partial writes.
+     * Ownership is discarded (new generation), state → IDLE; text already
+     * committed stays in the OLD editor.
      */
     fun onEditorChanged() {
         tracker.onEditorChanged()
@@ -535,87 +567,87 @@ class DictationController(
         }
     }
 
-    /** Editor-Kontext für den erwarteten eigenen Text (Besitzprüfung). */
+    /** Editor context for the expected own text (ownership check). */
     private fun contextForOwnText(): CharSequence? =
         if (typer.currentText.isEmpty()) null else sink.textBeforeCursor(typer.currentText.length)
 
     /**
-     * F1-Drift-Regel: erkennt den Edit-Timeout des InputConnectionSink an dessen
-     * fester Meldung — nur DIESER Fehler ist ein Drift-Abbruch, jede andere
-     * IllegalStateException bleibt im normalen fail()-Pfad.
+     * F1 drift rule: recognizes the edit timeout of InputConnectionSink by its
+     * fixed message — only THIS error is a drift abort, every other
+     * IllegalStateException stays on the normal fail() path.
      */
     private fun isEditorSyncTimeout(e: IllegalStateException): Boolean =
         e.message?.startsWith(EDITOR_SYNC_TIMEOUT_PREFIX) == true
 
-    /** F13b2: Zähler + Zeitstempel einer erzeugten Hypothese (nur Metadaten). */
+    /** F13b2: counter + timestamp of a generated hypothesis (metadata only). */
     private fun noteHypothesis() {
         hypothesesThisSession += 1
         lastHypAt = clock()
-        // F26b: Bufferstand der LETZTEN erzeugten Hypothese (letzter Decode-Wert).
+        // F26b: buffer level of the LAST generated hypothesis (last decode value).
         lastHypothesisBufferSeconds = lastDecodeBufferSeconds.toFloat()
     }
 
-    /** Geordneter Fehlerpfad: nach IDLE, Fehlercode sichtbar, Text bleibt stehen. */
+    /** Orderly error path: to IDLE, error code visible, text stays in place. */
     private fun fail(errorCode: String) {
         lastErrorCode = errorCode
-        failedThisSession = true // F13b: bewahren, bis ein neuer Start folgt
+        failedThisSession = true // F13b: preserved until a new start follows
         state = DictationState.IDLE
         policy.reset()
     }
 
     /**
-     * Schreibt eine (der aktuellen Session zugeordnete) Hypothese: Commit-Fortschritt
-     * über die Policy, danach minimales Delta über den Typer. Ohne bewiesenen
-     * Besitz wird nichts geschrieben (DESIGN §6).
-     * B1: Der Segment-Decode liefert nur das AKTIVE Segment — [withSegmentPrefix]
-     *  rekonstruiert daraus den vollen Session-Text (Präfix der abgeschlossenen
-     *  Segmente + Segment-Text, Naht = ein Leerzeichen); Policy/Agreement
-     *  erhalten die SESSION-Audiolänge ([segmentBaseSamples] + Puffer). Ohne
-     *  Segmentgrenzen ist beides identisch mit dem Bestandsverhalten.
+     * Writes a hypothesis (assigned to the current session): commit progress
+     * via the policy, then minimal delta via the typer. Without proven
+     * ownership nothing is written (DESIGN §6).
+     * B1: The segment decode yields only the ACTIVE segment — [withSegmentPrefix]
+     *  reconstructs the full session text from it (prefix of the completed
+     *  segments + segment text, seam = one space); policy/agreement
+     *  receive the SESSION audio length ([segmentBaseSamples] + buffer). Without
+     *  segment boundaries both are identical to the existing behavior.
      *
-     * A2b (PLAN_V0133 §A2b): Produktionspfad ist [DeltaTyper.reviseOutcome]
-     * (Grundrückgabe {SAME, W1, W3d, DELTA}); [final]=true (Session-Finale)
-     * nutzt [DeltaTyper.reviseFinal] — besitzgesicherte Gesamtrevision.
-     * W1-Re-Baseline in exakt den E1c-Koordinaten (Länge max(currentText,
+     * A2b (PLAN_V0133 §A2b): the production path is [DeltaTyper.reviseOutcome]
+     * (reason return {SAME, W1, W3d, DELTA}); [final]=true (session final)
+     * uses [DeltaTyper.reviseFinal] — ownership-secured full revision.
+     * W1 re-baseline in exactly the E1c coordinates (length max(currentText,
      * sink.ownText()), actual=sink.textBeforeCursor(len), fresherExpected=
-     * sink.ownText()); NUR nach positivem Suffixbeweis darf dieselbe
-     * Hypothese EINMAL erneut versucht werden. Zähler/Diagnose je Fenster
-     * über [noteWrite] (Regel 9: Zahlen/Codes).
+     * sink.ownText()); ONLY after a positive suffix proof may the same
+     * hypothesis be retried ONCE. Counters/diagnostics per window
+     * via [noteWrite] (rule 9: numbers/codes).
      */
     private fun writeHypothesis(hypothesis: Hypothesis, final: Boolean = false): Boolean {
-        // B1: Satzzeichen-Ende der letzten Hypothese (Eingang der weichen
-        //  Segmentregel a) — nur ein Boolean, nie der Text (Regel 9).
+        // B1: punctuation ending of the last hypothesis (input of the soft
+        //  segment rule a) — a boolean only, never the text (rule 9).
         val lastChar = hypothesis.text.trimEnd().lastOrNull()
         lastHypPunct = lastChar == '.' || lastChar == '!' || lastChar == '?'
         val fullText = withSegmentPrefix(hypothesis.text)
         if (!tracker.isOwned(typer.currentText, contextForOwnText())) {
-            // AP3 (PLAN_C2_FABLE_R2 §4, H-E2): verweigerte Schreibabsicht — der
-            // zweite Besitzverlust-Detektor neben dem Selection-Flip im
-            // Coordinator. Erster Moment in Session-Audio-Sekunden (-1 = nie),
-            // nur Zahlen (Regel 9). Zähler für Persistenz (stiller Schreibstopp).
-            // AP3-P2 (Review): VOR der ersten AUSGABE ist isOwned=false NORMAL
-            // (Baseline noch nicht etabliert; expectedText leer ⇒ nur lost kann
-            // verweigern) — der Detektor zählt erst, wenn die Session schon
-            // Output im Editor hat: hadOutput-Guard = typer.currentText
-            // NICHT leer (erster Partieller genügt — NICHT committedLength:
-            // ein Agreement-Commit braucht 3 stabile Hypothesen, und genau der
-            // „Partielle da, dann stiller Schreibstopp OHNE je einen Agreement-
-            // Commit"-Fall (H-E2) bliebe mit dem strengeren Guard unsichtbar;
-            // Review-Intention ist der partielle Schreibstopp). currentText
-            // resettet je Session (typer.reset() in start()). Detektor 1
-            // (Selection-Flip im Coordinator) bleibt unangetastet.
+            // AP3 (PLAN_C2_FABLE_R2 §4, H-E2): denied write intent — the
+            // second ownership-loss detector besides the selection flip in
+            // the coordinator. First moment in session audio seconds (-1 = never),
+            // numbers only (rule 9). Counter for persistence (silent write stop).
+            // AP3-P2 (review): BEFORE the first OUTPUT, isOwned=false is NORMAL
+            // (baseline not yet established; expectedText empty ⇒ only lost can
+            // deny) — the detector only counts once the session already has
+            // output in the editor: hadOutput guard = typer.currentText
+            // NOT empty (the first partial suffices — NOT committedLength:
+            // an agreement commit needs 3 stable hypotheses, and exactly the
+            // "partial present, then silent write stop WITHOUT ever an agreement
+            // commit" case (H-E2) would remain invisible with the stricter guard;
+            // the review intention is the partial write stop). currentText
+            // resets per session (typer.reset() in start()). Detector 1
+            // (selection flip in the coordinator) remains untouched.
             if (typer.currentText.isNotEmpty()) {
-                // A2b (E1c): EIN Re-Baseline-Versuch mit dem FRISCHEN Sink-Stand
-                // (ownText ist synchron zur commit-Runde, die Tracker-Erwartung
-                // hinkt worker-seitig nach). Tracker löscht lost NUR bei
-                // positivem Suffixbeweis; danach dieselbe Hypothese EINMAL
-                // erneut — sonst W1 ohne Sink-Zugriff (lost bleibt).
+                // A2b (E1c): ONE re-baseline attempt with the FRESH sink state
+                // (ownText is in sync with the commit round, the tracker expectation
+                // lags behind on the worker side). The tracker clears lost ONLY on
+                // a positive suffix proof; after that the same hypothesis ONCE
+                // again — otherwise W1 without sink access (lost remains).
                 val len = maxOf(typer.currentText.length, sink.ownText().length)
                 val rebased = tracker.rebaseline(sink.textBeforeCursor(len), sink.ownText())
                 if (!rebased || !tracker.isOwned(typer.currentText, contextForOwnText())) {
-                    // P2 (REVIEW_A2_A4): NUR die ECHTE Verweigerung zählt — eine
-                    // GELUNGENE Re-Baseline ist kein Besitzverlust (Zähler und
-                    // Stempel standen vorher VOR dem Versuch).
+                    // P2 (REVIEW_A2_A4): ONLY the REAL denial counts — a
+                    // SUCCESSFUL re-baseline is not an ownership loss (counter and
+                    // stamp were previously taken BEFORE the attempt).
                     ownershipDeniedCount += 1
                     if (ownershipDeniedAtS < 0.0) {
                         ownershipDeniedAtS = sessionAudioSeconds
@@ -636,12 +668,25 @@ class DictationController(
         )
         typer.commitUpTo(committed)
         val committedBefore = typer.committedLength
-        val outcome = if (final) typer.reviseFinal(fullText) else typer.reviseOutcome(fullText)
+        // T10 (v0.1.39): NUR das echte Session-Finale (final=true) hängt hinter
+        // Satzzeichen-Ende EIN Leerzeichen an (reine Entscheidung
+        // [TrailingSpace.rule], Doppelschutz dort). Zwischensegment-Finals
+        // (F53: finalizeSegment ruft writeHypothesis OHNE final) und der
+        // Abbruch-Pfad (gar kein writeHypothesis) bleiben unberührt. Der Space
+        // ist TEIL des reviseFinal-Ziels ⇒ Ownership/Tracker-Kette bleibt
+        // konsistent — KEIN separater commitText außerhalb der Typer-Buchhaltung.
+        val finalTarget = if (final && TrailingSpace.rule(fullText, fullText.lastOrNull())) {
+            fullText + " "
+        } else {
+            fullText
+        }
+        if (final) trailingSpaceCommitted = finalTarget.length > fullText.length
+        val outcome = if (final) typer.reviseFinal(finalTarget) else typer.reviseOutcome(fullText)
         noteWrite(outcome.kind, fullText)
-        // E8.2 C6: nach einem Rollback (committedLength GESCHRUMPFT, kein
-        // Divergenz-Verweigerung) beginnt die Agreement-Zählung NEU — kein
-        // sofortiger Re-Commit desselben (fehlerhaften) Präfixes. Gilt für
-        // W3c wie für die A2a/A2b-Gesamtrevision (W3d-Auflösung, Finale).
+        // E8.2 C6: after a rollback (committedLength SHRUNK, no
+        // divergence denial) the agreement counting starts NEW — no
+        // immediate re-commit of the same (faulty) prefix. Applies to
+        // W3c as well as to the A2a/A2b full revision (W3d resolution, final).
         if (outcome.kind == ReviseKind.DELTA && typer.committedLength < committedBefore) {
             policy.reset()
         }
@@ -652,8 +697,8 @@ class DictationController(
     }
 
     /**
-     * A2b: Schreib-Zähler/Diagnose EINES Fensters (Regel 9: Zahlen/Codes) +
-     * unveränderlicher [DecodeWindowStats]-Snapshot an den Beobachter.
+     * A2b: write counters/diagnostics of ONE window (rule 9: numbers/codes) +
+     * immutable [DecodeWindowStats] snapshot to the observer.
      */
     private fun noteWrite(kind: ReviseKind, fullText: String) {
         when (kind) {
@@ -705,11 +750,11 @@ class DictationController(
     }
 
     /**
-     * B1: Rekonstruiert den vollen Session-Text: Präfix der abgeschlossenen
-     * Segmente + Segment-Text, Naht = GENAU EIN Leerzeichen (an der Segment-
-     * grenze kennt der Decoder die Wortgrenze nicht — ein Space ist die
-     * konservative, nie klebende Wahl; Golden-Testbarkeit bleibt gegeben).
-     * Ohne Präfix (Segmenter aus/erste Segment) unverändert der Hypothesen-Text.
+     * B1: Reconstructs the full session text: prefix of the completed
+     * segments + segment text, seam = EXACTLY ONE space (at the segment
+     * boundary the decoder does not know the word boundary — a space is the
+     * conservative, never-sticking choice; golden-testability is preserved).
+     * Without a prefix (segmenter off/first segment) the hypothesis text stays unchanged.
      */
     private fun withSegmentPrefix(text: String): String {
         if (segmentPrefix.isEmpty()) return text
@@ -720,64 +765,64 @@ class DictationController(
     }
 
     /**
-     * B1 (PLAN_V0130 §6.3 Empfehlung (c)): ZWISCHENSEGMENT-FINALISIERUNG —
-     * Mini-Finale über das AKTIVE Segment-Puffer: finaler Decode (whole_buffer
-     * über den Segment-Ausschnitt) + PERMANENTER Commit über den Bestandsweg
-     * ([writeHypothesis] mit Agreement/Policy/Typer — derselbe Vertrag wie das
-     * Session-Finale), danach NUR Puffer + Decode-Statistik zurücksetzen; die
-     * Session bleibt RECORDING (keine Tonlücke: aufgerufen im Consumer, der
-     * einzige Puffer-Eigentümer; Blöcke queue im Kanal). Hypothesen-Takt,
-     * Agreement und min_audio-Guard rechnen ab Segmentstart (frischer Puffer).
+     * B1 (PLAN_V0130 §6.3 recommendation (c)): INTER-SEGMENT FINALIZATION —
+     * mini-final over the ACTIVE segment buffer: final decode (whole_buffer
+     * over the segment excerpt) + PERMANENT commit via the established path
+     * ([writeHypothesis] with agreement/policy/typer — the same contract as the
+     * session final), afterwards reset ONLY buffer + decode statistics; the
+     * session stays RECORDING (no audio gap: called in the consumer, the
+     * sole buffer owner; blocks queue in the channel). Hypothesis pacing,
+     * agreement and the min_audio guard count from the segment start (fresh buffer).
      *
-     * B1-Fix (Review P1, PLAN §6.3(c) Produktvertrag): FEHLERVERHALTEN — nur
-     * OOM bleibt ein HARTER Abbruch (abort + rethrow → ERR_OOM-Bestandspfad,
-     * kein Decode-Zustand mehr möglich); JEDE andere Exception (ASR-Fehler,
-     * Editor-Sync-Timeout) ist TRANSIENT: kein fail(), kein lastError — der
-     * Aufrufer verwirft Antrag + Pause-Wächter und die Session läuft RECORDING
-     * weiter; der NÄCHSTE Boundary-Versuch versucht erneut. fail() wäre hier
-     * ein Abbruchpfad mitten im Diktat (genau was der Vertrag ausschließt); ein
-     * wirklich defekter Editor endet über den nächsten PARTIAL-Decode dessen
-     * eigenen fail()-Pfad. Idempotent: ohne RECORDING oder ohne Samples im
-     * Puffer false ohne Nebeneffekt.
+     * B1 fix (review P1, PLAN §6.3(c) product contract): ERROR BEHAVIOR — only
+     * OOM remains a HARD abort (abort + rethrow → ERR_OOM existing path,
+     * no further decode state possible); EVERY other exception (ASR error,
+     * editor sync timeout) is TRANSIENT: no fail(), no lastError — the
+     * caller discards request + pause guard and the session keeps running RECORDING;
+     * the NEXT boundary attempt tries again. fail() would here be
+     * an abort path in the middle of dictation (exactly what the contract excludes); a
+     * truly broken editor ends via the next PARTIAL decode through its
+     * own fail() path. Idempotent: without RECORDING or without samples in
+     * the buffer, false without side effects.
      *
-     * @return true, wenn ein Segment finalisiert wurde (Puffer steht danach leer).
+     * @return true if a segment was finalized (the buffer is empty afterwards).
      */
     suspend fun finalizeSegment(): Boolean {
         if (state != DictationState.RECORDING) return false
         if (totalSamples <= 0) return false
         try {
-            val decodeStartNs = clock() // F17b/C2: Decode-Zeit mit injizierter Uhr
+            val decodeStartNs = clock() // F17b/C2: decode time with the injected clock
             val hypothesis = engine.transcribe(window(), sessionId, ++runId)
-            noteDecode(decodeStartNs) // nur Diagnose-Zahlen
-            noteHypothesis() // F13b2: auch ein Mini-Finale ist eine Hypothese
-            // Auch Mini-Finale alter Sessions verwerfen (veralteter Lauf)
+            noteDecode(decodeStartNs) // diagnostic numbers only
+            noteHypothesis() // F13b2: a mini-final is also a hypothesis
+            // Also discard mini-finals of old sessions (stale run)
             if (hypothesis.sessionId == sessionId) {
                 writeHypothesis(hypothesis)
             }
         } catch (e: OutOfMemoryError) {
-            // OOM bleibt der EINZIGE harte Abbruch (B1-Fix, Review P1): ohne
-            // Speicher ist kein weiterer Decode-Zustand möglich — Bestandspfad
-            // (Consumer fängt, ERR_OOM, kontrolliertes Ende).
+            // OOM remains the ONLY hard abort (B1 fix, review P1): without
+            // memory no further decode state is possible — established path
+            // (consumer catches, ERR_OOM, controlled end).
             abort()
             throw e
         } catch (e: IllegalStateException) {
-            // B1-Fix (Review P1, PLAN §6.3(c) Produktvertrag „kein Abbruch durch
-            // Decode-Latenz/Speicher allein, keine Tonlücke“): transienter
-            // ASR-/Editor-Fehler im Mini-Finale beendet die SESSION NICHT —
-            // fail() wäre ein Abbruchpfad mitten im Diktat. Der Segment-Antrag
-            // wird verworfen (Aufrufer löscht Anforderung + Wächter), die
-            // Aufnahme läuft weiter, der NÄCHSTE Boundary-Versuch (nächste
-            // Satzpause / Längenregel) versucht erneut. Ein wirklich defekter
-            // Editor wird vom NÄCHSTEN Partial-Decode über dessen eigenen
-            // fail()-Pfad beendet — das Segment-Finale ist kein Timer.
+            // B1 fix (review P1, PLAN §6.3(c) product contract "no abort due to
+            // decode latency/memory alone, no audio gap"): a transient
+            // ASR/editor error in the mini-final does NOT end the SESSION —
+            // fail() would be an abort path in the middle of dictation. The segment request
+            // is discarded (caller clears request + guard), the
+            // recording continues, the NEXT boundary attempt (next
+            // sentence pause / length rule) tries again. A truly broken
+            // editor is ended by the NEXT partial decode via its own
+            // fail() path — the segment final is not a timer.
             return false
         } catch (e: Exception) {
-            // dito: transienter ASR-Fehler — verwerfen, Session lebt (P1).
+            // same: transient ASR error — discard, session lives (P1).
             return false
         }
-        // Naht fortschreiben: der neue Präfix ist der committete Stand INKLUSIVE
-        // des Mini-Finals; danach Puffer + Decode-Statistik gezielt zurücksetzen
-        // (Session-Zähler wie hyp_count bleiben Session-Werte).
+        // Carry the seam forward: the new prefix is the committed state INCLUDING
+        // the mini-final; afterwards reset buffer + decode statistics deliberately
+        // (session counters like hyp_count keep their session values).
         segmentPrefix = typer.currentText
         segmentBaseSamples += totalSamples
         totalSamples = 0
@@ -785,25 +830,31 @@ class DictationController(
         return true
     }
 
-    /** B1: Endet die letzte Hypothese auf Satzzeichen — Eingang der weichen
-     *  Segmentregel (a). Nur Boolean, nie Text (Regel 9). */
+    /** B1: does the last hypothesis end with punctuation — input of the soft
+     *  segment rule (a). Boolean only, never text (rule 9). */
     fun lastHypothesisEndsWithPunct(): Boolean = lastHypPunct
+
+    /** T10 (v0.1.39): hat das SESSION-Finale (nur final=true) ein Leerzeichen
+     *  hinter Satzzeichen-Ende angehängt? Per Session, landet im StopOutcome-
+     *  Snapshot (VK-SESS trail_sp=0|1, Regel 9: nur die Zahl). */
+    @Volatile var trailingSpaceCommitted: Boolean = false
+        private set
 
     private fun window() = PcmWindow(pcm.copyOf(totalSamples), sampleRateHz)
 
     companion object {
         /**
-         * ASR_CONTRACT.md §4.4: Mindest-Audio-Länge für Partials.
-         * V12: aus der EINEN Konfig-Quelle (AsrThreadConfig, S12b Hebel 2) statt
-         * eigener Konstante — Default 2000 ms ⇒ 2,0 s (Verhalten identisch).
+         * ASR_CONTRACT.md §4.4: minimum audio length for partials.
+         * V12: from the ONE config source (AsrThreadConfig, S12b lever 2) instead of
+         * its own constant — default 2000 ms ⇒ 2.0 s (behavior identical).
          */
         val MIN_AUDIO_SECONDS_PARTIALS: Double =
             de.voicekeyboard.asr.AsrThreadConfig.DEFAULT.hypothesisMinIntervalMs / 1000.0
-        /** F21: Takt-Klammern aus der EINEN Konfig-Quelle (AsrThreadConfig, Hebel 2). */
+        /** F21: pacing clamps from the ONE config source (AsrThreadConfig, lever 2). */
         val PACE_BASE_MS: Long = de.voicekeyboard.asr.AsrThreadConfig.DEFAULT.decodePaceBaseMs
         val PACE_MAX_MS: Long = de.voicekeyboard.asr.AsrThreadConfig.DEFAULT.decodePaceMaxMs
         private const val EDITOR_SYNC_TIMEOUT = "editor_sync_timeout"
-        /** F17b/C2: Deckel des Decode-Stichprobenrings (wächst nie darüber). */
+        /** F17b/C2: cap of the decode sample ring (never grows beyond it). */
         private const val DECODE_SAMPLE_CAP = 64
         private const val ASR_PARTIAL_ERROR = "asr_partial_error"
         private const val ASR_FINAL_ERROR = "asr_final_error"

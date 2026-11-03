@@ -1,147 +1,145 @@
-# FINAL REVIEW M8 – Endverdict zur Sideload-Übergabe
+# FINAL REVIEW M8 – Final verdict on the sideload handover
 
-**Datum:** 28.10.2026  
-**Verantwortung:** Design- und Freigabeentscheidung auf Basis vorliegender Evidenz, kein neuer Gerätejob.  
-**Verdikt: Freigabe zum Sideload an den Nutzer zur persönlichen Erprobung von v0.1.0.**
+**Date:** 28.10.2026
+**Responsibility:** Design and release decision based on the available evidence, no new device job.
+**Verdict: Release for sideload to the user for personal evaluation of v0.1.0.**
 
-Die vier in M7 bestätigten P1 werden als erledigt akzeptiert. Die offenen Punkte
-L-01/UI-01 und L-03 sind **P2 und nicht übergabeblockierend**. L-01 muss nicht vor
-der Übergabe repariert werden. Die Freigabe ist keine Zusicherung einer vollständig
-auf physischem GrapheneOS geprüften, uneingeschränkt alltagstauglichen Diktierlösung.
+The four P1s confirmed in M7 are accepted as resolved. The open points
+L-01/UI-01 and L-03 are **P2 and not handover-blocking**. L-01 does not have to be fixed before
+the handover. This release is not an assurance of a fully tested, physically verified on
+GrapheneOS, unrestrictedly everyday-usable dictation solution.
 
-## 1. Beweismaßstab und überprüftes Artefakt
+## 1. Standard of evidence and the verified artifact
 
-Ich habe `docs/REVIEW_STAGE8_UI.md` vollständig gelesen, die sechs unten genannten
-Screenshots selbst angesehen und bestehende Quellen punktuell ausschließlich lesend
-abgeglichen. Keine adb-Nutzung, kein Gradle/Build, kein Commit und keine
-Code-/Assetänderung. Einzige neu erstellte Projektdatei ist dieser Bericht.
+I read `docs/REVIEW_STAGE8_UI.md` in full, looked at the six screenshots named below myself,
+and spot-checked existing sources purely by reading. No adb use, no Gradle/build, no commit
+and no code/asset changes. The only newly created project file is this report.
 
-Die Übergabe berichtet zusätzlich 237 Unit-Tests ohne Fehler, 6/6 Instrumented-Tests
-mit echtem Engine-WAV-Lauf und Golden-Endtext sowie eine maschinelle
-15/15-Sprachenstichprobe. Diese Ergebnisse akzeptiere ich als **Orchestrator-Protokoll**;
-ich habe die Tests hier nicht erneut ausgeführt und behaupte keine eigene Sichtung
-sämtlicher Rohlogs. Gleiches gilt für die Prefs-Ablesungen und die protokollierte
-Symbol-Umschaltfolge. Der DeepSeek-Review meldet 0 P0 / 0 P1 / 1 P2 im UI-Prüfumfang;
-das ist ein zusätzlicher Befund, keine vollständige System-/Hardwarezertifizierung.
+The handover additionally reports 237 unit tests without failures, 6/6 instrumented tests
+with a real engine WAV run and golden final text, plus a machine
+15/15-language sample. I accept these results as an **orchestrator protocol**;
+I did not re-run the tests here and do not claim my own inspection
+of all raw logs. The same applies to the prefs readings and the logged
+symbol toggle sequence. The DeepSeek review reports 0 P0 / 0 P1 / 1 P2 within its UI
+scope; that is an additional finding, not a complete system/hardware certification.
 
-Das freigegebene lokale Artefakt wurde von mir **read-only** mit `stat` und
-`sha256sum` nachgeprüft:
+The released local artifact was re-verified by me **read-only** with `stat` and
+`sha256sum`:
 
-| Merkmal | Verbindlicher Wert |
+| Feature | Binding value |
 |---|---|
-| Datei | `dist/voice-keyboard-0.1.0.apk` |
-| Größe | **81 148 054 Byte** |
+| File | `dist/voice-keyboard-0.1.0.apk` |
+| Size | **81,148,054 bytes** |
 | SHA-256 | **54c74a45280aaa7a60549add2f5c5b25d08d88b60b1eb762aac4481c124abd8f** |
-| Download | HTTP 200, `Content-Disposition: attachment` und Range 206 laut Orchestrator; hier nicht neu abgerufen |
+| Download | HTTP 200, `Content-Disposition: attachment` and Range 206 per the orchestrator; not re-fetched here |
 
-Die Freigabe gilt genau diesem Hash, nicht beliebigen späteren Builds. Die
-Hashprüfung identifiziert die Datei; sie ersetzt keine unabhängige Signaturprüfung.
+The release applies to exactly this hash, not to arbitrary later builds.
+The hash check identifies the file; it does not replace an independent signature check.
 
-**ANNAHME:** Der Orchestrator hat die angeführten funktionalen Ergebnisse dem
-entsprechenden aktuellen Implementierungsstand dieses dist-Artefakts zugeordnet.
-Screenshots allein beweisen diese Build-Zuordnung nicht. Es liegt keine Meldung
-über einen abweichenden oder nachträglich funktional geänderten dist-Stand vor.
+**ASSUMPTION:** The orchestrator has attributed the cited functional results to the
+corresponding current implementation state of this dist artifact.
+Screenshots alone do not prove this build attribution. There is no report
+of a deviating or subsequently functionally changed dist state.
 
-## 2. Entscheidung über die vier früheren P1
+## 2. Decision on the four former P1s
 
-| Früherer P1 | Status | Genannter Beweis und eigene Prüfung | Trägt der Beweis für mich? |
+| Former P1 | Status | Named evidence and own verification | Does the evidence hold for me? |
 |---|---|---|---|
-| **P1-01 – Sprachwechsel ohne Wirkung** | **erledigt** | Selbst angesehen: `/tmp/m8b_de.png` zeigt „Deutsch aktiv“, 11 Tasten in Reihe 1 einschließlich ü und DE-QWERTZ; `/tmp/m8b_en2.png` zeigt „English (US) aktiv“, 10 Tasten und z in Reihe 3. Laut Orchestrator wechselt ein Globus-Tap auch `vk_layout/current_language` de-de ⇄ en-us. 15/15 Geräte-Stichproben liefern je Sprache das erwartete erste Zeichen, darunter FR a, EL ς, RU й. Setup mit 15 Checkboxen, Mindestanzahl und Aufnahmeguard sind umgesetzt laut Übergabe. | **Ja.** Sichtbarer Layoutwechsel plus berichtete Persistenz und reale Zeicheneingabe beheben den früheren unerreichbaren Sprachwechsel. Ein Zeichen je Sprache beweist nicht deren gesamte sprachliche Qualität; die Stichprobe ist kein Volltest aller Tasten. |
-| **P1-02 – Caps-Doppeltipp ohne Wirkung** | **erledigt** | `/tmp/m8a_caps.png` selbst angesehen: Feld **QwQW**, Großbuchstabentafel und grün markiertes Caps-Symbol. Orchestrator-Sequenz: einfacher Shift q/w → Qw, Doppeltipp → QwQW. Lesender Codeabgleich bestätigt Doppel-Tipp-Zweig vor Abschalt-Zweig, `DOUBLE_TAP_MS=350`. | **Ja.** Der vormals reproduzierte zweite-Tap-Abschaltfehler ist mit sichtbarer fortgesetzter Großschreibung widerlegt. |
-| **P1-03 – symbolsShift unerreichbar** | **erledigt** | Orchestrator-Geräteprotokoll: **2 → 2² → 2²2** bei zweimaligem Shift. Laut T3 sind alle 30 Ebenen (15 × symbols/symbolsShift) auf `id:shift`, `label:⇧`, `value:shift` korrigiert. Lesender Abgleich zeigt Umschaltpfad für `KeyActions.SHIFT`; UI-Review bestätigt die Korrektur. Hier wurde kein separat benannter Symbol-Screenshot übergeben. | **Ja, auf Basis des berichteten Geräteprotokolls plus Implementierungsreview.** Nicht als selbst beobachtete neue adb-Messung ausgegeben. Die Zeichenfolge belegt beide Richtungen, nicht bloß eine geänderte Beschriftung. |
-| **P1-04 – Emoji-Aktion ohne brauchbaren Bedienweg** | **erledigt** | `/tmp/p1_emoji.png` und `/tmp/v2_probe.png` selbst angesehen: Status, Emoji-Raster, **„Gesichter 1/2“**, vollbreiter nativer **„Zur Tastatur“**-Button, keine Keyboard-Unterreihe darunter. `/tmp/v2_closed.png` zeigt wieder die vollständige Vier-Reihen-Tastatur ohne Overlayreste. Das anschließende z im Feld ist als Orchestrator-Eingabebeobachtung berichtet; das gelesene closed-Bild allein zeigt diesen Text nicht. Service-Leseprüfung bestätigt den bestehenden `onEmojiSelected → onTextInput → commitText(text,1)`-Pfad und die Aufnahmeguards; UI-Review bestätigt den nativen Rückweg. | **Ja, für den früheren fehlenden Panel-/Rückweg.** Kein weiterer Overlay-Trick, sondern der entschiedene V2-Mechanismus mit eigenem Rückbutton. Vollständiges Emoji-Rendering und Einfügeverhalten auf dem physischen Zielgerät bleiben Restpunkt R7, nicht pauschal „alles Emoji getestet“. |
+| **P1-01 – language switch without effect** | **resolved** | Looked at myself: `/tmp/m8b_de.png` shows "Deutsch aktiv", 11 keys in row 1 including ü and DE-QWERTZ; `/tmp/m8b_en2.png` shows "English (US) aktiv", 10 keys and z in row 3. Per the orchestrator, a globe tap also switches `vk_layout/current_language` de-de ⇄ en-us. 15/15 device samples deliver the expected first character per language, including FR a, EL ς, RU й. Setup with 15 checkboxes, minimum count and recording guard are implemented per the handover. | **Yes.** The visible layout switch plus the reported persistence and real character input fix the formerly unreachable language switch. One character per language does not prove its entire linguistic quality; the sample is not a full test of all keys. |
+| **P1-02 – caps double-tap without effect** | **resolved** | `/tmp/m8a_caps.png` looked at myself: field **QwQW**, uppercase board and green-highlighted caps symbol. Orchestrator sequence: single shift q/w → Qw, double-tap → QwQW. A read-only code comparison confirms the double-tap branch before the disable branch, `DOUBLE_TAP_MS=350`. | **Yes.** The previously reproduced second-tap disable failure is refuted by the visibly continued uppercase. |
+| **P1-03 – symbolsShift unreachable** | **resolved** | Orchestrator device protocol: **2 → 2² → 2²2** on two shift presses. Per T3, all 30 layers (15 × symbols/symbolsShift) are corrected to `id:shift`, `label:⇧`, `value:shift`. A read-only comparison shows the switching path for `KeyActions.SHIFT`; the UI review confirms the correction. No separately named symbol screenshot was handed over here. | **Yes, based on the reported device protocol plus implementation review.** Not claimed as a newly observed adb measurement of my own. The character sequence proves both directions, not merely a changed label. |
+| **P1-04 – emoji action without a usable operating path** | **resolved** | `/tmp/p1_emoji.png` and `/tmp/v2_probe.png` looked at myself: status, emoji grid, **"Gesichter 1/2"**, a full-width native **"Zur Tastatur"** button, no keyboard sub-row underneath. `/tmp/v2_closed.png` shows the complete four-row keyboard again without overlay remnants. The subsequent z in the field is reported as an orchestrator input observation; the read closed image alone does not show this text. A service read-check confirms the existing `onEmojiSelected → onTextInput → commitText(text,1)` path and the recording guards; the UI review confirms the native return path. | **Yes, for the formerly missing panel/return path.** No further overlay trick, but the decided V2 mechanism with its own back button. Complete emoji rendering and insertion behavior on the physical target device remain point R7, not categorically "all emoji tested". |
 
-**Zählung:** Von den vier früheren bestätigten P1 sind **4 erledigt, 0 offen**.
-In der vorgelegten Evidenz ist kein neuer bestätigter P0/P1 enthalten. Nicht geprüfte
-Hardwarebereiche sind Unsicherheiten und keine automatisch bestandenen Tests.
+**Count:** Of the four formerly confirmed P1s, **4 are resolved, 0 open**.
+The presented evidence contains no new confirmed P0/P1. Unchecked
+hardware areas are uncertainties and not automatically passed tests.
 
-### Korrigierte Geometrieeinordnung
+### Corrected geometry classification
 
-Die frühere „eine Zeile zu hoch“-Meldung wurde vom Orchestrator als Ablesefehler
-zurückgenommen. Gemeldete Trefferrechtecke und der UI-Review sprechen für dieselbe
-Modellbasis in Zeichnung und Hit-Test; ich halte den alten Verdacht daher **nicht**
-als bestätigten Defekt weiter offen. Ich habe keine neue Touchvermessung durchgeführt.
+The earlier "one row too high" report was withdrawn by the orchestrator as a reading
+error. The reported hit rectangles and the UI review speak for the same model basis
+in drawing and hit testing; I therefore do **not** keep the old suspicion open
+as a confirmed defect. I did not perform a new touch measurement.
 
-`pt-pt` hat **fünf** Zeilen und laut Messung 745 statt 630 px View-Höhe. Dafür sind
-andere Reihenpositionen korrekt; eine gegenüber DE/EN weiter oben liegende Taste
-ist allein kein Offsetfehler. Die 15-Sprachenstichprobe ist mit diesem Sonderfall
-vereinbar. V2 darf weiterhin keine aus einer pauschalen Vier-Reihen-Annahme
-abgeleitete Overlay-Geometrie verwenden.
+`pt-pt` has **five** rows and, per measurement, 745 instead of 630 px view height. Other
+row positions are correct for it; a key positioned higher than on DE/EN alone is not an
+offset error. The 15-language sample is compatible with this special case. V2 still must
+not use any overlay geometry derived from a blanket four-row assumption.
 
-## 3. Warum die Freigabe gegenüber M7 jetzt möglich ist
+## 3. Why the release is possible now compared to M7
 
-M7 lehnte einen Build mit vier tatsächlich ausgefallenen zugesagten Tastaturfunktionen
-ab. Diese Funktionen sind nun erreichbar beziehungsweise der frühere Fehlerfall ist
-mit nachvollziehbarer Geräte-/Review-Evidenz behoben. Eine deutsche Space-Beschriftung
-ist nicht gleich schwerwiegend wie eine nicht funktionierende Sprachwahl oder ein
-Panel ohne Rückweg. Deshalb wäre ein Festhalten am alten P1-Verdikt sachlich falsch.
+M7 rejected a build with four actually failed promised keyboard functions.
+These functions are now reachable, respectively the former failure is fixed with
+comprehensible device/review evidence. A German space label is not as serious as a
+non-working language switch or a panel without a return path. Holding on to the old
+P1 verdict would therefore be factually wrong.
 
-Die physische Audio-/GrapheneOS-Abnahme war in M7 ausdrücklich als Freigabegate für
-eine umfassend geprüfte Auslieferung benannt. Dieses Gate erkläre ich **nicht** für
-bestanden: Ich akzeptiere jetzt ausdrücklich den engeren Umfang **persönliche
-Sideload-Erprobung mit offengelegten Lücken**. Das ist eine bewusste Risikoannahme,
-keine nachträgliche Umdeutung von Emulator-WAV-Tests zu Mikrofontests.
+The physical audio/GrapheneOS acceptance was expressly named in M7 as a release gate
+for a comprehensively tested delivery. I do **not** declare this gate passed: I now
+expressly accept the narrower scope **personal sideload evaluation with disclosed
+gaps**. This is a conscious risk acceptance, not a retroactive reinterpretation of
+emulator WAV tests into microphone tests.
 
-Die persönliche APK-Übergabe braucht vorab weder einen neuen Gerätejob noch einen
-L-01-Fix. Eine Bewerbung als vollständig auf GrapheneOS/Headsets geprüft oder als
-zuverlässiger Ersatz für die bisherige Tastatur wäre von dieser Freigabe **nicht**
-gedeckt. Bekannte Datenverluste, fortgesetzte Aufnahme nach Ausblenden oder ein neuer
-P0/P1 würden das Urteil ändern; solche Fehler sind nicht mit „eigenes Risiko“ abgedeckt.
+The personal APK handover requires neither a new device job nor an
+L-01 fix beforehand. Marketing it as fully tested on GrapheneOS/headsets or as
+a reliable replacement for the previous keyboard is **not**
+covered by this release. Known data losses, continued recording after hiding, or a new
+P0/P1 would change the verdict; such errors are not covered by "at your own risk".
 
-## 4. Ehrliche Restliste – genau acht Punkte
+## 4. Honest remainder list — exactly eight points
 
-Die Liste enthält **zwei bekannte P2** und **sechs Zielgeräte-/Testlücken**. Die
-Testlücken sind für die informierte persönliche Erprobung nicht blockierend, wohl
-aber vor einer uneingeschränkten Qualitätszusage an weitere Nutzer zu schließen.
+The list contains **two known P2s** and **six target-device/test gaps**. The
+test gaps are not blocking for informed personal evaluation, but must be closed
+before an unrestricted quality assurance toward other users.
 
-| Nr. | Offener Punkt | Einordnung / bremst diese Sideload-Freigabe? | Konkreter Abschlussnachweis |
+| No. | Open point | Classification / does it block this sideload release? | Concrete completion evidence |
 |---|---|---|---|
-| **R1** | **L-01/UI-01: Space heißt überall „Leer“** | **P2, nein.** Sichtbarer i18n-Mangel, keine ausgefallene Space-Eingabe. Vor Übergabe klar benennen; nicht als vollständig lokalisierte Oberfläche verkaufen. | `app/src/main/java/de/voicekeyboard/keyboard/KeyboardView.kt`, `displayLabel`: Layout-Label statt pauschal SPACE→Leer; anschließend EN „Space“/PT „Espaço“ sichtbar und Space fügt unverändert ein Leerzeichen ein. |
-| **R2** | **L-03: availableIds() kennt nur DE/EN** | **P2, nein für die fest ausgelieferten 15 Sprachen.** Der kanonische Sprachzyklus und direkte Assetladung funktionieren laut 15/15-Probe unabhängig davon. Dynamische JSON-Erweiterbarkeit bleibt unvollständig; neue Assets dürfen noch nicht als automatisch auffindbar zugesagt werden. | `app/src/main/java/de/voicekeyboard/layouts/LayoutRepository.kt`: Asset-Scan; Test zeigt alle 15 IDs und ein zulässiges zusätzliches Layout ohne neue Hardcode-Liste. |
-| **R3** | Echtes internes Mikrofon auf physischem GrapheneOS | **Nicht beweisbar auf diesem Emulator; nein für Erprobung.** WAV-Engine-Erfolg beweist weder Aufnahmequelle noch reale Berechtigungs-/FGS-/Privacy-Integration oder ARM64-Latenz. | Auf dem Zielgerät Aufnahme durch Halten, Ende bei UP, verständliche Fehler bei Privacy-Entzug, realer Feldtext; Offlinebetrieb nach Modelleinrichtung und Neustart sowie Latenz/thermisches Verhalten dokumentieren. |
-| **R4** | Headsets und insbesondere Bluetooth-Routenwechsel | **Nicht geprüft; nein für Erprobung.** Erfolgreiches Internmikrofon wäre kein BT-Beweis. | Kabel-/USB- und BT-Mikrofon jeweils als tatsächliche Quelle belegen; Trennen/Wechsel während Aufnahme beendet kontrolliert oder meldet Fehler, statt heimlich auf anderes Mic umzuschalten. |
-| **R5** | Diktat beim App-/Editorwechsel bzw. im Hintergrund | **Nicht geprüft; nein für Erprobung, sicherheitsrelevante Testpriorität.** Gewollte Hintergrundaufnahme ist kein Produktziel. | Ziel-App wechseln, IME verbergen und Bildschirm sperren: Mikrofon wird freigegeben, keine weitere Aufnahme und kein verspätetes Commit in einen fremden Editor. Ein Verstoß wäre P1/P0 je Auswirkung und Freigabewiderruf. |
-| **R6** | Langer real gesprochener Satz mit Live-/Finalkorrektur | **Nicht durch den genannten Golden-Endtext vollständig belegt; nein für Erprobung.** Endtextgleichheit allein beweist nicht jede Zwischenrevision oder alle Fremdtextschutzfälle. | Längerer Satz mit Pause, Live-Tail und Finalkorrektur im Ziel-App-Feld; danach Cursor extern bewegen: keine Löschung vor eigenem Bereich und keine Ausgabe nach Besitzverlust; vorhandenen Text erhalten. |
-| **R7** | Emoji-Glyphen und tatsächliches Einfügen auf dem Zielgerät | **Nur teilweise durch Emulatorbilder belegt; nein für Erprobung.** Die angesehenen Glyphen sind sichtbar; daraus folgt keine vollständige Prüfung aller 384 Einträge/Fonts/Größen auf GrapheneOS. | Kategorien/Seiten durchsehen, repräsentative Emoji zwischen Alttext einfügen, Cursorposition und unveränderten Alttext prüfen, Rückbutton tippen und weiter schreiben; keine abgeschnittenen Glyphen, kein Fokusverlust, PT-Fünfzeilen-Rückkehr gesondert ansehen. |
-| **R8** | TalkBack / barrierefreie Erreichbarkeit | **Nicht geprüft; nein für die nicht als barrierefrei abgenommene Erprobung.** Ein sichtbarer Button oder Accessibility-Code beweist keine brauchbare Screenreader-Bedienung. | Emoji öffnen, Kategorie/Seite verstehen, Emoji auswählen, „Zur Tastatur“ finden und auslösen, normale Tastatur bedienen; sinnvolle Ansagen, Reihenfolge und kein Fokusfang. |
+| **R1** | **L-01/UI-01: space is called "Leer" everywhere** | **P2, no.** Visible i18n deficiency, not a failed space input. Name it clearly before the handover; do not sell it as a fully localized surface. | `app/src/main/java/de/voicekeyboard/keyboard/KeyboardView.kt`, `displayLabel`: layout label instead of blanket SPACE→Leer; afterwards EN "Space"/PT "Espaço" visible and space still inserts a space. |
+| **R2** | **L-03: availableIds() knows only DE/EN** | **P2, no for the 15 fixed shipped languages.** The canonical language cycle and direct asset loading work independently of it per the 15/15 probe. Dynamic JSON extensibility remains incomplete; new assets must not yet be promised as automatically discoverable. | `app/src/main/java/de/voicekeyboard/layouts/LayoutRepository.kt`: asset scan; a test shows all 15 IDs and an admissible additional layout without a new hard-coded list. |
+| **R3** | Real internal microphone on physical GrapheneOS | **Not provable on this emulator; no for evaluation.** WAV engine success proves neither the recording source nor the real permission/FGS/privacy integration or ARM64 latency. | On the target device: recording by holding, end on UP, comprehensible errors on privacy revocation, real field text; document offline operation after model setup and restart as well as latency/thermal behavior. |
+| **R4** | Headsets and especially Bluetooth route switches | **Not checked; no for evaluation.** A successful internal microphone is not BT proof. | Evidence cable/USB and BT microphones each as the actual source; disconnecting/switching during recording ends in a controlled way or reports an error, instead of secretly switching to another mic. |
+| **R5** | Dictation on app/editor switch or in the background | **Not checked; no for evaluation, safety-relevant test priority.** Wanted background recording is not a product goal. | Switch the target app, hide the IME and lock the screen: the microphone is released, no further recording and no delayed commit into a foreign editor. A violation would be P1/P0 depending on impact and a revocation of the release. |
+| **R6** | Long real spoken sentence with live/final correction | **Not fully proven by the named golden final text; no for evaluation.** Final-text equality alone does not prove every intermediate revision or all foreign-text protection cases. | A longer sentence with a pause, live tail and final correction in the target app field; then move the cursor externally: no deletion before the own region and no output after loss of ownership; existing text preserved. |
+| **R7** | Emoji glyphs and actual insertion on the target device | **Only partially evidenced by emulator images; no for evaluation.** The glyphs I looked at are visible; this does not imply a complete check of all 384 entries/fonts/sizes on GrapheneOS. | Browse categories/pages, insert representative emojis between old text, check cursor position and unchanged old text, tap the back button and keep writing; no truncated glyphs, no focus loss, check the PT five-row return separately. |
+| **R8** | TalkBack / accessible operability | **Not checked; no for the evaluation not accepted as accessible.** A visible button or accessibility code does not prove usable screen reader operation. | Open the emoji panel, understand category/page, select an emoji, find and trigger "Zur Tastatur", operate the normal keyboard; sensible announcements, ordering and no focus trap. |
 
-L-01 und L-03 sind damit **zwei unterschiedliche P2**, auch wenn der nachgeholte
-UI-Review nur L-01 als Fund seines engeren Prüfumfangs zählt. Ich addiere daraus
-keinen neuen P1. R3–R8 bleiben tatsächlich ungeprüft; „auf eigenes Risiko“ macht
-sie weder grün noch bedeutungslos.
+L-01 and L-03 are thereby **two distinct P2s**, even though the follow-up
+UI review counts only L-01 as a finding within its narrower scope. I do not add
+a new P1 from this. R3–R8 remain genuinely unchecked; "at your own risk" makes
+them neither green nor meaningless.
 
-## 5. Darf die APK jetzt übergeben werden?
+## 5. May the APK be handed over now?
 
-**Ja.** Die APK mit dem oben bestätigten Hash darf dem Nutzer jetzt zum Sideload
-übergeben werden. **Ich fordere L-01 nicht vorher.** Ein kurzfristiger Label-Fix
-wäre willkommen, rechtfertigt aber keinen weiteren ungeprüften Build vor dieser
-Übergabe. Wird die APK dennoch geändert, gilt die Hashbindung dieses Urteils nicht
-mehr automatisch für das neue Artefakt.
+**Yes.** The APK with the hash confirmed above may be handed to the user for sideloading
+now. **I do not demand L-01 beforehand.** A short-term label fix
+would be welcome, but does not justify another untested build before this
+handover. If the APK is nevertheless changed, the hash binding of this verdict no longer
+applies automatically to the new artifact.
 
-Der bloße Satz „für eigenes Risiko, ungeprüfte Areas“ wäre zu unspezifisch. Erlaubte,
-ehrliche Übergabeformulierung:
+The bare phrase "at your own risk, unchecked areas" would be too unspecific. Permitted,
+honest handover wording:
 
-> „Voice Keyboard 0.1.0 ist für deine persönliche Sideload-Erprobung freigegeben.
-> Tastaturfunktionen wurden am Android-16-Emulator geprüft, die lokale Engine mit WAV.
-> Echtes GrapheneOS-Mikrofon, Headsets/Bluetooth, Stoppen bei App-/Hintergrundwechsel,
-> lange Live-Korrekturen, vollständige Emoji-Darstellung und TalkBack sind noch nicht
-> auf deinem Gerät abgenommen. Die Leertaste heißt derzeit auch in anderen Sprachen
-> ‚Leer‘; zusätzliche JSON-Layouts werden noch nicht dynamisch aufgelistet.
-> Behalte zunächst eine andere Tastatur als Rückfall und teste Diktat zuerst in einem
-> unkritischen leeren Feld, nicht direkt in wichtigen oder sensiblen Texten.“
+> "Voice Keyboard 0.1.0 is released for your personal sideload evaluation.
+> Keyboard functions were tested on the Android 16 emulator, the local engine with WAV.
+> Real GrapheneOS microphone, headsets/Bluetooth, stopping on app/background switch,
+> long live corrections, complete emoji rendering and TalkBack have not yet been
+> accepted on your device. The space bar is currently called 'Leer' in other languages
+> too; additional JSON layouts are not yet listed dynamically.
+> Keep another keyboard as a fallback for now and first test dictation in an
+> uncritical empty field, not directly in important or sensitive texts."
 
-Kein zusätzlicher Gerätebeweis ist für **diesen begrenzten Übergabeentscheid** nötig;
-daher wird hier keine neue adb-Befehlsfolge angefordert. Für eine spätere umfassende
-Abnahme sind R3–R8 als eigenständige Geräteprüfungen zu protokollieren.
+No additional device evidence is needed for **this limited handover decision**;
+therefore no new adb command sequence is requested here. For a later comprehensive
+acceptance, R3–R8 are to be logged as standalone device tests.
 
-## 6. Abschlussprotokoll
+## 6. Closing protocol
 
-**FERTIG:** Vier alte P1 erledigt; Freigabe zum persönlichen Sideload erteilt; zwei P2 nicht blockierend; genau acht Restpunkte einschließlich ehrlicher Hardware-/Accessibility-Lücken dokumentiert.
+**DONE:** Four old P1s resolved; release for personal sideloading granted; two P2s not blocking; exactly eight remaining points including honest hardware/accessibility gaps documented.
 
-**OFFEN:** R1–R8. Insbesondere physisches GrapheneOS-/Audioverhalten nicht als bestanden ausgeben.
+**OPEN:** R1–R8. In particular, do not present physical GrapheneOS/audio behavior as passed.
 
-**ANNAHME:** Orchestrator-Ergebnisse gehören zum aktuellen dist-Implementierungsstand; keine neuen gegenläufigen P0/P1-Beweise liegen vor.
+**ASSUMPTION:** Orchestrator results belong to the current dist implementation state; no new contradicting P0/P1 evidence exists.
 
-**FREIGABE_NOETIG:** Keine zusätzliche Werkzeugfreigabe für dieses Urteil; keine Gerätebedienung oder Codearbeit vorgenommen.
+**RELEASE_REQUIRED:** No additional tool release for this verdict; no device operation or code work performed.
 
-**VERIFIKATION:** Sechs vorhandene Screenshots selbst angesehen, UI-Review vollständig gelesen, relevante bestehende Codepfade lesend abgeglichen, APK-Größe und SHA-256 selbst bestätigt; Tests/Prefs-/Touchprotokolle als übergebene Evidenz klar gekennzeichnet.
+**VERIFICATION:** Six existing screenshots looked at myself, UI review read in full, relevant existing code paths compared by reading, APK size and SHA-256 confirmed myself; tests/prefs/touch protocols clearly marked as handed-over evidence.

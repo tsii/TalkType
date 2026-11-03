@@ -7,41 +7,41 @@ import de.voicekeyboard.ime.VoiceKeyboardService
 import java.io.File
 
 /**
- * AP1 (docs/PLAN_C2_FABLE_R2.md §1.2): Debug-Hooks für die C2-Simulation —
- * LIVE gelesene System-Properties (adb shell setprop; NICHT persistiert,
- * der Prozess startet je Lauf frisch). Debug-Sourceset NUR — im Release wird
- * die identische Signatur aus dem release-Sourceset geliefert (leerer Stub,
- * Paarung wie LiteRtBridgeSetup — KEINE Reflection: main ruft direkt auf).
+ * AP1 (docs/PLAN_C2_FABLE_R2.md §1.2): debug hooks for the C2 simulation —
+ * LIVE-read system properties (adb shell setprop; NOT persisted,
+ * the process starts fresh per run). Debug source set ONLY — in the release
+ * the identical signature is provided from the release source set (empty stub,
+ * pairing like LiteRtBridgeSetup — NO reflection: main calls directly).
  *
- *  - debug.vk.fakewav=<pfad>   → debugAudioSourceFactory = FakeWavAudioSource(file)
- *    (Volldurchlauf-Defaults = „throughput"-Szenario; der Fake liest die WAV
- *    vollständig ein und liefert sie zeitgetreu).
+ *  - debug.vk.fakewav=<path>   → debugAudioSourceFactory = FakeWavAudioSource(file)
+ *    (full-run defaults = „throughput“ scenario; the fake reads the WAV
+ *    completely and delivers it time-faithfully).
  *  - debug.vk.engine=real | stub:<alpha_ms_pro_s>:<base_ms> → debugEngineFactory
- *    (real/leer = echte ParakeetAsrEngine, wie bisher).
- *  - debug.vk.export_file=1   → jeder 🐞-Export wird ZUSÄTZLICH nach
- *    files/debug_export.txt geschrieben (identischer Inhalt; Pull per
+ *    (real/empty = real ParakeetAsrEngine, as before).
+ *  - debug.vk.export_file=1   → every 🐞 export is ADDITIONALLY written to
+ *    files/debug_export.txt (identical content; pull via
  *    adb exec-out run-as de.voicekeyboard cat files/debug_export.txt).
  *
- * Regel 9: Properties tragen nur Pfade/Zahlen; Export-Inhalt bleibt der
- * sanitisierte 🐞-Text unverändert.
+ * Rule 9: properties carry only paths/numbers; the export content stays the
+ * sanitized 🐞 text, unchanged.
  */
 object DebugHooks {
 
     private const val TAG = "VK-DBGHOOK"
 
-    /** debug.vk.export_file=1 — beim apply gelesen; Exporte schreiben mit. */
+    /** debug.vk.export_file=1 — read at apply; exports write along. */
     @Volatile private var exportFileEnabled = false
 
     /**
-     * Wird vom Service VOR jedem Coordinator-Bau aufgerufen (onMicDown) —
-     * die Properties gelten damit je SESSION (force-stop zwischen Läufen,
-     * Skript §1.3 Schritt 4).
+     * Called by the service BEFORE every coordinator build (onMicDown) —
+     * the properties thus apply per SESSION (force-stop between runs,
+     * script §1.3 step 4).
      */
     fun apply(service: VoiceKeyboardService) {
         try {
             val fakewav = prop("debug.vk.fakewav")
             if (fakewav != null) {
-                Log.i(TAG, "fakewav hook active") // kein Pfadinhalt im Log
+                Log.i(TAG, "fakewav hook active") // no path content in the log
                 val factory: () -> de.voicekeyboard.audio.AudioSource =
                     { FakeWavAudioSource(File(fakewav)) }
                 service.debugAudioSourceFactory = factory
@@ -64,16 +64,16 @@ object DebugHooks {
             exportFileEnabled = prop("debug.vk.export_file") == "1"
             if (exportFileEnabled) Log.i(TAG, "export_file hook active")
         } catch (t: Throwable) {
-            // Debug-Hook darf den Start NIEMALS brechen — Produkt bleibt unberührt.
+            // The debug hook must NEVER break startup — the product stays untouched.
             Log.w(TAG, "hook apply failed: ${t.javaClass.simpleName}")
         }
     }
 
     /**
-     * Export-Hook (Aufrufer: VoiceKeyboardService.onDebugInfoRequested, NACH
-     * dem regulären Collector-Export) — schreibt den IDENTISCHEN 🐞-Text
-     * zusätzlich in files/debug_export.txt (überschreibt je Export; das Skript
-     * pullt nach jedem Lauf).
+     * Export hook (caller: VoiceKeyboardService.onDebugInfoRequested, AFTER
+     * the regular collector export) — writes the IDENTICAL 🐞 text
+     * additionally to files/debug_export.txt (overwrites per export; the script
+     * pulls after every run).
      */
     fun onExport(service: VoiceKeyboardService, text: String) {
         if (!exportFileEnabled) return
@@ -85,7 +85,7 @@ object DebugHooks {
         }
     }
 
-    /** stub:<alpha_ms_pro_s>:<base_ms> — z. B. stub:38.5:0, stub:80:50, stub:150:0. */
+    /** stub:<alpha_ms_pro_s>:<base_ms> — e.g. stub:38.5:0, stub:80:50, stub:150:0. */
     private fun parseStub(spec: String): LatencyStubEngine? {
         if (!spec.startsWith("stub:")) return null
         val rest = spec.removePrefix("stub:")
@@ -97,9 +97,9 @@ object DebugHooks {
     }
 
     /**
-     * SystemProperties.get über die Greylist-Reflexion (hidden API, für
-     * adb-setprop lesbare Properties; Debug-BuildsOnly). Fehlgeschlagene
-     * Lesung = Property abwesend — kein Fehler nach außen.
+     * SystemProperties.get via the greylist reflection (hidden API, for
+     * properties readable by adb setprop; debug builds only). A failed
+     * read = property absent — no error to the outside.
      */
     private fun prop(name: String): String? = try {
         @Suppress("PrivateApi")

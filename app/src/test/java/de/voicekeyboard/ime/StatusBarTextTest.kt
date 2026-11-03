@@ -6,14 +6,14 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * F13a (B1, docs/STREAMING_FREEZE_ANALYSE.md): Reinlogische Textauswahl der
- * IME-Statuszeile — „starte Aufnahme…" ist TRANSIENT und darf weder sticky
- * gesetzt noch einen vorhandenen Fehler verdecken.
+ * F13a (B1, docs/STREAMING_FREEZE_ANALYSE.md): purely logical text selection
+ * of the IME status row — „starte Aufnahme…“ is TRANSIENT and must neither be
+ * set sticky nor cover an existing error.
  *
- * Klärheitsregel (fixiert): ein Fehler (sticky/visible) ist NEUER als der
- * transiente Text, wenn der Aufrufer `errorsNewerThanTransient = true` übergibt
- * (Zeitstempelvergleich beim Aufrufer) — dann gewinnt der Fehler, sonst der
- * transiente Text.
+ * Clarity rule (fixed): an error (sticky/visible) is NEWER than the transient
+ * text if the caller passes `errorsNewerThanTransient = true` (timestamp
+ * comparison at the caller) — then the error wins, otherwise the transient
+ * text.
  */
 class StatusBarTextTest {
 
@@ -49,107 +49,107 @@ class StatusBarTextTest {
         diagSuffix = diagSuffix,
     )
 
-    // 1. Starttext + laufende Aufnahme -> Aufnahmetext; NIE „starte…" nach dem 3. Aufruf.
+    // 1. start text + running recording -> recording text; NEVER „starte…“ after the 3rd call.
     @Test
-    fun `Starttext weicht der laufenden Aufnahme - nie wieder starte nach dem dritten Aufruf`() {
+    fun `start text yields to the running recording - never starte again after the third call`() {
         val first = StatusBarText.select(inputs(transientText = start, recording = false))
-        assertEquals(start, first.text) // vor dem Start ist der transiente Text korrekt
+        assertEquals(start, first.text) // before the start the transient text is correct
         val second = StatusBarText.select(inputs(transientText = start, recording = true))
-        assertEquals(recordingText, second.text) // Aufnahme verdrängt den Starttext
-        assertTrue("Service muss den transienten Text freigeben", second.transientConsumed)
-        // 3. Aufruf: transient ist weg (Service hat ihn gelöscht) — bleibt der Aufnahmetext
+        assertEquals(recordingText, second.text) // the recording displaces the start text
+        assertTrue("the service must release the transient text", second.transientConsumed)
+        // 3rd call: transient gone (the service deleted it) — the recording text remains
         val third = StatusBarText.select(inputs(recording = true))
         assertEquals(recordingText, third.text)
         assertFalse(third.text.contains(start))
     }
 
-    // 2. Starttext + vorhandener (neuerer) Fehler -> Fehler sichtbar.
+    // 2. start text + existing (newer) error -> error visible.
     @Test
-    fun `Starttext verdeckt keinen vorhandenen Fehler`() {
+    fun `start text covers no existing error`() {
         val r = StatusBarText.select(
             inputs(transientText = start, stickyError = "Berechtigung nötig", errorsNewerThanTransient = true),
         )
         assertEquals("Berechtigung nötig", r.text)
-        assertFalse(r.stickyConsumed) // Fehler bleibt bestehen (R-2)
+        assertFalse(r.stickyConsumed) // the error persists (R-2)
     }
 
-    // 3. Kleiner Fehler (visibleError) nach Aufnahmebeginn -> wird angezeigt.
+    // 3. small error (visibleError) after the recording start -> is displayed.
     @Test
-    fun `visibleError nach Aufnahmebeginn wird angezeigt obwohl der Starttext lief`() {
+    fun `visibleError after the recording start is displayed although the start text was running`() {
         val r = StatusBarText.select(
             inputs(transientText = start, visibleError = "Audio-Start fehlgeschlagen", errorsNewerThanTransient = true),
         )
         assertEquals("Audio-Start fehlgeschlagen", r.text)
-        assertTrue(r.transientConsumed) // Starttext ist erledigt
+        assertTrue(r.transientConsumed) // the start text is done
     }
 
-    // 4. stickyError bleibt bei reinem updateStatus() (ohne extra) erhalten (R-2).
+    // 4. stickyError survives a pure updateStatus() (without extra) (R-2).
     @Test
-    fun `stickyError bleibt bei reinem updateStatus erhalten`() {
+    fun `stickyError survives a pure updateStatus`() {
         val whileRecording = StatusBarText.select(inputs(stickyError = "Berechtigung nötig", recording = true))
         assertEquals("Berechtigung nötig", whileRecording.text)
         assertFalse(whileRecording.stickyConsumed)
         val atIdle = StatusBarText.select(inputs(stickyError = "Berechtigung nötig"))
-        assertEquals("Berechtigung nötig", atIdle.text) // ohne Erfolg bleibt er stehen
+        assertEquals("Berechtigung nötig", atIdle.text) // without success it stays
         assertFalse(atIdle.stickyConsumed)
     }
 
-    // 5. Erfolg (idle) löscht stickyError — bestehendes R-2b-Verhalten.
+    // 5. success (idle) clears stickyError — existing R-2b behavior.
     @Test
-    fun `Erfolg loescht stickyError`() {
+    fun `success clears stickyError`() {
         val r = StatusBarText.select(inputs(stickyError = "Berechtigung nötig", success = true))
         assertEquals(idle, r.text)
-        assertTrue("Aufrufer DARF stickyError löschen", r.stickyConsumed)
+        assertTrue("the caller MAY clear stickyError", r.stickyConsumed)
     }
 
-    // 6. transient-Text wird NICHT sticky: 5 Aufrufe später, laengere Aufnahme, ist er weg.
+    // 6. the transient text does NOT become sticky: 5 calls later, longer recording, it is gone.
     @Test
-    fun `transienter Text wird nicht sticky - nach fuenf Aufrufen ist er weg`() {
+    fun `transient text does not become sticky - after five calls it is gone`() {
         val r1 = StatusBarText.select(inputs(transientText = start))
         assertEquals(start, r1.text)
-        assertFalse("Starttext darf kein stickyError werden", r1.extraIsSticky)
+        assertFalse("the start text must not become a stickyError", r1.extraIsSticky)
         var last = r1
         repeat(5) {
-            last = StatusBarText.select(inputs(recording = true)) // Service: transient gelöscht
+            last = StatusBarText.select(inputs(recording = true)) // service: transient deleted
             assertEquals(recordingText, last.text)
         }
         assertFalse(last.text.contains(start))
         assertFalse(last.stickyConsumed)
     }
 
-    // Ergänzung: extra als FEHLER ist sticky; extra == transientText ist es NICHT.
+    // Addition: extra as an ERROR is sticky; extra == transientText is NOT.
     @Test
-    fun `extra ist nur sticky wenn es kein transienter Text ist`() {
+    fun `extra is only sticky if it is not a transient text`() {
         val error = StatusBarText.select(inputs(extra = "Fehler X", transientText = start))
-        assertTrue("Fehler-extra muss als sticky gekennzeichnet werden", error.extraIsSticky)
+        assertTrue("the error extra must be marked sticky", error.extraIsSticky)
         assertEquals("Fehler X", error.text)
         val startExtra = StatusBarText.select(inputs(extra = start, transientText = start))
-        assertFalse("Starttext-extra ist transient, NICHT sticky", startExtra.extraIsSticky)
+        assertFalse("the start-text extra is transient, NOT sticky", startExtra.extraIsSticky)
         assertEquals(start, startExtra.text)
     }
 
-    // F52 (PLAN_V0130 A3, 🐞: status_res): Art des gewählten Texts je Zweig —
-    // nur Codes/Ressourcen-Namen (Regel 9); RAW darf NIE aus select kommen
-    // (er ist der verbotene Rückfall, Assertion unten).
+    // F52 (PLAN_V0130 A3, 🐞: status_res): kind of the selected text per branch —
+    // codes/resource names only (rule 9); RAW must NEVER come out of select
+    // (it is the forbidden fallback, assertion below).
     @Test
-    fun `F52 kind je Zweig - RAW nie - statusResCode nur Codes`() {
-        // STARTING: transiente Startmeldung ohne Hint-Flag.
+    fun `F52 kind per branch - never RAW - statusResCode only codes`() {
+        // STARTING: transient start message without a hint flag.
         assertEquals(
             StatusKind.STARTING,
             StatusBarText.select(inputs(transientText = start)).kind,
         )
-        // HINT: derselbe transiente Kanal, aber mit Hint-Flag (F50a-Hint etc.).
+        // HINT: the same transient channel, but with the hint flag (F50a hint etc.).
         assertEquals(
             StatusKind.HINT,
             StatusBarText.select(inputs(transientText = "Loslassen vorgemerkt…", transientHint = true)).kind,
         )
-        // RECORDING ohne / DIAG mit Debug-Suffix (Strukturmarker, kein Inhalt).
+        // RECORDING without / DIAG with debug suffix (structure marker, no content).
         assertEquals(StatusKind.RECORDING, StatusBarText.select(inputs(recording = true)).kind)
         assertEquals(
             StatusKind.DIAG,
             StatusBarText.select(inputs(recording = true, diagSuffix = true)).kind,
         )
-        // FINALIZING / IDLE / ERROR (extra und visibleError).
+        // FINALIZING / IDLE / ERROR (extra and visibleError).
         assertEquals(StatusKind.FINALIZING, StatusBarText.select(inputs(finalizing = true)).kind)
         assertEquals(StatusKind.IDLE, StatusBarText.select(inputs()).kind)
         assertEquals(StatusKind.IDLE, StatusBarText.select(inputs(success = true)).kind)
@@ -158,8 +158,8 @@ class StatusBarTextTest {
             StatusKind.ERROR,
             StatusBarText.select(inputs(visibleError = "editor_sync_timeout")).kind,
         )
-        // RAW: darf aus select NIE kommen — Assertion über alle obigen Fälle
-        // hinaus: statusResCode ist die einzige Stelle, die RAW benennen kann.
+        // RAW: must NEVER come out of select — an assertion beyond all cases
+        // above: statusResCode is the only place that may name RAW.
         for (r in listOf(
             StatusBarText.select(inputs(transientText = start)),
             StatusBarText.select(inputs(recording = true)),
@@ -167,9 +167,9 @@ class StatusBarTextTest {
             StatusBarText.select(inputs()),
             StatusBarText.select(inputs(extra = "Fehler X")),
         )) {
-            assertTrue("RAW ist der nie erlaubte Rückfall", r.kind != StatusKind.RAW)
+            assertTrue("RAW is the never-allowed fallback", r.kind != StatusKind.RAW)
         }
-        // statusResCode: nur Codes, ERROR trägt den Ressourcen-Namen (Regel 9).
+        // statusResCode: codes only, ERROR carries the resource name (rule 9).
         assertEquals("starting", StatusBarText.statusResCode(StatusKind.STARTING))
         assertEquals("recording", StatusBarText.statusResCode(StatusKind.RECORDING))
         assertEquals("finalizing", StatusBarText.statusResCode(StatusKind.FINALIZING))

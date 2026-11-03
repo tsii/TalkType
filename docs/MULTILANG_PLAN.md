@@ -1,137 +1,159 @@
-# Plan: Mehrsprachiges Tippen über die Sprachgrenze (Autokorrektur zurückgestellt)
+# Plan: multilingual typing across the language boundary (autocorrect
+deferred)
 
-**Stand:** 2026-10-28 · **Rolle:** Plan (keine Umsetzung, kein Build, kein Code-Umbau)
-**Nutzerentscheidung desselben Tages:** Autokorrektur/Wortfindung wird **vorerst nicht**
-umgesetzt; dieser Plan liegt vollständig vor und wird erst auf Zuruf abgearbeitet.
+**Status:** 2026-10-28 · **Role:** plan (no implementation, no build, no code
+rework)
+**User decision of the same day:** autocorrect/word suggestion will **not** be
+implemented for now; this plan is fully prepared and will be worked on only
+on request.
 
-**Wunsch, wörtlich:** deutsch tippen **mit englischen Wörtern dazwischen** (und
-umgekehrt) — **ohne** Sprachumschaltung; bei mehreren ausgewählten Sprachen sollen
-Tippen *und* Korrektur **alle gewählten Sprachen gemeinsam** abdecken (alle 15).
+**Wish, verbatim:** type German **with English words in between** (and vice
+versa) — **without** switching the language; with several selected languages,
+typing *and* correction must cover **all chosen languages jointly** (all 15).
 
 ---
 
-## 1. Zerlegung in unabhängige Fähigkeiten (der Kern)
+## 1. Decomposition into independent capabilities (the core)
 
-Der Wunsch besteht aus **drei** Fähigkeiten, die technisch **nichts** miteinander zu tun
-haben. F1 ist ohne Wörterbuch möglich, F2 nicht, F3 ist eine andere Baustelle.
+The wish consists of **three** capabilities that technically have **nothing**
+to do with each other. F1 is possible without a dictionary, F2 is not, F3 is a
+different construction site.
 
-### F1 — Tastenangebot für mehrere Sprachen gleichzeitig (**ohne Wörterbuch, heute machbar**)
+### F1 — key offering for several languages simultaneously (**without a
+dictionary, feasible today**)
 
-Ziel: Die Tastatur bietet **dauerhaft** alle Sonderzeichen aller gewählten Sprachen an —
-`ä ö ü ß` (de) **und** `é è ê à ç ù` (fr) **und** `ñ á é í ó ú` (es) **und** `å æ ø`
-(sv/da), `ı ş ğ` (tr), `ё ы э` (ru), `ě š č ř` (cs), `α β ς` (el) …
+Goal: the keyboard **permanently** offers all special characters of all chosen
+languages — `ä ö ü ß` (de) **and** `é è ê à ç ù` (fr) **and** `ñ á é í ó ú`
+(es) **and** `å æ ø` (sv/da), `ı ş ğ` (tr), `ё ы э` (ru), `ě š č ř` (cs),
+`α β ς` (el) …
 
-**Mechanik:** Ein **Laufzeit-Merge** der gewählten Assets zu einem *virtuellen Layout*:
+**Mechanics:** a **runtime merge** of the chosen assets into a *virtual
+layout*:
 
-- Buchstaben-Reihenfolge/Geometrie kommen vom **Primär-Layout** (`current_language`).
-- `alternates` jeder Taste = **Vereinigung** der `alternates` dieser Taste über **alle
-  aktiven Sprachen** (gleiche Taste, gleiche Position, z. B. `n` → `ñ ń`, `s` → `ß ś š`).
-- Zeichen, die in einer aktiven Sprache eine **eigene** Taste sind, werden im virtuellen
-  Layout zum **Alternate** derselben Taste der Primärsprache (z. B. `ü` aus de wird auf
-  `u` gelegt, wenn Primär = en).
-- `symbols`/`symbolsShift` bleiben unverändert (Sprache ist dort bereits neutral).
-- Das **Primär-Layout** bestimmt weiterhin Groß-/Kleinschreibung (`CaseMapper` je
-  `caseLocale`) — ein gemergtes Layout hat **eine** `caseLocale` (die der Primärsprache).
+- The letter order/geometry comes from the **primary layout**
+  (`current_language`).
+- The `alternates` of each key = the **union** of the `alternates` of that key
+  across **all active languages** (same key, same position, e.g. `n` → `ñ ń`,
+  `s` → `ß ś š`).
+- Characters that are an **own** key in one active language become an
+  **alternate** of the same key of the primary language in the virtual layout
+  (e.g. `ü` from de is placed on `u` when primary = en).
+- `symbols`/`symbolsShift` stay unchanged (the language is already neutral
+  there).
+- The **primary layout** continues to determine case mapping (`CaseMapper`
+  per `caseLocale`) — a merged layout has **one** `caseLocale` (that of the
+  primary language).
 
-**Zwei harte Regelkonflikte, die der Plan lösen muss (nicht verstecken):**
+**Two hard rule conflicts the plan must solve (not hide):**
 
-| Regel | Konflikt | Lösung im Plan |
+| Rule | Conflict | Solution in the plan |
 |---|---|---|
-| `LAYOUT_REQUIREMENTS` §1 Regel 3: „max. **8** alternates pro Taste" | Union über 15 Sprachen kann 8 überschreiten (z. B. `a`: `á à â ã å ä æ` …) | Regel gilt für **Assets** (bleiben unverändert ≤ 8). Das **virtuelle** Layout bekommt ein eigenes, dokumentiertes Limit **12** + Test „≤ 12, keine Duplikate, kein Zeichen der Taste selbst" |
-| §1 Regel 3: alternates nur **ein** Codepoint, NFC | `ı`/`i` (tr), `ß` (de), `ς` (el) sind je 1 Codepoint → ok; `ẞ` nur in `shift` | bleibt erfüllt; Test prüft NFC + `codePointCount == 1` |
+| `LAYOUT_REQUIREMENTS` §1 rule 3: "max. **8** alternates per key" | the union across 15 languages can exceed 8 (e.g. `a`: `á à â ã å ä æ` …) | the rule applies to **assets** (which stay unchanged, ≤ 8). The **virtual** layout gets its own documented limit **12** + test "≤ 12, no duplicates, no key's own character" |
+| §1 rule 3: alternates only **one** codepoint, NFC | `ı`/`i` (tr), `ß` (de), `ς` (el) are 1 codepoint each → ok; `ẞ` only in `shift` | stays fulfilled; the test checks NFC + `codePointCount == 1` |
 
-**Globus-Semantik ändert sich:** `🌐` wechselt künftig **nur** die Primärsprache
-(= Buchstabenanordnung), **nicht** das Zeichenangebot und **nicht** die Diktatsprache
-(ASR bleibt `auto`, DESIGN §3). Bei nur **einer** aktiven Sprache ist das Verhalten
-exakt wie heute.
+**Globe semantics change:** in the future `🌐` switches **only** the primary
+language (= letter arrangement), **not** the character offering and **not**
+the dictation language (ASR stays `auto`, DESIGN §3). With only **one** active
+language the behavior is exactly as today.
 
-### F2 — Wortfindung/Vervollständigung über die Sprachgrenze (**braucht Wörterbuch — zurückgestellt**)
+### F2 — word suggestion/completion across the language boundary (**needs a
+dictionary — deferred**)
 
-Das ist die eigentliche „Autokorrektur über Sprachen": Vervollständigung, Groß/Klein-
-Heuristik, „häufige Wörter", Tippfehler-Korrektur über einen **gemeinsamen Wortschatz**
-aller aktiven Sprachen. Ohne Lexikon ist das **nicht** möglich (keine Statistik, keine
-Kandidaten). Es braucht: ein offline mitgeliefertes oder heruntergeladenes Wörterbuch je
-Sprache, eine gemeinsame Kandidatenliste, Ranking und eine UI, die Korrekturen sichtbar
-macht (Vorschlagsleiste) — plus eine Konfliktregel mit dem ASR-Diktat (DESIGN §7.1
-warnt genau davor: zwei Korrekturinstanzen auf demselben Text).
+This is the actual "autocorrect across languages": completion, upper/lower
+heuristics, "frequent words", typing-error correction over a **shared
+vocabulary** of all active languages. Without a lexicon this is **not**
+possible (no statistics, no candidates). It needs: an offline bundled or
+downloaded dictionary per language, a joint candidate list, ranking, and a UI
+that makes corrections visible (a suggestion bar) — plus a conflict rule with
+ASR dictation (DESIGN §7.1 warns precisely about this: two correction
+instances on the same text).
 
-### F3 — ASR über Sprachgrenzen (**nicht** Teil dieses Plans)
+### F3 — ASR across language boundaries (**not** part of this plan)
 
-Diktat bleibt `language=auto` (25 Sprachen im Modell, KONZEPT §2.5); ein deutscher Satz
-mit englischen Wörtern ist heute schon möglich — das ist **keine** Tipp-Fähigkeit.
-Abgrenzung nur zur Klarheit: F1/F2 betreffen ausschließlich das **Tippen/Korrigieren**.
+Dictation stays `language=auto` (25 languages in the model, KONZEPT §2.5); a
+German sentence with English words is possible today already — that is **not**
+a typing capability. Delimitation only for clarity: F1/F2 concern exclusively
+**typing/correcting**.
 
 ---
 
-## 2. Konzept-Treue
+## 2. Concept fidelity
 
-| Punkt | Was der Nutzer will | Was `docs/KONZEPT.md` / Regeln sagen | Entscheidung/Wortlaut für die Konzept-Treue-Tabelle |
+| Point | What the user wants | What `docs/KONZEPT.md` / the rules say | Decision/wording for the concept-fidelity table |
 |---|---|---|---|
-| **Wörterbücher/Autokorrektur** | Korrektur über mehrere Sprachen gemeinsam | `KONZEPT.md` §7.1: „**Keine Autokorrektur und keine lernenden Wörterbücher in Version 1.**" · `reminders/ALWAYS.md` Regel 9: „keine Autokorrektur/Wörterbücher in v1" | **Bewusste, dokumentierte Abweichung (Phase 2), Datum 2026-10-28, durch den Nutzer selbst entschieden.** Eintrag: „*Mehrsprachige Wortfindung/Korrektur (F2) erweitert die v1-Aussage „keine Wörterbücher": Der Nutzer wünscht Korrektur über alle aktiven Sprachen. Umgesetzt wird sie nur **offline** (mitgeliefertes/herabladbares Lexikon, kein Cloud-Dienst), **abschaltbar**, **ohne Lernverhalten** (keine Nutzerhistorie) und erst nach F1. Bis dahin gilt KONZEPT §7.1 unverändert.*" |
-| **Ressourcen** | 15 Sprachen gemeinsam | KONZEPT: offline, eine signierte Sideload-APK | Lexika nur **offline**: entweder im APK (Größe!) oder über den bestehenden `ModelStore`-Download (Resume/Hash). **Keine** Cloud, kein Google-Dienst, kein Telemetrie-Lernen |
-| **F1 (Zeichenangebot)** | sofort gewünscht | KONZEPT/DESIGN schließen nur *Autokorrektur/Wörterbücher* aus, **nicht** das Zeichenangebot | **Keine Abweichung** — F1 ist reine Layout-Logik und darf sofort geplant/gebaut werden |
+| **Dictionaries/autocorrect** | correction across several languages jointly | `KONZEPT.md` §7.1: "**No autocorrect and no learning dictionaries in version 1.**" · `reminders/ALWAYS.md` rule 9: "no autocorrect/dictionaries in v1" | **Deliberate, documented deviation (phase 2), date 2026-10-28, decided by the user themselves.** Entry: "*Multilingual word suggestion/correction (F2) extends the v1 statement 'no dictionaries': the user wants correction across all active languages. It will be implemented **offline only** (bundled/downloadable lexicon, no cloud service), **switchable off**, **without learning behavior** (no user history), and only after F1. Until then KONZEPT §7.1 applies unchanged.*" |
+| **Resources** | 15 languages jointly | KONZEPT: offline, one signed sideload APK | lexicons **offline only**: either in the APK (size!) or via the existing `ModelStore` download (resume/hash). **No** cloud, no Google service, no telemetry learning |
+| **F1 (character offering)** | wanted immediately | KONZEPT/DESIGN exclude only *autocorrect/dictionaries*, **not** the character offering | **No deviation** — F1 is pure layout logic and may be planned/built immediately |
 
 ---
 
-## 3. Stufenplan (test-first, ≤ 4 Dateien, ≤ 2 Builds je Auftrag)
+## 3. Stage plan (test-first, ≤ 4 files, ≤ 2 builds per task)
 
-### Phase 1 — F1: Zeichenangebot über die Sprachmenge (freigegeben, Autokorrektur-frei)
+### Phase 1 — F1: character offering across the language set (released,
+autocorrect-free)
 
-| M | Ziel | Test ZUERST | Dateien | ETA |
+| M | Goal | Test FIRST | Files | ETA |
 |---|---|---|---|---|
-| **M1.1** | Merge-Kern als reine Funktion | `LayoutMergerTest`: (a) Primär de + aktiv en → `n`-Alternates enthalten `ñ`; (b) Primär en + aktiv de → Taste `u` trägt `ü`; (c) ≤ **12** Alternates, keine Duplikate, kein eigenes Zeichen; (d) NFC + 1 Codepoint; (e) **ein** Asset allein ⇒ Ergebnis **identisch** zum Asset (Regression) | `layouts/LayoutMerger.kt` (neu, ~120 Z.), `app/src/test/.../layouts/LayoutMergerTest.kt` | 3 h |
-| **M1.2** | Merge im Ladevorgang | `LayoutRepositoryTest`: `loadMerged(activeIds, primary)` liefert virtuelles Asset; bei 1 Sprache identisch zu `load()`; unbekannte IDs werden ignoriert | `layouts/LayoutRepository.kt`, `layouts/LayoutMerger.kt` | 1,5 h |
-| **M1.3** | Verdrahtung + Globus-Semantik | `MultilangWiringTest` (instrumented): Wechsel der Primärsprache ändert Buchstabenanordnung, **behält** die Sonderzeichen der anderen aktiven Sprachen; `active_languages` unverändert | `ime/VoiceKeyboardService.kt`, `keyboard/KeyboardView.kt` | 2 h |
-| **M1.4** | Shift-Ebene des Merges | `LayoutMergerShiftTest`: Großformen der gemergten Alternates (nur Zeichen **mit** Großform, D3-Regel aus `LAYOUT_REQUIREMENTS`), `ß→ẞ`, `σ/ς→Σ`-Ausnahme | `layouts/LayoutMerger.kt` | 2 h |
-| **M1.5** | Sichtprüfung + Doku | `LAYOUT_REQUIREMENTS` §1 Regel 3 um „gilt für Assets; virtuelles Layout ≤ 12" ergänzen; Emulator: 2× öffnen, Feldwechsel | `docs/LAYOUT_REQUIREMENTS.md` | 1 h |
+| **M1.1** | merge core as a pure function | `LayoutMergerTest`: (a) primary de + active en → the `n` alternates contain `ñ`; (b) primary en + active de → the key `u` carries `ü`; (c) ≤ **12** alternates, no duplicates, no own character; (d) NFC + 1 codepoint; (e) **one** asset alone ⇒ result **identical** to the asset (regression) | `layouts/LayoutMerger.kt` (new, ~120 lines), `app/src/test/.../layouts/LayoutMergerTest.kt` | 3 h |
+| **M1.2** | merge in the loading process | `LayoutRepositoryTest`: `loadMerged(activeIds, primary)` delivers a virtual asset; with 1 language identical to `load()`; unknown IDs are ignored | `layouts/LayoutRepository.kt`, `layouts/LayoutMerger.kt` | 1.5 h |
+| **M1.3** | wiring + globe semantics | `MultilangWiringTest` (instrumented): switching the primary language changes the letter arrangement, **keeps** the special characters of the other active languages; `active_languages` unchanged | `ime/VoiceKeyboardService.kt`, `keyboard/KeyboardView.kt` | 2 h |
+| **M1.4** | shift layer of the merge | `LayoutMergerShiftTest`: uppercase forms of the merged alternates (only characters **with** an uppercase form, rule D3 from `LAYOUT_REQUIREMENTS`), `ß→ẞ`, the `σ/ς→Σ` exception | `layouts/LayoutMerger.kt` | 2 h |
+| **M1.5** | visual check + docs | extend `LAYOUT_REQUIREMENTS` §1 rule 3 with "applies to assets; virtual layout ≤ 12"; emulator: open 2×, field change | `docs/LAYOUT_REQUIREMENTS.md` | 1 h |
 
-**Phase-1-Summe: ca. 9,5 h** (3 Aufträge à ≤ 4 Dateien; Builds: 2× `test`, 1× instrumented).
+**Phase 1 total: ~9.5 h** (3 tasks of ≤ 4 files each; builds: 2× `test`, 1×
+instrumented).
 
-### Phase 2 — F2: Korrektur über die Sprachmenge (**bewusst zurückgestellt**)
+### Phase 2 — F2: correction across the language set (**deliberately
+deferred**)
 
-| M | Ziel | Test ZUERST | Dateien | ETA |
+| M | Goal | Test FIRST | Files | ETA |
 |---|---|---|---|---|
-| **M2.0** | Entscheidungsvorlage (Lexikon-Quelle, Größe, Lizenz, Abschaltbarkeit) | Doku + `LexiconSourceTest` (nur Format) | `docs/LEXICON_DECISION.md` (neu) | 2 h |
-| **M2.1** | Lexikon-Loader + Index (offline, gepackt) | `LexiconTest`: Laden, Lookup, Speicher < X MB | `lexicon/Lexicon.kt`, `lexicon/LexiconFormat.kt` | 4 h |
-| **M2.2** | Kandidaten über **alle** aktiven Sprachen (Union, kein Ranking) | `CandidateUnionTest`: de+en liefert beide Wortlisten, dedupliziert, sortiert nach Sprache | `lexicon/CandidateProvider.kt` | 3 h |
-| **M2.3** | Vorschlagsleiste (nur Anzeige, **keine** Auto-Ersetzung) | `SuggestionBarTest`: erscheint, Auswahl fügt ein, **kein** automatischer Eingriff | `keyboard/SuggestionBar.kt`, `keyboard/KeyboardView.kt` | 4 h |
-| **M2.4** | Optional: Ranking/Lernen — **nur** mit expliziter Nutzerfreigabe | `NoLearningTest`: ohne Freigabe **keine** Persistenz von Nutzerwörtern | `lexicon/Ranking.kt` | 3 h |
+| **M2.0** | decision template (lexicon source, size, license, off-switch) | docs + `LexiconSourceTest` (format only) | `docs/LEXICON_DECISION.md` (new) | 2 h |
+| **M2.1** | lexicon loader + index (offline, packed) | `LexiconTest`: load, lookup, memory < X MB | `lexicon/Lexicon.kt`, `lexicon/LexiconFormat.kt` | 4 h |
+| **M2.2** | candidates across **all** active languages (union, no ranking) | `CandidateUnionTest`: de+en delivers both word lists, deduplicated, sorted by language | `lexicon/CandidateProvider.kt` | 3 h |
+| **M2.3** | suggestion bar (display only, **no** auto-replacement) | `SuggestionBarTest`: appears, selecting inserts, **no** automatic intervention | `keyboard/SuggestionBar.kt`, `keyboard/KeyboardView.kt` | 4 h |
+| **M2.4** | optional: ranking/learning — **only** with explicit user approval | `NoLearningTest`: without approval **no** persistence of user words | `lexicon/Ranking.kt` | 3 h |
 
-**Phase-2-Summe: ca. 16 h**, davon allein 2 h Entscheidung + 4 h Lexikon. **Nicht** vor
-F1, nicht ohne die Konzept-Treue-Zeile aus §2.
-
----
-
-## 4. Datenschutz-Abwägung (F2)
-
-- **Keine Wörterbuch-Downloads aus dem Netz** in der Grundvariante: Lexika kommen **im
-  APK** (kleine Sprachen) oder über den **bestehenden Modell-Downloader** (`ModelStore`
-  mit Resume/SHA-256, ein Host, eine Zustimmung). Kein Zwischenruf bei Drittanbietern.
-- **Kein Lernverhalten:** keine Nutzerhistorie, keine Frequenzzählung, kein „zuletzt
-  benutzt" — damit bleibt die Privacy-Zusage (Regel 9) intakt und die Abweichung
-  betrifft nur „Wörterbuch vorhanden", nicht „Nutzerdaten gesammelt".
-- **Abschaltbar:** ein Schalter in der Einrichtung („Wortvorschläge") — Default **aus**,
-  bis der Nutzer ihn aktiviert. Damit ist der heutige Zustand (KONZEPT §7.1) der Default.
-- **Größenordnung `ANNAHME:`** Lexikon je Sprache 0,3–2 MB komprimiert (Häufigkeitsliste
-  Top-20k–50k); 15 Sprachen ≈ 5–20 MB — vertretbar gegenüber 671 MB Modell, aber es ist
-  **APK-Wachstum** oder ein zweiter Download.
+**Phase 2 total: ~16 h**, of which alone 2 h decision + 4 h lexicon. **Not**
+before F1, not without the concept-fidelity line from §2.
 
 ---
 
-## 5. Zeitplan-Übersicht
+## 4. Privacy assessment (F2)
 
-| Phase | Inhalt | ETA | Abhängigkeit |
+- **No dictionary downloads from the network** in the basic variant: lexicons
+  come **in the APK** (small languages) or via the **existing model
+  downloader** (`ModelStore` with resume/SHA-256, one host, one consent). No
+  calls to third parties.
+- **No learning behavior:** no user history, no frequency counting, no
+  "recently used" — with that the privacy promise (rule 9) stays intact, and
+  the deviation concerns only "dictionary present", not "user data
+  collected".
+- **Switchable off:** a toggle in setup ("word suggestions") — default
+  **off** until the user activates it. With that today's state (KONZEPT §7.1)
+  is the default.
+- **Order of magnitude `ASSUMPTION:`** lexicon per language 0.3–2 MB
+  compressed (frequency list top 20k–50k); 15 languages ≈ 5–20 MB —
+  acceptable next to 671 MB of model, but it is **APK growth** or a second
+  download.
+
+---
+
+## 5. Schedule overview
+
+| Phase | Content | ETA | Dependency |
 |---|---|---|---|
-| **1 (F1)** | Zeichenangebot über alle aktiven Sprachen | **9,5 h** (3–4 Aufträge) | keine — **kann sofort starten** |
-| **2a (F2-Doku)** | Lexikon-Entscheidung + Konzept-Treue-Eintrag | 2 h | Nutzerfreigabe für Wörterbücher |
-| **2b (F2-Code)** | Lexikon + Vorschlagsleiste, **keine** Auto-Ersetzung | ~14 h | 2a |
-| **2c (optional)** | Ranking/Lernen | 3 h | ausdrückliche Freigabe; sonst **nie** |
+| **1 (F1)** | character offering across all active languages | **9.5 h** (3–4 tasks) | none — **can start immediately** |
+| **2a (F2 docs)** | lexicon decision + concept-fidelity entry | 2 h | user approval for dictionaries |
+| **2b (F2 code)** | lexicon + suggestion bar, **no** auto-replacement | ~14 h | 2a |
+| **2c (optional)** | ranking/learning | 3 h | explicit approval; otherwise **never** |
 
-## ANNAHME-Zeilen
+## ASSUMPTION lines
 
-- `ANNAHME: Die Vereinigung der Alternates bleibt bei ≤ 12 pro Taste, wenn höchstens 4`
-  `Sprachen gleichzeitig aktiv sind; bei mehr greift der Kappungs-Test (M1.1c) und`
-  `dokumentiert die Grenze in der UI.`
-- `ANNAHME: Lexikon-Größen 0,3–2 MB je Sprache (Top-20k–50k) — nicht gemessen.`
-- `ANNAHME: F1 braucht keine Schema-Änderung (keine 5. Ebene); der Merge erzeugt ein`
-  `virtuelles Asset im Speicher.`
+- `ASSUMPTION: The union of the alternates stays ≤ 12 per key if at most 4`
+  `languages are active simultaneously; with more, the truncation test`
+  `(M1.1c) applies and documents the limit in the UI.`
+- `ASSUMPTION: Lexicon sizes 0.3–2 MB per language (top 20k–50k) — not`
+  `measured.`
+- `ASSUMPTION: F1 needs no schema change (no 5th layer); the merge creates a`
+  `virtual asset in memory.`

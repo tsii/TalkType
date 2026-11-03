@@ -17,27 +17,29 @@ import java.io.File
 import java.util.concurrent.atomic.AtomicInteger
 
 /**
- * W-Paket (vc34, Debugger-Empfehlung): Engine-Warming — Vorwärmung beim ersten
- * IME-Show (W1), Residenz bis shutdown (W2) und die 🐞-Export-Felder
- * engine_load_ms / engine_resident / warm_hit / load_trigger / engine_loads.
+ * W package (vc34, debugger recommendation): engine warming — pre-warming on
+ * the first IME show (W1), residency until shutdown (W2) and the 🐞 export
+ * fields engine_load_ms / engine_resident / warm_hit / load_trigger /
+ * engine_loads.
  *
- *  (a) erster Show ⇒ preload GENAU 1× (Fake-Engine zählt loads); zweiter Show
- *      ⇒ 0 weitere; parallele preload() ⇒ Single-Flight (GENAU 1 load);
- *  (b) Diktat-Start nach Preload ⇒ warm_hit=1, load_trigger=ime_show,
- *      start_ms OHNE Ladezeit (Fake-load dauert künstlich); Kaltstart im
- *      Vergleich lädt selbst (mic) und schließt die Ladezeit ein;
- *  (c) fehlgeschlagener Preload blockiert den späteren Start NICHT (lazy-
- *      Fallback im Diktat-Start bleibt unangetastet).
+ *  (a) first show ⇒ preload EXACTLY 1× (the fake engine counts loads); second
+ *      show ⇒ 0 more; parallel preload() ⇒ single-flight (EXACTLY 1 load);
+ *  (b) dictation start after preload ⇒ warm_hit=1, load_trigger=ime_show,
+ *      start_ms WITHOUT load time (the fake load is artificially slow); the
+ *      cold start in comparison loads itself (mic) and includes the load
+ *      time;
+ *  (c) a failed preload does NOT block the later start (the lazy fallback in
+ *      the dictation start stays untouched).
  *
- * Regel 9: nur Zahlen/Codes — nie Modellpfade/-inhalte. Reine JVM-Tests
- * (Coordinator ist frameworkfrei; der Service-Trigger selbst ist die reine
- * Entscheidung [preloadDue], Muster editorRestartAction).
+ * Rule 9: numbers/codes only — never model paths/content. Pure JVM tests
+ * (the coordinator is framework-free; the service trigger itself is the pure
+ * decision [preloadDue], pattern editorRestartAction).
  */
 class EnginePreloadTest {
 
-    /** Fake-Engine: zählt load()-Läufe, wirft beim Zweitaufruf (Single-Flight-
-     *  Kanarienvogel), kann beim ersten load() scheitern und es künstlich
-     *  verzögern (Kaltstart-Messung). transcribe liefert leer (0 Samples). */
+    /** Fake engine: counts load() runs, throws on a second call (single-flight
+     *  canary), can fail on the first load() and delay it artificially (cold
+     *  start measurement). transcribe returns empty (0 samples). */
     private class CountingEngine(
         private val loadSleepMs: Long = 0,
         private val failFirstLoad: Boolean = false,
@@ -74,7 +76,7 @@ class EnginePreloadTest {
         override fun close() {}
     }
 
-    /** Kürzeste lebende Quelle: start ok, nie Daten (Session endet per stop). */
+    /** Shortest living source: start ok, never any data (the session ends via stop). */
     private class SilentSource : AudioSource {
         override fun start(sessionId: Long): Boolean = true
         override fun read(dst: ShortArray, timeoutMs: Int): Int = 0
@@ -82,7 +84,7 @@ class EnginePreloadTest {
         override fun release() {}
     }
 
-    /** Trivial-Sink: Start/Stop ohne Output braucht keinen Editor. */
+    /** Trivial sink: start/stop without output needs no editor. */
     private class NoopSink : EditorSink {
         override fun replaceBeforeCursor(replaceLength: Int, newText: String) {}
         override fun textBeforeCursor(maxChars: Int): CharSequence? = null
@@ -95,7 +97,7 @@ class EnginePreloadTest {
         (scope.coroutineContext[kotlinx.coroutines.Job])?.cancel()
     }
 
-    /** Modellverzeichnis (Fake-Engine liest es nicht — nur Nicht-null nötig). */
+    /** Model directory (the fake engine does not read it — non-null suffices). */
     private fun dir(): File = File(System.getProperty("java.io.tmpdir"), "vk-preload-model")
 
     private fun coordinator(
@@ -105,46 +107,46 @@ class EnginePreloadTest {
         scope, { SilentSource() }, { engine }, NoopSink(), modelDir = dir(),
     )
 
-    /** stop() + Warten auf das asynchrone Finale (Muster awaitIdle). */
+    /** stop() + wait for the asynchronous final (pattern awaitIdle). */
     private fun stopAndWait(c: DictationCoordinator) {
         c.stop()
         val deadline = System.currentTimeMillis() + 3000
         while (c.state != DictationState.IDLE && System.currentTimeMillis() < deadline) {
             Thread.sleep(10)
         }
-        assertEquals("stop()-Worker muss nach IDLE enden", DictationState.IDLE, c.state)
+        assertEquals("stop() worker must end in IDLE", DictationState.IDLE, c.state)
     }
 
-    // --- W4 (a): erster Show ⇒ preload GENAU 1×; zweiter Show ⇒ 0 weitere;
-    //     parallele Aufrufe ⇒ Single-Flight (GENAU 1 load, kein Zweitaufruf). ---
+    // --- W4 (a): first show ⇒ preload EXACTLY 1×; second show ⇒ 0 more;
+    //     parallel calls ⇒ single-flight (EXACTLY 1 load, no second call). ---
 
-    @Test fun `preload laedt genau einmal - zweiter Show und parallele Aufrufe starten kein weiteres load`() {
+    @Test fun `preload loads exactly once - second show and parallel calls start no further load`() {
         val scope = newScope()
         val engine = CountingEngine()
         val c = coordinator(scope, engine)
         try {
-            // erster Show (Service: preloadDue(false) ⇒ genau EIN preload-Aufruf)
-            assertTrue("erster Show-Preload lädt", preloadDue(false))
+            // first show (service: preloadDue(false) ⇒ exactly ONE preload call)
+            assertTrue("the first show preload loads", preloadDue(false))
             assertTrue(c.preload())
-            assertEquals("genau 1 load beim ersten Show", 1, engine.loadCalls.get())
-            assertTrue("Engine resident (W2: bis shutdown)", c.engineResident)
+            assertEquals("exactly 1 load on the first show", 1, engine.loadCalls.get())
+            assertTrue("Engine resident (W2: until shutdown)", c.engineResident)
             assertEquals("ime_show", c.loadTrigger)
 
-            // zweiter Show: Service-Trigger bleibt No-Op (Flag), Coordinator
-            // ebenfalls resident-idempotent — 0 weitere loads.
-            assertFalse("zweiter Show: Trigger bleibt No-Op", preloadDue(true))
-            assertTrue("zweiter Show: resident, kein weiterer load", c.preload())
-            assertEquals("kein weiterer load beim zweiten Show", 1, engine.loadCalls.get())
+            // second show: the service trigger stays a no-op (flag), the
+            // coordinator is likewise resident-idempotent — 0 further loads.
+            assertFalse("second show: the trigger stays a no-op", preloadDue(true))
+            assertTrue("second show: resident, no further load", c.preload())
+            assertEquals("no further load on the second show", 1, engine.loadCalls.get())
 
-            // Parallele preload() (8 Threads): Single-Flight-Gate — GENAU 1 load;
-            // die Fake-Engine wirft beim Zweitaufruf (Kanarienvogel oben).
+            // parallel preload() (8 threads): single-flight gate — EXACTLY 1 load;
+            // the fake engine throws on a second call (canary above).
             val engine2 = CountingEngine()
             val c2 = coordinator(scope, engine2)
             try {
                 val threads = (1..8).map { kotlin.concurrent.thread { c2.preload() } }
                 threads.forEach { it.join() }
-                assertEquals("parallele load() unmöglich (Single-Flight)", 1, engine2.loadCalls.get())
-                assertTrue("alle Aufrufer sehen resident", c2.engineResident)
+                assertEquals("parallel load() impossible (single-flight)", 1, engine2.loadCalls.get())
+                assertTrue("all callers see resident", c2.engineResident)
             } finally {
                 c2.shutdown()
             }
@@ -154,43 +156,43 @@ class EnginePreloadTest {
         }
     }
 
-    // --- W4 (b): Diktat-Start nach Preload ist WARM — warm_hit=1,
-    //     load_trigger=ime_show, start_ms OHNE Ladezeit (Fake-load 500 ms). ---
+    // --- W4 (b): a dictation start after preload is WARM — warm_hit=1,
+    //     load_trigger=ime_show, start_ms WITHOUT load time (fake load 500 ms). ---
 
-    @Test fun `Diktat-Start nach Preload ist warm - warm_hit, trigger ime_show, start_ms ohne Ladezeit`() {
+    @Test fun `dictation start after preload is warm - warm_hit, trigger ime_show, start_ms without load time`() {
         val scope = newScope()
         val engine = CountingEngine(loadSleepMs = 500)
         val c = coordinator(scope, engine)
         try {
             assertTrue(c.preload())
             assertEquals(1, engine.loadCalls.get())
-            assertTrue("engine_load_ms misst die Fake-Ladezeit (war ${c.engineLoadMs})", c.engineLoadMs >= 500)
+            assertTrue("engine_load_ms measures the fake load time (was ${c.engineLoadMs})", c.engineLoadMs >= 500)
 
-            assertTrue("warmer Start", c.start())
+            assertTrue("warm start", c.start())
             assertTrue(
-                "start_ms OHNE Ladezeit — Engine war resident (war ${c.lastStartMs})",
+                "start_ms WITHOUT load time — the engine was resident (was ${c.lastStartMs})",
                 c.lastStartMs < 500,
             )
-            assertEquals("kein weiterer load im warmen Start", 1, engine.loadCalls.get())
-            assertTrue("warm_hit: Start fand resident vor", c.warmHit)
-            assertEquals("load_trigger bleibt ime_show", "ime_show", c.loadTrigger)
-            assertEquals("engine_loads zählt den einen load", 1, c.engineLoads)
+            assertEquals("no further load in the warm start", 1, engine.loadCalls.get())
+            assertTrue("warm_hit: the start found the engine resident", c.warmHit)
+            assertEquals("load_trigger stays ime_show", "ime_show", c.loadTrigger)
+            assertEquals("engine_loads counts the one load", 1, c.engineLoads)
             stopAndWait(c)
 
-            // Vergleichs-KALTSTART: ohne Preload lädt der Start selbst
-            // (lazy-Fallback unangetastet, Trigger mic) — start_ms SCHLIESST
-            // die Ladezeit ein.
+            // comparison COLD START: without preload the start loads itself
+            // (lazy fallback untouched, trigger mic) — start_ms INCLUDES the
+            // load time.
             val engine2 = CountingEngine(loadSleepMs = 500)
             val c2 = coordinator(scope, engine2)
             try {
                 assertTrue(c2.start())
-                assertFalse("Kaltstart ist nicht warm", c2.warmHit)
+                assertFalse("the cold start is not warm", c2.warmHit)
                 assertEquals("mic", c2.loadTrigger)
                 assertTrue(
-                    "Kaltstart schließt die Ladezeit ein (war ${c2.lastStartMs})",
+                    "the cold start includes the load time (was ${c2.lastStartMs})",
                     c2.lastStartMs >= 500,
                 )
-                assertEquals("engine_loads zählt den Start-load", 1, c2.engineLoads)
+                assertEquals("engine_loads counts the start load", 1, c2.engineLoads)
                 stopAndWait(c2)
             } finally {
                 c2.shutdown()
@@ -201,25 +203,25 @@ class EnginePreloadTest {
         }
     }
 
-    // --- W4 (c): fehlgeschlagener Preload blockiert den späteren Start NICHT —
-    //     der lazy-Fallback im Diktat-Start lädt nach (Trigger mic). ---
+    // --- W4 (c): a failed preload does NOT block the later start —
+    //     the lazy fallback in the dictation start loads afterwards (trigger mic). ---
 
-    @Test fun `fehlgeschlagener Preload blockiert den spaeteren Diktat-Start nicht`() {
+    @Test fun `a failed preload does not block the later dictation start`() {
         val scope = newScope()
         val engine = CountingEngine(failFirstLoad = true)
         val c = coordinator(scope, engine)
         try {
-            assertFalse("Preload scheitert kontrolliert (false, keine Exception nach außen)", c.preload())
-            assertFalse("Engine nicht resident", c.engineResident)
-            assertEquals("Zähler zählt nur ERFOLGREICHE loads", 0, c.engineLoads)
+            assertFalse("preload fails in a controlled way (false, no exception upward)", c.preload())
+            assertFalse("engine not resident", c.engineResident)
+            assertEquals("the counter counts only SUCCESSFUL loads", 0, c.engineLoads)
 
-            // Der spätere Diktat-Start lädt lazy nach — der Fehlschlag blockiert NICHT.
-            assertTrue("Start wird vom Preload-Fehlschlag NICHT blockiert", c.start())
-            assertEquals("zweiter load-Lauf (der erste scheiterte)", 2, engine.loadCalls.get())
-            assertTrue("nach dem Start resident", c.engineResident)
-            assertEquals("Trigger des ERFOLGREICHEN load() = mic", "mic", c.loadTrigger)
-            assertFalse("Kaltstart: kein warm_hit", c.warmHit)
-            assertEquals("engine_loads zählt nur den Erfolg", 1, c.engineLoads)
+            // the later dictation start loads lazily — the failure does NOT block it.
+            assertTrue("the start is NOT blocked by the preload failure", c.start())
+            assertEquals("second load run (the first failed)", 2, engine.loadCalls.get())
+            assertTrue("resident after the start", c.engineResident)
+            assertEquals("trigger of the SUCCESSFUL load() = mic", "mic", c.loadTrigger)
+            assertFalse("cold start: no warm_hit", c.warmHit)
+            assertEquals("engine_loads counts only the success", 1, c.engineLoads)
             stopAndWait(c)
         } finally {
             c.shutdown()

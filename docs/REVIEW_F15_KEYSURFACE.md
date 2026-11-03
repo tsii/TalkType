@@ -1,39 +1,39 @@
-# Review F15 — KeySurface (D11: Rückmeldung gedrückte Taste, verstärkter Press, Caps-Akzent)
+# Review F15 — KeySurface (D11: pressed-key feedback, reinforced press, caps accent)
 
-**Reviewer:** DeepSeek V4 Pro 0813 · **Datum:** 2026-10-30
-**Umfang:** `keyboard/KeySurface.kt` (neu), `KeyboardView.onDraw` (D11-Naht), `KeyboardTheme.kt:88/103` (Press-Alphas), `KeySurfaceTest`/`KeyboardThemeTest`. Kein Build/Emulator.
+**Reviewer:** DeepSeek V4 Pro 0813 · **Date:** 2026-10-30
+**Scope:** `keyboard/KeySurface.kt` (new), `KeyboardView.onDraw` (D11 seam), `KeyboardTheme.kt:88/103` (press alphas), `KeySurfaceTest`/`KeyboardThemeTest`. No build/emulator.
 
 ---
 
-## Befundtabelle (nur Notes — kein P0/P1)
+## Findings table (notes only — no P0/P1)
 
-| Sev | Datei:Zeile | Befund | Minimaländerung |
+| Sev | File:Line | Finding | Minimal change |
 |---|---|---|---|
-| Note | `KeySurface.kt:38-45` (`surface`-Reihenfolge) | **Kein Fehler — GLMs „Abweichung" ist exakt D11.** `micRecording > CAPS_FILL > pressed > normal` entspricht wörtlich DESIGN_STOCK_LOOK.md „Gedrückt+Caps behält diese Akzentfüllung … **ohne zusätzlichen Overlayauftrag**". Der „verlorene" Fall (Caps-active Shift zeigt beim Drücken keine Press-Verdunklung) ist **vom Entscheid gewollt**; die Taste zeigt Akzent + `⇪`, das Deaktivieren (zweiter Tap) ändert die Fläche erst beim Loslassen. Kein Nutzerproblem. | Keine. |
-| Note | `KeySurface.kt:42-44` (`capsFill`-Gate) | **Caps-Füllung korrekt nur aus echtem `capsLock`.** `istShiftKey && capsLock && !symbolShift && !activeLayerIsSymbols` — nie `shiftTemporary` (Z.529 „nur Glyphen-Akzent"), nie `symbolsShift`, nie symbols-Ebene. Abgeleitet **live** je `onDraw` (kein Cache) → kann nach Schicht-/Editorwechsel nicht kleben (`resetShiftState` Z.142/156 nullt `capsLock` zusätzlich). | Keine. |
-| Note | `KeyboardTheme.kt:88,103` + Kontrastrechnung | **Kontrast ≥ 3:1 erfüllt.** Hell `micRecordingGlyph #37474F` auf `accent #4DB6AC` ≈ **4,2:1**; Dunkel `#263238` auf `#80CBC4` ≈ **7,0:1** (Relative-Luminanz, handgerechnet). Kein P1. | Keine. |
-| Note | `KeyboardView.kt:288-315` (`when`-Kette) | Kein verdeckter Zustand: Häkchen (`micCheckShowing`) ist **Glyphe** (`keyToggledGlyph`, Z.311) und wird auf jeder Fläche gezeichnet; `micRecording` ist höchste Priorität (D10 unverändert); Press-Overlay ändert die Textfarbe nicht; Dunkel-Lesbarkeit bleibt (Text auf minimal aufgehellter Fläche). | Keine. |
-| Note | `KeySurfaceTest`/`KeyboardThemeTest` (14 Tests) | **Verhalten + Konstanten getestet.** `KeySurfaceTest` prüft die Prioritätskette + „shiftTemporary füllt nicht" + „symbolsShift kein Caps-Fill" (würden bei Rückfall rot); `KeyboardThemeTest` assertet die **exakten** `keyPressed`-Werte `0xFFA3ABB0`/`0xFF676F74` (= `compose` aus 0x66/0x4D, nachgerechnet) — bei Rückfall auf 0x26/0x19 rot. | Keine. |
-| Note | (alle Dateien) | **Regeltreu:** nur vorhandene Tokens, kein Popup/Rahmen/Schatten, keine Geometrie-/Touchflächen-/Layoutänderung (KeySurface ist reine Entscheidung, `onDraw` ändert nur `keyPaint.color` + Glyphe), keine Inhalte in Text/Log (nur Int-Enums). | Keine. |
+| Note | `KeySurface.kt:38-45` (`surface` order) | **No defect — GLM's "deviation" is exactly D11.** `micRecording > CAPS_FILL > pressed > normal` matches DESIGN_STOCK_LOOK.md verbatim "Gedrückt+Caps behält diese Akzentfüllung … **ohne zusätzlichen Overlayauftrag**". The "lost" case (caps-active Shift shows no press darkening while pressed) is **intended by the decision**; the key shows accent + `⇪`, and deactivation (second tap) changes the surface only on release. No user problem. | None. |
+| Note | `KeySurface.kt:42-44` (`capsFill` gate) | **Caps fill correctly only from genuine `capsLock`.** `istShiftKey && capsLock && !symbolShift && !activeLayerIsSymbols` — never `shiftTemporary` (line 529 "glyph accent only"), never `symbolsShift`, never symbols layer. Derived **live** per `onDraw` (no cache) → cannot stick after a layer/editor switch (`resetShiftState` lines 142/156 additionally nulls `capsLock`). | None. |
+| Note | `KeyboardTheme.kt:88,103` + contrast calculation | **Contrast ≥ 3:1 met.** Light `micRecordingGlyph #37474F` on `accent #4DB6AC` ≈ **4.2:1**; dark `#263238` on `#80CBC4` ≈ **7.0:1** (relative luminance, hand-calculated). No P1. | None. |
+| Note | `KeyboardView.kt:288-315` (`when` chain) | No hidden state: the checkmark (`micCheckShowing`) is a **glyph** (`keyToggledGlyph`, line 311) and is drawn on every surface; `micRecording` is the highest priority (D10 unchanged); the press overlay does not change text color; dark-mode readability remains (text on a minimally lightened surface). | None. |
+| Note | `KeySurfaceTest`/`KeyboardThemeTest` (14 tests) | **Behavior + constants tested.** `KeySurfaceTest` checks the priority chain + "shiftTemporary does not fill" + "symbolsShift no caps fill" (would turn red on regression); `KeyboardThemeTest` asserts the **exact** `keyPressed` values `0xFFA3ABB0`/`0xFF676F74` (= `compose` from 0x66/0x4D, recalculated) — red on regression to 0x26/0x19. | None. |
+| Note | (all files) | **Rule-compliant:** only existing tokens, no popup/frame/shadow, no geometry/touch-area/layout change (KeySurface is a pure decision, `onDraw` changes only `keyPaint.color` + glyph), no content in text/logs (only Int enums). | None. |
 
 ---
 
-## Antworten A–F
+## Answers A–F
 
-- **A:** GLMs Priorität ist **keine** Abweichung — sie ist die wörtliche D11-Vorgabe („ohne zusätzlichen Overlayauftrag"). Der einzige „Verlust" (Caps-active Shift ohne Press-Verdunklung) ist spezifikationsgemäß gewollt; der `⇪`-Marker + die Akzentfläche bleiben die Rückmeldung. Kein Nutzerproblem.
-- **B:** korrekt — `capsFill` nur aus `capsLock && !symbolShift && !activeLayerIsSymbols`; live abgeleitet, kein Kleben; `resetShiftState` (Z.142/156) + Doppeltipp (Z.481-487) nullen den echten Caps-Zustand.
-- **C:** Kontrast Hell ≈ 4,2:1, Dunkel ≈ 7,0:1 → **≥ 3:1**, kein P1.
-- **D:** kein verdeckter Zweig; Häkchen/Toggle/Mic-Akzent/Dunkel bleiben lesbar (Häkchen = Glyphe, Mic-Recording = höchste Surface-Priorität).
-- **E:** Tests sind aussagekräftig (Verhalten in `KeySurfaceTest`, exakte Sollwerte in `KeyboardThemeTest`); Rückfall auf 0x26/0x19 und Caps-Füllung aus `shiftTemporary` würden **rot**.
-- **F:** regelkonform — nur Tokens, keine Flächen-/Geometrie-/Layout-Änderung, keine Regel-9-Verletzung.
+- **A:** GLM's priority is **not** a deviation — it is the literal D11 spec ("ohne zusätzlichen Overlayauftrag"). The only "loss" (caps-active Shift without press darkening) is intended per the specification; the `⇪` marker + the accent surface remain the feedback. No user problem.
+- **B:** correct — `capsFill` only from `capsLock && !symbolShift && !activeLayerIsSymbols`; derived live, no sticking; `resetShiftState` (lines 142/156) + double tap (lines 481-487) null the genuine caps state.
+- **C:** contrast light ≈ 4.2:1, dark ≈ 7.0:1 → **≥ 3:1**, no P1.
+- **D:** no hidden branch; checkmark/toggle/mic accent/dark remain readable (checkmark = glyph, mic recording = highest surface priority).
+- **E:** tests are meaningful (behavior in `KeySurfaceTest`, exact target values in `KeyboardThemeTest`); regression to 0x26/0x19 and caps fill from `shiftTemporary` would turn **red**.
+- **F:** rule-compliant — only tokens, no surface/geometry/layout change, no rule-9 violation.
 
 ---
 
-## SUMME
+## TOTAL
 
-**P0 = 0 · P1 = 0 · P2 = 0** (nur Notes). F15 setzt D11 treu um.
+**P0 = 0 · P1 = 0 · P2 = 0** (notes only). F15 implements D11 faithfully.
 
-**Offen (zum Nachmessen — ich kann es selbst belegen):**
-- Kontrastwerte sind **handgerechnet**, nicht gerätegemessen; für eine harte Abnahme bitte die Relative-Luminanz auf Gerät/Device-Dump bestätigen (Hell ≈ 4,2:1).
-- Die 14 Tests habe ich gelesen, nicht ausgeführt (kein Build).
-- Sichtbarer Gerätebeweis (Hell/Dunkel „normal/gedrückt" + „Caps an/aus") steht laut D11-Abnahme noch aus.
+**Open (for re-measurement — I can provide the evidence myself):**
+- Contrast values are **hand-calculated**, not device-measured; for a hard acceptance please confirm the relative luminance on a device/device dump (light ≈ 4.2:1).
+- I read the 14 tests, did not run them (no build).
+- Visible device evidence (light/dark "normal/pressed" + "caps on/off") is still pending per the D11 acceptance.

@@ -13,126 +13,126 @@ import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 
 /**
- * LayoutCompletenessTest (LAYOUT_REQUIREMENTS Abnahmekriterien 1+2):
- * Prüft JEDES vorhandene Layout-Asset gegen die Sprachmatrix und die Grundregeln.
+ * LayoutCompletenessTest (LAYOUT_REQUIREMENTS acceptance criteria 1+2):
+ * Checks EVERY existing layout asset against the language matrix and the basic rules.
  *
- * - Pflichtzeichen der Matrix-Zeile als EIGENE Taste in `base` (alternates zählen NICHT).
- * - shift ist vollständige Großform: jede base-Text-Taste hat eine shift-Taste mit
- *   sprachrichtiger Großform (CaseMapper), inkl. Sonderfall ß→ẞ für Deutsch.
- * - Grundregel 5 (Rev 3, WHITELIST): label == value, genau ein Codepoint, keine
- *   Artefakte (`=\\<`, `⌇`). `& \\ < >` sind KEINE Artefakte, sondern §2.1-Pflichtzeichen.
- * - §2.1 Pflichtsymbole: Gruppe 1 (20) + Ziffern je einmal auf `symbols`,
- *   Gruppe 2 (13) auf `symbols` ODER `symbolsShift` — Fehlermeldung nennt
- *   Asset und fehlendes Zeichen.
- * - Grundregel 6: alternates nur Zeichen (keine Action-Namen), max 8 pro Taste.
- * - Grundregel 4: je Ebene genau eine space-, backspace-, enter-, emoji- und mic-Taste
- *   sowie shift/layer-Tasten.
+ * - mandatory characters of the matrix row as an OWN key in `base` (alternates do NOT count).
+ * - shift is the complete uppercase form: every base text key has a shift key with
+ *   the language-correct uppercase form (CaseMapper), including the special case ß→ẞ for German.
+ * - basic rule 5 (Rev 3, WHITELIST): label == value, exactly one codepoint, no
+ *   artifacts (`=\\<`, `⌇`). `& \\ < >` are NOT artifacts but §2.1 mandatory characters.
+ * - §2.1 mandatory symbols: group 1 (20) + digits once each on `symbols`,
+ *   group 2 (13) on `symbols` OR `symbolsShift` — the error message names
+ *   the asset and the missing character.
+ * - basic rule 6: alternates only characters (no action names), max 8 per key.
+ * - basic rule 4: exactly one space, backspace, enter, emoji and mic key per layer
+ *   as well as shift/layer keys.
  *
- * Die Matrix unten listet alle 15 Sprachen. Assets, die es (noch) nicht gibt,
- * werden proaktiv übersprungen — der Test deckt damit automatisch jede neue Sprache ab,
- * sobald ihr Asset hinzukommt (Stufe 3).
+ * The matrix below lists all 15 languages. Assets that do not exist (yet) are
+ * proactively skipped — the test thereby automatically covers every new language
+ * as soon as its asset is added (stage 3).
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35])
 class LayoutCompletenessTest {
 
-    /** Eine Zeile der Sprachmatrix aus LAYOUT_REQUIREMENTS.md. */
+    /** One row of the language matrix from LAYOUT_REQUIREMENTS.md. */
     private data class MatrixRow(
         val assetId: String,
         val requiredOwnBaseKeys: List<String>,
-        /** Zeichen, die reachable sein müssen: eigene Taste ODER alternates (base oder shift). */
+        /** Characters that must be reachable: own key OR alternates (base or shift). */
         val requiredReachable: List<String> = emptyList(),
-        /** lowercase → uppercase Paare, die in shift als eigene Taste/value existieren müssen. */
+        /** lowercase → uppercase pairs that must exist in shift as an own key/value. */
         val shiftPairs: List<Pair<String, String>> = emptyList(),
     )
 
-    // Sprachmatrix gemäß LAYOUT_REQUIREMENTS.md Rev 3, §2.2 (Spalten A/B).
-    // Jede Zeile mit §-Verweis; A = eigene base-Taste, B = erreichbar (eigen ODER alternate).
+    // Language matrix per LAYOUT_REQUIREMENTS.md Rev 3, §2.2 (columns A/B).
+    // Every row with a § reference; A = own base key, B = reachable (own OR alternate).
     private val matrix: List<MatrixRow> = listOf(
-        // F23b-T (Nutzerentscheidung L1-Paket): de-de hat KEINE eigenen ä/ö/ü/ß-Tasten
-        // mehr — Stock-Vorbild: rowkeys_qwertz1.xml keySpec q..p (KEIN ü, dazu
-        // keyHintLabel 1..0) und rowkeys_qwertz3.xml keySpec y x c v b n m (KEIN ß).
-        // Die Umlaute sind als ERSTE Alternative erreichbar (eigener Test unten);
-        // shiftPairs prüft ẞ gegen die Shift-Ebene (eigener Wert ODER alternate,
-        // checkShiftPairs) — nach F23b über die S-Alternates, nicht mehr ueber eszett.
+        // F23b-T (user decision L1 package): de-de has NO own ä/ö/ü/ß keys
+        // anymore — stock model: rowkeys_qwertz1.xml keySpec q..p (NO ü, plus
+        // keyHintLabel 1..0) and rowkeys_qwertz3.xml keySpec y x c v b n m (NO ß).
+        // The umlauts are reachable as the FIRST alternate (own test below);
+        // shiftPairs checks ẞ against the shift layer (own value OR alternate,
+        // checkShiftPairs) — after F23b via the S alternates, no longer via eszett.
         MatrixRow("de-de", emptyList(), shiftPairs = listOf("ß" to "ẞ")),
-        // §2.2: en-us — keine A/B-Buchstaben (ASCII); Satzzeichen deckt PunctuationCoverageTest ab
+        // §2.2: en-us — no A/B letters (ASCII); punctuation is covered by PunctuationCoverageTest
         MatrixRow("en-us", emptyList(), requiredReachable = listOf("'", "\"", "–", "—", "…")),
-        // §2.2 fr-fr + F27c/D26: die Akzente sind KEINE eigenen Tasten mehr, sondern
-        // Alternates ihrer Grundtasten (Stock-Geometrie) — daher nur erreichbar (B).
+        // §2.2 fr-fr + F27c/D26: the accents are NO own keys anymore but
+        // alternates of their base keys (stock geometry) — hence only reachable (B).
         MatrixRow("fr-fr", emptyList(), requiredReachable = listOf("é", "è", "à", "ç", "ù", "ê", "ë", "ï", "î", "ô", "û", "ü", "œ", "æ", "ÿ"), shiftPairs = listOf("œ" to "Œ", "æ" to "Æ", "ç" to "Ç")),
-        // §2.2 es-es + F27c/D26: ñ ist Alternate von n (keine eigene Taste mehr).
+        // §2.2 es-es + F27c/D26: ñ is an alternate of n (no own key anymore).
         MatrixRow("es-es", emptyList(), requiredReachable = listOf("ñ", "á", "é", "í", "ó", "ú", "ü", "¿", "¡"), shiftPairs = listOf("ñ" to "Ñ")),
-        // §2.2 it-it + F27c/D26: à è é ì ò ù sind Alternates (Rev 3: ü B-pflicht — Audit B1)
+        // §2.2 it-it + F27c/D26: à è é ì ò ù are alternates (Rev 3: ü B-mandatory — audit B1)
         MatrixRow("it-it", emptyList(), requiredReachable = listOf("à", "è", "é", "ì", "ò", "ù", "á", "í", "ó", "ú", "î", "ü")),
-        // F24d (R8-Beschluss wie de-de): pt-pt hat KEINE eigenen Akzent-Tasten mehr —
-        // AOSP qwerty-Satz traegt a/e/i/o/u/c die Akzente als moreKeys
+        // F24d (R8 decision like de-de): pt-pt has NO own accent keys anymore —
+        // the AOSP qwerty row carries a/e/i/o/u/c accents as moreKeys
         // (docs/AOSP_ROWKEYS_BELEGE.md: "keine / 12 Akzent-Tasten + 5. Reihe (uns) -> Rebuild").
-        // Erreichbarkeit als ERSTE Alternative prueft der eigene Fall unten;
-        // shiftPairs prueft Ç gegen die shift-Ebene (eigener Wert ODER alternate).
+        // Reachability as the FIRST alternate is checked by the own case below;
+        // shiftPairs checks Ç against the shift layer (own value OR alternate).
         MatrixRow("pt-pt", emptyList(), requiredReachable = listOf("ü"), shiftPairs = listOf("ç" to "Ç")),
-        // §2.2: nl-nl A = —; B = á à ä ë é è ê ï ö ü (Rev 3: ä B-pflicht — Audit B1)
+        // §2.2: nl-nl A = —; B = á à ä ë é è ê ï ö ü (Rev 3: ä B-mandatory — audit B1)
         MatrixRow("nl-nl", emptyList(), requiredReachable = listOf("á", "à", "ä", "ë", "é", "è", "ê", "ï", "ö", "ü")),
-        // §2.2 pl-pl + F27c/D26: ą ć ę ł ń ó ś ź ż sind Alternates (Großformen via shiftPairs)
+        // §2.2 pl-pl + F27c/D26: ą ć ę ł ń ó ś ź ż are alternates (uppercase forms via shiftPairs)
         MatrixRow("pl-pl", emptyList(), requiredReachable = listOf("ą", "ć", "ę", "ł", "ń", "ó", "ś", "ź", "ż"), shiftPairs = listOf("ą" to "Ą", "ć" to "Ć", "ę" to "Ę", "ł" to "Ł", "ń" to "Ń", "ó" to "Ó", "ś" to "Ś", "ź" to "Ź", "ż" to "Ż")),
-        // §2.2 tr-tr + F27c/D26: ç ğ ı ö ş ü sind Alternates (i bleibt eigene Taste, ı→i);
+        // §2.2 tr-tr + F27c/D26: ç ğ ı ö ş ü are alternates (i stays an own key, ı→i);
         // shift i→İ, ı→I (§3)
         MatrixRow("tr-tr", emptyList(), requiredReachable = listOf("ğ", "ü", "ş", "ı", "ö", "ç", "â", "î", "û"), shiftPairs = listOf("ğ" to "Ğ", "ü" to "Ü", "ş" to "Ş", "ı" to "I", "ö" to "Ö", "ç" to "Ç", "i" to "İ")),
-        // §2.2 ru-ru + F27c/D27: а–я vollständig als eigene Tasten; ё ist Alternate von е
+        // §2.2 ru-ru + F27c/D27: а–я complete as own keys; ё is an alternate of е
         MatrixRow("ru-ru", listOf("а", "б", "в", "г", "д", "е", "ж", "з", "и", "й", "к", "л", "м", "н", "о", "п", "р", "с", "т", "у", "ф", "х", "ц", "ч", "ш", "щ", "ъ", "ы", "ь", "э", "ю", "я"), requiredReachable = listOf("ё")),
-        // §2.2 cs-cz + F27c/D26: alle Akzente sind Alternates; B = ď ť ň ó (HW nicht direkt belegt)
+        // §2.2 cs-cz + F27c/D26: all accents are alternates; B = ď ť ň ó (HW not directly assigned)
         MatrixRow("cs-cz", emptyList(), requiredReachable = listOf("ě", "š", "č", "ř", "ž", "ý", "á", "í", "é", "ú", "ů", "ď", "ť", "ň", "ó")),
-        // §2.2 sv-se + F27c/D26: å ä ö sind Alternates; B = á à é è ü
+        // §2.2 sv-se + F27c/D26: å ä ö are alternates; B = á à é è ü
         MatrixRow("sv-se", emptyList(), requiredReachable = listOf("å", "ä", "ö", "á", "à", "é", "è", "ü")),
-        // §2.2 da-dk + F27c/D26: æ ø å sind Alternates; B = ä é ö ü
+        // §2.2 da-dk + F27c/D26: æ ø å are alternates; B = ä é ö ü
         MatrixRow("da-dk", emptyList(), requiredReachable = listOf("æ", "ø", "å", "ä", "ö", "é", "ü")),
-        // §2.2 fi-fi + F27c/D26: ä ö å sind Alternates (Rev 1-Korrektur: å Pflicht); B = š ž é
+        // §2.2 fi-fi + F27c/D26: ä ö å are alternates (Rev 1 correction: å mandatory); B = š ž é
         MatrixRow("fi-fi", emptyList(), requiredReachable = listOf("ä", "ö", "å", "š", "ž", "é")),
-        // §2.2: el-gr A = α–ω vollständig + ς (explizite Liste, U+03C2); B = Tonos/Dialytika
-        // F24d-T2: shiftPairs ";"→":" — AOSP rowkeys_greek1.xml zeigt base ';' und shift ':'
-        // (docs/AOSP_ROWKEYS_BELEGE.md, el-gr); CaseMapper.upper(";") ist ";", daher
-        // Matrix-Sonderfall — exakt derselbe Mechanismus wie ß→ẞ (Zeile 57).
+        // §2.2: el-gr A = α–ω complete + ς (explicit list, U+03C2); B = tonos/dialytika
+        // F24d-T2: shiftPairs ";"→":" — AOSP rowkeys_greek1.xml shows base ';' and shift ':'
+        // (docs/AOSP_ROWKEYS_BELEGE.md, el-gr); CaseMapper.upper(";") is ";", hence
+        // a matrix special case — exactly the same mechanism as ß→ẞ (line 57).
         MatrixRow("el-gr", listOf("α", "β", "γ", "δ", "ε", "ζ", "η", "θ", "ι", "κ", "λ", "μ", "ν", "ξ", "ο", "π", "ρ", "ς", "σ", "τ", "υ", "φ", "χ", "ψ", "ω"), requiredReachable = listOf("Σ", "ΐ", "ΰ", "ϊ", "ϋ", "ά", "έ", "ή", "ί", "ό", "ύ", "ώ"), shiftPairs = listOf(";" to ":")),
     )
 
     /**
-     * F23b-T: de-de — ä/ö/ü/ß sind nicht mehr eigene Tasten (AOSP rowkeys_qwertz1.xml/
-     * rowkeys_qwertz3.xml, s. MatrixRow-Kommentar), sondern ERSTE Alternative ihrer
-     * Basisbuchstaben; ẞ bleibt über die S-Alternates der shift-Ebene erreichbar.
-     * Die Assets wandert F23b — dieser Fall ist bis dahin EXPECTED ROT.
+     * F23b-T: de-de — ä/ö/ü/ß are no longer own keys (AOSP rowkeys_qwertz1.xml/
+     * rowkeys_qwertz3.xml, see the MatrixRow comment), but the FIRST alternate of their
+     * base letters; ẞ stays reachable via the S alternates of the shift layer.
+     * The asset is migrated by F23b — this case is EXPECTED RED until then.
      */
     @Test
-    fun `de-de - Umlaute und szett sind erste Alternative`() {
-        val json = asset("de-de.json") ?: throw AssertionError("de-de.json nicht lesbar")
+    fun `de-de - umlauts and eszett are the first alternate`() {
+        val json = asset("de-de.json") ?: throw AssertionError("de-de.json not readable")
         val parsed = LayoutParser.parse(json)
         fun firstAlt(layer: String, id: String): String? =
             keysOf(parsed.layers.getValue(layer)).firstOrNull { it.id == id }?.alternates?.firstOrNull()
-        org.junit.Assert.assertEquals("base a: alternates[0] muss ä sein", "ä", firstAlt("base", "a"))
-        org.junit.Assert.assertEquals("base o: alternates[0] muss ö sein", "ö", firstAlt("base", "o"))
-        org.junit.Assert.assertEquals("base u: alternates[0] muss ü sein", "ü", firstAlt("base", "u"))
-        org.junit.Assert.assertEquals("base s: alternates[0] muss ß sein", "ß", firstAlt("base", "s"))
+        org.junit.Assert.assertEquals("base a: alternates[0] must be ä", "ä", firstAlt("base", "a"))
+        org.junit.Assert.assertEquals("base o: alternates[0] must be ö", "ö", firstAlt("base", "o"))
+        org.junit.Assert.assertEquals("base u: alternates[0] must be ü", "ü", firstAlt("base", "u"))
+        org.junit.Assert.assertEquals("base s: alternates[0] must be ß", "ß", firstAlt("base", "s"))
         val sShift = keysOf(parsed.layers.getValue("shift")).firstOrNull { it.id == "s" }
-        assertTrue("shift S muss ẞ in alternates fuehren (sonst ist ẞ verloren)",
+        assertTrue("shift S must carry ẞ in alternates (otherwise ẞ is lost)",
             sShift != null && sShift.alternates.contains("ẞ"))
     }
 
     /**
-     * F54 (Nutzer-Auftrag 02:4x): Punkt-Langdruckmenü über ALLE 15 Layouts —
-     * ‹/› und ihre cursor-Zellen sind RAUS; einheitliche Zellreihenfolge
-     * `,` `!` `?` `:` `;` `(` `)`; sprachliche Präfixe bleiben VORN (ru-ru:
-     * @); hoechstens 8 Menüzellen (MAX_CELLS); keine cursor-left/right-
-     * Aktionen mehr im period-Key. (Die FUSSZEILEN-Cursor-TASTEN sind ein
-     * anderes Feature und bleiben unberührt.)
+     * F54 (user order 02:4x): period long-press menu across ALL 15 layouts —
+     * ‹/› and their cursor cells are OUT; uniform cell order
+     * `,` `!` `?` `:` `;` `(` `)`; language prefixes stay at the FRONT (ru-ru:
+     * @); at most 8 menu cells (MAX_CELLS); no more cursor-left/right
+     * actions on the period key. (The FOOTER-row cursor KEYS are a
+     * different feature and stay untouched.)
      */
     @Test
-    fun `F54 - period-Alternates aller 15 Layouts - Zielzustand ohne cursor-Aktionen`() {
+    fun `F54 - period alternates of all 15 layouts - target state without cursor actions`() {
         val standard = listOf(",", "!", "?", ":", ";", "(", ")")
         val layouts = listOf(
             "cs-cz", "da-dk", "de-de", "el-gr", "en-us", "es-es", "fi-fi",
             "fr-fr", "it-it", "nl-nl", "pl-pl", "pt-pt", "ru-ru", "sv-se", "tr-tr",
         )
         for (name in layouts) {
-            val raw = asset("$name.json") ?: throw AssertionError("$name.json nicht lesbar")
+            val raw = asset("$name.json") ?: throw AssertionError("$name.json not readable")
             val root = JSONObject(raw)
             for (layerName in listOf("base", "shift")) {
                 val layer = root.getJSONObject("layers").getJSONObject(layerName)
@@ -148,23 +148,23 @@ class LayoutCompletenessTest {
                         val list = (0 until alts.length()).map { alts.getString(it) }
                         val expected = if (name == "ru-ru") listOf("@") + standard else standard
                         assertEquals(
-                            "$name/$layerName: period-Alternates == Zielzustand (Sprachpräfix + , ! ? : ; ( )",
+                            "$name/$layerName: period alternates == target state (language prefix + , ! ? : ; ( )",
                             expected, list,
                         )
                         assertTrue(
-                            "$name/$layerName: hoechstens ${de.voicekeyboard.keyboard.LongPressMenu.MAX_CELLS} Zellen",
+                            "$name/$layerName: at most ${de.voicekeyboard.keyboard.LongPressMenu.MAX_CELLS} cells",
                             list.size <= de.voicekeyboard.keyboard.LongPressMenu.MAX_CELLS,
                         )
-                        assertTrue("$name: keine ‹ mehr", "‹" !in list)
-                        assertTrue("$name: keine › mehr", "›" !in list)
+                        assertTrue("$name: no more ‹", "‹" !in list)
+                        assertTrue("$name: no more ›", "›" !in list)
                         if (key.has("cellActions")) {
                             val acts = key.getJSONArray("cellActions").join(",")
-                            assertTrue("$name/$layerName: keine cursor-Aktionen im period-Key",
+                            assertTrue("$name/$layerName: no cursor actions on the period key",
                                 "cursor-left" !in acts && "cursor-right" !in acts)
                         }
                     }
                 }
-                assertTrue("$name/$layerName: period-Key muss existieren", seen == 1)
+                assertTrue("$name/$layerName: period key must exist", seen == 1)
             }
         }
     }
@@ -173,45 +173,45 @@ class LayoutCompletenessTest {
         val context = RuntimeEnvironment.getApplication() as Application
         context.assets.open("layouts/$name").bufferedReader().use { it.readText() }
     } catch (e: Exception) {
-        null // Asset existiert (noch) nicht → Matrix-Zeile überspringen
+        null // asset does not exist (yet) → skip the matrix row
     }
 
-    // ---------- Gegenprobe (Negativtest mit Inline-Mutation, KEINE Asset-Änderung) ----------
+    // ---------- counter-check (negative test with inline mutation, NO asset change) ----------
 
-    /** A-3-Gegenprobe: Rückbau des pt-pt-Fixes (à wieder KEINE eigene Taste) muss ROT machen. */
+    /** A-3 counter-check: reverting the pt-pt fix (à again NO own key) must turn RED. */
     /**
-     * F24d (AOSP qwerty-Satz, R8 wie de-de): die portugiesischen Akzente sind keine
-     * eigenen Tasten mehr, sondern ERSTE Alternative ihrer Grundtaste — base a->á, c->ç,
-     * e->é, i->í, o->õ, u->ú; shift dieselben Großformen. Ü bleibt als Stufe-B-Zeichen
-     * alternate des U (IST-Uebernahme aus der ehemaligen u-acute-Taste).
+     * F24d (AOSP qwerty row, R8 like de-de): the Portuguese accents are no
+     * own keys anymore but the FIRST alternate of their base key — base a->á, c->ç,
+     * e->é, i->í, o->õ, u->ú; shift the same uppercase forms. Ü stays a stage-B
+     * alternate of U (IST takeover from the former u-acute key).
      */
     private fun firstAltOf(parsed: LayoutAsset, layer: String, id: String): String? =
         keysOf(parsed.layers.getValue(layer)).firstOrNull { it.id == id }?.alternates?.firstOrNull()
 
     private fun checkPtAccentsAsFirstAlternate(parsed: LayoutAsset) {
         for ((id, acc) in listOf("a" to "á", "c" to "ç", "e" to "é", "i" to "í", "o" to "õ", "u" to "ú")) {
-            org.junit.Assert.assertEquals("Asset 'pt-pt' base '$id': alternates[0] muss '$acc' sein", acc, firstAltOf(parsed, "base", id))
+            org.junit.Assert.assertEquals("Asset 'pt-pt' base '$id': alternates[0] must be '$acc'", acc, firstAltOf(parsed, "base", id))
         }
         for ((id, acc) in listOf("a" to "Á", "c" to "Ç", "e" to "É", "i" to "Í", "o" to "Õ", "u" to "Ú")) {
-            org.junit.Assert.assertEquals("Asset 'pt-pt' shift '$id': alternates[0] muss '$acc' sein", acc, firstAltOf(parsed, "shift", id))
+            org.junit.Assert.assertEquals("Asset 'pt-pt' shift '$id': alternates[0] must be '$acc'", acc, firstAltOf(parsed, "shift", id))
         }
     }
 
     @Test
-    fun `pt-pt - Akzente sind erste Alternative statt eigener Taste`() {
-        val json = asset("pt-pt.json") ?: throw AssertionError("pt-pt.json nicht lesbar")
+    fun `pt-pt - accents are the first alternate instead of an own key`() {
+        val json = asset("pt-pt.json") ?: throw AssertionError("pt-pt.json not readable")
         checkPtAccentsAsFirstAlternate(LayoutParser.parse(json))
     }
 
     /**
-     * F24d-Umdeutung des ehemaligen a-grave-Gegenprobenfalls: die FRUEHERE Regel
-     * ("à als fehlende EIGENE base-Taste muss rot werden") existiert nicht mehr —
-     * der Fall prueft jetzt die NEUE Regel: verliert base-a seine Akzentkette
-     * (alternates geloescht), muss der Akzent-Alternativen-Fall rot werden.
+     * F24d reinterpretation of the former a-grave counter-check case: the EARLIER rule
+     * ("à as a missing OWN base key must turn red") no longer exists —
+     * the case now checks the NEW rule: if base-a loses its accent chain
+     * (alternates deleted), the accent-alternates case must turn red.
      */
     @Test
-    fun `negativ - pt-pt ohne Akzentkette an a faellt der neue Fall rot`() {
-        val json = asset("pt-pt.json") ?: throw AssertionError("pt-pt.json nicht lesbar")
+    fun `negative - pt-pt without an accent chain on a turns the new case red`() {
+        val json = asset("pt-pt.json") ?: throw AssertionError("pt-pt.json not readable")
         val root = JSONObject(json)
         val rows: JSONArray = root.getJSONObject("layers").getJSONObject("base").getJSONArray("rows")
         var removed = false
@@ -225,23 +225,23 @@ class LayoutCompletenessTest {
                 }
             }
         }
-        assertTrue("Gegenprobe: base-Taste 'a' nicht gefunden", removed)
+        assertTrue("counter-check: base key 'a' not found", removed)
         val parsed = LayoutParser.parse(root.toString())
         var caught = false
         try {
             checkPtAccentsAsFirstAlternate(parsed)
         } catch (e: AssertionError) {
             caught = true
-            assertTrue("Meldung muss á nennen: ${e.message}", e.message?.contains("á") == true)
-            assertTrue("Meldung muss Asset nennen: ${e.message}", e.message?.contains("pt-pt") == true)
+            assertTrue("the message must name á: ${e.message}", e.message?.contains("á") == true)
+            assertTrue("the message must name the asset: ${e.message}", e.message?.contains("pt-pt") == true)
         }
-        assertTrue("Verlust der Akzentkette an 'a' wurde NICHT erkannt (Tautologie-Verdacht)", caught)
+        assertTrue("the loss of the accent chain on 'a' was NOT detected (tautology suspicion)", caught)
     }
 
     private fun keysOf(layer: LayoutLayer) = layer.rows.flatten()
 
     @Test
-    fun `alle vorhandenen Assets erfuellen die Sprachmatrix und alle Grundregeln`() {
+    fun `all existing assets fulfill the language matrix and all basic rules`() {
         var checked = 0
         val skipped = mutableListOf<String>()
         for (row in matrix) {
@@ -264,62 +264,62 @@ class LayoutCompletenessTest {
             checked++
         }
         assertTrue(
-            "Kein Asset geprüft — Assets fehlen oder sind unlesbar (übersprungen: $skipped)",
+            "no asset checked — assets missing or unreadable (skipped: $skipped)",
             checked > 0,
         )
-        println("LayoutCompletenessTest: $checked Assets geprüft, übersprungen: $skipped")
+        println("LayoutCompletenessTest: $checked assets checked, skipped: $skipped")
     }
 
     /**
-     * F27d→F36/V2 Stock-Geometrie als eigenständiges Gate: alle 15 Assets tragen
-     * base+shift das V2-Zielbild — Summen 10/10/10/13 (ru-ru r2: 12, D27), kein
-     * ⌫ in r0, F40: ⌫ genau 1x am r1-ENDE, @ genau 1x in r2 vor ⏎ (ru-ru:
-     * Ausnahme, kein Tausch), Buchstabenblock-Mitte 5u (ru-ru 6u).
+     * F27d→F36/V2 stock geometry as a standalone gate: all 15 assets carry
+     * base+shift the V2 target image — sums 10/10/10/13 (ru-ru r2: 12, D27), no
+     * ⌫ in r0, F40: ⌫ exactly 1x at the r1 END, @ exactly 1x in r2 before ⏎ (ru-ru:
+     * exception, no swap), letter block center 5u (ru-ru 6u).
      */
     @Test
-    fun `stockGeometrie gilt für alle 15 Assets`() {
+    fun `stock geometry holds for all 15 assets`() {
         val ids = listOf(
             "cs-cz", "da-dk", "de-de", "el-gr", "en-us", "es-es", "fi-fi", "fr-fr",
             "it-it", "nl-nl", "pl-pl", "pt-pt", "ru-ru", "sv-se", "tr-tr",
         )
         for (id in ids) {
             val json = asset("$id.json")
-            assertTrue("Asset $id fehlt oder ist unlesbar", json != null)
+            assertTrue("asset $id missing or unreadable", json != null)
             checkGeometry(LayoutParser.parse(json!!))
         }
     }
 
     /**
-     * F29-ABSCHLUSS (ru-ru-Sonderfall, base UND shift): 11 Buchstaben in r1 lassen
-     * eine @-Taste nicht zu (0.5 + 11 + 1 = 12.5u > 12; r2 ist D27-gesperrt und voll).
-     * Statt eigener @-Taste: @ als alternates[0] an der Punkt-Taste der Fussreihe;
-     * die Cursor-Zellen bleiben auf '‹'/'›' (cellActions auf Index 4/5).
-     * D27-Entscheidung 2026-11-01 (F33-Nachbesprechung): ru-ru r2 bleibt ⇧1+10+⏎1
-     * (Vollreihe, Mitte = View-Mitte 540 px; Sol-F33-Formel B=min(N,7) greift
-     * hier nicht) — dieses Test und die ru-ru-Ausnahmen in checkGeometry sind
-     * der verankerte Soll-Zustand.
+     * F29 conclusion (ru-ru special case, base AND shift): 11 letters in r1 do not
+     * allow an @ key (0.5 + 11 + 1 = 12.5u > 12; r2 is D27-locked and full).
+     * Instead of an own @ key: @ as alternates[0] on the footer's period key;
+     * the cursor cells stay on '‹'/'›' (cellActions at index 4/5).
+     * D27 decision 2026-11-01 (F33 follow-up discussion): ru-ru r2 stays ⇧1+10+⏎1
+     * (full row, center = view center 540 px; the Sol F33 formula B=min(N,7) does
+     * not apply here) — this test and the ru-ru exceptions in checkGeometry are
+     * the anchored target state.
      */
     @Test
-    fun `ru-ru - kein at-Objekt in r1, @ ist alternates-Null am period`() {
-        val parsed = LayoutParser.parse(asset("ru-ru.json")!!) // ru-ru-Referenz-Asset
+    fun `ru-ru - no at object in r1, @ is alternates zero on period`() {
+        val parsed = LayoutParser.parse(asset("ru-ru.json")!!) // ru-ru reference asset
         for (layerName in listOf("base", "shift")) {
             val rows = parsed.layers.getValue(layerName).rows
             assertTrue(
-                "$layerName: kein 'at'-Objekt in r1",
+                "$layerName: no 'at' object in r1",
                 rows[1].none { it.id == "at" && it.value == "@" },
             )
             val period = rows[3].first { it.id == "period" }
-            assertEquals("$layerName: @ ist alternates[0] am period", "@", period.alternates.first())
-            assertEquals("$layerName: F54-Standardzellen hinter @", listOf(",", "!", "?", ":", ";", "(", ")"), period.alternates.drop(1))
-            assertEquals("$layerName: F54 — keine cursor-Aktionen mehr", 0, period.cellActions.size)
+            assertEquals("$layerName: @ is alternates[0] on period", "@", period.alternates.first())
+            assertEquals("$layerName: F54 standard cells behind @", listOf(",", "!", "?", ":", ";", "(", ")"), period.alternates.drop(1))
+            assertEquals("$layerName: F54 — no more cursor actions", 0, period.cellActions.size)
         }
     }
 
     private fun assertEqualsAssetId(expected: String, actual: String) {
-        if (expected != actual) fail("Asset-Datei $expected.json hat interne id '$actual'")
+        if (expected != actual) fail("asset file $expected.json has internal id '$actual'")
     }
 
-    /** Grundregel 1 + Matrix: Pflichtzeichen als eigene Taste in base (nicht nur alternates). */
+    /** Basic rule 1 + matrix: mandatory characters as an own key in base (not only alternates). */
     private fun checkRequiredOwnBaseKeys(row: MatrixRow, parsed: LayoutAsset) {
         val baseValues = keysOf(parsed.layers.getValue("base"))
             .filter { it.kind == KeyKind.TEXT }
@@ -327,77 +327,77 @@ class LayoutCompletenessTest {
             .toSet()
         val missing = row.requiredOwnBaseKeys.filter { it !in baseValues }
         if (missing.isNotEmpty()) {
-            fail("Asset '${parsed.id}': Pflichtzeichen fehlen als eigene base-Taste: $missing " +
-                "(alternates zählen NICHT, LAYOUT_REQUIREMENTS Grundregel 1)")
+            fail("Asset '${parsed.id}': mandatory characters missing as own base keys: $missing " +
+                "(alternates do NOT count, LAYOUT_REQUIREMENTS basic rule 1)")
         }
     }
 
-    /** Matrix-Spalte „alternates": Zeichen müssen erreichbar sein (eigen ODER alternate). */
+    /** Matrix column „alternates": characters must be reachable (own OR alternate). */
     private fun checkReachable(row: MatrixRow, parsed: LayoutAsset) {
         val all = parsed.layers.values.flatMap { keysOf(it) }
         val reachable = all.flatMap { listOf(it.value) + it.alternates }.toSet()
         val missing = row.requiredReachable.filter { it !in reachable }
         if (missing.isNotEmpty()) {
-            fail("Asset '${parsed.id}': nicht erreichbare Matrix-Zeichen: $missing")
+            fail("Asset '${parsed.id}': unreachable matrix characters: $missing")
         }
     }
 
-    /** Grundregel 2 + Sonderfälle: shift enthält die Großform je base-Text-Taste (per CaseMapper bzw. Matrix). */
+    /** Basic rule 2 + special cases: shift contains the uppercase form for every base text key (via CaseMapper respectively the matrix). */
     private fun checkShiftPairs(row: MatrixRow, parsed: LayoutAsset) {
         val baseKeys = keysOf(parsed.layers.getValue("base")).filter { it.kind == KeyKind.TEXT }
         val shiftKeys = keysOf(parsed.layers.getValue("shift")).filter { it.kind == KeyKind.TEXT }
         val shiftByLabel = shiftKeys.map { it.value }.toSet()
-        // Jede base-Text-Taste braucht eine shift-Taste mit sprachrichtiger Großform.
-        // Ausnahme: Sprachen, deren Unicode-Großform mehrcodepointig ist (ß→SS) und im
-        // Matrix-Sonderfall explizit gefordert ist (z. B. ß→ẞ) — dann prüft der Paar-Test unten.
+        // Every base text key needs a shift key with the language-correct uppercase form.
+        // Exception: languages whose Unicode uppercase form is multi-codepoint (ß→SS) and
+        // is explicitly required in the matrix special case (e.g. ß→ẞ) — then the pair test below checks.
         for (key in baseKeys) {
             val expectedUpper = CaseMapper.upper(key.value, parsed.language.caseLocale)
             val coveredByMatrixPair = row.shiftPairs.any { it.first == key.value }
             if (expectedUpper !in shiftByLabel && !coveredByMatrixPair) {
-                fail("Asset '${parsed.id}': shift-Ebene hat keine Taste '${expectedUpper}' für base-" +
-                    "'${key.value}' (Taste '${key.id}')")
+                fail("Asset '${parsed.id}': the shift layer has no key '${expectedUpper}' for base-" +
+                    "'${key.value}' (key '${key.id}')")
             }
         }
-        // Explizite Matrix-Paare (z. B. ß→ẞ, i→İ): Großform muss in shift erreichbar
-        // sein — eigene Taste ODER alternate (§2.2 Stufe B, Rev 3).
+        // Explicit matrix pairs (e.g. ß→ẞ, i→İ): the uppercase form must be reachable
+        // in shift — own key OR alternate (§2.2 stage B, Rev 3).
         val shiftReachable = shiftKeys.flatMap { listOf(it.value) + it.alternates }.toSet()
         for ((lower, upper) in row.shiftPairs) {
             if (upper !in shiftReachable) {
-                fail("Asset '${parsed.id}': Großform '$upper' für '$lower' ist in der " +
-                    "shift-Ebene nicht erreichbar (weder eigene Taste noch alternate)")
+                fail("Asset '${parsed.id}': the uppercase form '$upper' for '$lower' is not " +
+                    "reachable in the shift layer (neither an own key nor an alternate)")
             }
         }
     }
 
-    /** Grundregel 5a/5b + echte Artefakte (Rev 3: WHITELIST — \\ < > & sind reguläre Zeichen). */
+    /** Basic rules 5a/5b + real artifacts (Rev 3: WHITELIST — \\ < > & are regular characters). */
     private fun checkNoLabelArtifacts(parsed: LayoutAsset) {
         val artifacts = listOf("=\\<", "⌇")
         for ((layerName, layer) in parsed.layers) {
             for (key in keysOf(layer)) {
                 if (key.kind == KeyKind.TEXT) {
                     if (key.label != key.value) {
-                        fail("Asset '${parsed.id}' Ebene '$layerName' Taste '${key.id}': " +
-                            "label '${key.label}' != value '${key.value}' (Regel 5a)")
+                        fail("Asset '${parsed.id}' layer '$layerName' key '${key.id}': " +
+                            "label '${key.label}' != value '${key.value}' (rule 5a)")
                     }
                     if (key.label.codePointCount(0, key.label.length) != 1) {
-                        fail("Asset '${parsed.id}' Ebene '$layerName' Taste '${key.id}': " +
-                            "label '${key.label}' hat nicht genau 1 Codepoint (Regel 5b)")
+                        fail("Asset '${parsed.id}' layer '$layerName' key '${key.id}': " +
+                            "label '${key.label}' does not have exactly 1 codepoint (rule 5b)")
                     }
                 }
                 for (bad in artifacts) {
                     if (key.label.contains(bad)) {
-                        fail("Asset '${parsed.id}' Ebene '$layerName' Taste '${key.id}': " +
-                            "Artefakt '${key.label}' (Regel 5d)")
+                        fail("Asset '${parsed.id}' layer '$layerName' key '${key.id}': " +
+                            "artifact '${key.label}' (rule 5d)")
                     }
                 }
             }
         }
     }
 
-    /** LAYOUT_REQUIREMENTS §2.1.1 Pflichtlisten (Maschinenlesbar, Rev 3). */
+    /** LAYOUT_REQUIREMENTS §2.1.1 mandatory lists (machine-readable, Rev 3). */
     private fun checkMandatorySymbols(parsed: LayoutAsset) {
-        val mandatoryOnSymbols = ".,?!:;'\"-/@()&%+=#_*".toList()  // Gruppe 1, 20 Zeichen
-        val mandatoryOnSymbolsOrShift = "\\\\[]{}<>~|€$§°".toList()   // Gruppe 2, 13 Zeichen
+        val mandatoryOnSymbols = ".,?!:;'\"-/@()&%+=#_*".toList()  // group 1, 20 characters
+        val mandatoryOnSymbolsOrShift = "\\\\[]{}<>~|€$§°".toList()   // group 2, 13 characters
         val digits = "0123456789".toList()
         val symbols = keysOf(parsed.layers.getValue("symbols"))
             .filter { it.kind == KeyKind.TEXT }.map { it.value }
@@ -405,49 +405,49 @@ class LayoutCompletenessTest {
             .filter { it.kind == KeyKind.TEXT }.map { it.value }
         for (c in mandatoryOnSymbols + digits) {
             if (symbols.count { it == c.toString() } != 1) {
-                fail("Asset '${parsed.id}': Pflichtzeichen '$c' fehlt auf Ebene 'symbols' " +
-                    "oder kommt mehrfach vor (§2.1 Gruppe 1/Ziffern; gefunden: " +
+                fail("Asset '${parsed.id}': mandatory character '$c' missing on layer 'symbols' " +
+                    "or occurs more than once (§2.1 group 1/digits; found: " +
                     "${symbols.count { it == c.toString() }}x)")
             }
         }
         for (c in mandatoryOnSymbolsOrShift) {
             if (symbols.count { it == c.toString() } + symbolsShift.count { it == c.toString() } < 1) {
-                fail("Asset '${parsed.id}': Pflichtzeichen '$c' fehlt auf 'symbols' " +
-                    "UND 'symbolsShift' (§2.1 Gruppe 2)")
+                fail("Asset '${parsed.id}': mandatory character '$c' missing on 'symbols' " +
+                    "AND 'symbolsShift' (§2.1 group 2)")
             }
         }
-        // Regel 8: innerhalb einer Ebene keine doppelten text-values.
+        // rule 8: no duplicate text values within a layer.
         for ((layerName, values) in listOf("symbols" to symbols, "symbolsShift" to symbolsShift)) {
             val dup = values.groupBy { it }.filterValues { it.size > 1 }.keys
             if (dup.isNotEmpty()) {
-                fail("Asset '${parsed.id}' Ebene '$layerName': doppelte Zeichen $dup (Regel 8)")
+                fail("Asset '${parsed.id}' layer '$layerName': duplicate characters $dup (rule 8)")
             }
         }
     }
 
-    /** Grundregel 6: alternates nur Zeichen (keine Actions), max 8. */
+    /** Basic rule 6: alternates only characters (no actions), max 8. */
     private fun checkAlternates(parsed: LayoutAsset) {
         for ((layerName, layer) in parsed.layers) {
             for (key in keysOf(layer)) {
                 if (key.alternates.size > 8) {
-                    fail("Asset '${parsed.id}' Ebene '$layerName' Taste '${key.id}': " +
+                    fail("Asset '${parsed.id}' layer '$layerName' key '${key.id}': " +
                         "${key.alternates.size} alternates > 8")
                 }
                 for (alt in key.alternates) {
                     if (alt in KeyActions.ALL) {
-                        fail("Asset '${parsed.id}' Ebene '$layerName' Taste '${key.id}': " +
-                            "alternates enthalten Action-Namen '$alt'")
+                        fail("Asset '${parsed.id}' layer '$layerName' key '${key.id}': " +
+                            "alternates contain action name '$alt'")
                     }
                     if (alt.isEmpty()) {
-                        fail("Asset '${parsed.id}' Ebene '$layerName' Taste '${key.id}': " +
-                            "leeres alternates-Element")
+                        fail("Asset '${parsed.id}' layer '$layerName' key '${key.id}': " +
+                            "empty alternates element")
                     }
                 }
             }
         }
     }
 
-    /** Grundregel 4: Pflicht-Aktionstasten je Ebene, eindeutig. */
+    /** Basic rule 4: mandatory action keys per layer, unique. */
     private fun checkRequiredActionKeys(parsed: LayoutAsset) {
         val isRu = parsed.id == "ru-ru"
         val mustHaveOnce = listOf(
@@ -460,94 +460,94 @@ class LayoutCompletenessTest {
         for ((layerName, layer) in parsed.layers) {
             val actions = keysOf(layer).filter { it.kind == KeyKind.ACTION }.map { it.value }
             for ((action, _) in mustHaveOnce) {
-                // ru-ru D27: die Buchstaben-Ebenen (base/shift) haben KEIN backspace
-                // (r2 = shift1+10+enter1 ist voll; r0 = 11+Margin hat keinen Platz).
+                // ru-ru D27: the letter layers (base/shift) have NO backspace
+                // (r2 = shift1+10+enter1 is full; r0 = 11+margin has no space).
                 val expected =
                     if (isRu && (layerName == "base" || layerName == "shift") && action == KeyActions.BACKSPACE) 0
                     else 1
                 val count = actions.count { it == action }
                 if (count != expected) {
-                    fail("Asset '${parsed.id}' Ebene '$layerName': Aktion '$action' " +
-                        "$count-mal vorhanden (erwartet: genau $expected)")
+                    fail("Asset '${parsed.id}' layer '$layerName': action '$action' " +
+                        "present $count times (expected: exactly $expected)")
                 }
             }
-            // Buchstaben-Ebenen brauchen shift, Symbolebenen layer-Wechsel.
+            // letter layers need shift, symbol layers a layer switch.
             val letterLayer = layerName == "base" || layerName == "shift"
             val needShift = actions.count { it == KeyActions.SHIFT || it == KeyActions.CAPS }
             val needLayer = actions.count {
                 it == KeyActions.LAYER_SYMBOLS || it == KeyActions.LAYER_BASE
             }
             if (letterLayer && needShift + needLayer < 1) {
-                fail("Asset '${parsed.id}' Ebene '$layerName': weder shift- noch layer-Taste")
+                fail("Asset '${parsed.id}' layer '$layerName': neither a shift nor a layer key")
             }
             if (!letterLayer && needLayer < 1) {
-                fail("Asset '${parsed.id}' Ebene '$layerName': keine layer-Wechsel-Taste")
+                fail("Asset '${parsed.id}' layer '$layerName': no layer-switch key")
             }
         }
     }
 
     /**
-     * P1-03/M8c (LAYOUT_REQUIREMENTS Regel 4a + §6 Punkt 9): Shift-Taste in den Symbolebenen.
-     * symbols UND symbolsShift: genau eine Taste mit kind==action, value=="shift",
-     * label=="⇧", id=="shift", an Position Reihe 2 / Spalte 0, width==1.5.
-     * Verboten in beiden Ebenen: value=="layer-symbols"; value=="layer-base" an einer
-     * Taste mit Label != "ABC" (ABC/layer-base in Reihe 3 bleibt als direkter Weg).
+     * P1-03/M8c (LAYOUT_REQUIREMENTS rule 4a + §6 item 9): shift key in the symbol layers.
+     * symbols AND symbolsShift: exactly one key with kind==action, value=="shift",
+     * label=="⇧", id=="shift", at position row 2 / column 0, width==1.5.
+     * Forbidden in both layers: value=="layer-symbols"; value=="layer-base" on a
+     * key with label != "ABC" (ABC/layer-base in row 3 stays as a direct way).
      */
     private fun checkSymbolShiftKeys(parsed: LayoutAsset) {
         for (layerName in listOf("symbols", "symbolsShift")) {
             val rows = parsed.layers.getValue(layerName).rows
-            // (1) Position Reihe 2 / Spalte 0: id shift, ⇧, action, value shift, width 1.5
+            // (1) position row 2 / column 0: id shift, ⇧, action, value shift, width 1.5
             if (rows.size <= 2 || rows[2].isEmpty()) {
-                fail("Asset '${parsed.id}' Ebene '$layerName': Reihe 2 fehlt — ⇧-Taste erwartet")
+                fail("Asset '${parsed.id}' layer '$layerName': row 2 missing — ⇧ key expected")
             }
             val pos = rows[2][0]
             if (pos.id != "shift" || pos.label != "⇧" || pos.kind != KeyKind.ACTION ||
                 pos.value != KeyActions.SHIFT || pos.width != 1.5
             ) {
-                fail("Asset '${parsed.id}' Ebene '$layerName' Reihe 2/Spalte 0: " +
+                fail("Asset '${parsed.id}' layer '$layerName' row 2/column 0: " +
                     "id='${pos.id}', label='${pos.label}', kind=${pos.kind}, value='${pos.value}', " +
-                    "width=${pos.width} (erwartet: id=shift, label=⇧, action, shift, 1.5)")
+                    "width=${pos.width} (expected: id=shift, label=⇧, action, shift, 1.5)")
             }
-            // (2) genau EINE Taste mit value==shift UND label==⇧ in dieser Ebene
+            // (2) exactly ONE key with value==shift AND label==⇧ in this layer
             val shiftKeys = keysOf(parsed.layers.getValue(layerName))
                 .filter { it.value == KeyActions.SHIFT }
             if (shiftKeys.size != 1 || shiftKeys[0].label != "⇧") {
-                fail("Asset '${parsed.id}' Ebene '$layerName': ${shiftKeys.size} Taste(n) mit " +
-                    "value==shift — erwartet genau 1 mit Label ⇧")
+                fail("Asset '${parsed.id}' layer '$layerName': ${shiftKeys.size} key(s) with " +
+                    "value==shift — expected exactly 1 with label ⇧")
             }
-            // (3) verbotene Werte
+            // (3) forbidden values
             for (key in keysOf(parsed.layers.getValue(layerName))) {
                 if (key.value == KeyActions.LAYER_SYMBOLS) {
-                    fail("Asset '${parsed.id}' Ebene '$layerName' Taste '${key.id}': " +
-                        "value=='layer-symbols' ist verboten (Regel 4a)")
+                    fail("Asset '${parsed.id}' layer '$layerName' key '${key.id}': " +
+                        "value=='layer-symbols' is forbidden (rule 4a)")
                 }
                 if (key.value == KeyActions.LAYER_BASE && key.label != "ABC") {
-                    fail("Asset '${parsed.id}' Ebene '$layerName' Taste '${key.id}': " +
-                        "layer-base mit Label '${key.label}' != 'ABC' (Regel 4a)")
+                    fail("Asset '${parsed.id}' layer '$layerName' key '${key.id}': " +
+                        "layer-base with label '${key.label}' != 'ABC' (rule 4a)")
                 }
             }
         }
     }
 
     /**
-     * F27d/F29→F36/V2 + F40 (docs/DESIGN_TASTATUR_V2.md, 1u = 108 px; Nutzer-
-     * Feedback v0.1.27): base/shift tragen das V2-Raster — r0 = 10 Buchstaben à
-     * 1,0 OHNE ⌫; r1 = Rand 0,5 + Buchstabenblock 8,5u + ⌫ 1,0 (F40: am r1-ENDE);
-     * r2 = T8 (v0.1.38, Planer-Freigabe) Y-Reihen-Ausrichtung: KEIN @ mehr
-     * (erreichbar über M-Langdruck-Menü), 13 7er-Assets ⇧ 0,89352 + 7 à 1,10185
-     * + ⏎ 1,39352 (Y-Mitte 13/9 = 1,44444 unter A/S, M-Mitte 145/18 = 8,05556
-     * unter K/L; Blockmitte wandert 540→513 px — dokumentierte Abweichung
-     * DESIGN_TASTATUR_V2 §10: Nutzer-Zentrierung schlägt Uniformität; r2 ist
-     * jetzt die breiteste Buchstabenreihe, 119-px-Zellen); cs-cz ⇧ 1,889 +
-     * 6 à 1,03704 + ⏎ 1,88889 (6er, keine M-Mittigkeit — dokumentierte Ausnahme);
-     * Footer r3 UNVERÄNDERT Σ13 (eigene Einheit u_footer). Rundung: 5 Dezimalen,
-     * Summen-Toleranz 0,001u (≤ 0,11 px). Sonderfälle: cs-cz r1 = 10 Buchstaben
-     * à 0,85 + ⌫ 1,0 (derselbe 8,5u-Block); ru-ru r0/r1 = Rand 0,11111 (12 px)
-     * je Seite + 11 à 0,88889 (96 px, Spec §6), r2 bleibt D27-Vollreihe ⇧1 +
-     * 10 à 1,0 + ⏎1 = Σ12 (Spec §6 „unverändert“; KEIN Tausch — kein @ in r1,
-     * ⌫ nur auf den Symbolebenen, @ am period). fr-fr ist strukturell Standard
-     * (r1 hat IST 9 Buchstaben + ⌫, m liegt in r2 — Spec §6 „10 Buchstaben“ passt
-     * nicht aufs Asset, keine Taste wandert).
+     * F27d/F29→F36/V2 + F40 (docs/DESIGN_TASTATUR_V2.md, 1u = 108 px; user
+     * feedback v0.1.27): base/shift carry the V2 grid — r0 = 10 letters at
+     * 1.0 each WITHOUT ⌫; r1 = margin 0.5 + letter block 8.5u + ⌫ 1.0 (F40: at the
+     * r1 END); r2 = T8 (v0.1.38, planner approval) Y-row alignment: NO more @
+     * (reachable via the M long-press menu), the 13 7-key assets ⇧ 0.89352 +
+     * 7 at 1.10185 + ⏎ 1.39352 (Y center 13/9 = 1.44444 below A/S, M center
+     * 145/18 = 8.05556 below K/L; the block center moves 540→513 px — documented
+     * deviation in DESIGN_TASTATUR_V2 §10: user centering beats uniformity; r2 is
+     * now the widest letter row, 119-px cells); cs-cz ⇧ 1.889 + 6 at 1.03704 +
+     * ⏎ 1.88889 (6-key, no M centering — documented exception); footer r3
+     * UNCHANGED Σ13 (its own unit u_footer). Rounding: 5 decimals, sum tolerance
+     * 0.001u (≤ 0.11 px). Special cases: cs-cz r1 = 10 letters at 0.85 + ⌫ 1.0
+     * (the same 8.5u block); ru-ru r0/r1 = margin 0.11111 (12 px) per side +
+     * 11 at 0.88889 (96 px, spec §6), r2 stays the D27 full row ⇧1 + 10 at
+     * 1.0 + ⏎1 = Σ12 (spec §6 „unverändert“; NO swap — no @ in r1, ⌫ only on
+     * the symbol layers, @ on period). fr-fr is structurally standard (r1 has
+     * IST 9 letters + ⌫, m lies in r2 — spec §6 „10 Buchstaben“ does not match
+     * the asset, no key moves).
      */
     private fun checkGeometry(parsed: LayoutAsset) {
         val isRu = parsed.id == "ru-ru"
@@ -555,66 +555,66 @@ class LayoutCompletenessTest {
         for (layerName in listOf("base", "shift")) {
             val rows = parsed.layers.getValue(layerName).rows
             if (rows.size < 4) {
-                fail("Asset '${parsed.id}' $layerName: weniger als 4 Reihen (V2-Geometrie)")
+                fail("Asset '${parsed.id}' $layerName: fewer than 4 rows (V2 geometry)")
             }
             val expectSums = if (isRu) listOf(10.0, 10.0, 12.0, 13.0) else listOf(10.0, 10.0, 10.0, 13.0)
             val sums = rows.take(4).map { row -> row.sumOf { it.width } }
             for (i in expectSums.indices) {
                 if (kotlin.math.abs(sums[i] - expectSums[i]) > 0.001) {
-                    fail("Asset '${parsed.id}' $layerName: Zeilensumme r$i=" +
+                    fail("Asset '${parsed.id}' $layerName: row sum r$i=" +
                         "${"%.5f".format(sums[i])}u != ${expectSums[i]}u (F36/V2)")
                 }
             }
-            // ⌫ verlässt r0 (alle Assets); F40: ⌫ sitzt genau 1x am r1-ENDE (ru-ru:
-            // keiner in den Buchstaben-Ebenen, D27) und NICHT mehr in r2.
+            // ⌫ leaves r0 (all assets); F40: ⌫ sits exactly 1x at the r1 END (ru-ru:
+            // none in the letter layers, D27) and NOT anymore in r2.
             val bsR0 = rows[0].count { it.kind == KeyKind.ACTION && it.value == KeyActions.BACKSPACE }
-            if (bsR0 != 0) fail("Asset '${parsed.id}' $layerName: r0 darf KEIN backspace tragen (F36/V2)")
+            if (bsR0 != 0) fail("Asset '${parsed.id}' $layerName: r0 must carry NO backspace (F36/V2)")
             val bsR2 = rows[2].count { it.kind == KeyKind.ACTION && it.value == KeyActions.BACKSPACE }
-            if (bsR2 != 0) fail("Asset '${parsed.id}' $layerName: r2 darf KEIN backspace tragen (F40 — ⌫ sitzt am r1-Ende)")
+            if (bsR2 != 0) fail("Asset '${parsed.id}' $layerName: r2 must carry NO backspace (F40 — ⌫ sits at the r1 end)")
             val enterR2 = rows[2].count { it.kind == KeyKind.ACTION && it.value == KeyActions.ENTER }
             val enterR3 = rows[3].count { it.kind == KeyKind.ACTION && it.value == KeyActions.ENTER }
-            if (enterR2 != 1) fail("Asset '${parsed.id}' $layerName: enter $enterR2-mal in r2 (erwartet 1)")
-            if (enterR3 != 0) fail("Asset '${parsed.id}' $layerName: enter in r3 verboten (V2-Geometrie)")
-            // r1: Rand 0,5 + Buchstabenblock + @ 1,0; ru-ru: Vollreihe mit 12-px-Seitenrändern, kein @.
+            if (enterR2 != 1) fail("Asset '${parsed.id}' $layerName: enter $enterR2 times in r2 (expected 1)")
+            if (enterR3 != 0) fail("Asset '${parsed.id}' $layerName: enter forbidden in r3 (V2 geometry)")
+            // r1: margin 0.5 + letter block + @ 1.0; ru-ru: full row with 12-px side margins, no @.
             val r1 = rows[1]
             if (isRu) {
                 if (r1[0].kind != KeyKind.MARGIN || r1.last().kind != KeyKind.MARGIN ||
                     kotlin.math.abs(r1[0].width - 0.11111) > 0.001 ||
                     kotlin.math.abs(r1.last().width - 0.11111) > 0.001
-                ) fail("Asset 'ru-ru' $layerName: r1 braucht 0,11111u-Seitenränder (12 px, Spec §6)")
+                ) fail("Asset 'ru-ru' $layerName: r1 needs 0.11111u side margins (12 px, spec §6)")
                 if (r1.any { it.kind == KeyKind.TEXT && it.value == "@" }) {
-                    fail("Asset 'ru-ru' $layerName: r1 darf kein @-Key tragen (D27, @ am period)")
+                    fail("Asset 'ru-ru' $layerName: r1 must carry no @ key (D27, @ on period)")
                 }
                 val ruLetters1 = r1.filter { it.kind == KeyKind.TEXT }
                 if (ruLetters1.size != 11) {
-                    fail("Asset 'ru-ru' $layerName: r1 braucht 11 Buchstaben (sind ${ruLetters1.size})")
+                    fail("Asset 'ru-ru' $layerName: r1 needs 11 letters (has ${ruLetters1.size})")
                 }
                 for (k in ruLetters1) {
                     if (kotlin.math.abs(k.width - 0.88889) > 0.001) {
-                        fail("Asset 'ru-ru' $layerName r1 '${k.id}': width ${k.width} != 0,88889 (96 px, Spec §6)")
+                        fail("Asset 'ru-ru' $layerName r1 '${k.id}': width ${k.width} != 0.88889 (96 px, spec §6)")
                     }
                 }
             } else {
                 if (r1.isEmpty() || r1[0].kind != KeyKind.MARGIN ||
                     kotlin.math.abs(r1[0].width - 0.5) > 0.0001
                 ) {
-                    fail("Asset '${parsed.id}' $layerName: r1[0] muss Margin 0,5 sein (F36/V2)")
+                    fail("Asset '${parsed.id}' $layerName: r1[0] must be margin 0.5 (F36/V2)")
                 }
                 val atInR1 = r1.count { it.kind == KeyKind.TEXT && it.value == "@" }
                 if (atInR1 != 0) {
-                    fail("Asset '${parsed.id}' $layerName: r1 darf KEIN @ tragen (T8: @ ist keine Direkttaste mehr, erreichbar über M-Menü)")
+                    fail("Asset '${parsed.id}' $layerName: r1 must carry NO @ (T8: @ is not a direct key anymore, reachable via the M menu)")
                 }
                 val bsR1 = r1.filter { it.kind == KeyKind.ACTION && it.value == KeyActions.BACKSPACE }
                 if (bsR1.size != 1 || r1.last() !== bsR1[0] ||
                     kotlin.math.abs(bsR1[0].width - 1.0) > 0.0001
                 ) {
-                    fail("Asset '${parsed.id}' $layerName: ⌫ genau 1x am r1-ENDE (width 1,0) erwartet (F40)")
+                    fail("Asset '${parsed.id}' $layerName: ⌫ exactly 1x at the r1 END (width 1.0) expected (F40)")
                 }
                 val letters = r1.filter { it.kind == KeyKind.TEXT && it.value != "@" }
                 val wantN = if (isCs) 10 else 9
-                val wantW = if (isCs) 0.85 else 0.94444 // 10 bzw. 9 Buchstaben à 8,5u-Block
+                val wantW = if (isCs) 0.85 else 0.94444 // 10 respectively 9 letters of the 8.5u block
                 if (letters.size != wantN) {
-                    fail("Asset '${parsed.id}' $layerName: r1 braucht $wantN Buchstaben (sind ${letters.size})")
+                    fail("Asset '${parsed.id}' $layerName: r1 needs $wantN letters (has ${letters.size})")
                 }
                 for (k in letters) {
                     if (kotlin.math.abs(k.width - wantW) > 0.001) {
@@ -622,39 +622,39 @@ class LayoutCompletenessTest {
                     }
                 }
                 if (r1.last().kind == KeyKind.MARGIN) {
-                    fail("Asset '${parsed.id}' $layerName: r1 ohne rechten Rand (Σ10, F36/V2)")
+                    fail("Asset '${parsed.id}' $layerName: r1 without right margin (Σ10, F36/V2)")
                 }
             }
-            // r2 T8 (v0.1.38, Planer-Freigabe): @-Taste RAUS (Nutzer-Auftrag — @
-            // erreichbar über M-Langdruck-Menü), ⇧ schmaler, ⏎ breiter — Y mittig
-            // unter A/S, M mittig unter K/L (Begründung der Umschreibung: die
-            // alten Invarianten ⇧1,889/0,889/@-Pflicht/⏎1,0/Blockmitte 5u sind
-            // mit dem Nutzer-Auftrag unvereinbar; Zentren-Invarianten wandern
-            // hierher UND nach LetterRowAlignmentAcrossAssetsTest).
-            //  - 13 7er-Assets: ⇧ 0,89352 + 7 à 1,10185 + ⏎ 1,39352;
-            //    Y-Mitte 13/9 = 1,44444, M-Mitte 145/18 = 8,05556 (KEY_GAP=0 ⇒ px-exakt:
-            //    96,5 + 7×119 + 150,5 = 1080 px).
-            //  - cs-cz (6er, kein y): ⇧ 1,88889 + 6 à 1,03704 + ⏎ 1,88889 (⇧=⏎
-            //    symmetrisch); M-Mittigkeit im 6er-Raster arithmetisch unerreichbar
-            //    ⇒ dokumentierte Ausnahme (nur Struktur, keine Zentren).
-            //  - ru-ru: D27-Vollreihe bleibt (kein @ auf Buchstaben-Ebenen).
+            // r2 T8 (v0.1.38, planner approval): @ key OUT (user order — @
+            // reachable via the M long-press menu), ⇧ narrower, ⏎ wider — Y centered
+            // below A/S, M centered below K/L (rationale of the rewrite: the
+            // old invariants ⇧1.889/0.889/@-mandatory/⏎1.0/block center 5u are
+            // incompatible with the user order; the center invariants move
+            // here AND to LetterRowAlignmentAcrossAssetsTest).
+            //  - the 13 7-key assets: ⇧ 0.89352 + 7 at 1.10185 + ⏎ 1.39352;
+            //    Y center 13/9 = 1.44444, M center 145/18 = 8.05556 (KEY_GAP=0 ⇒ px-exact:
+            //    96.5 + 7×119 + 150.5 = 1080 px).
+            //  - cs-cz (6-key, no y): ⇧ 1.88889 + 6 at 1.03704 + ⏎ 1.88889 (⇧=⏎
+            //    symmetric); M centering is arithmetically unreachable in the 6-key grid
+            //    ⇒ documented exception (structure only, no centers).
+            //  - ru-ru: the D27 full row stays (no @ on the letter layers).
             val r2 = rows[2]
             val r2Letters = r2.filter { it.kind == KeyKind.TEXT }
             val wantShift = when { isRu -> 1.0; isCs -> 1.88889; else -> 0.89352 }
             if (r2.isEmpty() || r2[0].kind != KeyKind.ACTION || r2[0].value != KeyActions.SHIFT ||
                 kotlin.math.abs(r2[0].width - wantShift) > 0.001
             ) {
-                fail("Asset '${parsed.id}' $layerName: r2[0] muss shift width $wantShift sein (T8, ist " +
+                fail("Asset '${parsed.id}' $layerName: r2[0] must be shift width $wantShift (T8, is " +
                     "${r2.firstOrNull()?.let { it.value + "/" + it.width }})")
             }
             val wantL = when {
-                isRu -> 1.0     // D27: 10 à 1,0 in der Σ12-Reihe
+                isRu -> 1.0     // D27: 10 at 1.0 in the Σ12 row
                 isCs -> 1.03704 // 112 px
-                else -> 1.10185 // 119 px — r2 ist jetzt die breiteste Buchstabenreihe (T8)
+                else -> 1.10185 // 119 px — r2 is now the widest letter row (T8)
             }
             val wantNL = if (isRu) 10 else if (isCs) 6 else 7
             if (r2Letters.size != wantNL) {
-                fail("Asset '${parsed.id}' $layerName: r2 braucht $wantNL Buchstaben (sind ${r2Letters.size})")
+                fail("Asset '${parsed.id}' $layerName: r2 needs $wantNL letters (has ${r2Letters.size})")
             }
             for (k in r2Letters) {
                 if (kotlin.math.abs(k.width - wantL) > 0.001) {
@@ -664,30 +664,30 @@ class LayoutCompletenessTest {
             val enter = r2.firstOrNull { it.kind == KeyKind.ACTION && it.value == KeyActions.ENTER }
             val wantEnter = when { isRu -> 1.0; isCs -> 1.88889; else -> 1.39352 }
             if (enter == null || kotlin.math.abs(enter.width - wantEnter) > 0.001) {
-                fail("Asset '${parsed.id}' $layerName: ⏎ width $wantEnter in r2 erwartet (T8)")
+                fail("Asset '${parsed.id}' $layerName: ⏎ width $wantEnter expected in r2 (T8)")
             }
             if (!isRu) {
-                // T8: KEINE @-Direkttaste mehr in r2 — @ läuft über das M-Menü.
+                // T8: NO more direct @ key in r2 — @ runs via the M menu.
                 if (r2.any { it.kind == KeyKind.TEXT && it.value == "@" }) {
-                    fail("Asset '${parsed.id}' $layerName: @-Direkttaste in r2 verboten (T8: @ → M-Menü)")
+                    fail("Asset '${parsed.id}' $layerName: direct @ key forbidden in r2 (T8: @ → M menu)")
                 }
                 val m = r2Letters.lastOrNull()
                 if (m == null || m.alternates.none { it == "@" }) {
-                    fail("Asset '${parsed.id}' $layerName: M-Taste muss @ im Langdruck-Menü tragen (T8)")
+                    fail("Asset '${parsed.id}' $layerName: the M key must carry @ in its long-press menu (T8)")
                 }
             }
             if (r2.last().kind == KeyKind.MARGIN) {
-                fail("Asset '${parsed.id}' $layerName: r2 ohne rechten Rand (F36/V2)")
+                fail("Asset '${parsed.id}' $layerName: r2 without right margin (F36/V2)")
             }
-            // T8-Zentren (nur 7er; cs: 6er-Ausnahme, ru: D27): Y mittig unter
-            // A/S ⇒ c(r2[0]) = 13/9; M mittig unter K/L ⇒ c(r2[6]) = 145/18
-            // (Herleitung: r1-Mitte c1(i) = 0,5 + (i+0,5)·0,94444). Ersetzt die
-            // F36-Blockmitte 5u — die wandert auf 4,75u (540→513 px, dokumentierte
-            // Abweichung DESIGN_TASTATUR_V2 §10).
+            // T8 centers (7-key assets only; cs: 6-key exception, ru: D27): Y centered
+            // below A/S ⇒ c(r2[0]) = 13/9; M centered below K/L ⇒ c(r2[6]) = 145/18
+            // (derivation: r1 center c1(i) = 0.5 + (i+0.5)·0.94444). Replaces the
+            // F36 block center 5u — which moves to 4.75u (540→513 px, documented
+            // deviation in DESIGN_TASTATUR_V2 §10).
             if (!isRu && !isCs) {
                 val r1Letters = rows[1].filter { it.kind == KeyKind.TEXT }
                 if (r1Letters.size != 9) {
-                    fail("Asset '${parsed.id}' $layerName: r1 braucht 9 Buchstaben (sind ${r1Letters.size})")
+                    fail("Asset '${parsed.id}' $layerName: r1 needs 9 letters (has ${r1Letters.size})")
                 }
                 var x1 = 0.5
                 val c1 = r1Letters.map { x1 += it.width; x1 - it.width / 2 }
@@ -696,7 +696,7 @@ class LayoutCompletenessTest {
                 if (kotlin.math.abs(c2[0] - 13.0 / 9) > 0.01 ||
                     kotlin.math.abs(c2[6] - 145.0 / 18) > 0.01
                 ) {
-                    fail("Asset '${parsed.id}' $layerName: T8-Zentren verletzt — " +
+                    fail("Asset '${parsed.id}' $layerName: T8 centers violated — " +
                         "Y ${"%.4f".format(c2[0])} != 13/9, M ${"%.4f".format(c2[6])} != 145/18")
                 }
             }
@@ -704,18 +704,18 @@ class LayoutCompletenessTest {
     }
 
     /**
-     * Gegenproben (müssen rot werden, §6 Punkt 9): mutierte Assets müssen von
-     * checkSymbolShiftKeys abgelehnt werden.
+     * Counter-checks (must turn red, §6 item 9): mutated assets must be
+     * rejected by checkSymbolShiftKeys.
      */
     @Test
-    fun `gegenproben symbolsShift Rueckwegstaste muss abgelehnt werden`() {
-        val base = LayoutParser.parse(asset("de-de.json")!!) // korrektes Referenz-Asset
-        // (a) Taste fehlt effektiv in symbolsShift Reihe 2/Spalte 0 (id geaendert)
-        assertRejected(mutateShiftKey(base, "symbolsShift") { it.copy(id = "shift-x") }, "(a) Taste fehlt")
-        // (b) Ist-Zustand da-dk: label ?123 + value shift
-        assertRejected(mutateShiftKey(base, "symbolsShift") { it.copy(label = "?123") }, "(b) ?123-Label")
-        // (c) ⇧ mit value layer-base (Ist-Zustand ru-ru/cs-cz)
-        assertRejected(mutateShiftKey(base, "symbolsShift") { it.copy(value = "layer-base") }, "(c) layer-base an ⇧")
+    fun `counter-checks symbolsShift back key must be rejected`() {
+        val base = LayoutParser.parse(asset("de-de.json")!!) // correct reference asset
+        // (a) key effectively missing in symbolsShift row 2/column 0 (id changed)
+        assertRejected(mutateShiftKey(base, "symbolsShift") { it.copy(id = "shift-x") }, "(a) key missing")
+        // (b) da-dk IST state: label ?123 + value shift
+        assertRejected(mutateShiftKey(base, "symbolsShift") { it.copy(label = "?123") }, "(b) ?123 label")
+        // (c) ⇧ with value layer-base (IST state ru-ru/cs-cz)
+        assertRejected(mutateShiftKey(base, "symbolsShift") { it.copy(value = "layer-base") }, "(c) layer-base on ⇧")
     }
 
     private fun mutateShiftKey(
@@ -735,9 +735,9 @@ class LayoutCompletenessTest {
     private fun assertRejected(mutated: LayoutAsset, label: String) {
         try {
             checkSymbolShiftKeys(mutated)
-            fail("Gegenprobe $label: mutiertes Asset wurde NICHT abgelehnt")
+            fail("counter-check $label: the mutated asset was NOT rejected")
         } catch (expected: AssertionError) {
-            // erwartetes Rot
+            // expected red
         }
     }
 }

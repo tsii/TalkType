@@ -11,7 +11,7 @@ class TdtGreedyTest {
     companion object {
         const val BLANK = AsrContract.BLANK // 8192
 
-        /** JointOut mit Token-Argmax [token], Duration-Argmax [dur]. */
+        /** JointOut with token argmax [token], duration argmax [dur]. */
         fun out(token: Int, dur: Int, s1: FloatArray, s2: FloatArray): JointOut {
             val t = FloatArray(AsrContract.VOCAB_SIZE)
             val d = FloatArray(AsrContract.NUM_DURATIONS)
@@ -23,7 +23,7 @@ class TdtGreedyTest {
         fun marker(v: Int) = FloatArray(AsrContract.PRED_HIDDEN * 2) { (v + it % 7).toFloat() }
     }
 
-    /** Fake, der pro Schritt (token, dur) abspielt und die empfangenen States protokolliert. */
+    /** Fake that plays back (token, dur) per step and records the received states. */
     class ScriptJoint(private val script: List<Pair<Int, Int>>) : JointStep {
         var calls = 0
         val seenStates1 = ArrayList<FloatArray>()
@@ -46,15 +46,15 @@ class TdtGreedyTest {
 
     private fun bigBudget() = 4096
 
-        /** Echte Filterregel für alle im Test genutzten IDs (ASR_CONTRACT §2.4):
-         * Vocabulary.isSpecial — unbekannte IDs und <...>-Tokens (78, 244) sind
-         * special; die regulären Tokens 100/200/300/500 nicht. */
+        /** Real filter rule for all IDs used in the test (ASR_CONTRACT §2.4):
+         * Vocabulary.isSpecial — unknown IDs and <...> tokens (78, 244) are
+         * special; the regular tokens 100/200/300/500 are not. */
         private val miniVocab = Vocabulary.parse(
             "hello 100\nworld 200\ntest 300\nfoo 500\nbar 650\nbaz 700\n<|de|> 78\n<|spltoken0|> 244\n"
         )
         private val IS_SPECIAL: (Int) -> Boolean = { miniVocab.isSpecial(it) }
 
-    // (i) einfache Sequenz Blank/Non-Blank
+    // (i) simple sequence Blank/Non-Blank
     @Test fun simpleSequence() {
         val j = ScriptJoint(listOf(BLANK to 1, 100 to 1, 200 to 1))
         val r = TdtGreedy.decode(j, frames = 3, tokenBudget = bigBudget(), isSpecial = IS_SPECIAL)
@@ -65,24 +65,24 @@ class TdtGreedyTest {
         assertEquals(listOf(1, 2), r.frameTimes.toList())
     }
 
-    // (ii) Non-Blank mit dur=0 mehrfach auf demselben Frame
+    // (ii) Non-Blank with dur=0 multiple times on the same frame
     @Test fun multipleNonBlankOnSameFrame() {
         val j = ScriptJoint(listOf(100 to 0, 200 to 0, 300 to 1))
         val r = TdtGreedy.decode(j, frames = 1, tokenBudget = bigBudget(), isSpecial = IS_SPECIAL)
         assertEquals(listOf(100, 200, 300), r.tokenIds.toList())
         assertEquals(listOf(0, 0, 0), r.frameTimes.toList())
-        // Frame-Index beim Joint: zweimal Frame 0 (dur=0 hält), dann kein weiterer Aufruf (t=1 = frames)
+        // frame index at the joint: frame 0 twice (dur=0 holds), then no further call (t=1 = frames)
         assertEquals(listOf(0, 0, 0), j.seenFrames.toList())
     }
 
-    // (iii) Non-Blank mit dur=0 hintereinander → Zwangsvorschub nach 10 (Pro-Frame-Limit, §3c)
+    // (iii) Non-Blank with dur=0 back to back → forced advance after 10 (per-frame limit, §3c)
     @Test fun emittedLimitForcesFrameAdvance() {
         val j = ScriptJoint(List(60) { 500 to 0 })
         val r = TdtGreedy.decode(j, frames = 3, tokenBudget = bigBudget(), isSpecial = IS_SPECIAL)
         assertFalse("no endless run, not step-limited", r.incomplete)
         assertNull(r.reason)
-        // Zwangsvorschub NACH 10 Emissionen: Frame 0 bekommt genau 10, der 11. Token
-        // fällt auf Frame 1 (kein Endloslauf, §3c).
+        // forced advance AFTER 10 emissions: frame 0 gets exactly 10, the 11th token
+        // falls onto frame 1 (no endless run, §3c).
         assertEquals(10, r.frameTimes.count { it == 0 })
         assertEquals(10, r.frameTimes.count { it == 1 })
         assertEquals(10, r.frameTimes.count { it == 2 })
@@ -91,7 +91,7 @@ class TdtGreedyTest {
         assertTrue(r.steps <= 3 * (AsrContract.MAX_SYMBOLS_PER_FRAME + 2))
     }
 
-    // (iv) Blank mit dur=3 überspringt 3 Frames
+    // (iv) Blank with dur=3 skips 3 frames
     @Test fun blankSkipsThreeFrames() {
         val j = ScriptJoint(listOf(BLANK to 3, 100 to 1))
         val r = TdtGreedy.decode(j, frames = 4, tokenBudget = bigBudget(), isSpecial = IS_SPECIAL)
@@ -109,11 +109,11 @@ class TdtGreedyTest {
         assertEquals(4, r.tokenIds.size)
     }
 
-    // (vi) Gleichstand bei Argmax → kleinster Index; stepLimit-Sicherheitsnetz
+    // (vi) tie in argmax → smallest index; stepLimit safety net
     @Test fun argmaxTieSmallestIndex() {
-        // alles 0.0: Token-Argmax = 0 (kleinster Index), dur-Argmax = 0.
-        // Token 0 ist Sondertoken → nicht emittiert; dur=0 + Non-Blank + emitted<10
-        // → kein Frame-Fortschritt → das Schrittlimit muss als Sicherheitsnetz greifen.
+        // all 0.0: token argmax = 0 (smallest index), duration argmax = 0.
+        // Token 0 is a special token → not emitted; dur=0 + Non-Blank + emitted<10
+        // → no frame progress → the step limit must kick in as a safety net.
         val flat = JointStep { _, _, _, _ ->
             JointOut(
                 FloatArray(AsrContract.VOCAB_SIZE),
@@ -122,14 +122,14 @@ class TdtGreedyTest {
             )
         }
         val r = TdtGreedy.decode(flat, frames = 2, tokenBudget = bigBudget(), isSpecial = IS_SPECIAL)
-        assertEquals(0, r.tokenIds.size) // Sondertoken 0 nie emittiert
-        // dur=0 + Nicht-Blank (Sondertoken zählt als Emission) → Pro-Frame-Limit
-        // erzwingt t+1 nach 10 Schritten → reguläres Ende nach 2 Frames, kein stepLimit
+        assertEquals(0, r.tokenIds.size) // special token 0 never emitted
+        // dur=0 + Non-Blank (special token counts as an emission) → per-frame limit
+        // forces t+1 after 10 steps → regular end after 2 frames, no stepLimit
         assertFalse(r.incomplete)
         assertNull(r.reason)
         assertEquals(20, r.steps)
 
-        // zwei gleichhohe Kandidaten → kleinerer Index gewinnt
+        // two candidates of equal height → the smaller index wins
         val tie = FloatArray(AsrContract.VOCAB_SIZE)
         tie[700] = 2f; tie[650] = 2f
         val j2 = JointStep { _, _, _, _ ->
@@ -139,7 +139,7 @@ class TdtGreedyTest {
         assertEquals(listOf(650), r2.tokenIds.toList())
     }
 
-    // (vii) Sondertoken 0..4 wird nicht emittiert
+    // (vii) special tokens 0..4 are not emitted
     @Test fun specialTokensNotEmitted() {
         val j = ScriptJoint(listOf(0 to 1, 3 to 1, 4 to 1, 100 to 1, BLANK to 1))
         val r = TdtGreedy.decode(j, frames = 5, tokenBudget = bigBudget(), isSpecial = IS_SPECIAL)
@@ -148,9 +148,9 @@ class TdtGreedyTest {
         assertNull(r.reason)
     }
 
-    // (e) SB1-01: vollstaendiger Sondertoken-Filter (ASR_CONTRACT §2.4/§7-4):
-    // Sprach-Tokens (<|de|>, ID 78) und <|spltoken0|> (ID 244) duerfen NICHT
-    // in tokenIds landen, wenn der Aufrufer Vocabulary.isSpecial verdrahtet.
+    // (e) SB1-01: complete special-token filter (ASR_CONTRACT §2.4/§7-4):
+    // language tokens (<|de|>, ID 78) and <|spltoken0|> (ID 244) must NOT
+    // end up in tokenIds when the caller wires up Vocabulary.isSpecial.
     @Test fun specialTokenLanguageTokenNotEmitted() {
         val j = ScriptJoint(listOf(78 to 1, 100 to 1))
         val r = TdtGreedy.decode(j, frames = 2, tokenBudget = bigBudget(), isSpecial = IS_SPECIAL)
@@ -165,23 +165,23 @@ class TdtGreedyTest {
         assertFalse(r.incomplete)
     }
 
-    // (viii) States werden bei Blank NICHT fortgeschrieben (§3a)
+    // (viii) states are NOT advanced on Blank (§3a)
     @Test fun statesNotAdvancedOnBlank() {
         val j = ScriptJoint(listOf(BLANK to 1, BLANK to 1, 100 to 1, 200 to 1))
         val r = TdtGreedy.decode(j, frames = 4, tokenBudget = bigBudget(), isSpecial = IS_SPECIAL)
         assertEquals(listOf(100, 200), r.tokenIds.toList())
         assertEquals(4, j.calls)
-        // Schritt 2 (Blank) muss dieselben Null-States erhalten wie Schritt 1 (kein Fortschreiben)
+        // step 2 (Blank) must receive the same zero states as step 1 (no advancing)
         assertTrue("states after blank must stay zero", j.seenStates1[1].all { it == 0f })
         assertTrue(j.seenStates2[1].all { it == 0f })
-        // Schritt 3 (Non-Blank) erhält ebenfalls die Null-States; erst danach übernehmen
+        // step 3 (Non-Blank) also receives the zero states; only afterwards do they take over
         assertTrue(j.seenStates1[2].all { it == 0f })
-        // Schritt 4 (Non-Blank nach Emission) erhält die frischen States aus Schritt 3 (Marker 102)
+        // step 4 (Non-Blank after emission) receives the fresh states from step 3 (marker 102)
         assertEquals(j.seenStates1[3].toList(), marker(102).toList())
         assertEquals(j.seenStates2[3].toList(), marker(102).toList())
     }
 
-    // (h) frames-Klemmung
+    // (h) frames clamping
     @Test fun negativeFramesClamped() {
         val j = ScriptJoint(emptyList())
         val r = TdtGreedy.decode(j, frames = -5, tokenBudget = bigBudget(), isSpecial = IS_SPECIAL)
@@ -191,15 +191,15 @@ class TdtGreedyTest {
         assertNull(r.reason)
     }
 
-    // (g) Schrittlimit-Sicherheitsnetz: bei regelkonformem Joint erzwingt jedes
-    // Schrittupdate Fortschritt (dur>0, Blank oder emitted>=10) — das Limit ist
-    // reiner Schutz. Nachweis der Schrittobegrenze über langen dur=0-Strom:
+    // (g) step-limit safety net: with a rule-compliant joint every step update
+    // forces progress (dur>0, Blank or emitted>=10) — the limit is pure
+    // protection. Proof of the step bound via a long dur=0 stream:
     @Test fun stepsStayBelowSafetyNet() {
         val always = JointStep { _, _, _, _ -> out(100, 0, FloatArray(1280), FloatArray(1280)) }
         val frames = 5
         val r = TdtGreedy.decode(always, frames = frames, tokenBudget = 1000, isSpecial = IS_SPECIAL)
-        // 10 Emissionen pro Frame; auf Frame 4 läuft der 11. Token nach dem
-        // Zwangsvorschuf (t=5=frames) nicht mehr — Ende bei 50 Tokens.
+        // 10 emissions per frame; on frame 4 the 11th token no longer runs after the
+        // forced advance (t=5=frames) — end at 50 tokens.
         assertEquals(50, r.tokenIds.size)
         assertEquals(50, r.steps)
         assertTrue(r.steps <= frames * (AsrContract.MAX_SYMBOLS_PER_FRAME + 2))

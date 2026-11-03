@@ -9,13 +9,13 @@ import java.io.File
 import kotlin.math.min
 
 /**
- * Hält die drei OrtSessions (Mel-Frontend, Conformer-Encoder, TDT-Decoder+Joint)
- * aus einem Verzeichnis und validiert IO-Namen/Dtypes/Ränge strikt gegen
- * [AsrContract] (docs/ASR_CONTRACT.md §2). Abweichung → IllegalStateException
- * mit konkreter Meldung — keine Toleranz, keine Kompensation.
+ * Holds the three OrtSessions (mel frontend, conformer encoder, TDT decoder+joint)
+ * from a directory and validates IO names/dtypes/ranks strictly against
+ * [AsrContract] (docs/ASR_CONTRACT.md §2). Deviation → IllegalStateException
+ * with a concrete message — no tolerance, no compensation.
  *
- * CPU-EP explizit (TECH_FACTS.md §3: NNAPI deckt nicht alle Parakeet-Ops ab);
- * ALL_OPT-Optimierung; Speicher schonen (ASR_CONTRACT §5: ~0,9 GB RSS).
+ * CPU EP explicitly (TECH_FACTS.md §3: NNAPI does not cover all Parakeet ops);
+ * ALL_OPT optimization; conserve memory (ASR_CONTRACT §5: ~0.9 GB RSS).
  */
 class OnnxSessions private constructor(
     val mel: OrtSession,
@@ -29,8 +29,8 @@ class OnnxSessions private constructor(
         const val FILE_DECODER = "decoder_joint-model.int8.onnx"
 
         /**
-         * Lädt die drei Sessions aus [dir] und prüft alle IO-Tensor-Verträge.
-         * Fehlende Dateien → IllegalStateException.
+         * Loads the three sessions from [dir] and checks all IO tensor contracts.
+         * Missing files → IllegalStateException.
          */
         fun load(dir: File): OnnxSessions {
             val files = listOf(
@@ -39,14 +39,14 @@ class OnnxSessions private constructor(
                 File(dir, FILE_DECODER),
             )
             for (f in files) {
-                check(f.isFile) { "Modell-Datei fehlt: ${f.name}" } // Regel 9: nur der Name, nie der Pfad
+                check(f.isFile) { "Modell-Datei fehlt: ${f.name}" } // rule 9: only the name, never the path
             }
             val env = OrtEnvironment.getEnvironment()
             val opts = OrtSession.SessionOptions().apply {
-                // S12 Hebel 1: Thread-Setting ueber die reine, testbare Konfig
-                // (AsrThreadConfig.forDevice; Defaults = heutige Ist-Werte).
-                // S12-01-FIX: ramMb = GERAETE-RAM (deviceRamMb, vom IME-Service
-                // aus ActivityManager gesetzt) — NIE Runtime.maxMemory (Java-Heap).
+                // S12 lever 1: thread setting via the pure, testable config
+                // (AsrThreadConfig.forDevice; defaults = today's actual values).
+                // S12-01-FIX: ramMb = DEVICE RAM (deviceRamMb, set by the IME service
+                // from ActivityManager) — NEVER Runtime.maxMemory (Java heap).
                 AsrThreadConfig.forDevice(
                     cores = Runtime.getRuntime().availableProcessors(),
                     ramMb = AsrThreadConfig.deviceRamMb,
@@ -54,16 +54,16 @@ class OnnxSessions private constructor(
                     override fun setIntraOpThreads(n: Int) = setIntraOpNumThreads(n)
                     override fun setInterOpThreads(n: Int) = setInterOpNumThreads(n)
                 })
-                // CPU-EP explizit festnageln (Default, hier gegen künftige Defaults)
+                // Pin the CPU EP explicitly (default, here against future defaults)
                 addCPU(false)
                 setOptimizationLevel(OrtSession.SessionOptions.OptLevel.ALL_OPT)
-                // Speicher schonen: keine Memory-Pattern-Preallokation, kein Prepacking
+                // Conserve memory: no memory pattern preallocation, no prepacking
                 setMemoryPatternOptimization(false)
                 addConfigEntry("session.disable_prepacking", "true")
             }
             opts.use { o ->
-                // SB1-03: bereits erzeugte Sessions bei Folgefehler schließen
-                // (Encoder ≈ 848 MB nativ — kein partieller Leak bei korruptem Modell).
+                // SB1-03: close already created sessions on a follow-up failure
+                // (encoder ≈ 848 MB native — no partial leak on a corrupt model).
                 val opened = ArrayList<OrtSession>(3)
                 var success = false
                 try {
@@ -75,18 +75,18 @@ class OnnxSessions private constructor(
                     s.validateEncoder()
                     s.validateDecoder()
                     success = true
-                    return s // Besitz geht an den Aufrufer — finally schließt dann nichts
+                    return s // ownership goes to the caller — finally then closes nothing
                 } finally {
                     if (!success) opened.forEach { it.close() }
                 }
             }
         }
 
-        /** Dtype-Name für Fehlermeldungen. */
+        /** Dtype name for error messages. */
         private fun OnnxJavaType.pretty(): String = this.toString()
     }
 
-    // ---- Validierung (§2): Name, Dtype, Rang strikt, keine Extra-Tensoren ----
+    // ---- Validation (§2): name, dtype, rank strict, no extra tensors ----
 
     private fun checkIo(model: String, nodes: Map<String, NodeInfo>, direction: String,
                         expected: List<Triple<String, OnnxJavaType, Int>>) {

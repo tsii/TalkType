@@ -1,85 +1,85 @@
-# Review v0.1.34 — A5 (Sitzungs-Reset) + W-Paket (Warming)
+# Review v0.1.34 — A5 (session reset) + W package (warming)
 
 Reviewer: DeepSeek V4 Pro 0813 (`cortecs/deepseek-v4-pro-0813`), 2026-11-02 21:10.
-Basis: vc35-Arbeitsstand (Debug 579/0), Root-Cause-Bericht Debugger (ownSpan-Leiche,
-Toggle-Beweislogs `/tmp/phone_toggle_{sess,asr}.log`).
+Basis: vc35 working state (Debug 579/0), debugger root-cause report (ownSpan corpse,
+toggle evidence logs `/tmp/phone_toggle_{sess,asr}.log`).
 
-## Verdikt (Review-Lauf 1)
+## Verdict (review run 1)
 
-**P0 = 1, P1 = 0, P2 = 2.** Push: NEIN bis P0-Fix.
+**P0 = 1, P1 = 0, P2 = 2.** Push: NO until the P0 fix.
 
-### P0 — A5 greift in Produktion nicht: `CountingSink` delegiert `resetSession()` nicht
-- `VoiceKeyboardService.kt:1008` baut `CountingSink(InputConnectionSink(...))`;
-  `DictationController.start():373` ruft `sink.resetSession()` → Wrapper;
-  `CountingSink` (`:1081–1096`) überschrieb `resetSession` nicht → Interface-Default
-  (`EditorSink.kt:61`) = No-op → ownSpan-Leiche in Produktion weiter aktiv.
-- `InputConnectionSinkSessionTest` injizierte den inneren Sink direkt → falsches Grün.
-- **FIX (Orchestrator, 21:11):** `CountingSink.override fun resetSession() = inner.resetSession()`
-  + Gegenprobe `produktions-wrap … delegiert Sitzungsreset` (neuer Test, Wrapper-Pfad).
+### P0 — A5 has no effect in production: `CountingSink` does not delegate `resetSession()`
+- `VoiceKeyboardService.kt:1008` builds `CountingSink(InputConnectionSink(...))`;
+  `DictationController.start():373` calls `sink.resetSession()` → wrapper;
+  `CountingSink` (`:1081–1096`) did not override `resetSession` → interface default
+  (`EditorSink.kt:61`) = no-op → ownSpan corpse still active in production.
+- `InputConnectionSinkSessionTest` injected the inner sink directly → false green.
+- **FIX (orchestrator, 21:11):** `CountingSink.override fun resetSession() = inner.resetSession()`
+  + cross-check `produktions-wrap … delegiert Sitzungsreset` (new test, wrapper path).
 
-## P2 (nicht-blockierend)
-1. A5(b) verlässt sich auf beiläufigen `Graphemes.isBoundary`-`require` statt explizitem
-   `deleteLength ≤ ownSpan`-Guard. Empfehlung für spätere Runde.
-2. `coordinator`-Feld (`VoiceKeyboardService.kt:175`) jetzt Zwei-Schreiber (Main über
-   Preload `:555`, Worker `:754`), nicht `@Volatile`; Zeitenfolge + Single-Flight
-   mitigieren, Muster bestand bereits. Optional `@Volatile`.
+## P2 (non-blocking)
+1. A5(b) relies on an incidental `Graphemes.isBoundary` `require` instead of an explicit
+   `deleteLength ≤ ownSpan` guard. Recommendation for a later round.
+2. `coordinator` field (`VoiceKeyboardService.kt:175`) now has two writers (Main via
+   preload `:555`, worker `:754`), not `@Volatile`; timing + single-flight mitigate,
+   the pattern already existed. Optional `@Volatile`.
 
-## Korrekt verifiziert
-- A5-Ort/Reset (`start():373` direkt nach `tracker.reset`), `InputConnectionSink.kt:126–128`
-  synchron @Volatile, `EditorSink.kt:61` Default-No-op (Fakes unverändert).
-- Race: `start()` nur aus IDLE; Sink-Writes synchron via `onEditExecutor`;
-  A1-Timeout setzt `abandoned` vor Wurf → kein apply-in-flight-Fenster.
+## Verified as correct
+- A5 location/reset (`start():373` directly after `tracker.reset`), `InputConnectionSink.kt:126–128`
+  synchronous @Volatile, `EditorSink.kt:61` default no-op (fakes unchanged).
+- Race: `start()` only from IDLE; sink writes synchronous via `onEditExecutor`;
+  A1 timeout sets `abandoned` before throwing → no apply-in-flight window.
 - W1: `loadEngineOnce` synchronized + double-check (`DictationCoordinator.kt:417–431`);
-  Fehlerpfad `engineLoaded=false`, Zähler/Trigger nur bei Erfolg; `preload()` schluckt;
-  `start():309` `loadEngineOnce("mic")` (Lazy-Fallback echt).
-- Service: `preloadDue` rein (`:1973`), `preloadTried` 1×/Lebenszeit, Preload in
-  `serviceScope.launch` (nie Main).
-- W3: 5 KEYS hinten (`:288–292`), 68+Kopf=69 (`check :365`), 0/1-Kodierung, Sanitizer,
-  Collector null-sicher (`DebugInfoCollector.kt:177–181`). Regel 9: `load_trigger`
-  closed {mic, ime_show, "-"}, keine Pfade.
-- W2: `shutdown()` einziger `close()`-Pfad (`:1091–1099`, CAS), kein Idle-Unload.
-- `EnginePreloadTest` (3 Tests) echt: `CountingEngine` wirft bei Zweitload; warm(<500)/
-  kalt(≥500) echte Messung; Preload-Fehlschlag ⇒ lazy 2. Load (`loadCalls=2`).
+  error path `engineLoaded=false`, counters/trigger only on success; `preload()` swallows;
+  `start():309` `loadEngineOnce("mic")` (lazy fallback genuine).
+- Service: `preloadDue` pure (`:1973`), `preloadTried` 1×/lifetime, preload in
+  `serviceScope.launch` (never Main).
+- W3: 5 KEYS at the back (`:288–292`), 68+header=69 (`check :365`), 0/1 encoding, sanitizer,
+  collector null-safe (`DebugInfoCollector.kt:177–181`). Rule 9: `load_trigger`
+  closed {mic, ime_show, "-"}, no paths.
+- W2: `shutdown()` is the only `close()` path (`:1091–1099`, CAS), no idle unload.
+- `EnginePreloadTest` (3 tests) genuine: `CountingEngine` throws on second load; warm(<500)/
+  cold(≥500) real measurement; preload failure ⇒ lazy 2nd load (`loadCalls=2`).
 
-## Status nach Fix (Orchestrator-Verifikation, 21:14)
-- **P0-Fix eingebaut:** `CountingSink.resetSession()` delegiert an `inner`
-  (`VoiceKeyboardService.kt` :1094ff, KDoc mit Review-Verweis) + **Gegenprobe**
+## Status after fix (orchestrator verification, 21:14)
+- **P0 fix in place:** `CountingSink.resetSession()` delegates to `inner`
+  (`VoiceKeyboardService.kt` :1094ff, KDoc with review reference) + **cross-check**
   `produktions-wrap … delegiert Sitzungsreset` in `InputConnectionSinkSessionTest`
-  (Wrapper-Pfad wie Produktion: Reset-Überleben, DELTA in Sitzung 2, Zähler ok).
-- Release-Echtheit wiederhergestellt: Compilation-Schaden (F56-Stub in `src/debug`,
-  Test in `src/test`) durch Test-Verschiebung nach `testDebug` behoben —
-  **Release 544/0 frisch** (war tagelang alt-482 wegen Up-to-date-Trugbild; XML-mtime
-  jetzt 21:13, 67 Dateien). Release-APK 21:13 BAUT MIT P0-FIX.
-- Debug-Runde 2 (Volltest inkl. Wrapper-Test + assembleDebug mit Fix) läuft
-  (`/tmp/b35_dbg2.log`, Ende-Marker D2_DONE; erwartet 580/0).
-- Review-Lauf 2 (P0-Nachbewertung + P2-Entscheidungen): steer auf sa-b7b53, Ergebnis
-  unten anzuhängen.
+  (wrapper path like production: reset survival, DELTA in session 2, counters ok).
+- Release authenticity restored: compilation damage (F56 stub in `src/debug`,
+  test in `src/test`) fixed by moving the test to `testDebug` —
+  **Release 544/0 fresh** (had been stale-old-482 for days due to an up-to-date illusion; XML mtime
+  now 21:13, 67 files). Release APK 21:13 BUILDS WITH the P0 FIX.
+- Debug round 2 (full test incl. wrapper test + assembleDebug with fix) running
+  (`/tmp/b35_dbg2.log`, end marker D2_DONE; expected 580/0).
+- Review run 2 (P0 re-assessment + P2 decisions): steer on sa-b7b53, result
+  to be appended below.
 
-## Review-Lauf 2 (Folgebewertung, 21:17 — DeepSeek, sa-b7b53)
-**P0 behoben, korrekt und vollständig.** Delegationskette `Controller.start():373 →
-CountingSink.resetSession() → InputConnectionSink.resetSession()` geschlossen;
-Gegenprobe `CountingWrapper` + Wrapper-Zwei-SitzungsTest bestätigt ownLength 5→0,
-writeReason=delta, commits=2. Hinweis des Reviewers (akzeptiert): Test repliziert die
-Wrapper-Struktur (private inner class), Produktions-Code direkt gelesen und verifiziert.
+## Review run 2 (follow-up assessment, 21:17 — DeepSeek, sa-b7b53)
+**P0 fixed, correctly and completely.** Delegation chain `Controller.start():373 →
+CountingSink.resetSession() → InputConnectionSink.resetSession()` closed;
+cross-check `CountingWrapper` + wrapper two-session test confirms ownLength 5→0,
+writeReason=delta, commits=2. Reviewer's note (accepted): the test replicates the
+wrapper structure (private inner class), production code read and verified directly.
 
-### Verdikt final: **P0 = 0, P1 = 0, P2 = 2 (Follow-ups 0.1.35) — Push: JA.**
-- P2-1: expliziter Längen-Guard in `replaceBeforeCursorSync` (statt beiläufigem
-  Graphemes-`require`) — Kandidat 0.1.35.
-- P2-2: `coordinator`-Feld `@Volatile` / Build in `serviceScope` — Follow-up.
+### Final verdict: **P0 = 0, P1 = 0, P2 = 2 (follow-ups 0.1.35) — Push: YES.**
+- P2-1: explicit length guard in `replaceBeforeCursorSync` (instead of the incidental
+  Graphemes `require`) — candidate for 0.1.35.
+- P2-2: `coordinator` field `@Volatile` / build in `serviceScope` — follow-up.
 
-## Auslieferung 0.1.34 (21:20)
-Debug **580/0** + Release **544/0 frisch** = **1124/0**. dist: voice-keyboard-0.1.34.apk
-`92ca385f…`, -diag-debug.apk `d948dbc2…`; 0.1.33 rotiert. Telefon-Beweise stehen aus
-(Halten→Toggle-Szene, Warmstart; Kriterien beim Debugger angefragt).
+## Delivery 0.1.34 (21:20)
+Debug **580/0** + Release **544/0 fresh** = **1124/0**. dist: voice-keyboard-0.1.34.apk
+`92ca385f…`, -diag-debug.apk `d948dbc2…`; 0.1.33 rotated. Phone evidence pending
+(hold→toggle scene, warm start; criteria requested from the debugger).
 
-## Geräte-Bewertungskriterien 0.1.34 (Debugger conv-6cf9903c, 21:2x — Beweiskette Telefon)
-- **BESTAND Besitz:** H→T im selben Feld; ab `audio_s=2` `write=delta/same`, kein `w1`
-  ohne nachgewiesenen Fremdgriff; `current_len/output_chars` wachsen; Toggle endet normal.
-- **BESTAND Warm:** Tastatur vorher sichtbar ⇒ `warm_hit=1`, `load_trigger=ime_show`,
-  `engine_loads=1` über beide Sessions, `start_ms<250`, PID unverändert; Modell-PSS resident.
-- **Fallback gültig (kein Bug):** neue PID ⇒ Prozessverlust; `warm_hit=0`, `load_trigger=mic`,
-  erneuter Load = korrekter Lazy-Fallback.
-- **Echter Fehler:** gleiche PID + nachweislich vorheriges IME-Show, aber `warm_hit=0`
-  (Preload-Ordering/`preloadTried`/finished prüfen); jedes unerklärte W1-Corpse-Muster.
-- **Wackelkandidat, kein Fail:** W3d mit DELTA-Recovery, Pacing-Skips, leichte
-  RSS-Schwankungen, `start_ms≥250` ohne vorheriges Keyboard-Show.
+## Device assessment criteria 0.1.34 (debugger conv-6cf9903c, 21:2x — phone evidence chain)
+- **PASS ownership:** H→T in the same field; from `audio_s=2` `write=delta/same`, no `w1`
+  without proven foreign grab; `current_len/output_chars` grow; toggle ends normally.
+- **PASS warm:** keyboard visible beforehand ⇒ `warm_hit=1`, `load_trigger=ime_show`,
+  `engine_loads=1` across both sessions, `start_ms<250`, PID unchanged; model PSS resident.
+- **Fallback valid (not a bug):** new PID ⇒ process loss; `warm_hit=0`, `load_trigger=mic`,
+  renewed load = correct lazy fallback.
+- **Genuine error:** same PID + provably prior IME show, but `warm_hit=0`
+  (check preload ordering/`preloadTried`/finished); any unexplained W1 corpse pattern.
+- **Borderline candidate, not a fail:** W3d with DELTA recovery, pacing skips, minor
+  RSS fluctuations, `start_ms≥250` without prior keyboard show.

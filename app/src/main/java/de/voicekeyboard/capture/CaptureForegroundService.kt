@@ -13,17 +13,17 @@ import de.voicekeyboard.R
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
- * Foreground-Service mit `foregroundServiceType="microphone"` (TECH_FACTS §4.1):
+ * Foreground service with `foregroundServiceType="microphone"` (TECH_FACTS §4.1):
  *
- * - Typ `microphone` (Flag 0x80) verlangt ab targetSdk 34 `FOREGROUND_SERVICE_MICROPHONE`
- *   **und** eine Mikrofon-Permission — beide stehen im Manifest.
- * - `startForeground` wird sofort in [onStartCommand] gerufen (innerhalb der
- *   FGS-Startfrist), bevor irgendwelche Audio-/Modell-Initials passiert.
- * - Kein Audio über Binder (DESIGN §2.2 „capture-service … kein Audio über Binder"):
- *   dieser Service hält nur die Vordergrund-Präsenz; Aufnahme läuft im
- *   IME-Prozess über die AudioRecord-Pipeline. Start/Stop sind idempotent.
- * - Ohne `POST_NOTIFICATIONS` läuft der Service trotzdem (Notification unsichtbar);
- *   das wird der Ziel-UI gemeldet, nicht hier umgangen.
+ * - Type `microphone` (flag 0x80) requires `FOREGROUND_SERVICE_MICROPHONE` from targetSdk 34
+ *   **and** a microphone permission — both are in the manifest.
+ * - `startForeground` is called immediately in [onStartCommand] (within the
+ *   FGS start deadline), before any audio/model initialization happens.
+ * - No audio over Binder (DESIGN §2.2 „capture-service … kein Audio über Binder”):
+ *   this service only holds the foreground presence; recording runs in the
+ *   IME process via the AudioRecord pipeline. Start/stop are idempotent.
+ * - Without `POST_NOTIFICATIONS` the service still runs (notification invisible);
+ *   that is reported to the target UI, not worked around here.
  */
 class CaptureForegroundService : Service() {
 
@@ -34,18 +34,18 @@ class CaptureForegroundService : Service() {
         const val ACTION_STOP = "de.voicekeyboard.capture.STOP"
         private const val TAG = "VK-Capture"
 
-        /** F28c: In-Prozess-Handshake (IME + Service laufen im selben Prozess):
-         *  wird NACH abgeschlossener [startForeground] gerufen. Die IME wartet
-         *  darauf, BEVOR sie AudioRecord.startRecording() öffnet — ab api 33
-         *  muss der FGS-Typ microphone aktiv sein, sonst kann das System die
-         *  Aufnahme stumm stoppen (Export #2: Ende nach 1,0 s). */
+        /** F28c: in-process handshake (IME + service run in the same process):
+         *  called AFTER [startForeground] has completed. The IME waits
+         *  for it BEFORE it opens AudioRecord.startRecording() — from api 33
+         *  the FGS type microphone must be active, otherwise the system can
+         *  silently stop the recording (export #2: end after 1.0 s). */
         @Volatile var onForegroundReady: (() -> Unit)? = null
     }
 
     private val running = AtomicBoolean(false)
     private var startedAtMs = 0L
 
-    override fun onBind(intent: Intent?): IBinder? = null // kein Binder, kein Audio über IPC
+    override fun onBind(intent: Intent?): IBinder? = null // no binder, no audio over IPC
 
     override fun onCreate() {
         super.onCreate()
@@ -61,20 +61,20 @@ class CaptureForegroundService : Service() {
                 stopSelf()
                 return START_NOT_STICKY
             }
-            // null-Intent nach Neustart (STICKY-Fall vermeiden): kontrolliert beenden,
-            // keine automatische Wiederaufnahme (DESIGN §3 „kein automatisches Wiederanlaufen")
+            // null intent after restart (avoiding the STICKY case): end in a controlled way,
+            // no automatic resumption (DESIGN §3 „kein automatisches Wiederanlaufen”)
             null -> {
                 stopSelf()
                 return START_NOT_STICKY
             }
         }
-        // START (oder unbekannte Aktion): idempotent starten
+        // START (or unknown action): start idempotently
         if (running.compareAndSet(false, true)) {
             startedAtMs = SystemClock.elapsedRealtime()
         }
         startForeground(NOTIFICATION_ID, buildNotification(), ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE)
-        // F28c: erst JETZT ist der FGS garantiert aktiv — die IME darf das
-        // Mikrofon öffnen (synchroner Aufruf, nur Lock/notify, keine UI-Arbeit).
+        // F28c: only NOW is the FGS guaranteed active — the IME may open the
+        // microphone (synchronous call, lock/notify only, no UI work).
         onForegroundReady?.invoke()
         return START_NOT_STICKY
     }
@@ -83,7 +83,7 @@ class CaptureForegroundService : Service() {
         val channel = NotificationChannel(
             CHANNEL_ID,
             "Diktat-Aufnahme",
-            NotificationManager.IMPORTANCE_LOW, // kein Sound: Aufnahme-Indikation, kein Alarm
+            NotificationManager.IMPORTANCE_LOW, // no sound: recording indication, no alarm
         ).apply {
             description = "Zeigt an, solange das Mikrofon für das Diktat aktiv ist"
             setShowBadge(false)
@@ -100,7 +100,7 @@ class CaptureForegroundService : Service() {
                 Notification.Builder(this, CHANNEL_ID)
             }
         return builder
-            .setContentTitle(getString(R.string.capture_notification_title)) // F51 (K2): Ressource statt hartkodiert
+            .setContentTitle(getString(R.string.capture_notification_title)) // F51 (K2): resource instead of hardcoded
             .setContentText("Mikrofon ist aktiv")
             .setSmallIcon(android.R.drawable.ic_btn_speak_now)
             .setOngoing(true)
@@ -111,7 +111,7 @@ class CaptureForegroundService : Service() {
 
     override fun onDestroy() {
         if (running.compareAndSet(true, false)) {
-            // Nur Kennzahlen, nie Audiodaten oder Text.
+            // Metrics only, never audio data or text.
             android.util.Log.i(TAG, "destroy; durationMs=${SystemClock.elapsedRealtime() - startedAtMs}")
         }
         running.set(false)

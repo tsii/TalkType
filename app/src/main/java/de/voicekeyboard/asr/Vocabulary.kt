@@ -1,11 +1,11 @@
 package de.voicekeyboard.asr
 
 /**
- * Parser und Detokenizer für vocab.txt (8193 Zeilen, Format "<token> <id>").
- * Filterregel aus ASR_CONTRACT.md §2.4: Token verwerfen, wenn der Token-String
- * auf '<' beginnt und auf '>' endet, plus ID 8192 (<blk>), plus IDs 0..4.
- * NICHT über ID-Bereiche filtern — IDs 234..243 sind die Ziffern 0–9 und
- * reguläres Vokabular.
+ * Parser and detokenizer for vocab.txt (8193 lines, format "<token> <id>").
+ * Filter rule from ASR_CONTRACT.md §2.4: discard a token if the token string
+ * starts with '<' and ends with '>', plus ID 8192 (<blk>), plus IDs 0..4.
+ * Do NOT filter by ID ranges — IDs 234..243 are the digits 0–9 and
+ * regular vocabulary.
  */
 class Vocabulary(private val tokenById: Array<String?>) {
 
@@ -13,9 +13,9 @@ class Vocabulary(private val tokenById: Array<String?>) {
         const val WORD_BOUNDARY = "▁" // U+2581
 
         /**
-         * Erwartet eine vocab.txt: Zeilen "<token> <id>". Tolerant gegen CRLF,
-         * Leerzeilen und doppelte IDs (erste Definition gewinnt). Der Token kann
-         * selbst Leerzeichen enthalten → von rechts splitten.
+         * Expects a vocab.txt: lines "<token> <id>". Tolerant of CRLF,
+         * empty lines and duplicate IDs (first definition wins). The token may
+         * itself contain spaces → split from the right.
          */
         fun parse(text: String): Vocabulary {
             val tokens = arrayOfNulls<String>(AsrContract.VOCAB_SIZE)
@@ -41,27 +41,27 @@ class Vocabulary(private val tokenById: Array<String?>) {
         }
     }
 
-    /** Token-String zur ID oder null. */
+    /** Token string for an ID or null. */
     fun token(id: Int): String? = if (id in 0 until AsrContract.VOCAB_SIZE) tokenById[id] else null
 
     /**
-     * True, wenn dieses Token (diese ID) NIEMALS emittiert/angezeigt werden darf:
-     * IDs 0..4, IDs mit Token-Muster "<...>", ID 8192 (Blank).
-     * Ziffern-IDs 234..243 sind NICHT gefiltert (siehe §2.4, empirisch geprüft).
+     * True if this token (this ID) must NEVER be emitted/shown:
+     * IDs 0..4, IDs with token pattern "<...>", ID 8192 (blank).
+     * Digit IDs 234..243 are NOT filtered (see §2.4, checked empirically).
      */
     fun isSpecial(id: Int): Boolean {
         if (id == AsrContract.BLANK) return true
         if (id in AsrContract.SPECIAL_TOKEN_IDS) return true
-        val t = token(id) ?: return true // unbekannte IDs sind per Definition Sonderfall
+        val t = token(id) ?: return true // unknown IDs are by definition a special case
         return t.length >= 2 && t.startsWith("<") && t.endsWith(">")
     }
 
-    /** IDs, die vom Decoder kommen dürfen (nicht gefiltert), bzw. null wenn unbekannt. */
+    /** IDs that may come from the decoder (not filtered), or null if unknown. */
     fun isEmittable(id: Int): Boolean = !isSpecial(id)
 
     /**
-     * Detokenisierung (§2.4, vereinfacht — für alle Golden-WAVs identisch mit der
-     * Referenz-Regex): konkatenieren, ▁ → Leerzeichen, trim.
+     * Detokenization (§2.4, simplified — identical to the
+     * reference regex for all golden WAVs): concatenate, ▁ → space, trim.
      */
     fun detokenize(ids: IntArray): String {
         val sb = StringBuilder(ids.size * 4)
@@ -73,8 +73,8 @@ class Vocabulary(private val tokenById: Array<String?>) {
     }
 
     /**
-     * Detokenisierung einer Liste von Token-Strings (nur für Tests/Fakes gedacht,
-     * wenn man Token-Strings statt IDs vorliegen hat).
+     * Detokenization of a list of token strings (intended only for tests/fakes,
+     * when token strings are at hand instead of IDs).
      */
     fun detokenizeTokens(tokens: List<String>): String =
         tokens.joinToString("").replace(WORD_BOUNDARY, " ").trim()

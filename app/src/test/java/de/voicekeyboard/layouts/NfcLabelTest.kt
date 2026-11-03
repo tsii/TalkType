@@ -12,14 +12,14 @@ import org.robolectric.annotation.Config
 import java.text.Normalizer
 
 /**
- * NfcLabelTest (LAYOUT_REQUIREMENTS §6.4, Grundregel 7):
- * ALLE `label`, `value` und `alternates` ALLER vorhandenen Layout-Assets müssen
- * NFC-normalisiert sein (java.text.Normalizer.Form.NFC).
- * Ein NFD-Label (z. B. „a“ + U+0308 statt „ä“) unterläuft die Gleichheitstests und
- * rendert auf dem Gerät anders — deshalb Pflicht.
- * Verstoß-Meldung nennt Asset, Taste und die betroffenen Codepoints (U+XXXX).
+ * NfcLabelTest (LAYOUT_REQUIREMENTS §6.4, basic rule 7):
+ * ALL `label`, `value` and `alternates` of ALL existing layout assets must
+ * be NFC-normalized (java.text.Normalizer.Form.NFC).
+ * An NFD label (e.g. "a" + U+0308 instead of "ä") slips past the equality tests and
+ * renders differently on the device — hence mandatory.
+ * Violation messages name the asset, key and the affected codepoints (U+XXXX).
  *
- * Gegenprobe: präparierter JSON-String mit NFD-Zeichen muss den Test ROT machen.
+ * Counter-check: a prepared JSON string with NFD characters must turn the test RED.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35])
@@ -33,7 +33,7 @@ class NfcLabelTest {
     }
 
     private fun codepoints(s: String): String =
-        s.codePoints().mapToObj { "U+%04X".format(it) }.reduce { a, b -> "$a $b" }.orElse("<leer>")
+        s.codePoints().mapToObj { "U+%04X".format(it) }.reduce { a, b -> "$a $b" }.orElse("<empty>")
 
     private fun checkNfc(assetJson: String, assetFile: String) {
         val parsed = LayoutParser.parse(assetJson)
@@ -41,16 +41,16 @@ class NfcLabelTest {
             for (row in layer.rows) for (key in row) {
                 for ((field, text) in listOf("label" to key.label, "value" to key.value)) {
                     if (!Normalizer.isNormalized(text, Normalizer.Form.NFC)) {
-                        fail("Asset '${parsed.id}' ($assetFile), Ebene '$layerName', Taste " +
-                            "'${key.id}': $field '${text}' ist nicht NFC-normalisiert " +
-                            "(${codepoints(text)}; Grundregel 7, LAYOUT_REQUIREMENTS §1)")
+                        fail("Asset '${parsed.id}' ($assetFile), layer '$layerName', key " +
+                            "'${key.id}': $field '${text}' is not NFC-normalized " +
+                            "(${codepoints(text)}; basic rule 7, LAYOUT_REQUIREMENTS §1)")
                     }
                 }
                 for (alt in key.alternates) {
                     if (!Normalizer.isNormalized(alt, Normalizer.Form.NFC)) {
-                        fail("Asset '${parsed.id}' ($assetFile), Ebene '$layerName', Taste " +
-                            "'${key.id}': alternate '${alt}' ist nicht NFC-normalisiert " +
-                            "(${codepoints(alt)}; Grundregel 7, LAYOUT_REQUIREMENTS §1)")
+                        fail("Asset '${parsed.id}' ($assetFile), layer '$layerName', key " +
+                            "'${key.id}': alternate '${alt}' is not NFC-normalized " +
+                            "(${codepoints(alt)}; basic rule 7, LAYOUT_REQUIREMENTS §1)")
                     }
                 }
             }
@@ -58,44 +58,44 @@ class NfcLabelTest {
     }
 
     @Test
-    fun `alle Assets sind vollstaendig NFC-normalisiert`() {
+    fun `all assets are fully NFC-normalized`() {
         val dir = RuntimeEnvironment.getApplication().assets.list("layouts")
-            ?: throw AssertionError("layouts-Verzeichnis nicht lesbar")
+            ?: throw AssertionError("layouts directory not readable")
         val files = dir.filter { it.endsWith(".json") }
-        assertTrue("Keine Layout-Assets gefunden", files.isNotEmpty())
+        assertTrue("no layout assets found", files.isNotEmpty())
         for (file in files) {
-            val json = asset(file) ?: throw AssertionError("$file nicht lesbar")
+            val json = asset(file) ?: throw AssertionError("$file not readable")
             checkNfc(json, file)
         }
-        println("NfcLabelTest: ${files.size} Assets geprüft (labels, values, alternates)")
+        println("NfcLabelTest: ${files.size} assets checked (labels, values, alternates)")
     }
 
-    // ---------- Gegenprobe (Negativtest mit Inline-Mutation, KEINE Asset-Änderung) ----------
+    // ---------- counter-check (negative test with inline mutation, NO asset change) ----------
 
     @Test
-    fun `negativ - NFD-Alternate wird erkannt`() {
-        val json = asset("de-de.json") ?: throw AssertionError("de-de.json nicht lesbar")
+    fun `negative - an NFD alternate is detected`() {
+        val json = asset("de-de.json") ?: throw AssertionError("de-de.json not readable")
         val root = JSONObject(json)
-        // Alternate "a" + U+0301 (NFD-á) auf der 'a'-Tase einschleusen → Test MUSS rot werden.
-        val aKey = findKeyById(root, "base", "a") ?: throw AssertionError("Taste 'a' nicht gefunden")
+        // smuggle an alternate "a" + U+0301 (NFD-á) onto the 'a' key → the test MUST turn red.
+        val aKey = findKeyById(root, "base", "a") ?: throw AssertionError("key 'a' not found")
         aKey.put("alternates", JSONArray(listOf("a\u0301")))
         var caught = false
         try {
             checkNfc(root.toString(), "de-de.json")
         } catch (e: AssertionError) {
             caught = true
-            assertTrue("Meldung muss U+0301 nennen: ${e.message}", e.message?.contains("U+0301") == true)
-            assertTrue("Meldung muss die Taste nennen: ${e.message}", e.message?.contains("'a'") == true)
+            assertTrue("the message must name U+0301: ${e.message}", e.message?.contains("U+0301") == true)
+            assertTrue("the message must name the key: ${e.message}", e.message?.contains("'a'") == true)
         }
-        assertTrue("NFD-Verstoß wurde NICHT erkannt (Tautologie-Verdacht)", caught)
+        assertTrue("NFD violation was NOT detected (tautology suspicion)", caught)
     }
 
-    // Zweite Gegenprobe: NFD im Label selbst (Regel 7 für label — nicht nur alternates).
+    // second counter-check: NFD in the label itself (rule 7 for label — not only alternates).
     @Test
-    fun `negativ - NFD-Label wird erkannt`() {
-        val json = asset("de-de.json") ?: throw AssertionError("de-de.json nicht lesbar")
+    fun `negative - an NFD label is detected`() {
+        val json = asset("de-de.json") ?: throw AssertionError("de-de.json not readable")
         val root = JSONObject(json)
-        val zKey = findKeyById(root, "base", "z") ?: throw AssertionError("Taste 'z' nicht gefunden")
+        val zKey = findKeyById(root, "base", "z") ?: throw AssertionError("key 'z' not found")
         zKey.put("label", "\u007A\u0301") // z + combining acute
         zKey.put("value", "\u007A\u0301")
         var caught = false
@@ -103,9 +103,9 @@ class NfcLabelTest {
             checkNfc(root.toString(), "de-de.json")
         } catch (e: AssertionError) {
             caught = true
-            assertTrue("Meldung muss U+0301 nennen: ${e.message}", e.message?.contains("U+0301") == true)
+            assertTrue("the message must name U+0301: ${e.message}", e.message?.contains("U+0301") == true)
         }
-        assertTrue("NFD-Label-Verstoß wurde NICHT erkannt", caught)
+        assertTrue("NFD label violation was NOT detected", caught)
     }
 
     private fun findKeyById(root: JSONObject, layer: String, keyId: String): JSONObject? {

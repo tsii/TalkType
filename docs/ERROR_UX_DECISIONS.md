@@ -1,163 +1,165 @@
-# Fehler-UX- und Setup-Entscheidungen (E5–E7) — verbindlich
+# Error UX and setup decisions (E5–E7) — binding
 
-**Stand:** 2026-10-27 · **Rolle:** Analyse/Regeln (keine Code-/Resource-Änderung)
-**Grundlage:** `docs/REVIEW_STAGE5.md` (S5-2, S5-3, S5-4, S5-6),
+**Status:** 2026-10-27 · **Role:** analysis/rules (no code/resource changes)
+**Basis:** `docs/REVIEW_STAGE5.md` (S5-2, S5-3, S5-4, S5-6),
 `app/src/main/res/values/strings.xml`, `ime/SetupActivity.kt`,
 `audio/AudioRecordSource.kt`, `ime/VoiceKeyboardService.kt`,
-`docs/SETUP_UI_DECISIONS.md` E3, `docs/KONZEPT.md` §2.1 („Tastatur blockiert nie").
+`docs/SETUP_UI_DECISIONS.md` E3, `docs/KONZEPT.md` §2.1 ("the keyboard never
+blocks").
 
 ---
 
-## E5 — Fehlerdifferenzierung beim Diktat-Start
+## E5 — Error differentiation at dictation start
 
-### Ist-Zustand (belegt)
+### Current state (evidenced)
 
-- `VoiceKeyboardService.onMicDown()` schreibt bei drei völlig verschiedenen Ursachen
-  denselben Text: `updateStatus("Start fehlgeschlagen")` (Z.156) bzw.
-  `"Start fehlgeschlagen (${e.javaClass.simpleName})"` (Z.163) — letzteres ist eine
-  **Entwickler-Klasse im Nutzertext** (`IllegalStateException`).
-- `updateStatus()` (Z.304) rendert `c.visibleError` zusätzlich als
-  `"Fehler: Mikrofon/Route (<code>)"` — auch das ist ein Rohcode
+- `VoiceKeyboardService.onMicDown()` writes the same text for three completely
+  different causes: `updateStatus("Start fehlgeschlagen")` (L.156) or
+  `"Start fehlgeschlagen (${e.javaClass.simpleName})"` (L.163) — the latter is a
+  **developer class in the user text** (`IllegalStateException`).
+- `updateStatus()` (L.304) renders `c.visibleError` additionally as
+  `"Fehler: Mikrofon/Route (<code>)"` — that too is a raw code
   (`audioInit:IllegalStateException`, `model:<msg>`, `startFailed`).
-- Vorhandene, bereits differenzierte Pfade: Modell nicht bereit
-  (`!store.isReady()` → „Modell nicht installiert — Setup öffnen", Z.144),
-  Berechtigung (Z.247/262).
-- Verfügbare Signale: `DictationCoordinator.lastError`/`visibleError`
-  (`startFailed`, `audioInit:<Klasse>`, `model:<msg>`, `audio:<code>:<detail>`),
+- Existing, already differentiated paths: model not ready
+  (`!store.isReady()` → "Modell nicht installiert — Setup öffnen", L.144),
+  permission (L.247/262).
+- Available signals: `DictationCoordinator.lastError`/`visibleError`
+  (`startFailed`, `audioInit:<class>`, `model:<msg>`, `audio:<code>:<detail>`),
   `AudioRecordSource.ERR_INIT | ERR_INVALID_OP | ERR_SYSTEM_STOP | ERR_MAX_DURATION`,
   `ModelStore.status()` = `ABSENT | DOWNLOADING | VERIFYING | READY | BROKEN`,
   `AudioRouter.routeListener`/`currentRoute` (`WIRED > BLUETOOTH_SCO > BUILTIN`).
 
-### Entscheidung: 7 Nutzerklassen + 1 Fallback (Texte ≤ 45 Zeichen)
+### Decision: 7 user classes + 1 fallback (texts ≤ 45 characters)
 
-| Klasse | Nutzertext (max. 45 Z.) | Zeichen | Handlungsoption im UI | Technisch unterscheidbar? |
+| Class | User text (max 45 chars) | Chars | Action option in the UI | Technically distinguishable? |
 |---|---|---|---|---|
-| **(a)** kein Mikrofon | `Kein Mikrofon gefunden – Gerät prüfen` | 37 | keine Aktion in der App; Hinweiszeile „Mikrofon anschließen/System prüfen", Mic bleibt gesperrt | **Ja, bedingt**: `AudioManager.getDevices(GET_DEVICES_INPUTS)` leer bzw. `RoutingPolicy.preferredInput()` = `null`. Sonst fällt der Fall in (d). |
-| **(b)** Mikrofon belegt | — **kein eigener Text** → (d) | — | — | **Nein.** Andere Aufnahmen sind für normale Apps nicht einsehbar (`getActiveRecordingConfigurations` ist privilegiert); „belegt" wäre eine geratene Diagnose. Erlaubt ist nur der *Hinweis* in der Erläuterung, nicht die Behauptung. |
-| **(c)** Berechtigung fehlt/entzogen | `Mikrofon-Berechtigung fehlt` | 27 | Button „Berechtigung erteilen" (In-App-Request); bei `denied_forever` → „Systemeinstellungen öffnen" | **Ja**: `checkSelfPermission(RECORD_AUDIO)` vor dem Start **oder** `lastError == "audioInit:SecurityException"`. |
-| **(d)** Audio-Init-/Systemfehler (+ b) | `Audio-Start fehlgeschlagen – erneut versuchen` | 45 | Mic-Taste erneut drücken (kein Auto-Retry-Loop); Erläuterung: „Mögliche Ursachen: Mikrofon von einer anderen App belegt, Systemfehler." | **Ja als Klasse**: `startFailed`, `audioInit:<nicht SecurityException>`, `ERR_INIT`, `ERR_INVALID_OP`, `ERR_SYSTEM_STOP` **ohne** gleichzeitigen Routenwechsel. |
-| **(e)** Modell nicht geladen | `Modell nicht geladen – Setup öffnen` | 35 | Tap → `SetupActivity` | **Ja**: `store.isReady() == false` **und** `status ∈ {ABSENT, DOWNLOADING, VERIFYING}`, oder `lastError == "model:<…>"` (Engine-Ladefehler, C-2/R-1). |
-| **(f)** Modell defekt/BROKEN | `Modelldatei defekt – neu herunterladen` | 38 | Tap → Setup, dort „Erneut prüfen/laden" (Hash-Reparatur) | **Ja**: `store.status() == BROKEN` (Pointer vorhanden, `verifyInstalled()` false). |
-| **(g)** Speicher knapp (Runtime) | `Zu wenig Speicher – App neu starten` | 35 | nur Hinweis + Prozess-Neustart durch Nutzer; kein Auto-Recovery | **Teilweise**: `OutOfMemoryError` (muss als `Error`/`Throwable` **explizit** gefangen werden — `catch (e: Exception)` sieht ihn nicht) und ORT-Meldungen mit `alloc`/`memory`/`bad_alloc`. Alles andere ist nicht klassifizierbar → (d). |
-| **(h)** Bluetooth-SCO verloren | `Bluetooth-Mikrofon getrennt` | 27 | Aufnahme **kontrolliert beenden**, Hinweis „über Gerätemikrofon fortsetzen?"; kein automatischer Neustart | **Ja**: `state == RECORDING` **und** `routeListener` meldet Wechsel von `BLUETOOTH_SCO` auf `BUILTIN`/`WIRED`/`null` (bzw. `ERR_SYSTEM_STOP` genau in diesem Moment). |
-| **Fallback** | `Diktat-Start fehlgeschlagen` | 27 | erneut versuchen; Erläuterung „Details im Systemprotokoll" (kein Rohcode im Text) | Wenn keine Regel greift (Pflicht: die einzige Stelle ohne Diagnoseversprechen). |
+| **(a)** no microphone | `Kein Mikrofon gefunden – Gerät prüfen` | 37 | no action in the app; hint line "connect microphone/check system", mic stays locked | **Yes, conditionally**: `AudioManager.getDevices(GET_DEVICES_INPUTS)` empty or `RoutingPolicy.preferredInput()` = `null`. Otherwise the case falls into (d). |
+| **(b)** microphone occupied | — **no own text** → (d) | — | — | **No.** Other recordings are not visible to normal apps (`getActiveRecordingConfigurations` is privileged); "occupied" would be a guessed diagnosis. Only the *hint* in the explanation is allowed, not the claim. |
+| **(c)** permission missing/revoked | `Mikrofon-Berechtigung fehlt` | 27 | Button "Grant permission" (in-app request); on `denied_forever` → "Open system settings" | **Yes**: `checkSelfPermission(RECORD_AUDIO)` before the start **or** `lastError == "audioInit:SecurityException"`. |
+| **(d)** audio init/system error (+ b) | `Audio-Start fehlgeschlagen – erneut versuchen` | 45 | Press the mic key again (no auto retry loop); explanation: "Possible causes: microphone occupied by another app, system error." | **Yes as a class**: `startFailed`, `audioInit:<not SecurityException>`, `ERR_INIT`, `ERR_INVALID_OP`, `ERR_SYSTEM_STOP` **without** a simultaneous route change. |
+| **(e)** model not loaded | `Modell nicht geladen – Setup öffnen` | 35 | Tap → `SetupActivity` | **Yes**: `store.isReady() == false` **and** `status ∈ {ABSENT, DOWNLOADING, VERIFYING}`, or `lastError == "model:<…>"` (engine load error, C-2/R-1). |
+| **(f)** model damaged/BROKEN | `Modelldatei defekt – neu herunterladen` | 38 | Tap → setup, there "check/download again" (hash repair) | **Yes**: `store.status() == BROKEN` (pointer present, `verifyInstalled()` false). |
+| **(g)** memory low (runtime) | `Zu wenig Speicher – App neu starten` | 35 | only a hint + process restart by the user; no auto recovery | **Partially**: `OutOfMemoryError` (must be caught **explicitly** as an `Error`/`Throwable` — `catch (e: Exception)` does not see it) and ORT messages with `alloc`/`memory`/`bad_alloc`. Everything else is not classifiable → (d). |
+| **(h)** Bluetooth SCO lost | `Bluetooth-Mikrofon getrennt` | 27 | End the recording **in a controlled way**, hint "continue via the device microphone?"; no automatic restart | **Yes**: `state == RECORDING` **and** `routeListener` reports a change from `BLUETOOTH_SCO` to `BUILTIN`/`WIRED`/`null` (or `ERR_SYSTEM_STOP` exactly at that moment). |
+| **Fallback** | `Diktat-Start fehlgeschlagen` | 27 | try again; explanation "details in the system log" (no raw code in the text) | When no rule applies (mandatory: the only place without a diagnosis promise). |
 
-**Verbindliche Regeln (Coder):**
+**Binding rules (coder):**
 
-1. **Rohcodes nie im Nutzertext.** `visibleError` wird **gemappt**, nicht gedruckt
-   (`audioInit:IllegalStateException`, `startFailed`, `model:…` dürfen nur im Log
-   landen, nicht in der Statuszeile).
-2. **Prioritätsreihenfolge** der Auswertung (erste Trefferregel gewinnt):
-   Berechtigung (c) → Modell (f BROKEN vor e) → kein Gerät (a) → SCO-Verlust (h,
-   nur während RECORDING) → Speicher (g) → Audio-Init (d) → Fallback.
-3. **Sticky-Semantik bleibt** (R-2): Der Fehler steht bis zur nächsten bewussten
-   Aktion; `onMicUp` löscht ihn nicht.
-4. **Kein Diagnoseversprechen ohne Beleg:** (b) existiert als Text **nicht**; die
-   Erläuterung zu (d) nennt Ursachen als Möglichkeit („Mögliche Ursachen: …"), nie
-   als Feststellung.
-5. **Tastatur blockiert nie** (KONZEPT §2.1): Jede Fehlerklasse betrifft nur die
-   Sprachfunktion; Tippen bleibt unverändert möglich, keine modale Sperre.
-6. **Kein Auto-Retry** bei (a)/(d)/(g); bei (h) kein automatischer Aufnahme-Neustart
-   (Mikrofon-Route könnte erneut wechseln → Flackern).
-7. **String-Ressourcen:** alle sieben Texte (plus Fallback) als
-   `dictation_error_*` in `strings.xml`; **keine** zusammengebauten Sätze im Code
-   (Übersetzbarkeit). Vorschlag der Schlüssel:
-   `dictation_error_no_mic`, `_permission`, `_audio_start`, `_model_missing`,
-   `_model_broken`, `_out_of_memory`, `_bt_lost`, `_unknown`.
+1. **Never raw codes in the user text.** `visibleError` is **mapped**, not
+   printed (`audioInit:IllegalStateException`, `startFailed`, `model:…` may only
+   land in the log, not in the status row).
+2. **Priority order** of evaluation (first match wins): permission (c) → model
+   (f BROKEN before e) → no device (a) → SCO loss (h, only during RECORDING) →
+   memory (g) → audio init (d) → fallback.
+3. **Sticky semantics remain** (R-2): the error stays until the next deliberate
+   action; `onMicUp` does not clear it.
+4. **No diagnosis promise without evidence:** (b) does **not** exist as a text;
+   the explanation for (d) names causes as a possibility ("Possible causes: …"),
+   never as an assertion.
+5. **The keyboard never blocks** (KONZEPT §2.1): every error class affects only
+   the voice function; typing remains fully possible, no modal lock.
+6. **No auto retry** for (a)/(d)/(g); for (h) no automatic recording restart (the
+   mic route could change again → flickering).
+7. **String resources:** all seven texts (plus fallback) as `dictation_error_*`
+   in `strings.xml`; **no** assembled sentences in code (translatability).
+   Proposed keys: `dictation_error_no_mic`, `_permission`, `_audio_start`,
+   `_model_missing`, `_model_broken`, `_out_of_memory`, `_bt_lost`, `_unknown`.
 
-### Was wir heute *nicht* können (bewusst)
+### What we *cannot* do today (deliberately)
 
-- **(b) nicht** — Android gibt anderen Apps keinen Einblick in fremde Aufnahmen.
-- **(g) nur grob** — OOM ist fangbar, native ORT-Allocator-Fehler sind nur über
-  Meldungsmuster erkennbar; beides ist best-effort und fällt sonst in (d).
-- **(a) nur bedingt** — ein leerer Geräte-Katalog ist eindeutig; ein vorhandenes,
-  aber funktionsuntüchtiges Gerät (z. B. Emulator `-no-audio`) landet in (d).
-  Genau deshalb ist (d) die **Sammelklasse** und nicht (a).
+- **(b) not** — Android gives other apps no insight into foreign recordings.
+- **(g) only roughly** — OOM is catchable; native ORT allocator errors are
+  recognizable only via message patterns; both are best-effort and otherwise
+  fall into (d).
+- **(a) only conditionally** — an empty device catalog is unambiguous; an
+  existing but non-functional device (e.g. emulator `-no-audio`) lands in (d).
+  That is exactly why (d) is the **catch-all class** and not (a).
 
 ---
 
-## E6 — Datenschutztext-Präzisierung (S5-4)
+## E6 — Privacy text precision (S5-4)
 
-**Fakten:** `INTERNET`/`ACCESS_NETWORK_STATE` bleiben dauerhaft im Manifest
-(Permissions sind bei Android nicht zur Laufzeit ab-/zuschaltbar); die Abschaltung
-nach dem Download ist der **App-Schalter** (`network_for_downloads`), der den
-Download-Start gatet. Zusätzlich kann der Nutzer auf GrapheneOS die
-Netzwerkberechtigung im System entziehen.
+**Facts:** `INTERNET`/`ACCESS_NETWORK_STATE` remain permanently in the manifest
+(permissions cannot be toggled at runtime on Android); the shutdown after the
+download is the **app switch** (`network_for_downloads`) that gates the download
+start. Additionally, on GrapheneOS the user can revoke the network permission at
+the system level.
 
-**Variante A (empfohlen, minimal-invasiv, 2 Sätze):**
+**Variant A (recommended, minimally invasive, 2 sentences):**
 
-> „Nach dem Download deaktiviert die App ihren Download-Schalter automatisch; es
+> "Nach dem Download deaktiviert die App ihren Download-Schalter automatisch; es
 > findet dann kein weiterer Netzwerkzugriff statt. Sie können den Schalter jederzeit
 > wieder aktivieren oder der App in den Android-Einstellungen die
 > Netzwerkberechtigung ganz entziehen — die Tastatur funktioniert danach unverändert
 > offline."
 
-**Variante B (expliziter über die Berechtigung, 3 Sätze):**
+**Variant B (more explicit about the permission, 3 sentences):**
 
-> „Die Netzwerkberechtigung bleibt im App-Manifest, wird aber ausschließlich für
+> "Die Netzwerkberechtigung bleibt im App-Manifest, wird aber ausschließlich für
 > diesen einen Download genutzt. Danach schaltet die App ihren Download-Schalter
 > automatisch ab, sodass kein weiterer Netzwerkzugriff stattfindet. Sie können den
 > Schalter jederzeit wieder aktivieren oder der App in den Android-Einstellungen die
 > Netzwerkberechtigung ganz entziehen — die Tastatur funktioniert weiterhin offline."
 
-**Empfehlung: Variante A.** Begründung: Sie beseitigt die einzige Unschärfe
-(„schaltet den Netzwerkzugriff ab" → „deaktiviert ihren Download-Schalter") und
-behält den zweiten Satz als Eskalationspfad (OS-Entzug). Variante B nennt
-„App-Manifest" — Entwicklerjargon, der beim Nutzer nur Unsicherheit erzeugt und
-nichts entscheidbar macht; die technisch relevante Zusage („kein weiterer
-Netzwerkzugriff") steht in A genauso. **Rest des Textes bleibt unverändert**
-(Sätze 1–2 zum lokalen Verbleib von Audio/Text, Abschluss zu „ohne Modell").
-`docs/TECH_FACTS.md` §3 beschreibt die Manifest-Seite bereits korrekt.
+**Recommendation: variant A.** Rationale: it removes the only ambiguity ("turns
+off network access" → "deactivates its download switch") and keeps the second
+sentence as an escalation path (OS revocation). Variant B names the "app manifest"
+— developer jargon that only creates uncertainty for the user and makes nothing
+decidable; the technically relevant promise ("no further network access") stands
+in A just as well. **The rest of the text remains unchanged** (sentences 1–2 on
+the local retention of audio/text, the closing remark about "without model").
+`docs/TECH_FACTS.md` §3 already describes the manifest side correctly.
 
 ---
 
-## E7 — `dataSync`-FGS auf API < 34 (S5-6)
+## E7 — `dataSync` FGS on API < 34 (S5-6)
 
-**Korrektur der Review-Prämisse:** `ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC`
-**und** das Manifest-Attribut `android:foregroundServiceType` gibt es **seit API 29**
-(minSdk = 29) — es sind *keine* API-34-Konzepte. Neu ab API 34 ist nur: der Typ ist
-**Pflicht**, jede Typklasse hat eine eigene `FOREGROUND_SERVICE_*`-Permission, und
-Verstöße werfen `MissingForegroundServiceTypeException`/`SecurityException`.
-*(Quelle: SDK-Konstanten-Doku „Added in API level 29"; im Container nicht per
-Gradle gegengeprüft.)* Die praktische Konsequenz bleibt trotzdem: **kein
-ungeschützter Start**, sondern defensives Starten mit Fallback.
+**Correction of the review premise:** `ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC`
+**and** the manifest attribute `android:foregroundServiceType` exist **since API
+29** (minSdk = 29) — they are *not* API 34 concepts. New only from API 34: the type
+is **mandatory**, every type class has its own `FOREGROUND_SERVICE_*` permission,
+and violations throw `MissingForegroundServiceTypeException`/`SecurityException`.
+*(Source: SDK constants doc "Added in API level 29"; not counter-checked via
+Gradle in the container.)* The practical consequence remains anyway: **no
+unguarded start**, but defensive starting with a fallback.
 
-**Verbindliche Regel (Coder):**
+**Binding rule (coder):**
 
-1. **Primär:** `startForeground(NOTIFICATION_ID, notif,
-   ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)` (3-Arg-Form, API ≥ 29) — kein
-   `SDK_INT`-Branch um den Typ selbst nötig.
-2. **Fallback-Kaskade** genau einmal, in dieser Reihenfolge:
-   `IllegalArgumentException` (Typ nicht im Manifest) → `SecurityException`
-   (Permission fehlt, nur API ≥ 34 möglich) →
-   `ForegroundServiceStartNotAllowedException` (API ≥ 31, Start aus dem Hintergrund)
-   ⇒ **einmal** `startForeground(NOTIFICATION_ID, notif)` (2-Arg, Typ = aus Manifest,
-   auf API 29–33 ohne Zeitlimit) versuchen.
-3. **Wenn auch das scheitert:** `stopSelf()`, Download bleibt `Idle`
-   (`.part` unberührt) und die Setup-Seite zeigt den bestehenden Text
-   `setup_error_fgs_blocked` („Download konnte nicht gestartet werden. Öffnen Sie
-   die App erneut und versuchen Sie es noch einmal."). Kein Crash, keine stille
-   Weiterführung ohne Notification.
-4. **Kein eigener Text für „altes Android":** Auf API 29–33 läuft der Download mit
-   dem 2-Arg-Fallback unverändert (nur ohne Typsemantik/6-h-Limit). Der Nutzer
-   braucht dort **keine** Meldung. `onTimeout` (API ≥ 35) bleibt als
-   `override`-Methode vorhanden; auf älteren APIs wird sie vom System nie gerufen.
-5. **Testbarkeit ohne Altgerät:** Der Fallback-Pfad ist als Unit-Test über einen
-   injizierbaren „Foreground-Starter" prüfbar (Fake, der beim 3-Arg-Aufruf wirft);
-   Emulator (API 36) deckt ihn **nicht** ab — deshalb Pflicht-Test, nicht
-   Emulator-Beobachtung.
+1. **Primary:** `startForeground(NOTIFICATION_ID, notif,
+   ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)` (3-arg form, API ≥ 29) — no
+   `SDK_INT` branch needed around the type itself.
+2. **Fallback cascade** exactly once, in this order:
+   `IllegalArgumentException` (type not in the manifest) → `SecurityException`
+   (permission missing, possible only on API ≥ 34) →
+   `ForegroundServiceStartNotAllowedException` (API ≥ 31, start from the
+   background) ⇒ try `startForeground(NOTIFICATION_ID, notif)` **once** (2-arg,
+   type = from the manifest, without a time limit on API 29–33).
+3. **If that also fails:** `stopSelf()`, the download stays `Idle` (`.part`
+   untouched) and the setup page shows the existing text
+   `setup_error_fgs_blocked` ("Download konnte nicht gestartet werden. Öffnen Sie
+   die App erneut und versuchen Sie es noch einmal."). No crash, no silent
+   continuation without a notification.
+4. **No own text for "old Android":** on API 29–33 the download runs unchanged
+   with the 2-arg fallback (only without type semantics/6-h limit). The user
+   needs **no** message there. `onTimeout` (API ≥ 35) remains present as an
+   `override` method; on older APIs the system never calls it.
+5. **Testability without an old device:** the fallback path is checkable as a unit
+   test via an injectable "foreground starter" (a fake that throws on the 3-arg
+   call); the emulator (API 36) does **not** cover it — hence a mandatory test, not
+   emulator observation.
 
 ---
 
-## Anhang: Prüfliste (Merge-Gate für S5-3/S5-4/S5-6)
+## Appendix: checklist (merge gate for S5-3/S5-4/S5-6)
 
-- [ ] Acht `dictation_error_*`-Strings vorhanden, jeder ≤ 45 Zeichen.
-- [ ] Kein Rohcode (`startFailed`, `audioInit:…`, `model:…`) erscheint in der
-      Statuszeile — nur Log.
-- [ ] `store.status() == BROKEN` erzeugt den Defekt-Text, **nicht** den
-      „nicht installiert"-Text.
-- [ ] `OutOfMemoryError` wird gefangen (nicht nur `Exception`).
-- [ ] SCO-Verlust während RECORDING beendet die Aufnahme und zeigt `_bt_lost`.
-- [ ] Datenschutztext entspricht Variante A (wörtlich).
-- [ ] 3-Arg-`startForeground` mit Fallback-Kaskade + Unit-Test für den Wurf-Fall.
-- [ ] Tippen bleibt in allen Fehlerklassen möglich (keine Sperre, kein Modal).
+- [ ] Eight `dictation_error_*` strings present, each ≤ 45 characters.
+- [ ] No raw code (`startFailed`, `audioInit:…`, `model:…`) appears in the
+      status row — log only.
+- [ ] `store.status() == BROKEN` produces the damaged text, **not** the "not
+      installed" text.
+- [ ] `OutOfMemoryError` is caught (not just `Exception`).
+- [ ] SCO loss during RECORDING ends the recording and shows `_bt_lost`.
+- [ ] Privacy text matches variant A (verbatim).
+- [ ] 3-arg `startForeground` with fallback cascade + unit test for the throw
+      case.
+- [ ] Typing remains possible in all error classes (no lock, no modal).

@@ -18,20 +18,21 @@ import java.io.File
 import java.util.concurrent.atomic.AtomicLong
 
 /**
- * F49a (PLAN_V0130 §1 A1, Minimal-Repro): Hold-Gate für den F43-Auto-Stop am
- * ECHTEN Korpus-Verlauf — „Sprache — 2,0 s Pause — Sprache — 3,0 s Pause —
- * Sprache" (je 2 s laut) × {Gate=false, Gate=true}:
+ * F49a (PLAN_V0130 §1 A1, minimal repro): hold gate for the F43 auto-stop on
+ * the REAL corpus run — "speech — 2.0 s pause — speech — 3.0 s pause — speech"
+ * (2 s loud each) × {gate=false, gate=true}:
  *
- *  - Gate=false: die 2-s-Pause übersteht (< 2,5 s), die 3-s-Pause beendet
- *    automatisch REGULÄR (Orakel: Auto-Stop 2,5 s in die Pause, die dritte
- *    Sprache wird nie gefüttert), lastError null.
- *  - Gate=true: KEIN Auto-Stop — beide Pausen überstanden, Lauf bis zum
- *    Quellen-Ende (11 s), expliziter Stopp finalisiert regulär.
- *  - Beide: Besitz nie verloren (Schreibweg + hyp_count) und Stille≠Stall-
- *    Vertrag intakt (streamende Stille löst NIE ERR_STALL/ERR_SILENT aus).
+ *  - Gate=false: the 2 s pause survives (< 2.5 s), the 3 s pause ends
+ *    automatically REGULARLY (oracle: auto-stop 2.5 s into the pause, the third
+ *    speech is never fed), lastError null.
+ *  - Gate=true: NO auto-stop — both pauses survived, run until the source end
+ *    (11 s), an explicit stop finalizes regularly.
+ *  - Both: ownership never lost (write path + hyp_count) and the
+ *    silence≠stall contract intact (streaming silence NEVER triggers
+ *    ERR_STALL/ERR_SILENT).
  *
- * Muster [DictationAutoStopTest]: virtuelle Uhr, self-paced 320-Sample-Blöcke
- * à 20 ms, KEIN Thread.sleep im Rhythmus. Regel 9: nur Zahlen/Codes.
+ * Pattern [DictationAutoStopTest]: virtual clock, self-paced 320-sample blocks
+ * of 20 ms each, NO Thread.sleep in the rhythm. Rule 9: numbers/codes only.
  */
 class DictationHoldGateTest {
 
@@ -39,7 +40,7 @@ class DictationHoldGateTest {
         val now = AtomicLong(1_000_000L)
     }
 
-    /** Skript-Quelle (Stille = Null-Blöcke, streamend wie AudioRecord). */
+    /** Script source (silence = null blocks, streaming like AudioRecord). */
     private class ScriptSource(
         private val clock: VClock,
         private val script: List<Pair<Long, Boolean>>,
@@ -69,7 +70,7 @@ class DictationHoldGateTest {
             if (released) return -1
             val t = nextIdx * blockMs
             if (t >= totalMs) {
-                Thread.sleep(1) // Skript-Ende: kein Block, virtuelle Uhr steht
+                Thread.sleep(1) // script end: no block, virtual clock stands still
                 return 0
             }
             val due = base + t
@@ -108,7 +109,7 @@ class DictationHoldGateTest {
         override fun close() {}
     }
 
-    /** Echter Schreib-Sink (Besitz-Nachweis: committete Zeichen, nie Inhalte). */
+    /** Real write sink (ownership proof: committed characters, never content). */
     private class RecordingSink : EditorSink {
         val text = StringBuilder()
         override fun replaceBeforeCursor(replaceLength: Int, newText: String) {
@@ -119,9 +120,9 @@ class DictationHoldGateTest {
         override fun ownLength(): Int = text.length
     }
 
-    /** Korpus: 2 s Sprache — 2,0 s Pause — 2 s Sprache — 3,0 s Pause — 2 s Sprache
-     *  (GESAMT 11 s; 16 kHz = 176 000 Samples; 5 volle 2-s-Ticks = 10 s gefüttert,
-     *  der 1-s-Rest kommt mit dem expliziten Stopp). */
+    /** Corpus: 2 s speech — 2.0 s pause — 2 s speech — 3.0 s pause — 2 s speech
+     *  (TOTAL 11 s; 16 kHz = 176,000 samples; 5 full 2-s ticks = 10 s fed,
+     *  the 1-s rest comes with the explicit stop). */
     private val corpus = listOf(
         2_000L to true, 2_000L to false, 2_000L to true, 3_000L to false, 2_000L to true,
     )
@@ -133,8 +134,8 @@ class DictationHoldGateTest {
         val scope: CoroutineScope,
     )
 
-    /** Fährt den Korpus mit dem gegebenen F49-Gate bis Auto-Finale (Gate=false)
-     *  oder Quellen-Ende (Gate=true; 5 Ticks à 2 s = 10 s gefüttert, Rest beim Stopp). */
+    /** Runs the corpus with the given F49 gate until the auto final (gate=false)
+     *  or source end (gate=true; 5 ticks of 2 s = 10 s fed, the rest at the stop). */
     private fun runCorpus(suppressed: Boolean): Ctx {
         val clock = VClock()
         val src = ScriptSource(clock, corpus)
@@ -145,13 +146,13 @@ class DictationHoldGateTest {
             scope, { src }, { engine }, sink, nowMs = { clock.now.get() },
             autoStopSuppressed = { suppressed },
         )
-        assertTrue("start muss gelingen", c.start())
+        assertTrue("start must succeed", c.start())
         val deadline = System.currentTimeMillis() + 20_000
         while (System.currentTimeMillis() < deadline) {
             Thread.sleep(5)
-            if (c.lastAbortReason == "final") break // Auto-Finale (Gate=false) oder expliziter Stopp
-            if (c.audioSeconds >= 9.99) break // Quellen-Ende: 5 Ticks gefüttert (11-s-Korpus)
-            if (!c.isActive) break // Kill-Pfad (darf hier nicht passieren)
+            if (c.lastAbortReason == "final") break // auto final (gate=false) or explicit stop
+            if (c.audioSeconds >= 9.99) break // source end: 5 ticks fed (11-s corpus)
+            if (!c.isActive) break // kill path (must not happen here)
         }
         return Ctx(c, engine, sink, scope)
     }
@@ -164,48 +165,48 @@ class DictationHoldGateTest {
         assertEquals("abort_reason", expected, c.lastAbortReason)
     }
 
-    // ---- (1) Gate=false: Orakel — Auto-Stop an der 3-s-Pause ----
+    // ---- (1) gate=false: oracle — auto-stop at the 3-s pause ----
 
     @Test
-    fun `gate=false - Auto-Stop an der 3-s-Pause, 2-s-Pause uebersteht, kein ERR`() {
+    fun `gate=false - auto-stop at the 3-s pause, 2-s pause survives, no ERR`() {
         val ctx = runCorpus(suppressed = false)
         try {
             val c = ctx.coordinator
-            // Auto-Finale ist bereits eingetreten (kein expliziter Stopp nötig).
-            assertEquals("reguläres Auto-Finale", "final", c.lastAbortReason)
-            assertTrue("Outcome FinalRan (ist ${c.lastStopOutcome})", c.lastStopOutcome is StopOutcome.FinalRan)
-            assertNull("kein ERR (Stille ist keine Stall-/Silence-Falle)", c.lastError)
-            // Orakel: Auto-Stop 2,5 s IN die 3-s-Pause (nach 8 s Korpus), die
-            // dritte Sprache (ab 9 s) wird NIE gefüttert.
+            // the auto final has already occurred (no explicit stop needed).
+            assertEquals("regular auto-final", "final", c.lastAbortReason)
+            assertTrue("Outcome FinalRan (is ${c.lastStopOutcome})", c.lastStopOutcome is StopOutcome.FinalRan)
+            assertNull("no ERR (silence is not a stall/silence trap)", c.lastError)
+            // Oracle: auto-stop 2.5 s INTO the 3-s pause (after 8 s of corpus), the
+            // third speech (from 9 s on) is NEVER fed.
             assertTrue(
                 "Auto-Stop nach der 3. Sprache, in der Pause (audio_s=${c.audioSeconds})",
                 c.audioSeconds >= 8.0 && c.audioSeconds <= 9.5,
             )
-            assertTrue("kein ERR_STALL/ERR_SILENT-Abbruch", c.lastAbortReason.startsWith("audio_error").not())
+            assertTrue("no ERR_STALL/ERR_SILENT abort", c.lastAbortReason.startsWith("audio_error").not())
         } finally {
             ctx.scope.cancel()
         }
     }
 
-    // ---- (2) Gate=true: kein Auto-Stop, Lauf bis Quellen-Ende ----
+    // ---- (2) gate=true: no auto-stop, run until the source end ----
 
     @Test
-    fun `gate=true - kein Auto-Stop, beide Pausen ueberstanden, bis Quellen-Ende`() {
+    fun `gate=true - no auto-stop, both pauses survived, until the source end`() {
         val ctx = runCorpus(suppressed = true)
         try {
             val c = ctx.coordinator
-            assertTrue("Gate zu: Session läuft nach 2-s- UND 3-s-Pause weiter", c.isActive)
-            assertEquals("kein abort bis Quellen-Ende", "-", c.lastAbortReason)
-            assertNull("kein ERR trotz 3-s-Pause", c.lastError)
+            assertTrue("gate closed: session keeps running after a 2-s AND 3-s pause", c.isActive)
+            assertEquals("no abort until the source ends", "-", c.lastAbortReason)
+            assertNull("no ERR despite the 3-s pause", c.lastError)
             assertTrue(
-                "ganzer Korpus gefüttert (audio_s=${c.audioSeconds})",
+                "whole corpus fed (audio_s=${c.audioSeconds})",
                 c.audioSeconds >= 9.99,
             )
-            c.stop() // regulärer Abschluss
+            c.stop() // regular finish
             awaitReason(c, "final")
-            assertTrue("expliziter Stopp: FinalRan (ist ${c.lastStopOutcome})", c.lastStopOutcome is StopOutcome.FinalRan)
+            assertTrue("explicit stop: FinalRan (is ${c.lastStopOutcome})", c.lastStopOutcome is StopOutcome.FinalRan)
             assertTrue(
-                "Reste beim Stopp nicht verloren: audio_s=${c.audioSeconds} ≈ 11,0",
+                "remnants not lost at the stop: audio_s=${c.audioSeconds} ≈ 11.0",
                 c.audioSeconds >= 10.9,
             )
         } finally {
@@ -213,15 +214,15 @@ class DictationHoldGateTest {
         }
     }
 
-    // ---- (3) beide Gates: Besitz nie verloren ----
+    // ---- (3) both gates: ownership never lost ----
 
     @Test
-    fun `beide Gates - Besitz nie verloren (Schreibweg laeuft, hyp_count positiv)`() {
+    fun `both gates - ownership never lost (write path runs, hyp_count positive)`() {
         for (suppressed in listOf(false, true)) {
             val ctx = runCorpus(suppressed = suppressed)
             try {
                 val c = ctx.coordinator
-                if (suppressed) { // erst regulär beenden, dann bewerten
+                if (suppressed) { // first finish regularly, then evaluate
                     c.stop()
                     awaitReason(c, "final")
                 }
@@ -230,7 +231,7 @@ class DictationHoldGateTest {
                     c.hypCount >= 1 && ctx.engine.calls >= 1,
                 )
                 assertTrue(
-                    "gate=$suppressed: Schreibweg hat committet (${ctx.sink.text.length} Zeichen, nur Zahl)",
+                    "gate=$suppressed: the write path committed (${ctx.sink.text.length} characters, digits only)",
                     ctx.sink.text.isNotEmpty(),
                 )
             } finally {
@@ -239,10 +240,10 @@ class DictationHoldGateTest {
         }
     }
 
-    // ---- (4) beide Gates: Stille≠Stall-Vertrag intakt ----
+    // ---- (4) both gates: silence≠stall contract intact ----
 
     @Test
-    fun `beide Gates - streamende Stille loest nie ERR_STALL und capStall bleibt unter dem Limit`() {
+    fun `both gates - streaming silence never triggers ERR_STALL and capStall stays below the limit`() {
         for (suppressed in listOf(false, true)) {
             val ctx = runCorpus(suppressed = suppressed)
             try {
@@ -251,9 +252,9 @@ class DictationHoldGateTest {
                     c.stop()
                     awaitReason(c, "final")
                 }
-                assertNull("gate=$suppressed: kein ERR_STALL/ERR_SILENT (lastError=${c.lastError})", c.lastError)
+                assertNull("gate=$suppressed: no ERR_STALL/ERR_SILENT (lastError=${c.lastError})", c.lastError)
                 assertTrue(
-                    "gate=$suppressed: capStallMs=${c.capStallMs()} < STALL_LIMIT (Blöcke strömten)",
+                    "gate=$suppressed: capStallMs=${c.capStallMs()} < STALL_LIMIT (blocks streamed)",
                     c.capStallMs() < DictationCoordinator.STALL_LIMIT_MS,
                 )
             } finally {

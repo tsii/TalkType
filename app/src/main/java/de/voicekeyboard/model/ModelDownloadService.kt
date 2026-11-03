@@ -15,39 +15,39 @@ import java.io.File
 import java.util.concurrent.Executors
 
 /**
- * Foreground-Service (dataSync) für den 671-MB-Modelldownload — E1/E2 aus
- * docs/SETUP_UI_DECISIONS.md. Der Service BESITZT den [DownloadController]
- * (L9: genau eine Instanz pro Prozess, START_NOT_STICKY); die spätere
- * Setup-Activity beobachtet nur [controller] (State-Reader/Listener) und
- * startet/stopt per Intent-Action.
+ * Foreground service (dataSync) for the 671 MB model download — E1/E2 from
+ * docs/SETUP_UI_DECISIONS.md. The service OWNS the [DownloadController]
+ * (L9: exactly one instance per process, START_NOT_STICKY); the later
+ * setup activity only observes [controller] (state reader/listener) and
+ * starts/stops via intent action.
  *
- * L2: startForeground sofort in onStartCommand, Kanal `model_download`,
- * IMPORTANCE_LOW. L4/L5: Cancel-Action; Ready/Failed/Cancelled → stopSelf.
- * L7: onTimeout → controller.cancel() + stopSelf (nie ohne stopSelf weiter).
+ * L2: startForeground immediately in onStartCommand, channel `model_download`,
+ * IMPORTANCE_LOW. L4/L5: cancel action; Ready/Failed/Cancelled → stopSelf.
+ * L7: onTimeout → controller.cancel() + stopSelf (never continue without stopSelf).
  *
- * Logging: Tag "VK-DL", NUR Dateinamen/Dauern/Zustände — nie URLs, nie
- * Audio, nie Textinhalte.
+ * Logging: tag "VK-DL", ONLY file names/durations/states — never URLs, never
+ * audio, never text contents.
  */
 /**
- * E7-Fallback-Kaskade als reine, JVM-testbare Logik (keine Android-Typen):
- * Versuchte Modi in fester Reihenfolge TYPED → UNTYPED → ABORT;
- * [nextAfter] liefert den nächsten Versuch nach einem Fehlschlag, [isFinal]
- * sagt, ob nach beiden fehlgeschlagenen Versuchen abgebrochen wird.
+ * E7 fallback cascade as pure, JVM-testable logic (no Android types):
+ * attempted modes in fixed order TYPED → UNTYPED → ABORT;
+ * [nextAfter] returns the next attempt after a failure, [isAbort]
+ * says whether the download is aborted after both attempts failed.
  */
 object ForegroundStartPolicy {
     enum class Mode { TYPED, UNTYPED, ABORT }
 
-    /** Erster Versuch (API ≥ 29: typisierter dataSync-Start). */
+    /** First attempt (API ≥ 29: typed dataSync start). */
     val firstAttempt: Mode = Mode.TYPED
 
-    /** Nächster Modus nach einem Fehlschlag (IllegalArgumentException/SecurityException/
-     * ForegroundServiceStartNotAllowedException → typloser API-29-Fallback). */
+    /** Next mode after a failure (IllegalArgumentException/SecurityException/
+     * ForegroundServiceStartNotAllowedException → untyped API-29 fallback). */
     fun nextAfter(failed: Mode): Mode = when (failed) {
         Mode.TYPED -> Mode.UNTYPED
         else -> Mode.ABORT
     }
 
-    /** true, wenn beide Versuche scheiterten und der Download ohne FGS abgebrochen wird. */
+    /** true if both attempts failed and the download is aborted without FGS. */
     fun isAbort(mode: Mode): Boolean = mode == Mode.ABORT
 }
 
@@ -60,19 +60,19 @@ class ModelDownloadService : Service() {
         const val NOTIFICATION_ID = 42
         private const val TAG = "VK-DL"
 
-        /** Prozess-Singleton: genau ein laufender Download pro Prozess (L9). */
+        /** Process singleton: exactly one running download per process (L9). */
         @Volatile var controller: DownloadController? = null
             private set
 
-        /** Externer UI-Beobachter (Setup-Activity): wird ZUSÄTZLICH zum internen
-         *  Notification-Listener informiert — überschreibt ihn nie. */
+        /** External UI observer (setup activity): informed IN ADDITION to the internal
+         *  notification listener — never overrides it. */
         @Volatile var observer: ((DownloadController.State) -> Unit)? = null
 
         private fun notifyAll(state: DownloadController.State) {
             observer?.invoke(state)
         }
 
-        /** Modelwurzel im privaten Dateisystem (model dir). */
+        /** Model root in the private file system (model dir). */
         private fun modelRoot(context: Context): File = File(context.filesDir, "models")
     }
 
@@ -91,10 +91,10 @@ class ModelDownloadService : Service() {
             stopSelf()
             return START_NOT_STICKY
         }
-        // L2: startForeground VOR jeder Init — Notification sofort sichtbar.
-        // E7-Kaskade: siehe startForegroundCompat.
+        // L2: startForeground BEFORE any init — notification visible immediately.
+        // E7 cascade: see startForegroundCompat.
         if (!startForegroundCompat()) {
-            // Ohne FGS kein Download (Doze/Prozess-Kill-Gefahr) — sauber abbrechen.
+            // No download without FGS (Doze/process-kill risk) — cancel cleanly.
             stopSelf()
             return START_NOT_STICKY
         }
@@ -107,8 +107,8 @@ class ModelDownloadService : Service() {
                     notifyAll(state)
                     onStateChanged(state, startedAt)
                 }
-                notifyAll(c.state) // aktueller Zustand sofort an neue UI
-                c.start() // idempotent: No-Op während Downloading/Verifying/Ready
+                notifyAll(c.state) // current state to the new UI immediately
+                c.start() // idempotent: no-op during Downloading/Verifying/Ready
             }
             ACTION_CANCEL -> {
                 controller?.cancel()
@@ -119,7 +119,7 @@ class ModelDownloadService : Service() {
         return START_NOT_STICKY
     }
 
-    /** L7: dataSync-Systemlimit (6 h/24 h) — geordnet abbrechen, nie weiterlaufen. */
+    /** L7: dataSync system limit (6 h/24 h) — abort in an orderly way, never keep running. */
     override fun onTimeout(startId: Int, fgsType: Int) {
         controller?.cancel()
         stopSelf()
@@ -132,15 +132,15 @@ class ModelDownloadService : Service() {
 
     /**
      * E7 (ERROR_UX_DECISIONS.md): `ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC`
-     * und das Manifest-Attribut existieren seit API 29 (minSdk) — die 3-Arg-Form ist
-     * der kanonische Aufruf. Neu ab API 34 sind Typ-Pflicht + eigene Permission je
-     * Typklasse; Verstöße werfen IllegalArgumentException/SecurityException — und
-     * ein Hintergrund-Start wirft ForegroundServiceStartNotAllowedException. Daher
-     * GENAU EINE Fallback-Stufe: typlos starten (API-29-Semantik); schlägt auch
-     * das fehl, ist ein Download ohne FGS unvertretbar (Prozess unter Speicher-
-     * druck killbar, Doze-Throttling) → stopSelf + false.
+     * and the manifest attribute exist since API 29 (minSdk) — the 3-arg form is
+     * the canonical call. New from API 34: type obligation + own permission per
+     * type class; violations throw IllegalArgumentException/SecurityException — and
+     * a background start throws ForegroundServiceStartNotAllowedException. Hence
+     * EXACTLY ONE fallback level: start untyped (API-29 semantics); if that
+     * fails too, a download without FGS is indefensible (process killable under
+     * memory pressure, Doze throttling) → stopSelf + false.
      *
-     * @return true, wenn der Service als Foreground läuft (typisiert oder typlos).
+     * @return true if the service runs as foreground (typed or untyped).
      */
     private fun startForegroundCompat(): Boolean {
         val notification = buildNotification()
@@ -155,11 +155,11 @@ class ModelDownloadService : Service() {
 
     private fun fallbackUntyped(notification: Notification): Boolean = try {
         @Suppress("DEPRECATION")
-        startForeground(NOTIFICATION_ID, notification) // typlos (API-29-Fallback)
+        startForeground(NOTIFICATION_ID, notification) // untyped (API-29 fallback)
         true
     } catch (e: Exception) {
-        // Auch der typlose Start scheiterte (z. B. Start aus dem Hintergrund
-        // verboten, Permission entzogen): geordnet beenden, KEIN stiller Download.
+        // The untyped start failed too (e. g. background start
+        // forbidden, permission revoked): end in an orderly way, NO silent download.
         Log.w(TAG, "untyped FGS start failed too: ${e.javaClass.simpleName}")
         stopSelf()
         false
@@ -182,12 +182,12 @@ class ModelDownloadService : Service() {
             is DownloadController.State.Failed,
             is DownloadController.State.Cancelled,
             -> {
-                // L5: Terminierung innerhalb ~1 s; nur Dauern/Zustand geloggt
+                // L5: termination within ~1 s; only durations/state logged
                 android.util.Log.i(TAG, "state=${state::class.simpleName} elapsedMs=${System.currentTimeMillis() - startedAtMs}")
                 stopSelf()
             }
             else -> {
-                // Fortschritts-Notification (nur Zahlen/Dateinamen)
+                // progress notification (numbers/file names only)
                 val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
                 nm.notify(NOTIFICATION_ID, buildNotification(state))
             }
@@ -221,7 +221,7 @@ class ModelDownloadService : Service() {
         return builder
             .setSmallIcon(android.R.drawable.stat_sys_download)
             .setContentTitle(getString(R.string.download_notification_title))
-            .setContentText(text) // nur Zahlen/Dateinamen, nie Inhalte
+            .setContentText(text) // numbers/file names only, never contents
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .build()

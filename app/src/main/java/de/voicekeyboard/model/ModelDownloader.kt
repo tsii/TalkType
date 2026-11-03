@@ -8,23 +8,23 @@ import java.net.URL
 import java.security.MessageDigest
 
 /**
- * JDK-Downloader für Modell-Dateien (keine neue Dependency).
+ * JDK downloader for model files (no new dependency).
  *
- * - `HttpURLConnection` mit Connect/Read-Timeouts.
- * - Resume: vorhandene `.part` wird mit `Range: bytes=<len>-` fortgesetzt;
- *   Server-ETag wird je Datei gespeichert — weicht er ab, startet der Download
- *   von vorn (kein Misch-Datenbestand). Antwort 200 statt 206 auf Range ⇒ Neustart.
- * - SHA-256 wird WÄHREND des Streams berechnet (Prefix der `.part` wird vorab in
- *   den Digest gelesen), am Ende gegen [ModelFile.sha256] geprüft (Ende-zu-Ende).
- * - Fortschritt über [DownloadProgressListener] (Bytes, Gesamt, Rate) — nur Zahlen.
- * - Abbruch über `volatile` Flag ([cancel]): `.part` bleibt für Resume erhalten.
- * - Retry: Netzwerkfehler und HTTP 5xx mit begrenztem Backoff (max. [maxRetries]).
- * - Platzprüfung vor jedem Schreiben: `usableSpace` der Part-Partition.
- * - Sauberes Schließen aller Streams/Verbindungen in finally.
- * - Keine Logs von URLs/Inhalten (Aufrufer sieht nur [ModelError] mit Status/Detail).
+ * - `HttpURLConnection` with connect/read timeouts.
+ * - Resume: an existing `.part` is continued with `Range: bytes=<len>-`;
+ *   the server ETag is stored per file — if it changes, the download starts
+ *   from scratch (no mixed data stock). Response 200 instead of 206 on Range ⇒ restart.
+ * - SHA-256 is computed WHILE streaming (the `.part` prefix is read into the
+ *   digest beforehand), checked against [ModelFile.sha256] at the end (end to end).
+ * - Progress via [DownloadProgressListener] (bytes, total, rate) — numbers only.
+ * - Abort via a `volatile` flag ([cancel]): `.part` stays for resuming.
+ * - Retry: network errors and HTTP 5xx with bounded backoff (max. [maxRetries]).
+ * - Space check before every write: `usableSpace` of the part partition.
+ * - Clean closing of all streams/connections in finally.
+ * - No logs of URLs/contents (the caller only sees [ModelError] with status/detail).
  *
- * @param opener erlaubt Tests, den Transport zu fälschen (JDK-HttpServer oder
- *   In-Memory-Verbindung) — Produktionscode nutzt den Default.
+ * @param opener lets tests fake the transport (JDK HttpServer or
+ *   in-memory connection) — production code uses the default.
  */
 class ModelDownloader(
     private val baseUrl: String = ModelManifest.BASE_URL,
@@ -39,7 +39,7 @@ class ModelDownloader(
     },
 ) {
 
-    /** Abbruch-Flag: wird vom UI-Thread gesetzt, im Read-Loop geprüft. */
+    /** Abort flag: set by the UI thread, checked in the read loop. */
     @Volatile private var cancelled = false
 
     fun cancel() {
@@ -47,9 +47,9 @@ class ModelDownloader(
     }
 
     /**
-     * Lädt [file] (Resume + Hash-Prüfung) in die Store-Part-Datei.
-     * @return true, wenn die Datei vollständig und hash-korrekt ist (Move/Activate
-     *   macht dann der [ModelStore]); wirft [ModelError] bei endgültigem Scheitern.
+     * Downloads [file] (resume + hash check) into the store part file.
+     * @return true if the file is complete and hash-correct (the [ModelStore]
+     *   then does the move/activate); throws [ModelError] on final failure.
      */
     @Throws(ModelError::class)
     fun download(
@@ -63,7 +63,7 @@ class ModelDownloader(
             try {
                 return downloadAttempt(file, listener, currentAttempt = attempt + 1)
             } catch (e: ModelError.Cancelled) {
-                throw e // Abbruch ist nie retry-bar
+                throw e // an abort is never retryable
             } catch (e: ModelError) {
                 val retryable = e is ModelError.Network || (e is ModelError.Http && e.statusCode >= 500)
                 if (!retryable || attempt == maxRetries) throw e
@@ -103,7 +103,7 @@ class ModelDownloader(
                 connectTimeout = connectTimeoutMs
                 readTimeout = readTimeoutMs
                 if (resumeFrom > 0) setRequestProperty("Range", "bytes=$resumeFrom-")
-                setRequestProperty("Accept-Encoding", "identity") // keine Kompression: Range+Hash sonst kaputt
+                setRequestProperty("Accept-Encoding", "identity") // no compression: range+hash would break
             }
             connection.connect()
             val status = connection.responseCode
@@ -111,22 +111,22 @@ class ModelDownloader(
                 throw ModelError.Http(status, "für ${file.storeName}")
             }
 
-            // ETag-Guard: Wechsel ⇒ alter .part unbrauchbar, von vorn beginnen.
-            // Bei 416 KEIN ETag-Neustart: die .part ist (vermutlich) komplett —
-            // ein ETag-Wechsel fängt in der Hash-Prüfung (Mismatch) sicher auf.
+            // ETag guard: change ⇒ old .part unusable, start from scratch.
+            // On 416 NO ETag restart: the .part is (presumably) complete —
+            // an ETag change is caught safely by the hash check (mismatch).
             val etag = connection.getHeaderField("ETag")
             val storedEtag = store.etagFor(file.storeName)
             if (status != 416 && resumeFrom > 0 && storedEtag != null && etag != null && storedEtag != etag) {
                 part.delete()
                 store.storeEtag(file.storeName, null)
-                return downloadAttempt(file, listener) // ohne Resume, frischer ETag wird gespeichert
+                return downloadAttempt(file, listener) // without resume, fresh ETag is stored
             }
             if (etag != null) store.storeEtag(file.storeName, etag)
 
             if (status == 416) {
-                // Range nicht erfüllbar (B-1): .part NICHT löschen.
+                // Range not satisfiable (B-1): do NOT delete the .part.
                 if (part.length() >= file.sizeBytes) {
-                    // vollständig → nur noch Hash-Verifikation, kein Neustart (keine Endlosschleife)
+                    // complete → hash verification only, no restart (no endless loop)
                     val digest = MessageDigest.getInstance("SHA-256")
                     readPrefixIntoDigest(part, part.length(), digest)
                     val actual = Sha256.hex(digest.digest())
@@ -137,7 +137,7 @@ class ModelDownloader(
                     }
                     return true
                 }
-                // kleiner als erwartete Größe → verworfen und GENAU EIN Neustart ohne Range
+                // smaller than the expected size → discarded and EXACTLY ONE restart without range
                 part.delete()
                 store.storeEtag(file.storeName, null)
                 if (restartedAfter416) {
@@ -149,18 +149,18 @@ class ModelDownloader(
             val rangeAccepted = status == 206
             val effectiveStart = if (rangeAccepted) resumeFrom else 0L
             if (!rangeAccepted) {
-                // D1(a): Server antwortet 200 statt 206 auf Range (CDN ignoriert
-                // Range nach Redirect) — der volle Body darf NIEMALS an die
-                // vorhandene .part angehaengt werden. .part auf 0 kuerzen,
-                // komplett neu beginnen.
+                // D1(a): server answers 200 instead of 206 on Range (CDN ignores
+                // Range after a redirect) — the full body must NEVER be
+                // appended to the existing .part. Truncate the .part to 0,
+                // start completely anew.
                 java.io.RandomAccessFile(part, "rw").use { it.setLength(0) }
             }
 
-            val contentLength = connection.contentLengthLong // -1 unbekannt
+            val contentLength = connection.contentLengthLong // -1 unknown
             val total = if (contentLength >= 0) effectiveStart + contentLength else file.sizeBytes
             checkDiskSpace(parent, total, effectiveStart)
 
-            // Digest über die GESAMTE Datei: .part-Prefix vorab einlesen
+            // Digest over the WHOLE file: read the .part prefix beforehand
             val digest = MessageDigest.getInstance("SHA-256")
             if (effectiveStart > 0) readPrefixIntoDigest(part, effectiveStart, digest)
 
@@ -171,7 +171,7 @@ class ModelDownloader(
             var lastEmitMs = 0L
             if (input != null) {
                 val out = java.io.RandomAccessFile(part, "rw").use { raf ->
-                    raf.setLength(effectiveStart) //truncate Neustart-Reste über die Marque
+                    raf.setLength(effectiveStart) // truncate restart remnants beyond the mark
                     raf.seek(effectiveStart)
                     val buf = ByteArray(bufferBytes)
                     while (true) {
@@ -181,9 +181,9 @@ class ModelDownloader(
                         raf.write(buf, 0, n)
                         digest.update(buf, 0, n)
                         written += n
-                        // D1(b): .part waechst ueber die erwartete Groesse → besch
-                        // digte Fortsetzung (Range/Hash-Basis kaputt). .part loeschen,
-                        // als Netzwerkfehler klassifizieren (Retry-Logik greift).
+                        // D1(b): .part grows beyond the expected size → corrupted
+                        // continuation (range/hash basis broken). Delete the .part,
+                        // classify as a network error (retry logic applies).
                         if (written > file.sizeBytes) {
                             raf.setLength(0)
                             throw ModelError.Network("beschädigte Fortsetzung (${file.storeName})")
@@ -208,13 +208,13 @@ class ModelDownloader(
                 written = part.length()
             }
 
-            // Hash-Prüfung (Ende-zu-Ende, auch beim puren 416-Fortsetzungsfall)
+            // Hash check (end to end, also in the pure 416 continuation case)
             if (written != file.sizeBytes) {
                 throw ModelError.Network("unvollständig: ${written}/${file.sizeBytes} Bytes (${file.storeName})")
             }
             val actual = Sha256.hex(digest.digest())
             if (!Sha256.constantTimeEquals(actual, file.sha256)) {
-                // Mismatch ist endgültig: .part verwerfen, damit kein kaputtes Resume folgt
+                // A mismatch is final: discard the .part so no broken resume follows
                 part.delete()
                 store.storeEtag(file.storeName, null)
                 throw ModelError.HashMismatch(file.storeName, file.sha256, actual)

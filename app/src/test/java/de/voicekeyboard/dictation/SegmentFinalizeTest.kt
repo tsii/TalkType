@@ -20,26 +20,26 @@ import java.io.File
 import java.util.concurrent.atomic.AtomicLong
 
 /**
- * B1 (PLAN_V0130 §6.3 Empfehlung (c)): Segmenter-Kern — Zwischensegment-
- * Finalisierung, §5.1-KONFORM (whole_buffer nur ZEITLICH segmentiert).
- * Muster [de.voicekeyboard.ime.DictationAutoStopTest]: virtuelle Uhr,
- * self-paced 320-Sample-Blöcke à 20 ms, KEIN Thread.sleep im Rhythmus.
+ * B1 (PLAN_V0130 §6.3 recommendation (c)): segmenter core — intermediate
+ * segment finalization, §5.1-COMPLIANT (whole_buffer only segmented IN TIME).
+ * Pattern [de.voicekeyboard.ime.DictationAutoStopTest]: virtual clock,
+ * self-paced 320-sample blocks of 20 ms each, NO Thread.sleep in the rhythm.
  *
- * Korpus (Regel-a-Fall): „Sprache(3 s) — Pause 1,0 s — Sprache(3 s) — Pause"
- * mit Satzzeichen-Hypothesen und segmentFinalizeMs = 35 000:
- *  - (1) Grenze an der Stille+Satzzeichen (≥ 1,2 s Pause), NICHT bei der
- *    1,0-s-Pause; jede Pause nur EINMAL; Session lebt bis UP; das UP-Finale
- *    dekodiert NUR das REST-Puffer (wichtigster Vertragstest).
- *  - (2) Dauerfall 40 s pausenlose Sprache → Zwangssegment (Längenregel b)
- *    bei ~35 s; Decode-Fenster je Segment bleibt ≤ 38 s.
- *  - (3) ohne Satzzeichen bleibt die Stille-Regel (a) stumm — keine Grenze.
- *  - (4) reine Funktion [segmentBoundary]: Wahrheitstafel beider Regeln.
- *  - (5) B1-Fix (Review P1): transienter Fehler im Segment-Finale killt die
- *    Session NICHT — Wiederholungs-Boundary + korrektes UP-Rest-Finale.
- *  - (6) B1-Fix (Review P2a): Export-Längen (audio_s/buffer_s) bleiben nach
- *    Segmenten SESSION-Semantik; hyp_last_buffer_s bleibt segment-lokal.
+ * Corpus (rule-a case): "speech(3 s) — pause 1.0 s — speech(3 s) — pause"
+ * with punctuation hypotheses and segmentFinalizeMs = 35,000:
+ *  - (1) boundary at silence+punctuation (≥ 1.2 s pause), NOT at the
+ *    1.0 s pause; each pause only ONCE; the session lives until UP; the UP
+ *    final decodes ONLY the REST buffer (most important contract test).
+ *  - (2) continuous case: 40 s of uninterrupted speech → forced segment
+ *    (length rule b) at ~35 s; decode window per segment stays ≤ 38 s.
+ *  - (3) without punctuation the silence rule (a) stays mute — no boundary.
+ *  - (4) pure function [segmentBoundary]: truth table of both rules.
+ *  - (5) B1 fix (review P1): a transient error in the segment final does NOT
+ *    kill the session — retry boundary + correct UP rest final.
+ *  - (6) B1 fix (review P2a): export lengths (audio_s/buffer_s) keep SESSION
+ *    semantics after segments; hyp_last_buffer_s stays segment-local.
  *
- * Regel 9: nur Zahlen/Codes; Fixture-Texte sind Testkonstanten, nie Nutzerdaten.
+ * Rule 9: numbers/codes only; fixture texts are test constants, never user data.
  */
 class SegmentFinalizeTest {
 
@@ -47,11 +47,11 @@ class SegmentFinalizeTest {
         val now = AtomicLong(1_000_000L)
     }
 
-    /** Skript-Quelle (Stille = Null-Blöcke, streamend wie AudioRecord).
-     *  [pacingNanos]: optionale Wanduhr-Drossel je Block (F56-Repro,
-     *  SegmentGoldenTest-Muster: ohne Pacing überholt die µs-schnelle Capture
-     *  den Consumer — lastHypPunct wäre bei der (a)-Prüfung noch nicht aus
-     *  einem ABGESCHLOSSENen Decode gesetzt, dieselbe Race-Familie wie B1/B3). */
+    /** Script source (silence = zero blocks, streaming like AudioRecord).
+     *  [pacingNanos]: optional wall-clock throttle per block (F56 repro,
+     *  SegmentGoldenTest pattern: without pacing the µs-fast capture overtakes
+     *  the consumer — lastHypPunct would not yet be set from a COMPLETED decode
+     *  at the (a) check, the same race family as B1/B3). */
     private class ScriptSource(
         private val clock: VClock,
         private val script: List<Pair<Long, Boolean>>,
@@ -82,7 +82,7 @@ class SegmentFinalizeTest {
             if (released) return -1
             val t = nextIdx * blockMs
             if (t >= totalMs) {
-                Thread.sleep(1) // Skript-Ende: kein Block, virtuelle Uhr steht
+                Thread.sleep(1) // script end: no block, virtual clock stands still
                 return 0
             }
             val due = base + t
@@ -103,11 +103,11 @@ class SegmentFinalizeTest {
         }
     }
 
-    /** Stub mit KONFIGURIERBAREM Text (Satzzeichen ja/nein); Fenster je Aufruf.
-     *  B1-Fix (P1, Test 5): [failFinalizeAttempts] SEGMENT-Finalize-Versuche
-     *  werfen eine transiente IllegalStateException — ein Finalize wiederholt
-     *  die Fenstergröße des unmittelbar vorherigen Partial-Decodes (Partials
-     *  wachsen im Segment streng monoton, ein Finalize wiederholt die Größe). */
+    /** Stub with CONFIGURABLE text (punctuation yes/no); window per call.
+     *  B1 fix (P1, test 5): [failFinalizeAttempts] SEGMENT finalize attempts
+     *  throw a transient IllegalStateException — a finalize repeats the window
+     *  size of the immediately preceding partial decode (partials grow strictly
+     *  monotonically within a segment, a finalize repeats the size). */
     private class TextStubEngine(
         private val text: String,
         private val failFinalizeAttempts: Int = 0,
@@ -144,7 +144,7 @@ class SegmentFinalizeTest {
         override fun close() {}
     }
 
-    /** Echter Schreib-Sink (Besitz-Nachweis über Schreib-Zähler, nie Inhalte geloggt). */
+    /** Real write sink (ownership proof via write counter, content never logged). */
     private class RecordingSink : EditorSink {
         var writes = 0
             private set
@@ -180,7 +180,7 @@ class SegmentFinalizeTest {
         val scope = CoroutineScope(Dispatchers.Default)
         val coordinator = DictationCoordinator(
             scope, { src }, { engine }, sink, nowMs = { clock.now.get() },
-            autoStopSuppressed = { true }, // Hold-Modus: F43 aus — Session lebt bis UP
+            autoStopSuppressed = { true }, // hold mode: F43 off — the session lives until UP
             segmentFinalizeMs = segmentFinalizeMs,
         )
         assertTrue(coordinator.start())
@@ -202,74 +202,75 @@ class SegmentFinalizeTest {
         assertEquals("abort_reason", expected, c.lastAbortReason)
     }
 
-    // ---- (1) Stille+Satzzeichen-Grenze; 1,0-s-Pause schneidet NICHT ----
+    // ---- (1) silence+punctuation boundary; the 1.0 s pause does NOT cut ----
 
     @Test
-    fun `(1) Satzpause mit Satzzeichen schneidet - 1,0-s-Pause nicht - UP finalisiert nur das Rest-Buffer`() {
-        // Sprache(3 s) — Pause 1,0 s — Sprache(3 s) — Pause für immer.
+    fun `(1) sentence pause with punctuation cuts - 1,0 s pause does not - UP finalizes only the rest buffer`() {
+        // speech(3 s) — pause 1.0 s — speech(3 s) — pause forever.
         val ctx = runScript(
             script = listOf(3_000L to true, 1_000L to false, 3_000L to true, 6_000L to false),
-            engineText = "Ein Satz.", // endet auf Satzzeichen (Regel a)
+            engineText = "Ein Satz.", // ends with punctuation (rule a)
             segmentFinalizeMs = 35_000L,
             stopWhen = { it.coordinator.segmentFinalizations() >= 1 },
         )
         try {
             val c = ctx.coordinator
-            assertTrue("Grenze an der 2. Pause (Regel a)", c.segmentFinalizations() >= 1)
-            assertTrue("Session lebt bis UP (kein Auto-Stop, kein ERR)", c.isActive)
-            assertNull("kein ERR", c.lastError)
-            assertEquals("kein abort", "-", c.lastAbortReason)
-            // 1,0-s-Pause hat NICHT geschnitten (Regel-a-Mindestpause 1,2 s):
-            // die Grenze kam an der ZWEITEN Pause. Die exakte Naht-Position im
-            // Puffer ist SCHEDULING-abhängig (Consumer-Lag beim Einholen der
-            // Capture-Anforderung — Ehren bei fed 10…13 s, ggf. erst im Stopp-
-            // Drain) — deshalb hier nur UNVERLETZBARE Invarianten; den
-            // deterministischen Naht-/Rest-Vertrag trägt Test (2) (die
-            // Längenregel ehrt der Consumer an EIGENER Position, nicht racy).
+            assertTrue("boundary at the 2nd pause (rule a)", c.segmentFinalizations() >= 1)
+            assertTrue("session lives until UP (no auto-stop, no ERR)", c.isActive)
+            assertNull("no ERR", c.lastError)
+            assertEquals("no abort", "-", c.lastAbortReason)
+            // the 1.0 s pause did NOT cut (rule-a minimum pause 1.2 s):
+            // the boundary came at the SECOND pause. The exact seam position in
+            // the buffer depends on SCHEDULING (consumer lag catching up with
+            // the capture request — honorable at fed 10…13 s, possibly only in
+            // the stop drain) — therefore only INVARIANT assertions here; the
+            // deterministic seam/rest contract is carried by test (2) (the
+            // consumer honors the length rule at its OWN position, not racy).
             val maxWindow = ctx.engine.windowSeconds.max()
             assertTrue(
-                "kein Decode-Fenster über die 13-s-Session hinaus (Ist=$maxWindow)",
+                "no decode window beyond the 13-s session (actual=$maxWindow)",
                 maxWindow <= 13.0,
             )
-            // Jede Pause nur EINMAL: weitere 4+ s Stille => KEINE zweite Grenze.
+            // each pause only ONCE: another 4+ s of silence => NO second boundary.
             val deadline = System.currentTimeMillis() + 5_000
             var segmentsAfterPause = c.segmentFinalizations()
             while (System.currentTimeMillis() < deadline) {
                 Thread.sleep(20)
                 segmentsAfterPause = c.segmentFinalizations()
             }
-            assertEquals("keine Wiederholungs-Grenze in derselben Pause", 1, segmentsAfterPause)
-            // UP => reguläres Session-Finale; Text committet.
+            assertEquals("no repeated boundary in the same pause", 1, segmentsAfterPause)
+            // UP => regular session final; text committed.
             c.stop()
             awaitReason(c, "final")
-            assertTrue("FinalRan (ist ${c.lastStopOutcome})", c.lastStopOutcome is StopOutcome.FinalRan)
-            assertTrue("Text committet (Ist=${ctx.sink.writes} Writes)", ctx.sink.writes >= 1)
-            assertTrue("Text ganze Stücke, nicht leer", ctx.sink.text.isNotBlank())
-            assertNull("kein ERR am Ende", c.lastError)
+            assertTrue("FinalRan (is ${c.lastStopOutcome})", c.lastStopOutcome is StopOutcome.FinalRan)
+            assertTrue("text committed (actual=${ctx.sink.writes} writes)", ctx.sink.writes >= 1)
+            assertTrue("text in whole pieces, not empty", ctx.sink.text.isNotBlank())
+            assertNull("no ERR at the end", c.lastError)
         } finally {
             ctx.scope.cancel()
         }
     }
 
-    // ---- (2) Dauerfall: 40 s pausenlos => Zwangssegment bei 35 s ----
+    // ---- (2) continuous case: 40 s without pauses => forced segment at 35 s ----
 
     @Test
-    fun `(2) 40 s pausenlose Sprache - Laengenregel schneidet bei 35 s - Fenster bleibt begrenzt`() {
+    fun `(2) 40 s of uninterrupted speech - length rule cuts at 35 s - window stays bounded`() {
         var maxBufferS = 0.0
         var firstBoundaryAtAudioS = -1.0
         val ctx = runScript(
-            // 40 s pausenlose Sprache + NUR 1,0 s Endstille (< Regel-a-Mindestpause
-            // 1,2 s): der ERSTE Schnitt kann nur aus der Längenregel (b) kommen
-            // (35 s) — nicht aus der Endstille (B1-Befund früherer Läufe).
+            // 40 s of uninterrupted speech + ONLY 1.0 s of trailing silence
+            // (< rule-a minimum pause 1.2 s): the FIRST cut can only come from
+            // the length rule (b) (35 s) — not from the trailing silence
+            // (B1 finding from earlier runs).
             script = listOf(40_000L to true, 1_000L to false),
             engineText = "Ein Satz.",
             segmentFinalizeMs = 35_000L,
             stopWhen = { ctx ->
-                // Segment-lokales Decode-Fenster (buffer_s ist seit B1-Fix
-                // SESSION-basiert): hyp_last_buffer_s = letztes Decode-Fenster.
+                // segment-local decode window (buffer_s has been SESSION-based
+                // since the B1 fix): hyp_last_buffer_s = last decode window.
                 maxBufferS = maxOf(maxBufferS, ctx.coordinator.lastHypothesisBufferSeconds().toDouble())
-                // Session-Fortschritt = audioMs (audioSeconds ist Session-Länge,
-                // aber der Schnitt-Beobachtungswert muss konsistent sein).
+                // session progress = audioMs (audioSeconds is the session length,
+                // but the cut observation value must be consistent).
                 if (ctx.coordinator.segmentFinalizations() >= 1 && firstBoundaryAtAudioS < 0) {
                     firstBoundaryAtAudioS = ctx.coordinator.audioMs / 1000.0
                 }
@@ -279,61 +280,67 @@ class SegmentFinalizeTest {
         )
         try {
             val c = ctx.coordinator
-            assertTrue("Zwangssegment gelaufen", c.segmentFinalizations() >= 1)
+            assertTrue("forced segment ran", c.segmentFinalizations() >= 1)
             assertTrue(
-                "erste Grenze bei ~35 s (Längenregel, Ist=$firstBoundaryAtAudioS)",
+                "first boundary at ~35 s (length rule, actual=$firstBoundaryAtAudioS)",
                 firstBoundaryAtAudioS >= 33.0 && firstBoundaryAtAudioS <= 40.0,
             )
             assertTrue(
-                "kein (a)-Vorab-Schnitt: die 1,0-s-Endstille bleibt unter der Grenze",
+                "no (a) pre-cut: the 1.0-s end silence stays below the boundary",
                 c.segmentFinalizations() <= 2,
             )
             assertTrue(
-                "Decode-Fenster je Segment <= 38 s (Ist=$maxBufferS)",
+                "decode window per segment <= 38 s (actual=$maxBufferS)",
                 maxBufferS <= 38.0,
             )
-            assertTrue("Session lebt bis UP", c.isActive)
-            assertNull("kein ERR", c.lastError)
+            assertTrue("session lives until UP", c.isActive)
+            assertNull("no ERR", c.lastError)
             c.stop()
             awaitReason(c, "final")
-            assertTrue("FinalRan (ist ${c.lastStopOutcome})", c.lastStopOutcome is StopOutcome.FinalRan)
+            assertTrue("FinalRan (is ${c.lastStopOutcome})", c.lastStopOutcome is StopOutcome.FinalRan)
             val restWindow = ctx.engine.windowSeconds.last()
             assertTrue(
-                "UP-Finale über NUR das Rest-Buffer (Ist=${"%.2f".format(restWindow)} s)",
+                "UP final over ONLY the rest buffer (actual=${"%.2f".format(restWindow)} s)",
                 restWindow < 8.0,
             )
-            // Session-Zähler monoton: hyp_count/cap_blocks/loud_s nie rückwärts.
+            // session counters monotonic: hyp_count/cap_blocks/loud_s never backwards.
             assertTrue("hyp_count > 0", c.hypCount > 0)
             assertTrue("cap_blocks > 0", c.capBlocks() > 0)
             assertTrue("loud_s > 0", c.loudS() > 0.0)
-            assertTrue("mind. 2 permanente Commits (Ist=${ctx.sink.writes})", ctx.sink.writes >= 2)
-            // Deterministische NAHT (byLength schneidet an Consumer-Position):
-            // Segment-1-Text + genau EIN Leerzeichen + Segment-2-Text — der
-            // Beweis, dass das zweite Segment über den GERESETTETEN Puffer
-            // dekodiert hat (Puffer-Reset, racy-frei).
-            assertEquals("Naht: Präfix + Segment-2-Text", "Ein Satz. Ein Satz.", ctx.sink.text.toString())
+            assertTrue("at least 2 permanent commits (actual=${ctx.sink.writes})", ctx.sink.writes >= 2)
+            // deterministic SEAM (byLength cuts at the consumer position):
+            // segment-1 text + exactly ONE space + segment-2 text — the proof
+            // that the second segment decoded over the RESET buffer (buffer
+            // reset, race-free).
+            // T10 (v0.1.39) nachgezogen: das SESSION-Finale hängt EIN Leerzeichen
+            // hinter dem Satzzeichen-Ende an (die seg_final-Naht selbst bleibt exakt).
+            assertEquals(
+                "seam: prefix + segment-2 text (+ T10 final space)",
+                "Ein Satz. Ein Satz. ",
+                ctx.sink.text.toString(),
+            )
         } finally {
             ctx.scope.cancel()
         }
     }
 
-    // ---- (3) ohne Satzzeichen bleibt die Stille-Regel stumm ----
+    // ---- (3) without punctuation the silence rule stays mute ----
 
     @Test
-    fun `(3) Stille ohne Satzzeichen-Ende schneidet nicht - keine Grenze`() {
+    fun `(3) silence without a punctuation ending does not cut - no boundary`() {
         val ctx = runScript(
             script = listOf(3_000L to true, 4_000L to false),
-            engineText = "kein satz", // KEIN Satzzeichen-Ende
+            engineText = "kein satz", // NO punctuation ending
             segmentFinalizeMs = 35_000L,
             stopWhen = { it.coordinator.audioMs >= 6_500L },
         )
         try {
             val c = ctx.coordinator
-            // 4 s Pause, aber ohne Satzzeichen: Regel (a) stumm; Längenregel
-            // (35 s) nicht erreicht => NULL Grenzen.
-            assertEquals("keine Segmentgrenze ohne Satzzeichen", 0, c.segmentFinalizations())
-            assertTrue("Session lebt", c.isActive)
-            assertNull("kein ERR", c.lastError)
+            // 4 s pause, but without punctuation: rule (a) mute; length rule
+            // (35 s) not reached => ZERO boundaries.
+            assertEquals("no segment boundary without punctuation", 0, c.segmentFinalizations())
+            assertTrue("session lives", c.isActive)
+            assertNull("no ERR", c.lastError)
             c.stop()
             awaitReason(c, "final")
             assertTrue(c.lastStopOutcome is StopOutcome.FinalRan)
@@ -342,60 +349,61 @@ class SegmentFinalizeTest {
         }
     }
 
-    // ---- (5) B1-Fix (Review P1): transienter Finalize-Fehler killt die Session NICHT ----
+    // ---- (5) B1 fix (review P1): a transient finalize error does NOT kill the session ----
 
     @Test
-    fun `(5) transienter Fehler im Segment-Finale - Session lebt - Wiederholung und UP-Finale korrekt`() {
+    fun `(5) transient error in the segment final - session lives - retry and UP final correct`() {
         val ctx = runScript(
-            // Laengenregel (b) statt Stille-Regel (a): der CONSUMER ehrt (b) an
-            // EIGENER Position und RETRYED nach transientem Fehler von selbst
-            // (segmentStartedAtAudioMs rueckt nicht) — deterministisch. Bei (a)
-            // haenge der Retry am Capture-Re-Request, der bei Quelle-Erschoepfung
-            // nie kommt (B1-Fix-Befund: racy segments=0).
+            // length rule (b) instead of the silence rule (a): the CONSUMER
+            // honors (b) at its OWN position and RETRIES on its own after a
+            // transient error (segmentStartedAtAudioMs does not move) —
+            // deterministic. With (a) the retry hangs on the capture re-request
+            // which never comes once the source is exhausted (B1 fix finding:
+            // racy segments=0).
             script = listOf(75_000L to true, 1_000L to false),
             engineText = "Ein Satz.",
             segmentFinalizeMs = 35_000L,
-            failFinalizes = 1, // der ERSTE Boundary-Versuch wirft transient
+            failFinalizes = 1, // the FIRST boundary attempt throws transiently
             stopWhen = { it.coordinator.segmentFinalizations() >= 1 && it.coordinator.audioMs >= 74_000L },
             waitMs = 120_000,
         )
         try {
             val c = ctx.coordinator
-            // (i) der erste Finalize-Versuch ist TRANSIENT gescheitert:
-            assertTrue("ein Finalize-Versuch gescheitert", ctx.engine.failedFinalizes == 1)
-            // (ii) KEIN ERR, KEIN Abbruch — die Session überlebt den Fehler.
-            assertNull("lastError NICHT gesetzt (transient verworfen)", c.lastError)
-            assertEquals("kein abort", "-", c.lastAbortReason)
-            assertTrue("Session lebt trotz transientem Segment-Fehler", c.isActive)
-            // (iii) Wiederholung: der NÄCHSTE Boundary-Versuch (nächste
-            //  Satzpause) feuert wieder und schneidet.
+            // (i) the first finalize attempt failed TRANSIENTLY:
+            assertTrue("one finalize attempt failed", ctx.engine.failedFinalizes == 1)
+            // (ii) NO ERR, NO abort — the session survives the error.
+            assertNull("lastError NOT set (transient discarded)", c.lastError)
+            assertEquals("no abort", "-", c.lastAbortReason)
+            assertTrue("session lives despite the transient segment error", c.isActive)
+            // (iii) retry: the NEXT boundary attempt (next sentence pause)
+            // fires again and cuts.
             assertTrue(
-                "Wiederholungs-Boundary nach transientem Fehler (Ist=${c.segmentFinalizations()})",
+                "repeat boundary after the transient error (actual=${c.segmentFinalizations()})",
                 c.segmentFinalizations() >= 1,
             )
-            // (iv) UP finalisiert den Rest korrekt (Engine geheilt) — über
-            //  NUR das Rest-Fenster.
+            // (iv) UP finalizes the rest correctly (engine healed) — over
+            //  ONLY the rest window.
             c.stop()
             awaitReason(c, "final")
-            assertTrue("FinalRan (ist ${c.lastStopOutcome})", c.lastStopOutcome is StopOutcome.FinalRan)
+            assertTrue("FinalRan (is ${c.lastStopOutcome})", c.lastStopOutcome is StopOutcome.FinalRan)
             val restWindow = ctx.engine.windowSeconds.last()
             assertTrue(
-                "UP-Finale über NUR das Rest-Buffer (Ist=${"%.2f".format(restWindow)} s)",
+                "UP final over ONLY the rest buffer (actual=${"%.2f".format(restWindow)} s)",
                 restWindow < 12.0,
             )
-            assertTrue("Text committet", ctx.sink.text.length >= "Ein Satz.".length)
-            assertNull("auch am Ende kein ERR aus dem transienten Fehler", c.lastError)
+            assertTrue("text committed", ctx.sink.text.length >= "Ein Satz.".length)
+            assertNull("no ERR from the transient error at the end either", c.lastError)
         } finally {
             ctx.scope.cancel()
         }
     }
 
-    // ---- (6) B1-Fix (Review P2a): Export-Längen bleiben Session-Semantik ----
+    // ---- (6) B1 fix (review P2a): export lengths keep session semantics ----
 
     @Test
-    fun `(6) Export-Laengen nach 2 Segmenten Session-Audiolaenge - nicht segment-lokal`() {
+    fun `(6) export lengths after 2 segments are session audio length - not segment-local`() {
         val ctx = runScript(
-            // 75 s pausenlose Sprache: Längenschnitte bei ~36 s und ~72 s.
+            // 75 s of uninterrupted speech: length cuts at ~36 s and ~72 s.
             script = listOf(75_000L to true, 1_000L to false),
             engineText = "Ein Satz.",
             segmentFinalizeMs = 35_000L,
@@ -404,21 +412,21 @@ class SegmentFinalizeTest {
         )
         try {
             val c = ctx.coordinator
-            assertEquals("zwei Längenschnitte", 2, c.segmentFinalizations())
-            // 🐞-Quelle audio_s: NACH 2 Segmenten immer noch SESSION-Länge
-            // (segment-lokal wäre sie <= ~1–2 s).
+            assertEquals("two length cuts", 2, c.segmentFinalizations())
+            // 🐞 source audio_s: AFTER 2 segments still the SESSION length
+            // (segment-local it would be <= ~1–2 s).
             assertTrue(
-                "audio_s Session-Semantik nach 2 Segmenten (Ist=${c.audioSeconds})",
+                "audio_s session semantics after 2 segments (actual=${c.audioSeconds})",
                 c.audioSeconds >= 70.0,
             )
-            // 🐞-Quelle buffer_s: dieselbe nachgeführte Session-Länge.
+            // 🐞 source buffer_s: the same tracked session length.
             assertEquals(
-                "buffer_s == audio_s (gleiche nachgeführte Quelle)",
+                "buffer_s == audio_s (same trailing source)",
                 c.audioSeconds, c.bufferSeconds(), 0.5,
             )
-            // hyp_last_buffer_s bleibt segment-lokal (Decode-Fenster, unverändert).
+            // hyp_last_buffer_s stays segment-local (decode window, unchanged).
             assertTrue(
-                "hyp_last_buffer_s segment-lokal (Ist=${c.lastHypothesisBufferSeconds()})",
+                "hyp_last_buffer_s stays segment-local (actual=${c.lastHypothesisBufferSeconds()})",
                 c.lastHypothesisBufferSeconds() <= 40f,
             )
             c.stop()
@@ -428,50 +436,50 @@ class SegmentFinalizeTest {
         }
     }
 
-    // ---- (4) reine Funktion: Wahrheitstafel der beiden Regeln ----
+    // ---- (4) pure function: truth table of the two rules ----
 
     @Test
-    fun `(4) segmentBoundary-Wahrheitstafel - Laengenregel und Stille-Regel`() {
+    fun `(4) segmentBoundary truth table - length rule and silence rule`() {
         val f = ::segmentBoundary
-        // Segmenter aus => nie.
+        // segmenter off => never.
         assertFalse(
             "segmentFinalizeMs=0 => aus",
             f(1_010_000L, 1_000_000L, true, 20L, 1_000_000L, true, 0L),
         )
-        // (b) Längenregel: 35 s erreicht => auch ohne Stille/Satzzeichen.
+        // (b) length rule: 35 s reached => even without silence/punctuation.
         assertTrue(
-            "Längenregel bei 35 s",
+            "length rule at 35 s",
             f(1_035_000L, 1_035_000L, true, 20L, 1_000_000L, false, 35_000L),
         )
         assertFalse(
-            "Längenregel knapp davor (34,9 s)",
+            "length rule just below (34.9 s)",
             f(1_034_900L, 1_034_900L, true, 20L, 1_000_000L, false, 35_000L),
         )
-        // (a) Stille-Regel: Satzpause 1,2 s + Satzzeichen + streamend + everLoud.
+        // (a) silence rule: sentence pause 1.2 s + punctuation + streaming + everLoud.
         assertTrue(
-            "Satzpause 1,2 s mit Satzzeichen",
+            "sentence pause 1.2 s with punctuation",
             f(1_002_200L, 1_001_000L, true, 20L, 1_000_000L, true, 35_000L),
         )
         assertFalse(
-            "Pause 1,19 s: noch nicht",
+            "pause 1.19 s: not yet",
             f(1_002_190L, 1_001_000L, true, 20L, 1_000_000L, true, 35_000L),
         )
         assertFalse(
-            "ohne Satzzeichen: Regel (a) stumm",
+            "without punctuation: rule (a) silent",
             f(1_002_200L, 1_001_000L, true, 20L, 1_000_000L, false, 35_000L),
         )
         assertFalse(
-            "tote Quelle (capStall >= 2500): Stille != Stall",
+            "dead source (capStall >= 2500): silence != stall",
             f(1_002_200L, 1_001_000L, true, 2_600L, 1_000_000L, true, 35_000L),
         )
         assertFalse(
-            "nie laut (everLoud false)",
+            "never loud (everLoud false)",
             f(1_002_200L, 1_000_000L, false, 20L, 1_000_000L, true, 35_000L),
         )
     }
 
-    /** F56: gerätegetreuer Stub (LatencyStubEngine-Muster, JVM ohne Sleep) —
-     *  Wörter = 2/s Fenster, deterministisch „wort<i>", '.' an jedem 8. Wort. */
+    /** F56: device-faithful stub (LatencyStubEngine pattern, JVM without sleep) —
+     *  words = 2/s window, deterministically "wort<i>", '.' every 8th word. */
     private class DevicePunctStubEngine : AsrEngine {
         val windows = ArrayList<Double>()
         override fun load(modelDir: File) {}
@@ -485,7 +493,7 @@ class SegmentFinalizeTest {
             for (i in 1..words) {
                 if (i > 1) sb.append(' ')
                 sb.append("wort").append(i)
-                if (i % 8 == 0) sb.append('.') // Satzzeichen alle 8 Wörter
+                if (i % 8 == 0) sb.append('.') // punctuation every 8 words
             }
             return Hypothesis(
                 IntArray(0), sb.toString(), IntArray(0), sessionId, runId,
@@ -495,39 +503,39 @@ class SegmentFinalizeTest {
         override fun close() {}
     }
 
-    /** F56-Erwartungstext: „wort1 … wort<n>" mit '.' an jedem 8. Wort. */
+    /** F56 expected text: "wort1 … wort<n>" with '.' every 8th word. */
     private fun punctWords(n: Int): String =
         (1..n).joinToString(" ") { i -> "wort$i" + if (i % 8 == 0) "." else "" }
 
     /**
-     * F56 (vc33-Gerätefund 2026-11-02): Session-Abort „aborted:consumer:Illegal-
-     * StateException" EXAKT in der Sekunde des ERSTEN Mini-Finals (seg=1,
-     * out=189). Verdacht: Naht-Kollision Mini-Finale × laufende Hypothese.
-     * JVM-Repro mit GERÄTEMUSTER: wachsende Fenster, '.' alle 8 Wörter,
-     * Korpus 16 s laut — 2 s Pause — 6 s laut — 8 s Stille, 500-µs-Block-
-     * Pacing, echte DeltaTyper/Sink-Kette über den Coordinator.
+     * F56 (vc33 device finding 2026-11-02): session abort "aborted:consumer:Illegal-
+     * StateException" EXACTLY in the second of the FIRST mini final (seg=1,
+     * out=189). Suspicion: seam collision mini final × running hypothesis.
+     * JVM repro with a DEVICE PATTERN: growing windows, '.' every 8 words,
+     * corpus 16 s loud — 2 s pause — 6 s loud — 8 s silence, 500 µs block
+     * pacing, real DeltaTyper/sink chain across the coordinator.
      *
-     * BEFUND (Fix-Lauf): die Kette ist DETERMINISTISCH SAUBER — kein Abort,
-     * keine ISE; der einzige ISE-Typ, der den Consumer erreichen KANN, ist der
-     * RETHROWN-Editor-Sync-Timeout (F1-Drift, Gerät: blockierter Main-Thread,
-     * EDIT_TIMEOUT_MS=2000) — dessen Code-Maskierung (visibleError zeigt
-     * consumer:IllegalStateException statt editor_sync_timeout) fixt der F56-
-     * Coordinator-Patch; hier der Sequenz-Regressionsteil.
+     * FINDING (fix run): the chain is DETERMINISTICALLY CLEAN — no abort,
+     * no ISE; the only ISE type that CAN reach the consumer is the RETHROWN
+     * editor-sync timeout (F1 drift, device: blocked main thread,
+     * EDIT_TIMEOUT_MS=2000) — its code masking (visibleError shows
+     * consumer:IllegalStateException instead of editor_sync_timeout) is what
+     * the F56 coordinator patch fixes; this is the sequence regression part.
      */
     @Test
-    fun `F56-Repro - erstes Mini-Finale toetet die Session nicht - Kette deterministisch sauber`() {
+    fun `F56-Repro - the first mini final does not kill the session - chain deterministically clean`() {
         val clock = VClock()
         val src = ScriptSource(
             clock,
             listOf(
-                16_000L to true, // Segment 1: laut — 16-s-Fenster endet auf „wort32."
-                2_000L to false, // Satzpause (≥ 1,2 s) → Regel (a) feuert
-                6_000L to true, // Segment 2 — Skript-ENDE: ab hier liefert die
-                // Quelle nur 0-Blöcke (kein weiterer Ton kann ankommen), das
-                // Finalfenster ist damit DETERMINISTISCH 6 s (Lauf-1-Fund: 8 s
-                // Endstille feuerte (a) ein zweites Mal; Lauf-2-Fund: eine
-                // 1-s-Endstille ist eine Stop-Race gegen die Capture — der
-                // Stop gewinnt, die Stille fällt weg, Fenster = 6 s).
+                16_000L to true, // segment 1: loud — the 16 s window ends with "wort32."
+                2_000L to false, // sentence pause (≥ 1.2 s) → rule (a) fires
+                6_000L to true, // segment 2 — script END: from here the source
+                // delivers only zero blocks (no further sound can arrive), so
+                // the final window is DETERMINISTICALLY 6 s (run-1 finding: 8 s
+                // of trailing silence fired (a) a second time; run-2 finding: a
+                // 1 s trailing silence is a stop race against the capture —
+                // the stop wins, the silence drops away, window = 6 s).
             ),
             pacingNanos = 500_000L,
         )
@@ -536,42 +544,42 @@ class SegmentFinalizeTest {
         val scope = CoroutineScope(Dispatchers.Default)
         val c = DictationCoordinator(
             scope, { src }, { engine }, sink, nowMs = { clock.now.get() },
-            autoStopSuppressed = { true }, // Halten: F43 aus, Session lebt
+            autoStopSuppressed = { true }, // hold: F43 off, the session lives
             segmentFinalizeMs = 35_000L,
         )
         try {
             assertTrue(c.start())
-            // Warten bis das GANZE Skript gefüttert ist (deterministische
-            // VClock-Position, NICHT Wanduhr): alle Chunks geflusht.
-            // Deterministische Warte-Position: ALLE lauten Chunks geflusht
-            // (audioMs = 24 s; die 1-s-Reststille fließt erst im Stopp-Drain).
+            // wait until the WHOLE script has been fed (deterministic VClock
+            // position, NOT wall clock): all chunks flushed.
+            // deterministic wait position: ALL loud chunks flushed
+            // (audioMs = 24 s; the 1 s of rest silence only flows in the stop drain).
             val deadline = System.currentTimeMillis() + 20_000
             while (c.audioMs < 24_000L && System.currentTimeMillis() < deadline) {
                 Thread.sleep(5)
             }
-            assertEquals("lauter Korpus gefüttert (Ist=${c.audioMs} ms)", 24_000L, c.audioMs)
-            // (1) DER REPRO-KERN: das erste Mini-Finale hat die Session NICHT
-            //     getötet — kein Abort, keine ISE, Mikro läuft weiter.
-            assertEquals("genau EIN Mini-Finale (Regel a an der 2-s-Pause)", 1, c.segmentFinalizations())
-            assertTrue("Session lebt nach dem Mini-Finale (kein Abort)", c.isActive)
-            assertNull("kein Fehlercode (keine ISE entkommen)", c.lastError)
-            assertEquals("kein Abort-Grund", "-", c.lastAbortReason)
-            // (2) Mini-Finale wiederholt das Fenster des letzten Partials
-            //     (Gerätevertrag; 18 s = 16 s laut + 2 s Pause im Segment 1).
+            assertEquals("pure corpus fed (actual=${c.audioMs} ms)", 24_000L, c.audioMs)
+            // (1) THE REPRO CORE: the first mini final did NOT kill the session
+            //     — no abort, no ISE, the mic keeps running.
+            assertEquals("exactly ONE mini-final (rule a at the 2-s pause)", 1, c.segmentFinalizations())
+            assertTrue("session lives after the mini-final (no abort)", c.isActive)
+            assertNull("no error code (no ISE escaped)", c.lastError)
+            assertEquals("no abort reason", "-", c.lastAbortReason)
+            // (2) the mini final repeats the window of the last partial
+            //     (device contract; 18 s = 16 s loud + 2 s pause in segment 1).
             assertTrue(
-                "Finalize-Fenster == letztes Partial-Fenster (Ist=${engine.windows})",
+                "finalize window == last partial window (actual=${engine.windows})",
                 engine.windows.count { it == 18.0 } >= 2,
             )
-            assertTrue("kein Decode-Fenster über 18 s", engine.windows.max() <= 18.0)
-            // (3) UP → reguläres Finale NUR über das Rest-Puffer (exakt die
-            //     6 s Segment-2-Laut — kein Block kann nach Skript-Ende noch
-            //     ankommen) — Text-Kette: Segment 1 (W36) + EINE Naht +
-            //     Segment-2-Rest (W12), exakt, deterministisch.
+            assertTrue("no decode window over 18 s", engine.windows.max() <= 18.0)
+            // (3) UP → regular final over ONLY the rest buffer (exactly the
+            //     6 s of segment-2 loud — no block can still arrive after the
+            //     script end) — text chain: segment 1 (W36) + ONE seam + the
+            //     segment-2 rest (W12), exact, deterministic.
             c.stop()
             awaitReason(c, "final")
-            assertTrue("FinalRan (ist ${c.lastStopOutcome})", c.lastStopOutcome is StopOutcome.FinalRan)
+            assertTrue("FinalRan (is ${c.lastStopOutcome})", c.lastStopOutcome is StopOutcome.FinalRan)
             assertEquals(
-                "golden: Naht = GENAU EIN Leerzeichen, keine Duplikate",
+                "golden: seam = EXACTLY ONE space, no duplicates",
                 punctWords(36) + " " + punctWords(12),
                 sink.text.toString(),
             )

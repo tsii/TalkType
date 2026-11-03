@@ -1,21 +1,21 @@
 #!/usr/bin/env python3
-"""Erzeugt die Kurzfenster-/Stille-/Rausch-Fixtures fuer die min_audio_s-Messung.
+"""Creates the short-window/silence/noise fixtures for the min_audio_s measurement.
 
-Aufruf:  .venv-asr/bin/python tools/make_cut_windows.py [--out testdata/cut]
+Usage:  .venv-asr/bin/python tools/make_cut_windows.py [--out testdata/cut]
 
-Ergebnis (deterministisch, 16 kHz mono PCM16, exakt N Samples):
-  <stem>_<dur>s.wav          Schnitt ab 0 s (Kopf des Materials)
-  <stem>_t<off>_<dur>s.wav   Schnitt ab <off> s (mitten im Material)
-  silence_<dur>s.wav          digitales Nullsignal
-  noise_<dur>s.wav           weisses Rauschen, RMS = -50 dBFS (Mikrofon-Grundrauschen)
+Result (deterministic, 16 kHz mono PCM16, exactly N samples):
+  <stem>_<dur>s.wav          cut from 0 s (head of the material)
+  <stem>_t<off>_<dur>s.wav   cut from <off> s (in the middle of the material)
+  silence_<dur>s.wav         digital zero signal
+  noise_<dur>s.wav           white noise, RMS = -50 dBFS (microphone noise floor)
 
-Die Messung selbst macht `tools/measure_min_audio.py` (Import von
-`tools/reference_decode.py`, also derselbe korrigierte Decoder wie die Goldens).
+The measurement itself is done by `tools/measure_min_audio.py` (import of
+`tools/reference_decode.py`, i.e. the same corrected decoder as the goldens).
 
-Warum genau diese Fenster: `min_audio_s` ist die Schwelle, ab der die Pipeline
-zum ersten Mal transkribiert — gemessen werden muss daher (a) wie viel Text ein
-Fenster dieser Laenge ueberhaupt traegt, (b) ob ein Schnitt mitten im Material
-schadet und (c) ob Stille/Rauschen dieser Laenge schon Halluzinationen erzeugt.
+Why exactly these windows: `min_audio_s` is the threshold from which the pipeline
+transcribes for the first time — so the measurement must determine (a) how much text
+a window of this length carries at all, (b) whether a cut in the middle of the material
+harms, and (c) whether silence/noise of this length already produces hallucinations.
 """
 from __future__ import annotations
 
@@ -30,19 +30,19 @@ import soundfile as sf
 SR = 16000
 ROOT = Path(__file__).resolve().parent.parent
 
-# (Quelle, Laenge in s) — jedes Fenster ab 0 s
+# (source, length in s) — every window from 0 s
 HEAD_WINDOWS = [1.0, 1.5, 2.0, 2.5, 3.0, 4.0, 6.0]
 SOURCES = ["de_smoke", "de_pause"]
-# Fenster, die mitten im Material beginnen (realistischer Streaming-Fall:
-# der Chunk faengt nicht am Satzanfang an). Offset so gewaehlt, dass ein
-# Wortanfang bzw. Satzanfang enthalten ist.
+# windows that start in the middle of the material (more realistic streaming case:
+# the chunk does not start at the sentence start). Offset chosen so that a
+# word start or sentence start is contained.
 MID_WINDOWS = [("de_smoke", 2.0, [1.0, 2.0, 3.0]), ("de_pause", 6.0, [1.0, 2.0, 3.0])]
-# Stille/Rauschen: hier zaehlt nur, ob Text erfunden wird (Halluzination).
-# 0.3 s ist die in ASR_CONTRACT §4.3 behauptete Halluzinationslaenge, die
-# uebrigen Werte liegen um die zu entscheidende Schwelle.
+# silence/noise: here the only thing that matters is whether text is invented (hallucination).
+# 0.3 s is the hallucination length asserted in ASR_CONTRACT §4.3, the
+# remaining values lie around the threshold to be decided.
 PROBE_DURATIONS = [0.3, 0.5, 1.0, 1.5, 2.0, 3.0, 4.0]
-# Zwei Rauschpegel: -50 dBFS (sehr leise, reines Grundrauschen) und -30 dBFS
-# (laute Umgebung / Handmikrofon ohne Sprechsignal).
+# two noise levels: -50 dBFS (very quiet, pure noise floor) and -30 dBFS
+# (loud environment / handheld microphone without a speech signal).
 NOISE_RMS_DBFS = [-50.0, -30.0]
 NOISE_SEED = 20261027
 
@@ -50,7 +50,7 @@ NOISE_SEED = 20261027
 def load(path: Path) -> np.ndarray:
     data, sr = sf.read(str(path), dtype="float32", always_2d=False)
     if sr != SR:
-        raise SystemExit(f"{path}: {sr} Hz, erwartet {SR} Hz")
+        raise SystemExit(f"{path}: {sr} Hz, expected {SR} Hz")
     if data.ndim > 1:
         data = data.mean(axis=1)
     return np.ascontiguousarray(data, dtype=np.float32)
@@ -64,7 +64,7 @@ def cut(audio: np.ndarray, offset_s: float, dur_s: float) -> np.ndarray:
     a = round(offset_s * SR)
     n = round(dur_s * SR)
     if a + n > audio.shape[0]:
-        raise SystemExit(f"Fenster {offset_s}s+{dur_s}s passt nicht in {audio.shape[0] / SR:.3f}s")
+        raise SystemExit(f"window {offset_s}s+{dur_s}s does not fit into {audio.shape[0] / SR:.3f}s")
     return np.ascontiguousarray(audio[a:a + n])
 
 
@@ -101,9 +101,9 @@ def main(argv: list[str]) -> int:
         write(fn, np.zeros(n, dtype=np.float32))
         manifest.append({"file": fn.name, "source": "silence", "offset_s": 0.0,
                          "seconds": dur, "samples": n, "kind": "silence"})
-        # (Rauschdateien entstehen direkt danach, s. Schleife unten.)
+        # (noise files are created directly afterwards, see the loop below.)
         for level in NOISE_RMS_DBFS:
-            # gleicher Seed pro Laenge/Pegel -> reproduzierbar
+            # same seed per length/level -> reproducible
             rng = np.random.default_rng(NOISE_SEED)
             noise = rng.standard_normal(n).astype(np.float32)
             rms = float(np.sqrt(np.mean(noise ** 2)))
@@ -118,7 +118,7 @@ def main(argv: list[str]) -> int:
         json.dumps({"sr": SR, "noise_rms_dbfs": NOISE_RMS_DBFS, "noise_seed": NOISE_SEED,
                     "items": manifest}, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8")
-    print(f"{len(manifest)} Fixtures in {out} geschrieben")
+    print(f"wrote {len(manifest)} fixtures to {out}")
     return 0
 
 

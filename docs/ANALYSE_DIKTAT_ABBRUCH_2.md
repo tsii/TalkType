@@ -1,220 +1,221 @@
-# Analyse Diktat-Abbruch #2 (0.1.17/18, api 37) + Layout-Korrektur F27b
+# Analysis of dictation abort #2 (0.1.17/18, api 37) + layout correction F27b
 
-**Methode:** nur lesen; jeder Befund mit Datei:Zeile. Nicht Bewiesenes ist als
-**Hypothese** gekennzeichnet. REGEL 9: nur Zahlen, Tasten, Codes, Pfade.
+**Method:** read only; every finding with file:line. Anything not proven is marked as a
+**hypothesis**. RULE 9: only numbers, keys, codes, paths.
 
-## 0. Aus dem Export rechnerisch zwingend
+## 0. Arithmetically forced by the export
 
-`first_hyp_ms` wird im **ersten flush()** gesetzt — unabhängig davon, ob eine Hypothese
-entsteht (`DictationCoordinator.kt:296-297`). flush() läuft nur bei (a) tick-Vollstand
-(`consume()`, `DictationCoordinator.kt:263-269`; tick = `chunkMs` 2000 → 32 000 Samples,
-`DictationCoordinator.kt:47`) oder (b) **Schließen des Kanals** (Schluss-flush
-`DictationCoordinator.kt:276`). Der Takt-flush braucht 2,0 s Audio — bei `audio_s 1,0`
-**unmöglich**. Also: erster flush = Schluss-flush ⇒ **Kanal wurde bei t ≈ 1,201 s
-geschlossen ⇒ `stop()` lief bei t ≈ 1,2 s** (`ch.close()`, `DictationCoordinator.kt:375`).
-Passiert ist dann: `stop()` → `controller.stop()` → Finale über 1,0 s (121 ms) →
-`hyp_count 1`, `abort_reason "final"` (`DictationCoordinator.kt:388-393`); alle Partials
-vom 2,0-s-Guard blockiert (`DictationController.kt:257,470-471`). `hyp_gap_ms 2692` ⇒
-Export ≈ 3,9 s nach Start — **die ganze Episode ist ~4 s, nicht 20 s**.
-Zusätzlich: `abort(reason)` **überschreibt** den Grund (`DictationCoordinator.kt:477`) —
-hätte nach dem Finale ein weiteres Release-Event (Abort `michold_cancel`,
-`VoiceKeyboardService.kt:581/583`) oder ein zweiter Stop stattgefunden, stünde dort nicht
-`final`. **Kein Mic-Event hat die App nach dem 1,2-s-Stop mehr erreicht.**
+`first_hyp_ms` is set in the **first flush()** — regardless of whether a hypothesis
+results (`DictationCoordinator.kt:296-297`). flush() only runs on (a) tick overflow
+(`consume()`, `DictationCoordinator.kt:263-269`; tick = `chunkMs` 2000 → 32,000 samples,
+`DictationCoordinator.kt:47`) or (b) **closing the channel** (final flush
+`DictationCoordinator.kt:276`). The tick flush needs 2.0 s of audio — impossible with
+`audio_s 1.0`. So: first flush = final flush ⇒ **the channel was closed at t ≈ 1.201 s
+⇒ `stop()` ran at t ≈ 1.2 s** (`ch.close()`, `DictationCoordinator.kt:375`).
+What happened then: `stop()` → `controller.stop()` → final over 1.0 s (121 ms) →
+`hyp_count 1`, `abort_reason "final"` (`DictationCoordinator.kt:388-393`); all partials
+blocked by the 2.0-s guard (`DictationController.kt:257,470-471`). `hyp_gap_ms 2692` ⇒
+export ≈ 3.9 s after start — **the whole episode is ~4 s, not 20 s**.
+Additionally: `abort(reason)` **overwrites** the reason (`DictationCoordinator.kt:477`) —
+if a further release event (abort `michold_cancel`,
+`VoiceKeyboardService.kt:581/583`) or a second stop had occurred after the final, it
+would not read `final`. **No mic event reached the app after the 1.2-s stop.**
 
-## 1) Pfade, die die Aufnahme nach ~1 s beenden können
+## 1) Paths that can end the recording after ~1 s
 
-- **Kein 1-s-Timer existiert im Code.** maxDuration = 300 s (`AudioRecordSource.kt:38,
-  108-110`); Start-Watchdog = 15 s (`VoiceKeyboardService.kt:455-464`); FGS hat kein
-  Zeitlimit im Projektcode.
-- Einziger Weg zu `abort_reason "final"` = **`stopDictationIfRunning()` →
+- **No 1-s timer exists in the code.** maxDuration = 300 s (`AudioRecordSource.kt:38,
+  108-110`); start watchdog = 15 s (`VoiceKeyboardService.kt:455-464`); FGS has no
+  time limit in the project code.
+- Only path to `abort_reason "final"` = **`stopDictationIfRunning()` →
   `coordinator.stop()`** (`VoiceKeyboardService.kt:566-585` → `DictationCoordinator.kt:
-  366-393`). Aufrufer:
+  366-393`). Callers:
   1. **Mic-UP**: `KeyboardView.kt:820` `onMicHoldEnd(cancelled=false)` →
-     `VoiceKeyboardService.kt:708-718` (STOP) → `stopDictationIfRunning()`; alternativ
-     Tap-UP: `VoiceKeyboardService.kt:504-512` `onMicUp()`.
-  2. **Nachgereichtes Loslassen** während Start: `VoiceKeyboardService.kt:506-509` →
+     `VoiceKeyboardService.kt:708-718` (STOP) → `stopDictationIfRunning()`; alternatively
+     tap-UP: `VoiceKeyboardService.kt:504-512` `onMicUp()`.
+  2. **Belated release** during start: `VoiceKeyboardService.kt:506-509` →
      450-469 (`wantedStop` → `stopDictationIfRunning()`).
-  3. **IME verschwindet**: `onFinishInputView`/`onWindowHidden`
+  3. **IME disappears**: `onFinishInputView`/`onWindowHidden`
      (`VoiceKeyboardService.kt:327-338`) → `stopDictationIfRunning()`.
-- **Ausgeschlossen durch den Export:** `ACTION_CANCEL` (`KeyboardView.kt:820` →
-  `MicToggle.kt:47-50` → ABORT) würde `michold_cancel` schreiben
-  (`VoiceKeyboardService.kt:720-725`); Audio-Systemstopp/InvalidOp
+- **Ruled out by the export:** `ACTION_CANCEL` (`KeyboardView.kt:820` →
+  `MicToggle.kt:47-50` → ABORT) would write `michold_cancel`
+  (`VoiceKeyboardService.kt:720-725`); audio system stop/InvalidOp
   (`AudioRecordSource.kt:129-132`) → `audio_error:…` (`DictationCoordinator.kt:355`);
-  Editor-Wechsel → `editor_change` (`DictationCoordinator.kt:516`); OOM/Consumer-Tod →
-  `no_final:…` bzw. `lastError` (`DictationCoordinator.kt:311-341`).
-- **Fazit:** Der Stop kam über einen **echten UP-Wege** (1./2./3.). **Hypothese H-A
-  (führend):** der Finger war bei 1,2 s tatsächlich losgelassen (Nutzer-Wahrnehmung
-  „die ganze Zeit gehalten" unzuverlässig — die Zahlen zulassen nichts anderes).
-  **Hypothese H-B:** F27-Pointer-Umbau/View-Ereignis lieferte bei 1,2 s ein **spurloses
-  ACTION_UP** (Pointer-Capture-Verlust); das späte echte Loslassen kam dann nicht mehr
-  als Gesture-Event an. **Hypothese H-C:** kurzer IME-Wechsel (System) bei 1,2 s.
-  Alle drei sind mit dem Export kompatibel; nur H-A erklärt zusätzlich die
-  Status-Reset-Folge (s. 4).
+  editor change → `editor_change` (`DictationCoordinator.kt:516`); OOM/consumer death →
+  `no_final:…` or `lastError` (`DictationCoordinator.kt:311-341`).
+- **Conclusion:** the stop came through a **genuine UP path** (1./2./3.). **Hypothesis H-A
+  (leading):** the finger was actually released at 1.2 s (the user's perception "held
+  the whole time" is unreliable — the numbers permit nothing else).
+  **Hypothesis H-B:** the F27 pointer rework/view event delivered a **traceless
+  ACTION_UP** at 1.2 s (pointer capture loss); the later genuine release then no longer
+  arrived as a gesture event. **Hypothesis H-C:** brief IME switch (system) at 1.2 s.
+  All three are compatible with the export; only H-A additionally explains the
+  status reset sequence (see 4).
 
-## 2) Warum 0 Pegel / −56,2 dBFS
+## 2) Why 0 level / −56.2 dBFS
 
-- **Wo gemessen:** pro rohem Capture-Block, **vor Queue und vor jeder Verarbeitung**
-  (kein Resampling — Aufnahme läuft direkt 16 kHz): `AudioRecordSource.kt:121`
-  (`levelListener?.onLevel(rms(copy), block.seq)`); `LevelPeak.note(rms)` = Max über
-  Block-RMS (`debug/LevelPeak.kt:20-24`), `percent()` `LevelPeak.kt:26`, `dbfs()`
-  `LevelPeak.kt:33-48`. ⇒ **kein Messfehler in der Pipeline**: −56,2 dBFS ist der
-  Digitizer-Grundrauschen-Boden — die Sprach-Signale sind nie in der Aufnahme
-  angekommen.
-- **Kandidaten (Hypothesen, gerätebezogen):**
-  h1) **Systemseitiges Mikro-Entzug/Drossel nach ~1 s** (Android 13+/api 37,
-  FGS-microphone-Berechtigung ohne `POST_NOTIFICATIONS` — die Projektabwicklung „läuft
-  auch ohne sie" ist für api 37 **unverifiziert**: `DictationPermissions.kt:16-27`,
-  `capture/CaptureForegroundService.kt:24`). Passt sowohl zum 1-s-Ende als zum
-  Stillepegel.
-  h2) Hardware-/Routing-Zustand des Geräts in der Session (Mic-Mute, anderes Mikrofon,
-  do-not-disturb) — Route intern / src VOICE_RECOGNITION sind **identisch** zur guten
-  F13-Messung (−22,0 dBFS / 7 %), also Konfiguration nicht der Unterschied.
-- **Code-Lücke (bewiesen):** liefert `AudioRecord.read()` dauerhaft 0/keine Blöcke,
-  dreht der Loop endlos **ohne Fehler, ohne Timeout, ohne Statuswechsel**
-  (`AudioRecordSource.kt:126-128` „kein Daten — loop"; `DictationCoordinator.kt:241-251`
-  `n==0` → implizit weiter). Stille/Mikro-Tod ist so **ununterscheidbar** von
-  „nutzt gerade das Mikro nicht" → s. 4 und 6.
+- **Where measured:** per raw capture block, **before queue and before any processing**
+  (no resampling — recording runs directly at 16 kHz): `AudioRecordSource.kt:121`
+  (`levelListener?.onLevel(rms(copy), block.seq)`); `LevelPeak.note(rms)` = max over
+  block RMS (`debug/LevelPeak.kt:20-24`), `percent()` `LevelPeak.kt:26`, `dbfs()`
+  `LevelPeak.kt:33-48`. ⇒ **no measurement error in the pipeline**: −56.2 dBFS is the
+  digitizer noise floor — the speech signals never arrived in the recording.
+- **Candidates (hypotheses, device-related):**
+  h1) **System-side microphone revocation/throttling after ~1 s** (Android 13+/api 37,
+  FGS-microphone permission without `POST_NOTIFICATIONS` — the project's assumption that
+  it "also runs without it" is **unverified** for api 37: `DictationPermissions.kt:16-27`,
+  `capture/CaptureForegroundService.kt:24`). Fits both the 1-s end and the silence level.
+  h2) Hardware/routing state of the device in the session (mic mute, different microphone,
+  do-not-disturb) — route internal / src VOICE_RECOGNITION are **identical** to the good
+  F13 measurement (−22.0 dBFS / 7%), so configuration is not the difference.
+- **Code gap (proven):** if `AudioRecord.read()` persistently returns 0/no blocks,
+  the loop turns endlessly **without an error, without a timeout, without a status change**
+  (`AudioRecordSource.kt:126-128` "no data — loop"; `DictationCoordinator.kt:241-251`
+  `n==0` → implicitly continue). Silence/mic death is thus **indistinguishable** from
+  "not currently using the mic" → see 4 and 6.
 
-## 3) rtf 0.00 bei decode_ms_max 121
+## 3) rtf 0.00 with decode_ms_max 121
 
-**Plausibel, kein Zählerfehler, aber Mess-Blindspot.** `rtf = processingMs/audioMs`
-(`DictationCoordinator.kt:104`, Guard `audioMs > 0` sonst „-"); `processingMs` wird
-**nur in flush()** akkumuliert (`DictationCoordinator.kt:294`) — d. h. nur für
-Coordinator-`feedAudio`-Aufrufe. Der 1,2-s-flush lief **ohne Decode** (2,0-s-Guard) ⇒
-`processingMs ≈ 0`, `audioMs = 1000` ⇒ 0,00x → `%.2f` → `0.00`. Die 121 ms Finale-Decode
-laufen in `controller.stop()` **außerhalb** von flush() und zählen also **nicht** in rtf
-(`DictationCoordinator.kt:388`; Decode-Messung `DictationController.kt:183-191`).
-Zusammen mit 0: `first_hyp_ms` misst **ersten flush, nicht erste Hypothese**
-(`DictationCoordinator.kt:296-297`) — F28 soll beide Semantiken sauber trennen.
+**Plausible, not a counter error, but a measurement blind spot.** `rtf = processingMs/audioMs`
+(`DictationCoordinator.kt:104`, guard `audioMs > 0` otherwise "-"); `processingMs` is
+**only accumulated in flush()** (`DictationCoordinator.kt:294`) — i.e. only for
+coordinator `feedAudio` calls. The 1.2-s flush ran **without decode** (2.0-s guard) ⇒
+`processingMs ≈ 0`, `audioMs = 1000` ⇒ 0.00x → `%.2f` → `0.00`. The 121 ms final decode
+runs in `controller.stop()` **outside** of flush() and therefore does **not** count in rtf
+(`DictationCoordinator.kt:388`; decode measurement `DictationController.kt:183-191`).
+Together with 0: `first_hyp_ms` measures **first flush, not first hypothesis**
+(`DictationCoordinator.kt:296-297`) — F28 should cleanly separate both semantics.
 
-## 4) Warum Status „Diktat" bleibt (trotz audio_s 1.0)
+## 4) Why the status "dictation" remains (despite audio_s 1.0)
 
-Anzeige: `updateStatus()` (`VoiceKeyboardService.kt:885-915`) →
+Display: `updateStatus()` (`VoiceKeyboardService.kt:885-915`) →
 `StatusBarText.select(recording = state==RECORDING, finalizing = …, recordingText
-„Diktat… (…)")`. Solange der Controller `RECORDING` ist, steht „Diktat" — **korrekt**,
-solange eine Session läuft. Der **fehlende Übergang** ist ein **Stall-Erkennungs-Event**:
-kein Code-Pfad macht „keine Audio-Blöcke / Dauerstille" zu Fehler oder Stop (Beweis 2).
-Zwei Fälle: (a) Stop lief bei 1,2 s (Beweis 0) → `stopDictationIfRunning` setzt
-`micRecording=false` + `updateStatus()` synchron (`VoiceKeyboardService.kt:584-585`) und
-`onStopped` ruft `updateStatus` erneut (`DictationCoordinator.kt:406-411`) → „Diktat"
-dürfte nur **kurz** (Finale 121 ms) sichtbar sein; das von Nutzer erlebte „bleibt bis
-Loslassen" ist dann **Hypothese H-B/D** (Main-Thread-Update verspätet/stuck — F9-P0-Klasse,
-`VoiceKeyboardService.kt:887-890` postet auf Main) oder Wahrnehmung. (b) H-B: Session
-lief formal weiter ohne Daten → „Diktat" **sollte** stehen — exakt der beobachtete
-Zustand. → F28-Feld `status_shown` (s. 5) korreliert Anzeige mit Controller-Zustand.
+"Dictating… (…)")`. As long as the controller is `RECORDING`, it reads "dictation" —
+**correct**, as long as a session is running. The **missing transition** is a
+**stall-detection event**: no code path turns "no audio blocks / permanent silence"
+into an error or stop (proof in 2). Two cases: (a) stop ran at 1.2 s (proof in 0) →
+`stopDictationIfRunning` sets `micRecording=false` + `updateStatus()` synchronously
+(`VoiceKeyboardService.kt:584-585`) and `onStopped` calls `updateStatus` again
+(`DictationCoordinator.kt:406-411`) → "dictation" should only be visible **briefly**
+(final 121 ms); the user-experienced "stays until release" is then **hypothesis H-B/D**
+(main-thread update delayed/stuck — F9-P0 class,
+`VoiceKeyboardService.kt:887-890` posts to main) or perception. (b) H-B: session
+formally continued without data → "dictation" **should** be displayed — exactly the
+observed state. → F28 field `status_shown` (see 5) correlates display with controller
+state.
 
-## 5) Minimale Instrumentierung F28 (4 neue 🐞-Felder, nur Zahlen/Codes)
+## 5) Minimal instrumentation F28 (4 new 🐞 fields, numbers/codes only)
 
-| Feld (Name) | Typ | Wo gemessen | Formatter-Position |
+| Field (name) | Type | Where measured | Formatter position |
 |---|---|---|---|
-| `cap_stall_ms` | Long | `DictationCoordinator.captureLoop` (Zeile 238-259): Zeitstempel bei jedem `n>0`; Getter `now − lastBlockAtMs` | nach `decode_skips` (30.→31. Schlüssel) |
-| `cap_blocks` | Int | ebenda: Zähler je `n>0`-Block (erwartet ≈ 100 für 1,0 s @ 10-ms-Blöcke; gefrorenes Zähler = Capture-Ende) | 32. |
-| `mic_rel` | String (kodiert) | `VoiceKeyboardService.kt`: `onMicUp` (504) = `up:<ms>`, `onMicHoldEnd` (708) = `holdup/holdcancel:<ms>`, `onFinishInputView` (327) = `hidden:<ms>`, `onStartInput` (307) = `editor:<ms>` — Zeitstempel relativ Session-Start; via Coordinator-Durchreiche (`DebugInfoCollector.kt` neben Zeile 94) | 33. |
-| `status_shown` | String (kodiert: `ready/dictat/finalizing/error`) | `VoiceKeyboardService.updateStatus` (885): letzter an `statusText` gegebener Zustand als Enum-Code | 34. |
+| `cap_stall_ms` | Long | `DictationCoordinator.captureLoop` (lines 238-259): timestamp at every `n>0`; getter `now − lastBlockAtMs` | after `decode_skips` (30th→31st key) |
+| `cap_blocks` | Int | same place: counter per `n>0` block (expected ≈ 100 for 1.0 s @ 10-ms blocks; frozen counter = capture end) | 32nd |
+| `mic_rel` | String (encoded) | `VoiceKeyboardService.kt`: `onMicUp` (504) = `up:<ms>`, `onMicHoldEnd` (708) = `holdup/holdcancel:<ms>`, `onFinishInputView` (327) = `hidden:<ms>`, `onStartInput` (307) = `editor:<ms>` — timestamp relative to session start; passed through via the coordinator (`DebugInfoCollector.kt` next to line 94) | 33rd |
+| `status_shown` | String (encoded: `ready/dictat/finalizing/error`) | `VoiceKeyboardService.updateStatus` (885): last state given to `statusText` as enum code | 34th |
 
-Keine Audio-/Textinhalte (Regel 9). Damit ist im **nächsten** Export: Stop-Auslöser
-(`mic_rel`), Capture-Stall (`cap_stall_ms`/`cap_blocks`), Anzeige-Wahrheit
-(`status_shown`) und H-A/H-B-Scheidung in einem Lauf ablesbar.
-Nebenfix (kostenlos, Semantik): `first_hyp_ms` bleibt, aber Doku-Korrigendum in
-`docs/DEBUG_INFO_FIELDS.md` („= erster feedAudio-flush, nicht erste Hypothese") oder
-F28-Feld `first_real_hyp_ms` (in `noteHypothesis`, `DictationController.kt:412-414`).
+No audio/text content (rule 9). With this, the **next** export shows: stop trigger
+(`mic_rel`), capture stall (`cap_stall_ms`/`cap_blocks`), display truth
+(`status_shown`) and the H-A/H-B distinction in one run.
+Side fix (free, semantics): `first_hyp_ms` stays, but documentation corrigendum in
+`docs/DEBUG_INFO_FIELDS.md` ("= first feedAudio flush, not first hypothesis") or
+F28 field `first_real_hyp_ms` (in `noteHypothesis`, `DictationController.kt:412-414`).
 
-## 6) Ursachen-Rangfolge + kleinster wirksamer Fix
+## 6) Cause ranking + smallest effective fix
 
-| # | Ursache (Wahrscheinlichkeit) | Begründung | Kleinster Fix |
+| # | Cause (probability) | Rationale | Smallest fix |
 |---|---|---|---|
-| 1 | **Mikro wurde systemseitig nach ~1 s stummgelegt/gestoppt** (api 37 FGS-mic/`POST_NOTIFICATIONS`, h1) | erklärt **beide** Anomalien (1-s-Ende + Stille) in einem Mechanismus; Projektannahme dafür unverifiziert (`DictationPermissions.kt:16-27`) | zuerst **F28** messen; dann FGS-Start-Ordnung/Typ prüfen (`VoiceKeyboardService.kt:401,793-800`, `CaptureForegroundService.kt:67`) — falls h1 bestätigt: FGS + Notification **vor** `AudioRecord`-Start garantieren und `notif=yes` als A/B-Vergleich |
-| 2 | **Kein Stall-/Stille-Watchdog** (Code-Lücke, sicher vorhanden) | Beweis 2: `read()=0`-Ewigkeitsloop ohne Ausweg (`AudioRecordSource.kt:126-128`) | 10-Zeilen-Fix: in `DictationCoordinator.captureLoop` (238-259) `if (now − lastBlockAtMs > 3000)` → `errorListener.onError("stall", …)` → existierender abort-/Statuspfad (sichtbarer Fehler statt „Diktat-Ewigkeit") |
-| 3 | **Spurloses ACTION_UP nach F27-Pointer-Umbau** (H-B) | nur dann, wenn H-A ausgeschlossen ist (F28 `mic_rel`) | Messung vor Fix: Debug-Pointer-Log an der Mic-Taste (VK-HIT-Stil, `KeyboardView.kt:820/837`); Fix erst nach Beleg |
-| 4 | Main-Thread-Update-Verzögerung (H-B/D) | F9-P0-Klasse (`VoiceKeyboardService.kt:887-890`) | nur falls `status_shown` ≠ Controller-Zustand zeigt: onStopped-Update mit Timeout-Resync — andernfalls nichts |
-| — | windowed-Streaming (`KONZEPT` §5.1) | **bleibt gesperrt** — dieser Lauf liefert keinen C2-Anteil (decode 121 ms, kein Buffer-Wachstum) | — |
+| 1 | **Microphone was muted/stopped system-side after ~1 s** (api 37 FGS-mic/`POST_NOTIFICATIONS`, h1) | explains **both** anomalies (1-s end + silence) with one mechanism; project assumption for it unverified (`DictationPermissions.kt:16-27`) | first measure with **F28**; then check FGS start order/type (`VoiceKeyboardService.kt:401,793-800`, `CaptureForegroundService.kt:67`) — if h1 confirmed: guarantee FGS + notification **before** `AudioRecord` start and run `notif=yes` as an A/B comparison |
+| 2 | **No stall/silence watchdog** (code gap, certainly present) | proof in 2: `read()=0` eternal loop without exit (`AudioRecordSource.kt:126-128`) | 10-line fix: in `DictationCoordinator.captureLoop` (238-259) `if (now − lastBlockAtMs > 3000)` → `errorListener.onError("stall", …)` → existing abort/status path (visible error instead of "dictation eternity") |
+| 3 | **Traceless ACTION_UP after the F27 pointer rework** (H-B) | only if H-A is ruled out (F28 `mic_rel`) | measurement before fix: debug pointer log on the mic key (VK-HIT style, `KeyboardView.kt:820/837`); fix only after proof |
+| 4 | Main-thread update delay (H-B/D) | F9-P0 class (`VoiceKeyboardService.kt:887-890`) | only if `status_shown` ≠ controller state shows: onStopped update with timeout resync — otherwise nothing |
+| — | windowed streaming (`KONZEPT` §5.1) | **remains blocked** — this run yields no C2 share (decode 121 ms, no buffer growth) | — |
 
 ---
 
-## 7) Layout-Korrektur F27b — Pop-up-Top je Reihe (Spezifikation, keine Implementierung)
+## 7) Layout correction F27b — popup top per row (specification, no implementation)
 
-Basis (Dichte 2,625): Statusleiste = **48 dp = 126 px**, oben im Root
-(`ImeRootView.kt:98-99`); KeyboardView darunter (Root-y 126..702, 576 px); Gap
-`POPUP_GAP_DP` 8 dp = **21 px** (`KeyboardTheme.kt:90`, `KeyboardView.kt:195`); Menühöhe
-`POPUP_HEIGHT_DP` 56 dp = **147 px** (gemessen 146, `KeyboardTheme.kt:87`); Pop-up heute
-nur im KeyboardView-Canvas gezeichnet (`KeyboardView.kt:423`) → **nach oben aus
-KeyboardView heraus clippt**.
+Base (density 2.625): status bar = **48 dp = 126 px**, at the top in the root
+(`ImeRootView.kt:98-99`); KeyboardView below (root-y 126..702, 576 px); gap
+`POPUP_GAP_DP` 8 dp = **21 px** (`KeyboardTheme.kt:90`, `KeyboardView.kt:195`); menu
+height `POPUP_HEIGHT_DP` 56 dp = **147 px** (measured 146, `KeyboardTheme.kt:87`); popup
+today drawn only in the KeyboardView canvas (`KeyboardView.kt:423`) → **clips when
+extending upward out of the KeyboardView**.
 
-| Taste/Reihe | Ist (F27b, `LongPressMenu.kt:79-83`) | Gewünscht | Neue top-Formel | Zahlenbeispiel |
+| Key/row | Current (F27b, `LongPressMenu.kt:79-83`) | Desired | New top formula | Numeric example |
 |---|---|---|---|---|
-| r3 (Fuß, keyTop 432, Höhe 144) | `keyTop − rowHeight − gap − menuH` = **132** (2 Reihen über) | **1 Reihe darüber** (0.1.16-Position) | **`keyTop − gap − menuH`** (kein rowHeight-Abzug) | 432 − 21 − 147 = **264 px** (0.1.16: 276 mit altem Gap 10 px; Differenz 12 px = neuer 8-dp-Gap) |
-| r1 / r2 | `keyTop − rowHeight − gap − menuH` (1 Reihe höher) | unverändert (Nutzer bestätigt „eine Zeile höher") | **bleibt** | — |
-| r0 (Zahlen, keyTop 0) | Flip: `keyTop + rowHeight + gap` = **154** (UNTERHALB) | **DARÜBER**, sichtbar über dem Finger | **Root-Overlay:** `top_root = max(0, statusLine(126) + keyTop_view − gap − menuH)` | 126 + 0 − 21 − 147 = **−42 → geclampt 0**; Menü belegt Root **0..147** → überdeckt 21 px der r0-Reihe (126..147), liegt aber **über dem Finger** (Tastenmitte ≈ Root 198); **kein Window-Clip** (top 0). In KeyboardView-Koordinaten wäre top = −126 → unmöglich im Canvas |
+| r3 (foot, keyTop 432, height 144) | `keyTop − rowHeight − gap − menuH` = **132** (2 rows up) | **1 row above** (0.1.16 position) | **`keyTop − gap − menuH`** (no rowHeight deduction) | 432 − 21 − 147 = **264 px** (0.1.16: 276 with old gap 10 px; difference 12 px = new 8-dp gap) |
+| r1 / r2 | `keyTop − rowHeight − gap − menuH` (1 row higher) | unchanged (user confirmed "one row higher") | **stays** | — |
+| r0 (digits, keyTop 0) | Flip: `keyTop + rowHeight + gap` = **154** (BELOW) | **ABOVE**, visible above the finger | **Root overlay:** `top_root = max(0, statusLine(126) + keyTop_view − gap − menuH)` | 126 + 0 − 21 − 147 = **−42 → clamped to 0**; menu occupies root **0..147** → covers 21 px of the r0 row (126..147), but lies **above the finger** (key center ≈ root 198); **no window clip** (top 0). In KeyboardView coordinates top would be −126 → impossible in the canvas |
 
-**Implementierungs-Hinweis:** das r0-Overlay muss von **`ImeRootView`** gehostet werden —
-die Statusleiste (48 dp, `ImeRootView.kt:63-115`) und das `KeyboardView` sind Kinder
-eines Stack-Containers (`ImeRootView.kt:168`); dort einen Pop-up-Host (eigenes Child-View
-oder eigener Draw-Pass in Root-Koordinaten, `left` unverändert via
-`LongPressMenu.menuLeftPx`, `KeyboardView.kt:504`) vorsehen. r1/r2/r3 bleiben im
-KeyboardView-Canvas. `menuTopPx` (LongPressMenu) bekommt dann nur noch die r3-Formel
-ohne rowHeight; der r0-Fall zieht aus dem Canvas heraus.
+**Implementation hint:** the r0 overlay must be hosted by **`ImeRootView`** — the
+status bar (48 dp, `ImeRootView.kt:63-115`) and the `KeyboardView` are children of a
+stack container (`ImeRootView.kt:168`); provide a popup host there (its own child view
+or its own draw pass in root coordinates, `left` unchanged via
+`LongPressMenu.menuLeftPx`, `KeyboardView.kt:504`). r1/r2/r3 stay in the
+KeyboardView canvas. `menuTopPx` (LongPressMenu) then gets only the r3 formula
+without rowHeight; the r0 case moves out of the canvas.
 
 ---
 
-## 8. Nachtrag F30/F31 (v0.1.23, versionCode 24, 01:38)
+## 8. Addendum F30/F31 (v0.1.23, versionCode 24, 01:38)
 
-- **F30 — Fake-Audio-Quelle (Debug-only):** `app/src/debug/java/de/voicekeyboard/audio/
-  FakeWavAudioSource.kt` — zeitgetreue **10-ms-Blöcke** aus WAV, konfigurierbare
-  Szenarien (durchgehend / Stille-Abschnitte / Aussetzer-`inGap` / `stopAfterMs`,
-  `FakeWavAudioSource.kt:29/40/144`). Dazu `app/src/testDebug/java/de/voicekeyboard/ime/
-  FakeAudioScenarioTest.kt` mit 8 Fällen (a–h, VirtualClock-getaktet). **Der
-  Nutzerfall ist damit deterministisch nachstellbar:** Fall d „Ende nach 1,2 s“
-  (`stopAfterMs = 1_200` → `abort_reason final`, `audio_s ≈ 1,2`) reproduziert die
-  Zahlen von Export #2 im Labor. **Nicht gedeckt:** Engine-Decode auf dem Emulator —
-  weiterhin blockiert durch den x86_64-`libonnxruntime`-SIGSEGV (s. §1/
+- **F30 — fake audio source (debug only):** `app/src/debug/java/de/voicekeyboard/audio/
+  FakeWavAudioSource.kt` — time-accurate **10-ms blocks** from WAV, configurable
+  scenarios (continuous / silence sections / dropout `inGap` / `stopAfterMs`,
+  `FakeWavAudioSource.kt:29/40/144`). Plus `app/src/testDebug/java/de/voicekeyboard/ime/
+  FakeAudioScenarioTest.kt` with 8 cases (a–h, VirtualClock-driven). **The user case is
+  thereby deterministically reproducible:** case d "end after 1.2 s"
+  (`stopAfterMs = 1_200` → `abort_reason final`, `audio_s ≈ 1.2`) reproduces the
+  numbers from export #2 in the lab. **Not covered:** engine decode on the emulator —
+  still blocked by the x86_64 `libonnxruntime` SIGSEGV (see §1/
   `docs/EMULATOR_DIKTAT_HARNESS.md` §1).
-- **F31 — Stille-Erkennung:** `lastLoudAtMs` (`ime/DictationCoordinator.kt:282/206/313`);
-  neue Regel im Watchdog: **Blöcke laufen** (`capBlocks > 0`) **aber seit > 3000 ms kein
-  lautes Signal** → `ERR_SILENT` `"silence"` mit `no_signal` (`DictationCoordinator.kt:
-  337-338`, neue Konstante `ERR_SILENT` `:78`); Nutzer-Meldung
-  `dictation_error_no_signal` (`res/values/strings.xml:57`); neues 🐞-Messfeld
-  **`loud_s`** (Sektunden mit lautem Signal, `DictationCoordinator.kt:284-287`,
-  `debug/DebugInfoFormatter.kt:134/194`). **3 F31-Tests** (FakeAudioScenarioTest
-  Fälle e/f/g): durchgehend still → genau ein `ERR_SILENT`, Session beendet; still→laut
-  → **kein** `ERR_SILENT`, `loud_s` wächst; keine Blöcke → weiterhin `ERR_STALL`
-  (Vorrang, `DictationCoordinator.kt:327-329`) — die zwei Fälle sauber getrennt.
-  **Bedeutung für Export #2:** der Zustand „Blöcke laufen, aber nur Rauschen (−56,2 dBFS)"
-  würde heute (statt „Diktat-Ewigkeit") nach 3 s in einen sichtbaren `audio_error:silence`
-  münden.
+- **F31 — silence detection:** `lastLoudAtMs` (`ime/DictationCoordinator.kt:282/206/313`);
+  new rule in the watchdog: **blocks are flowing** (`capBlocks > 0`) **but no loud signal
+  for > 3000 ms** → `ERR_SILENT` `"silence"` with `no_signal` (`DictationCoordinator.kt:
+  337-338`, new constant `ERR_SILENT` `:78`); user message
+  `dictation_error_no_signal` (`res/values/strings.xml:57`); new 🐞 measurement field
+  **`loud_s`** (seconds with a loud signal, `DictationCoordinator.kt:284-287`,
+  `debug/DebugInfoFormatter.kt:134/194`). **3 F31 tests** (FakeAudioScenarioTest
+  cases e/f/g): permanently silent → exactly one `ERR_SILENT`, session ends;
+  silent→loud → **no** `ERR_SILENT`, `loud_s` grows; no blocks → still `ERR_STALL`
+  (precedence, `DictationCoordinator.kt:327-329`) — the two cases cleanly separated.
+  **Meaning for export #2:** the state "blocks are flowing, but only noise (−56.2 dBFS)"
+  would today (instead of "dictation eternity") end in a visible `audio_error:silence`
+  after 3 s.
 
-## 9. Entscheidungsbaum Export #3 (Nutzer-Telefon, 🐞-Export mit F26/F28/F31-Feldern)
+## 9. Decision tree for export #3 (user's phone, 🐞 export with F26/F28/F31 fields)
 
-Leseregel: die Felder `cap_blocks`/`cap_stall_ms`/`loud_s`/`mic_rel`/`status_shown`/
-`abort_reason`/`hyp_count` trennen die Schichten (Quelle → Pegel → Engine → Commit → UI)
-**von unten nach oben**. Erste nicht passende Zeile = die Schicht mit dem Fehler.
+Reading rule: the fields `cap_blocks`/`cap_stall_ms`/`loud_s`/`mic_rel`/`status_shown`/
+`abort_reason`/`hyp_count` separate the layers (source → level → engine → commit → UI)
+**bottom to top**. First non-matching row = the layer with the fault.
 
-| # | Messlage im Export #3 | Wahrscheinliche Ursache | Zuständiger Code-Ort (Datei:Zeile) | Nächster Schritt / Fix-Typ |
+| # | Measurement situation in export #3 | Most likely cause | Responsible code location (file:line) | Next step / fix type |
 |---|---|---|---|---|
-| a | `cap_blocks = 0` **und** `cap_stall_ms` wächst | **AudioRecord liefert nichts** (FGS-Mikro/Permission/Routing) | Capture-Loop `audio/AudioRecordSource.kt:113-141` (n==0-Loop `:127`); Watchdog `ime/DictationCoordinator.kt:327-329` (`ERR_STALL no_audio`); FGS-Start `ime/VoiceKeyboardService.kt:401/793` + F28c-Handshake `:183-185` | FGS-/Permission-Pfad prüfen (api 37, `POST_NOTIFICATIONS`), ggf. AudioSource-Wechsel an der Injektionsnaht `VoiceKeyboardService.kt:651` |
-| b | `cap_blocks > 0`, **`loud_s = 0`** | **Mikro liefert nur Rauschen** → Hardware-Mute, Mic-Besetzung durch andere App, oder die **VOICE_RECOGNITION-Quelle** ist tot | F31-Check `ime/DictationCoordinator.kt:337-338`; Pegel vom rohen Capture `audio/AudioRecordSource.kt:121` (`LevelPeak`) | **Nutzerfrage zuerst** (andere Apps/Mikro-Mute — s. §10); dann AudioSource-Experiment (SOURCE-Mic vs. VOICE_RECOGNITION, Param an `AudioRecordSource`/`VoiceKeyboardService.kt:651`) |
-| c | `cap_blocks > 0`, `loud_s > 0`, **`hyp_count = 0`** | Signal da, **Engine/VAD liefert nichts** (Decode-Fehler, Modell, 2,0-s-Guard + kein Final) | `dictation/DictationController.kt:250ff` (`feedAudio`), Guard `:470-471`, `lastError`-Felder; Watchdog-Fehler in `ime/DictationCoordinator.kt:311-341` | Decode-Pfad-Debug: `last_error` im Export lesen; OOM/ISE-Logs; ggf. Mini-WAV aus `loud_s`-Zeitfenster als Pipeline-Testfixture (Regel 9: nur wenn Nutzer einwilligt) |
-| d | **`hyp_count` wächst**, aber **Text fehlt** | **Commit-/Editor-Pfad** (CommitPolicy verweigert, Ownership verloren, Editor-InputConnection tot) | `commit/CommitPolicy.kt`/`LocalAgreement.kt`, `editor/InputConnectionSink.kt`/`DeltaTyper.kt`/`OwnershipTracker.kt`; Sink-Verschaltung `ime/VoiceKeyboardService.kt:585ff` (buildCoordinator) | Commit-/Editor-Pfad-Debug: Hypothesen-Zähler vs. Sink-Operationen (Diktat-Ausgabe-Zähler zählt nur Zeichen, dort belegt); `dictation_error_editor_busy`-Pfad `VoiceKeyboardService.kt` |
-| e | **`mic_rel = up:…` < 1,5 s** | **Echter Loslass-Pfad** (Finger/Sensorik/Halt-Geste endet früh) — **kein Produktfehler** im Diktat | `keyboard/KeyboardView.kt:820` (`onMicHoldEnd`), `ime/MicToggle.kt:47-50`, `ime/VoiceKeyboardService.kt:708-718/504-512` | Kein Code-Fix; UX-Option: Halt-Schwelle/Visuelle Rückmeldung (Design-Entscheidung), ggf. H-B-Pointer-Log zur Abgrenzung spurloses UP |
-| f | **`mic_rel = hidden:…` / `editor:…`** | **IME-/Fokusverlust** (System versteckt Tastatur, Editor-Wechsel) | `ime/VoiceKeyboardService.kt:327-338` (`onFinishInputView`/`onWindowHidden` → stop), `:307-318` (`onStartInput` → `onEditorChanged`/abort) | Lifecycle-Fix: Verhalten bei kurzem Hide (Gnadenfrist?) oder Abbruch sichtbar machen; dann F28-`status_shown`-Kohärenz prüfen |
-| g | **`status_shown` ≠ Controller-Zustand** (Export-Zeitraum) | **Anzeige-Fix** (F9-Klasse: Main-Thread-Update verspätet/stuck) | `ime/VoiceKeyboardService.kt:885-915` (`updateStatus`, Main-Post `:887-890`), `ime/StatusBarText.kt`/`StatusRouting.kt` | Anzeige-Fix: Resync-Timeout in `updateStatus`/`onStopped` (`DictationCoordinator.kt:406-411`); Messung bleibt (`status_shown`-Feld) |
+| a | `cap_blocks = 0` **and** `cap_stall_ms` grows | **AudioRecord delivers nothing** (FGS mic/permission/routing) | capture loop `audio/AudioRecordSource.kt:113-141` (n==0 loop `:127`); watchdog `ime/DictationCoordinator.kt:327-329` (`ERR_STALL no_audio`); FGS start `ime/VoiceKeyboardService.kt:401/793` + F28c handshake `:183-185` | check FGS/permission path (api 37, `POST_NOTIFICATIONS`), if needed audio-source switch at the injection seam `VoiceKeyboardService.kt:651` |
+| b | `cap_blocks > 0`, **`loud_s = 0`** | **Mic delivers only noise** → hardware mute, mic occupied by another app, or the **VOICE_RECOGNITION source** is dead | F31 check `ime/DictationCoordinator.kt:337-338`; level from the raw capture `audio/AudioRecordSource.kt:121` (`LevelPeak`) | **ask the user first** (other apps/mic mute — see §10); then audio-source experiment (SOURCE-mic vs. VOICE_RECOGNITION, param on `AudioRecordSource`/`VoiceKeyboardService.kt:651`) |
+| c | `cap_blocks > 0`, `loud_s > 0`, **`hyp_count = 0`** | signal present, **engine/VAD delivers nothing** (decode error, model, 2.0-s guard + no final) | `dictation/DictationController.kt:250ff` (`feedAudio`), guard `:470-471`, `lastError` fields; watchdog errors in `ime/DictationCoordinator.kt:311-341` | decode-path debug: read `last_error` in the export; OOM/ISE logs; if needed a mini WAV from the `loud_s` time window as a pipeline test fixture (rule 9: only if the user consents) |
+| d | **`hyp_count` grows**, but **text is missing** | **commit/editor path** (CommitPolicy refuses, ownership lost, editor InputConnection dead) | `commit/CommitPolicy.kt`/`LocalAgreement.kt`, `editor/InputConnectionSink.kt`/`DeltaTyper.kt`/`OwnershipTracker.kt`; sink wiring `ime/VoiceKeyboardService.kt:585ff` (buildCoordinator) | commit/editor path debug: hypothesis counter vs. sink operations (dictation output counter counts characters only, proven there); `dictation_error_editor_busy` path `VoiceKeyboardService.kt` |
+| e | **`mic_rel = up:…` < 1.5 s** | **Genuine release path** (finger/sensor/hold gesture ends early) — **not a product fault** in dictation | `keyboard/KeyboardView.kt:820` (`onMicHoldEnd`), `ime/MicToggle.kt:47-50`, `ime/VoiceKeyboardService.kt:708-718/504-512` | no code fix; UX option: hold threshold/visual feedback (design decision), if needed H-B pointer log to delimit a traceless UP |
+| f | **`mic_rel = hidden:…` / `editor:…`** | **IME/focus loss** (system hides the keyboard, editor switch) | `ime/VoiceKeyboardService.kt:327-338` (`onFinishInputView`/`onWindowHidden` → stop), `:307-318` (`onStartInput` → `onEditorChanged`/abort) | lifecycle fix: behavior on brief hide (grace period?) or make the abort visible; then check F28 `status_shown` coherence |
+| g | **`status_shown` ≠ controller state** (export period) | **display fix** (F9 class: main-thread update delayed/stuck) | `ime/VoiceKeyboardService.kt:885-915` (`updateStatus`, main post `:887-890`), `ime/StatusBarText.kt`/`StatusRouting.kt` | display fix: resync timeout in `updateStatus`/`onStopped` (`DictationCoordinator.kt:406-411`); measurement stays (`status_shown` field) |
 
-**Lesebeispiel (Export-#2-Annahme nachgerückt):** `abort_reason final` + `mic_rel up:≈1200`
-+ `cap_blocks ≈ 120` + `loud_s 0` ⇒ Zeile e (echter UP) **plus** Zeile b (Rauschen-Mikro)
-als paralleler Befund — zwei unabhängige Geschichten in einem Export.
+**Reading example (export-#2 assumption, retrofitted):** `abort_reason final` +
+`mic_rel up:≈1200` + `cap_blocks ≈ 120` + `loud_s 0` ⇒ row e (genuine UP) **plus**
+row b (noise mic) as a parallel finding — two independent stories in one export.
 
-## 10. Was am Telefon zu prüfen ist (offene Nutzerfrage)
+## 10. What to check on the phone (open user question)
 
-Bevor/während des nächsten Diktat-Versuchs mit 0.1.23 (🐞-Export #3): 
-1. **Mikro in anderen Apps:** kurze Testton-App (oder Sprachnotiz) starten — ist dort
-   der Pegel normal? → nein: **Gerät/Mikro-Mute/Besetzung** (Zeile b, Hardware-/Frei-
-   gabe-Ebene, kein App-Fix). 
-2. **GrapheneOS-Freigaben:** explizit prüfen, ob für die IME **`RECORD_AUDIO`** und
-   **`POST_NOTIFICATIONS`** (Benachrichtigung) aktiv sind — GrapheneOS handhabt
-   FGS-Mikro-Berechtigungen strikter; `notif=-`/`notif=no` im Export ist das Indiz
-   (`dictation/…`, Feld `permissions` im 🐞-Export). 
-3. **Wiederholung mit 0.1.23:** F31 macht den Rauschen-Zustand sichtbar (`audio_error:
-   silence` statt Endlos-Diktat), F28/F30-Felder (`cap_blocks`, `cap_stall_ms`,
-   `loud_s`, `mic_rel`, `status_shown`) trennen danach die Schichten nach §9 — **ein
-   Export reicht für die Einordnung**, sofern der Nutzer 1./2. dokumentiert.
-4. **Nicht tun:** keine echten Sprachinhalte in Logs/Exports (Regel 9); Export =
-   Zahlen + Codes + Tastennamen, nichts anderes.
+Before/during the next dictation attempt with 0.1.23 (🐞 export #3):
+1. **Mic in other apps:** start a short test-tone app (or voice note) — is the level
+   normal there? → no: **device/mic mute/occupation** (row b, hardware/permission
+   layer, no app fix).
+2. **GrapheneOS permissions:** explicitly check that **`RECORD_AUDIO`** and
+   **`POST_NOTIFICATIONS`** (notification) are enabled for the IME — GrapheneOS
+   handles FGS-microphone permissions more strictly; `notif=-`/`notif=no` in the export
+   is the indicator (`dictation/…`, field `permissions` in the 🐞 export).
+3. **Repeat with 0.1.23:** F31 makes the noise state visible (`audio_error:
+   silence` instead of endless dictation), F28/F30 fields (`cap_blocks`,
+   `cap_stall_ms`, `loud_s`, `mic_rel`, `status_shown`) then separate the layers
+   per §9 — **one export suffices for classification**, provided the user documents
+   1./2.
+4. **Do not do:** no real speech content in logs/exports (rule 9); export =
+   numbers + codes + key names, nothing else.

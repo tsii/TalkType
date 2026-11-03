@@ -1,66 +1,66 @@
-# ADB über Netzwerk zum Nutzer-Telefon (GrapheneOS) — Schritt-für-Schritt
+# ADB over the network to the user's phone (GrapheneOS) — step by step
 
-**Zweck:** Drahtlose Diagnose (Logcat/🐞-Exporte) ohne USB-Kabel, damit wir die Abbrüche
-(„Audio-Start fehlgeschlagen" nach IME-Start, Toggle-Abbrüche „Kein Text erkannt") live sehen.
-**Benötigt:** Telefon und Server (<internal-host>) im **selben WLAN** (kein Gastnetz). USB-Debugging
-muss **nicht** an sein; **root wird nicht benötigt**; kein Kabel nötig.
+**Purpose:** Wireless diagnostics (logcat/🐞 exports) without a USB cable, so that we can see the aborts
+("audio start failed" after IME start, toggle aborts "no text recognized") live.
+**Required:** Phone and server (<internal-host>) on the **same WLAN** (no guest network). USB debugging
+does **not** need to be on; **root is not required**; no cable needed.
 
-## 1. Vorbereitung am Telefon
+## 1. Preparation on the phone
 
-1. **Entwickleroptionen entsperren:** Einstellungen → Über das Telefon → **Build-Nummer** 7× hintereinander tippen (ggf. PIN eingeben). *Du siehst jetzt:* „Du bist jetzt Entwickler" (Toast).
-2. **Drahtloses Debugging aktivieren:** Einstellungen → System → Entwickleroptionen → **Drahtloses Debugging** einschalten. *Du siehst jetzt:* der Schalter ist an, darunter erscheint eine IP mit Port.
-3. **Koppeln öffnen:** Tippe auf „Drahtloses Debugging" → **„Gerät koppeln"** (Pairing). *Du siehst jetzt:* ein Fenster mit einer **6-stelligen Zahl** (Pairing-Code) und einer **IP:PORT**-Angabe. **Bildschirm muss an bleiben** — bei Displaysperung verschwindet der Pairing-Dialog oft.
+1. **Unlock developer options:** Settings → About phone → tap **Build number** 7 times in a row (enter PIN if asked). *You now see:* "You are now a developer" (toast).
+2. **Enable wireless debugging:** Settings → System → Developer options → turn on **Wireless debugging**. *You now see:* the toggle is on, and an IP with port appears below it.
+3. **Open pairing:** Tap "Wireless debugging" → **"Pair device with pairing code"** (pairing). *You now see:* a window with a **6-digit number** (pairing code) and an **IP:PORT** entry. **The screen must stay on** — when the display locks, the pairing dialog often disappears.
 
-## 2. Diese Werte notieren und uns mitteilen (getrennt beschriften!)
+## 2. Note these values and send them to us (label them separately!)
 
-| Wert | Wo sichtbar | Beispiel |
+| Value | Where visible | Example |
 |---|---|---|
-| **A) Pairing-Code** (6-stellig) | Fenster „Gerät koppeln" | `482 913` |
-| **B) Pairing-IP:Port** | Fenster „Gerät koppeln" (unter dem Code) | `192.168.1.42:37125` |
-| **C) Connect-IP:Port** | Hauptbildschirm „Drahtloses Debugging" (unter dem Schalter) | `192.168.1.42:40133` |
+| **A) Pairing code** (6 digits) | "Pair device with pairing code" window | `482 913` |
+| **B) Pairing IP:port** | "Pair device with pairing code" window (below the code) | `192.168.1.42:37125` |
+| **C) Connect IP:port** | "Wireless debugging" main screen (below the toggle) | `192.168.1.42:40133` |
 
-**Wichtig:** B und C haben **unterschiedliche Ports** — beide notieren, nicht vertauschen.
+**Important:** B and C have **different ports** — note both, do not mix them up.
 
-## 3. Kommandos auf dem Server (führen WIR aus — nicht eintippen, nur zur Info)
-
-```
-adb pair <B) Pairing-IP:Port> <A) Pairing-Code>     # einmalig, Code gilt nur kurz
-adb connect <C) Connect-IP:Port>                    # danach für jede Sitzung
-adb devices                                         # Kontrolle: Gerät muss als "device" erscheinen
-```
-
-## 4. Schnell-Test (führen WIR aus)
+## 3. Commands on the server (WE run these — do not type them in, for information only)
 
 ```
-adb -s <C) Connect-IP:Port> shell getprop ro.product.model
+adb pair <B) pairing IP:port> <A) pairing code>     # one time only, code is valid only briefly
+adb connect <C) connect IP:port>                    # afterwards for each session
+adb devices                                         # check: device must appear as "device"
 ```
-Erwartet: Modellname (z. B. `Pixel 8`). Dann läuft Logcat und wir ziehen die 🐞-Exporte live.
 
-## 5. Fehlerbilder
+## 4. Quick test (WE run this)
 
-| Du siehst / es passiert | Ursache | Abhilfe |
+```
+adb -s <C) connect IP:port> shell getprop ro.product.model
+```
+Expected: model name (e.g. `Pixel 8`). Then logcat runs and we pull the 🐞 exports live.
+
+## 5. Failure modes
+
+| You see / what happens | Cause | Remedy |
 |---|---|---|
-| Server: `failed to authenticate` / Code abgelehnt | Code falsch abgeschrieben oder **abgelaufen** (gilt nur Sekunden bis Minuten) | „Gerät koppeln" **schließen und neu öffnen** → frischen Code mitteilen; wiederholen |
-| `adb connect` bleibt nach Pairing hängen / Timeout | **Client-Isolation** im Router (Geräte im WLAN dürfen einander nicht erreichen) | Router: „AP/AP-Isolation" bzw. „Client-Isolation" deaktivieren; sonst 2.4/5-GHz-Netz des **selben Routers** testen |
-| Pairing-IP beginnt mit `192.168.x.x`, Server ist `<internal-host>` | Telefon in **anderem Netz/Gastnetz** | Telefon und Server müssen am **selben Router/Netz** hängen (kein Gast-WLAN, kein „ Gäste"-SSID) |
-| Nach Fernstart/Neustart des Telefons kein Connect mehr | GrapheneOS schaltet **Drahtloses Debugging nach Neustart und nach WLAN-Trennung ab** | Schritte 2–3 wiederholen (Entwickleroptionen bleiben entschlert) |
-| Dialog verschwindet beim Koppeln | **Displaysperre/Bildschirm aus** | Bildschirm **an** lassen; Display-Timeout temporär hoch |
-| Unbekannte Telefon-IP | steht in Schritt 2 B/C auf dem Telefon selbst | einfach die angezeigten Werte übermitteln |
+| Server: `failed to authenticate` / code rejected | Code transcribed incorrectly or **expired** (valid only seconds to minutes) | **Close and reopen** "Pair device with pairing code" → send a fresh code; repeat |
+| `adb connect` hangs after pairing / timeout | **Client isolation** on the router (devices on the WLAN may not reach each other) | Router: disable "AP/AP isolation" or "client isolation"; otherwise try the 2.4/5-GHz network of the **same router** |
+| Pairing IP starts with `192.168.x.x`, server is `<internal-host>` | Phone on a **different network/guest network** | Phone and server must be on the **same router/network** (no guest WLAN, no "guests" SSID) |
+| No more connect after remote start/reboot of the phone | GrapheneOS **turns wireless debugging off after reboot and after WLAN disconnection** | Repeat steps 2–3 (developer options remain unlocked) |
+| Dialog disappears during pairing | **Display lock/screen off** | Keep the screen **on**; temporarily increase the display timeout |
+| Unknown phone IP | shown in step 2 B/C on the phone itself | simply send the displayed values |
 
-## 6. Sicherheit — nach der Diagnose
+## 6. Security — after the diagnostics
 
-1. Einstellungen → System → Entwickleroptionen → **Drahtloses Debugging → gekoppelte Geräte → Server-Eintrag entfernen** (Pairing verwerfen).
-2. Schalter **Drahtloses Debugging aus**.
-3. Entwickleroptionen dürfen an bleiben (unproblematisch); bei Bedarf: „Entwickleroptionen" ganz aus.
-4. Wir protokollieren nur **Zahlen und Codes** (keine personenbezogenen Inhalte) — dieselbe Regel-9-Disziplin wie in den 🐞-Exporten.
+1. Settings → System → Developer options → **Wireless debugging → paired devices → remove the server entry** (discard pairing).
+2. Toggle **Wireless debugging off**.
+3. Developer options may stay on (not a problem); if desired: turn "Developer options" off entirely.
+4. We only log **numbers and codes** (no personal content) — the same rule-9 discipline as in the 🐞 exports.
 
-## 7. Kurz-Checkliste
+## 7. Quick checklist
 
-- [ ] Build-Nummer 7× → Entwickleroptionen da
-- [ ] Drahtloses Debugging **an**
-- [ ] „Gerät koppeln" offen, Bildschirm an
-- [ ] **A** Pairing-Code, **B** Pairing-IP:Port, **C** Connect-IP:Port notiert und übermittelt
-- [ ] Telefon am **selben Netz** wie Server (kein Gastnetz, keine Client-Isolation)
-- [ ] Nach Diagnose: Pairing entfernt + Drahtloses Debugging **aus**
+- [ ] Build number 7× → developer options present
+- [ ] Wireless debugging **on**
+- [ ] "Pair device with pairing code" open, screen on
+- [ ] **A** pairing code, **B** pairing IP:port, **C** connect IP:port noted and sent
+- [ ] Phone on the **same network** as the server (no guest network, no client isolation)
+- [ ] After diagnostics: pairing removed + wireless debugging **off**
 
-*Stand: v0.1.29/v0.1.30-Diagnose. Bei Abbruch der Diagnose einfach Debugging ausschalten — nichts am Telefon zurückgeblieben.*
+*Status: v0.1.29/v0.1.30 diagnostics. If the diagnostics are aborted, simply turn off debugging — nothing is left behind on the phone.*

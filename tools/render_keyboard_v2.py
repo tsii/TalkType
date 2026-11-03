@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""V2-Tastatur-Preview (DESIGN_TASTATUR_V2.md): PNG hell/dunkel + GIF, 1080x1440, offline."""
+"""V2 keyboard preview (DESIGN_TASTATUR_V2.md): PNG light/dark + GIF, 1080x1440, offline."""
 import math
 from PIL import Image, ImageDraw, ImageFont
 
@@ -19,7 +19,7 @@ THEMES = {
 F40 = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 44)
 F28 = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 28)
 
-# Zeilen: (label, links, rechts) — r0 10x108, r1 54+9x102+@108, r2 204+7x96+96+108, r3 Footer
+# rows: (label, left, right) — r0 10x108, r1 54+9x102+@108, r2 204+7x96+96+108, r3 footer
 R0 = [(c, i * U, (i + 1) * U) for i, c in enumerate("qwertzuiop")]
 R1 = [("a", 54, 156), ("s", 156, 258), ("d", 258, 360), ("f", 360, 462), ("g", 462, 564),
       ("h", 564, 666), ("j", 666, 768), ("k", 768, 870), ("l", 870, 972), ("@", 972, 1080)]
@@ -28,7 +28,7 @@ R2 = [("shift", 0, 204)] + [(c, 204 + i * 96, 204 + (i + 1) * 96) for i, c in en
 R3 = [("sym", 0, 125), ("lang", 125, 208), ("emoji", 208, 291), ("space", 291, 831),
       ("dot", 831, 914), ("mic", 914, 1080)]
 
-# Endonyme laut LanguageCycle.ENDONYMS (VoiceKeyboardService.kt:45-61), Fallback "Space"
+# endonyms per LanguageCycle.ENDONYMS (VoiceKeyboardService.kt:45-61), fallback "Space"
 ENDONYMS = [("de-de", "Deutsch"), ("en-us", "English (US)"), ("fr-fr", "Français"),
             ("es-es", "Español"), ("it-it", "Italiano"), ("pt-pt", "Português"),
             ("nl-nl", "Nederlands"), ("pl-pl", "Polski"), ("tr-tr", "Türkçe"),
@@ -37,7 +37,7 @@ ENDONYMS = [("de-de", "Deutsch"), ("en-us", "English (US)"), ("fr-fr", "Françai
 
 
 def icon(draw, kind, cx, cy, s, col, width=9):
-    """Icon in 1x1-Box, s = Kantenlaenge, (cx,cy) = Mitte. Punkte aus DESIGN §7."""
+    """Icon in a 1x1 box, s = edge length, (cx,cy) = center. Dots from DESIGN §7."""
     def P(x, y):
         return (cx - s / 2 + x * s, cy - s / 2 + y * s)
     lw, cap = width, "round"
@@ -45,7 +45,7 @@ def icon(draw, kind, cx, cy, s, col, width=9):
         draw.line([P(.5, .78), P(.5, .30)], fill=col, width=lw, joint="curve")
         draw.line([P(.28, .52), P(.5, .30), P(.72, .52)], fill=col, width=lw, joint="curve")
         draw.line([P(.32, .84), P(.68, .84)], fill=col, width=lw)
-    elif kind == "back":   # reiner Links-Pfeil + Sockel
+    elif kind == "back":   # plain left arrow + base
         draw.line([P(.80, .50), P(.30, .50)], fill=col, width=lw)
         draw.line([P(.52, .30), P(.30, .50), P(.52, .70)], fill=col, width=lw, joint="curve")
         draw.line([P(.18, .32), P(.18, .68)], fill=col, width=lw)
@@ -94,15 +94,15 @@ def frame(theme, pressed=None, shift=False, popup=False):
     T = THEMES[theme]
     img = Image.new("RGB", (W, H), T["bg"])
     d = ImageDraw.Draw(img)
-    # Statusleiste (126 px) + Trennlinie
+    # status bar (126 px) + divider line
     d.rectangle([0, 0, W, KB_TOP], fill=T["bg"])
-    d.ellipse([40, 54, 70, 84], outline=T["accent"], width=5)          # Mic-Punkt (ohne Text)
+    d.ellipse([40, 54, 70, 84], outline=T["accent"], width=5)          # mic dot (without text)
     d.line([0, KB_TOP, W, KB_TOP], fill=T["line"], width=2)
-    # Editorenfläche (leer, nur Feld-Kontur + Cursor)
+    # editor surface (empty, only field outline + cursor)
     d.rounded_rectangle([24, KB_TOP + 576 + 40, W - 24, KB_TOP + 576 + 190], radius=16,
                         outline=T["line"], width=3)
     d.line([60, KB_TOP + 576 + 62, 60, KB_TOP + 576 + 168], fill=T["accent"], width=4)
-    # Tasten
+    # keys
     for label, x0, y0, x1, y1 in key_rects():
         cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
         col = T["press"] if (pressed == label) else T["key"]
@@ -117,16 +117,16 @@ def frame(theme, pressed=None, shift=False, popup=False):
             icon(d, {"sym": ",", "lang": "globe", "emoji": "emoji", "mic": "mic", "dot": "."}[label],
                  cx, cy, (x1 - x0) * 0.55, T["text"])
         elif label == "space":
-            # Endonym der aktiven Sprache (de-de-Darstellung: „Deutsch“, s. DESIGN §4a)
+            # endonym of the active language (de-de rendering: „Deutsch", see DESIGN §4a)
             text_c(d, "Deutsch", cx, cy, T["text"])
         else:
             ch = label.upper() if (shift and label.isalpha()) else label
             text_c(d, ch, cx, cy, T["text"])
-    # Popup-Andeutung ueber "d" (r1, x 258-360): 4 Zellen, leere Zaehn + Hinweis-Punkt
+    # popup hint above "d" (r1, x 258-360): 4 cells, empty counts + hint dot
     if popup:
         px0, pw, ph, gap = 216, 264, 92, 26
-        py1 = KB_TOP + ROW - gap                 # untere Kante = 26 px ueber Tasten-Unterkante? -> ueber Taste
-        py0 = KB_TOP + 0 - ph + 40                # in r0-Richtung
+        py1 = KB_TOP + ROW - gap                 # lower edge = 26 px above the key bottom edge? -> above the key
+        py0 = KB_TOP + 0 - ph + 40                # towards r0
         py0, py1 = max(KB_TOP - 0, KB_TOP + ROW - gap - ph), KB_TOP + ROW - gap
         d.rounded_rectangle([px0, py0, px0 + pw, py1], radius=12, fill=T["popbg"],
                             outline=T["line"], width=3)
@@ -141,7 +141,7 @@ def frame(theme, pressed=None, shift=False, popup=False):
 
 
 def space_strip():
-    """Mini-Grafik: Space-Beschriftung je Sprache (Endonyme, de-DE/en-US zuerst)."""
+    """Mini graphic: space label per language (endonyms, de-DE/en-US first)."""
     T = THEMES["hell"]
     row, pad = 64, 20
     w, h = 1080, 40 + row * 15 + pad
@@ -172,7 +172,7 @@ def main():
     space_strip().save("docs/preview/space_endonyme.png")
     for f in ("keyboard_v2_hell.png", "keyboard_v2_dunkel.png", "keyboard_v2.gif", "space_endonyme.png"):
         import pathlib
-        print(f, pathlib.Path("docs/preview/" + f).stat().st_size, "Bytes")
+        print(f, pathlib.Path("docs/preview/" + f).stat().st_size, "bytes")
     print("frames:", len(frames))
 
 

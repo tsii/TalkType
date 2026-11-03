@@ -9,18 +9,18 @@ import org.junit.rules.TemporaryFolder
 import java.io.File
 
 /**
- * F11 (P0) — der interaktive Pfad der IME darf nicht hashen.
+ * F11 (P0) — the interactive path of the IME must not hash.
  *
- * Gemessen auf <device>: der Tap auf die neue Mikrofon-Taste führte zu
- * `am_anr: InputMethod is not responding. Waited 5000ms for MotionEvent`, weil
- * `onMicDown` → `ModelStore.isReady()` → SHA-256 über ~670 MB auf dem
- * Main-Thread lief. Diese Tests fixieren den Ersatz `isReadyQuick()`:
+ * Measured on <device>: the tap on the new microphone key led to
+ * `am_anr: InputMethod is not responding. Waited 5000ms for MotionEvent`,
+ * because `onMicDown` → `ModelStore.isReady()` → SHA-256 over ~670 MB ran on
+ * the main thread. These tests pin down the replacement `isReadyQuick()`:
  *
- *  - interaktiv: Existenz + Größe reichen (Vollprüfung bleibt bei Aktivierung,
- *    ModelStore.activate → Zeile 216, und bei verifyInstalled),
- *  - einmal pro Prozess vollständig geprüft → kein erneutes Hashen,
- *  - `status()` (Vollprüfung) und `statusQuick()` (interaktiv) bleiben
- *    unterscheidbar, damit die Setup-Oberfläche weiter hart prüft.
+ *  - interactive: existence + size suffice (the full check stays at
+ *    activation, ModelStore.activate → line 216, and at verifyInstalled),
+ *  - fully checked once per process → no repeated hashing,
+ *  - `status()` (full check) and `statusQuick()` (interactive) remain
+ *    distinguishable so the setup surface keeps checking hard.
  */
 class ModelStoreQuickReadyTest {
 
@@ -37,52 +37,52 @@ class ModelStoreQuickReadyTest {
         val staging = store.newStagingDir()
         File(staging, "model.bin").writeBytes(a)
         File(staging, "vocab.txt").writeBytes(b)
-        assertTrue("Aktivierung erwartet", store.activate(staging))
+        assertTrue("activation expected", store.activate(staging))
         return store
     }
 
     @Test
-    fun `ohne Modell meldet auch die schnelle Prüfung nicht bereit`() {
+    fun `without a model even the quick check does not report ready`() {
         val store = ModelStore(tmp.newFolder(), miniManifest(byteArrayOf(1), byteArrayOf(2)))
         assertFalse(store.isReadyQuick())
         assertEquals(ModelStatus.ABSENT, store.statusQuick())
     }
 
     @Test
-    fun `schnelle Prüfung prüft Größe nicht Hash — Vollprüfung bleibt scharf`() {
+    fun `quick check checks size not hash - the full check stays sharp`() {
         val a = byteArrayOf(1, 2, 3)
         val b = byteArrayOf(9, 8)
         val store = activatedStore(tmp.newFolder(), a, b)
-        // Inhalt austauschen, Größe identisch lassen (exakt der Korruptionsfall).
+        // swap the content, keep the size identical (exactly the corruption case).
         File(store.modelDir(), "model.bin").writeBytes(byteArrayOf(7, 7, 7))
-        // Frische Instanz = kein Prozess-Cache.
+        // fresh instance = no process cache.
         val root = store.modelDir().parentFile!!.parentFile
         val fresh = ModelStore(root, miniManifest(a, b))
-        assertFalse("Vollprüfung muss die Korruption erkennen", fresh.verifyInstalled())
-        assertTrue("interaktive Prüfung: Größe ja, Hash nein", fresh.isReadyQuick())
+        assertFalse("the full check must detect the corruption", fresh.verifyInstalled())
+        assertTrue("interactive check: size yes, hash no", fresh.isReadyQuick())
         assertEquals(ModelStatus.READY, fresh.statusQuick())
         assertEquals(ModelStatus.BROKEN, fresh.status())
     }
 
     @Test
-    fun `Prozess-Cache ueberspringt nie die Existenzpruefung`() {
+    fun `the process cache never skips the existence check`() {
         val a = byteArrayOf(1, 2, 3)
         val b = byteArrayOf(9, 8)
         val store = activatedStore(tmp.newFolder(), a, b)
-        assertTrue(store.isReady()) // füllt den Prozess-Cache
+        assertTrue(store.isReady()) // fills the process cache
         assertTrue(File(store.modelDir(), "vocab.txt").delete())
-        assertFalse("fehlende Datei darf nicht als bereit gelten", store.isReadyQuick())
+        assertFalse("a missing file must not count as ready", store.isReadyQuick())
         assertEquals(ModelStatus.BROKEN, store.statusQuick())
     }
 
     @Test
-    fun `nach erfolgreicher Vollprüfung wird im Prozess nicht erneut gehasht`() {
+    fun `after a successful full check the process does not hash again`() {
         val a = byteArrayOf(1, 2, 3)
         val b = byteArrayOf(9, 8)
         val store = activatedStore(tmp.newFolder(), a, b)
-        assertTrue(store.isReady()) // füllt den Prozess-Cache
-        File(store.modelDir(), "vocab.txt").writeBytes(byteArrayOf(1, 1)) // gleiche Größe
-        assertTrue("Cache: bereit ohne erneutes Hashen", store.isReadyQuick())
-        assertFalse("Vollprüfung erkennt die Änderung weiterhin", store.verifyInstalled())
+        assertTrue(store.isReady()) // fills the process cache
+        File(store.modelDir(), "vocab.txt").writeBytes(byteArrayOf(1, 1)) // same size
+        assertTrue("cache: ready without hashing again", store.isReadyQuick())
+        assertFalse("the full check still detects the change", store.verifyInstalled())
     }
 }

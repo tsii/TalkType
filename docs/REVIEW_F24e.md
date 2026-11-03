@@ -1,38 +1,38 @@
-# Review F24e/e0-e5 — Aktionszellen, Bewaffnungszone, 15er-Fußzeilen
+# Review F24e/e0-e5 — action cells, arming zone, 15-layout footer
 
-**Reviewer:** DeepSeek V4 Pro 0813 · **Datum:** 2026-10-30
-**Umfang:** `LongPressMenu` (cellAction/stillArmed-mit-Breite), `KeyboardView` (actionCells/commitAlternate/DIAG-Logs), `LayoutParser`/`LayoutAsset` (cellActions), 15 Layouts (period-Zelle), Tests. Kein Build/Emulator (Orchestrator-Gerätebefunde übernommen).
+**Reviewer:** DeepSeek V4 Pro 0813 · **Date:** 2026-10-30
+**Scope:** `LongPressMenu` (cellAction/stillArmed-with-width), `KeyboardView` (actionCells/commitAlternate/DIAG logs), `LayoutParser`/`LayoutAsset` (cellActions), 15 layouts (period cell), tests. No build/emulator (orchestrator device findings adopted).
 
 ---
 
-## Befundtabelle
+## Findings table
 
-| Sev | Datei:Zeile | Befund | Minimaländerung |
+| Sev | File:Line | Finding | Minimal change |
 |---|---|---|---|
-| **P1** | `LongPressMenu.kt:63-66` (`menuLeftPx`-Clamp) vs. `:135` (`stillArmed` `halfW=menuWidthPx/2+slop` um **Tastenmitte**) | **F24e6: Clamp und Bewaffnungszone widersprechen sich.** Die Palette wird per `coerceIn(0, viewWidth−menuWidth)` an den Rand geklemmt, die Arming-Zone aber **symmetrisch um die Tastenmitte** (`downX`) gerechnet — `[centerX−halfW, centerX+halfW]`. Für eine Taste nahe dem Rand (Fusszeilen-Punkt, Breite 2, view 1080) liegt die überstehende **linke** Palettenhälfte (Zellen 0/1) **außerhalb** dieser Zone ⇒ Schieben dorthin disarmt und das Menü öffnet nie (gemessen: Zelle 0 x=468 und Zelle 1 x=594 ohne popup-open; `,`/`!` damit sprachlich unerreichbar). | Bewaffnungszone aus dem **tatsächlich geklemmten** `left` (Ergebnis von `menuLeftPx`) ableiten: `offset ∈ [left−downX, left+menuWidth−downX]` statt `±menuWidth/2` um die Mitte. Dann ist jede Menüzelle per Schieben erreichbar, ohne Überstand (`Überstand erlauben` verwirft der Viewer-Clip, s. o.). |
-| **P2** | `VoiceKeyboardService.applyLanguage` (aus F24/F25 offen) | **Stiller de-de-Fallback ohne Hinweis bleibt.** Fehlt das Asset der Zielsprache, lädt `loadOrFallback` de-de, der Status zeigt aber das Ziel-Endonym. (Zurückgestellter P2.) | Fallback-IST-Sprache erkennen und ehrlich anzeigen. |
-| **P2** | `KeyboardView.drawKeyHint` (aus F23 offen) | **Latente Hint-Kollision in 12er-Reihen bleibt.** Horizontale Enge (Hint rechts oben vs. Mittel-Label) ungeprüft; aktuell kein Hint-Layout mit 12er-Reihe. (Zurückgestellter P2.) | `hintAnchorX` gegen das Label-Ink-Rechteck klemmen oder Hint bei `keyWidth<Schwelle` ausblenden. |
+| **P1** | `LongPressMenu.kt:63-66` (`menuLeftPx` clamp) vs. `:135` (`stillArmed` `halfW=menuWidthPx/2+slop` around the **key center**) | **F24e6: clamp and arming zone contradict each other.** The palette is clamped to the edge via `coerceIn(0, viewWidth−menuWidth)`, but the arming zone is computed **symmetrically around the key center** (`downX`) — `[centerX−halfW, centerX+halfW]`. For a key near the edge (footer period, width 2, view 1080), the overhanging **left** palette half (cells 0/1) lies **outside** this zone ⇒ sliding there disarms and the menu never opens (measured: cell 0 x=468 and cell 1 x=594 without popup-open; `,`/`!` thus linguistically unreachable). | Derive the arming zone from the **actually clamped** `left` (result of `menuLeftPx`): `offset ∈ [left−downX, left+menuWidth−downX]` instead of `±menuWidth/2` around the center. Then every menu cell is reachable by sliding, without overhang (overhang is discarded by the viewer clip, see above). |
+| **P2** | `VoiceKeyboardService.applyLanguage` (open from F24/F25) | **Silent de-de fallback without notice remains.** If the target language's asset is missing, `loadOrFallback` loads de-de, but the status shows the target endonym. (Deferred P2.) | Detect the actual fallback language and display it honestly. |
+| **P2** | `KeyboardView.drawKeyHint` (open from F23) | **Latent hint collision in 12-key rows remains.** Horizontal tightness (hint top right vs. center label) unchecked; currently no hint layout with a 12-key row. (Deferred P2.) | Clamp `hintAnchorX` against the label ink rect or hide the hint when `keyWidth<threshold`. |
 
 ---
 
-## Antworten / Prüfungen
+## Answers / checks
 
-- **Mechanik stimmt.** `cellAction(index, actionCells) = getOrNull(index)?.takeIf { isNotBlank() }` (LongPressMenu:38-39): `""`/`"   "` → `null` ⇒ Text-Commit (F24e5-Fix korrekt; der Geraetefund „verpuffte Action" ist weg). `stillArmed` wächst die seitliche Zone auf `max(keyWidth/2, menuWidth/2)+slop` (Z.135) — die P1 oben betrifft nur die **Mittensymmetrie**, nicht die Breite.
-- **Aktionsfeld + Shift:** die einzigen `cellActions` sind `cursor-left`/`cursor-right` (Leerstring für Textzellen); `commitAlternate` (KeyboardView:509 ff.) sendet `onAction(action)` **oder** `onTextInput`. Shift wird wie gehabt nur bei echtem Text-Commit verbraucht; die Cursor-Aktion löst ausschließlich den bestehenden `DPAD_LEFT/RIGHT`-Pfad (VKS:973/976) aus — keine Shift-/Diktat-Interaktion neu geschaffen. Ein Cursor-Aufruf im RECORDING ist Fremd-Edit (Ownership-Verlust) — identisch zum früheren Tasten-Fuß, **kein** neuer Pfad.
-- **Index-Parallelität:** `alternates = [",","!","?","‹","›"]` (5) ↔ `cellActions = ["","","","cursor-left","cursor-right"]` (5); `KeyboardView:456` nimmt `cellActions.take(n)` parallel zu `glyphs.take(n)` — bei einem `hint` (Ende von `withHint`) liegt er **hinter** den Aktionswerten und hat `cellAction==null` ⇒ Text. Kein Drift.
-- **Zeichensatz `‹`/`›`:** nur als **Glyphen-Label** der Cursor-Zellen, richtungsneutral und sprachunabhängig — vertretbar für alle 15.
-- **Fusszeilen:** alle 15 (base **und** shift) haben period; Σ width = 13 (`space 5 + period 2` bei 14, `space 6 + period 1` bei de-de); keine cursor-Taste mehr — die DRIFT-Ursache aus `REVIEW_FUSSZEILE_MODELLE_PFADE.md` ist damit (im Quellbaum) beseitigt.
-- **Regel 9 — bestätigt:** DIAG-Logs `popup-open cells=$n left=$left top=$top` und `popup-commit cell=$cell action=${action ?: "-"}` führen **nur** Zahlen + einen statischen `KeyActions`-Namen (`cursor-left`), **kein** Glyph, Feldinhalt oder Pfad; `debuggable()`-geschützt. Kein Verstoß.
-- **Tests:** `LongPressMenuTest` deckt `""`/`"   "`/5er-Menü-Offset `−270` true / `−360` false; `FooterAcrossAssetsTest` deckt Σ/ID-Parallelität; `LayoutParserTest` hint-Fälle. (Nicht selbst ausgeführt — offen.)
+- **Mechanics correct.** `cellAction(index, actionCells) = getOrNull(index)?.takeIf { isNotBlank() }` (LongPressMenu:38-39): `""`/`"   "` → `null` ⇒ text commit (F24e5 fix correct; the device finding "action fizzled" is gone). `stillArmed` grows the lateral zone to `max(keyWidth/2, menuWidth/2)+slop` (line 135) — the P1 above concerns only the **center symmetry**, not the width.
+- **Action field + shift:** the only `cellActions` are `cursor-left`/`cursor-right` (empty string for text cells); `commitAlternate` (KeyboardView:509 ff.) sends `onAction(action)` **or** `onTextInput`. Shift is still consumed only on a genuine text commit; the cursor action triggers exclusively the existing `DPAD_LEFT/RIGHT` path (VKS:973/976) — no new shift/dictation interaction. A cursor call during RECORDING is a foreign edit (ownership loss) — identical to the former key footer, **no** new path.
+- **Index parallelism:** `alternates = [",","!","?","‹","›"]` (5) ↔ `cellActions = ["","","","cursor-left","cursor-right"]` (5); `KeyboardView:456` takes `cellActions.take(n)` parallel to `glyphs.take(n)` — with a `hint` (end of `withHint`) it sits **behind** the action values and has `cellAction==null` ⇒ text. No drift.
+- **Character set `‹`/`›`:** only as **glyph labels** of the cursor cells, direction-neutral and language-independent — defensible for all 15.
+- **Footers:** all 15 (base **and** shift) have period; Σ width = 13 (`space 5 + period 2` for the 14, `space 6 + period 1` for de-de); no more cursor key — the DRIFT cause from `REVIEW_FUSSZEILE_MODELLE_PFADE.md` is thereby eliminated (in the source tree).
+- **Rule 9 — confirmed:** DIAG logs `popup-open cells=$n left=$left top=$top` and `popup-commit cell=$cell action=${action ?: "-"}` contain **only** numbers + a static `KeyActions` name (`cursor-left`), **no** glyph, field content, or path; `debuggable()`-protected. No violation.
+- **Tests:** `LongPressMenuTest` covers `""`/`"   "`/5-cell menu offset `−270` true / `−360` false; `FooterAcrossAssetsTest` covers Σ/ID parallelism; `LayoutParserTest` hint cases. (Not executed myself — open.)
 
 ---
 
-## SUMME
+## TOTAL
 
-**P0 = 0 · P1 = 0 · P2 = 3** (ursprünglich 1 P1 eingetragen, nach Klärung zurückgestuft).
+**P0 = 0 · P1 = 0 · P2 = 3** (originally 1 P1 entered, downgraded after clarification).
 
-**KORREKTUR (nachträglich, Orchestrator-Messfehler geklärt):**
-1. Der vermeintliche „F24e6-P1" beruhte auf einem **Stale-Build**: `install -r` lässt den IME-Prozess weiterlaufen — ohne `am force-stop de.voicekeyboard` (und ohne `settings get secure default_input_method` = `de.voicekeyboard/.ime.VoiceKeyboardService`; eine Runde lief auf dem Google-TTS-IME) misst man alten Code. **Statisch ist `menuWForArm` korrekt gefüllt** (KeyboardView:666 `menuWidthPx(cellPx, cellCount(alternatesOf(k)), padPx)` = 756 für die 5-Zellen-Periode) und wird an `stillArmed(…, menuWidthPx=menuWForArm)` übergeben → die Zone wächst auf `max(keyWidth/2, menuW/2)+slop` und deckt die Palettenzellen ab. Rest bleibt nur ein ~44-px-Splitter am weit außen liegenden Rand einer **geklemmten** Randtastenpalette (Zone symmetrisch um die Taste, Palette asymmetrisch geklemmt) — deshalb **Zonenbasis = tatsächliches (geklemmtes) `left`** statt `±menuWidth/2` (**P2**, keine Unerreichbarkeit eines ganzen Sprachzeichens).
-2. „Asset-Modell-Drift" aus `REVIEW_FUSSZEILE_MODELLE_PFADE.md` ist **FALSE POSITIVE**: `D10_FOOTER.composeRow` (KeyboardModel:140ff) baut die Fußreihe **absichtlich** um (Mic rechts, Enter vorletzt, Space 5→4, Mic 1→2); der VK-HIT-Befund war schlicht das **alte** Asset. Zurückstufen auf „angedacht, vom Design gedeckt"; die neue `period`-Taste (width 2) bleibt durch `compose` unverändert (÷ Σ 13, 166 px ≤ 200, passt auf 1080).
+**CORRECTION (after the fact, orchestrator measurement error clarified):**
+1. The supposed "F24e6 P1" was based on a **stale build**: `install -r` keeps the IME process running — without `am force-stop de.voicekeyboard` (and without `settings get secure default_input_method` = `de.voicekeyboard/.ime.VoiceKeyboardService`; one round ran on the Google TTS IME) one measures old code. **Statically, `menuWForArm` is correctly populated** (KeyboardView:666 `menuWidthPx(cellPx, cellCount(alternatesOf(k)), padPx)` = 756 for the 5-cell period) and is passed to `stillArmed(…, menuWidthPx=menuWForArm)` → the zone grows to `max(keyWidth/2, menuW/2)+slop` and covers the palette cells. What remains is only a ~44-px sliver at the outermost edge of a **clamped** edge-key palette (zone symmetric around the key, palette asymmetrically clamped) — hence **zone basis = actual (clamped) `left`** instead of `±menuWidth/2` (**P2**, no whole language character becomes unreachable).
+2. The "asset model drift" from `REVIEW_FUSSZEILE_MODELLE_PFADE.md` is a **FALSE POSITIVE**: `D10_FOOTER.composeRow` (KeyboardModel:140ff) rebuilds the footer row **intentionally** (mic right, enter second-to-last, space 5→4, mic 1→2); the VK-HIT finding was simply the **old** asset. Downgrade to "intended, covered by the design"; the new `period` key (width 2) remains unchanged via `compose` (÷ Σ 13, 166 px ≤ 200, fits on 1080).
 
-**Offen (zum Belegen):** eigener `./gradlew test`-Lauf (429/0), Volltext der neuen `LongPressMenuTest`/`FooterAcrossAssetsTest`-Methoden, eigene Reproduktion der Zelle-0/1-Nichtöffnung nach dem Zone-Fix.
+**Open (to provide evidence):** an own `./gradlew test` run (429/0), full text of the new `LongPressMenuTest`/`FooterAcrossAssetsTest` methods, own reproduction of the cell 0/1 non-opening after the zone fix.

@@ -1,62 +1,62 @@
 package de.voicekeyboard.editor
 
 /**
- * Frameworkfreier Zugang zum Editor des Diktats (DESIGN.md §6, IMPLEMENTATION_PLAN.md B.2).
+ * Framework-free access to the dictation editor (DESIGN.md §6, IMPLEMENTATION_PLAN.md B.2).
  *
- * Bewusst ohne Android-Typen (kein `InputConnection`), damit Commit-/Delta-Logik
- * rein auf der JVM testbar ist. Die Android-Implementierung `InputConnectionSink`
- * (Stufe 4, Teil 2b) übersetzt diese Operationen in `deleteSurroundingText` /
+ * Deliberately without Android types (no `InputConnection`), so that commit/delta logic
+ * is purely testable on the JVM. The Android implementation `InputConnectionSink`
+ * (stage 4, part 2b) translates these operations into `deleteSurroundingText` /
  * `commitText`.
  *
- * Vertrag:
- * - [replaceBeforeCursor] wirkt nur auf den **eigenen** Bereich vor dem Cursor.
- *   Der Aufruf gilt als atomar: bei einer Exception ist er nicht ausgeführt worden.
- * - Besitz ist nicht bewiesen, wenn Kontext/Länge nicht mit den Erwartungen
- *   übereinstimmen (`null` / `-1`).
+ * Contract:
+ * - [replaceBeforeCursor] acts only on the **own** area before the cursor.
+ *   The call counts as atomic: on an exception it has not been executed.
+ * - Ownership is not proven if context/length do not match the expectations
+ *   (`null` / `-1`).
  */
 interface EditorSink {
 
     /**
-     * Ersetzt die letzten [replaceLength] Zeichen vor dem Cursor durch [newText].
-     * Cursor steht danach hinter dem neuen Text. Wirft bei Fehler (Fehler nach oben,
-     * KONZEPT.md §2.7); interner Zustand des Aufrufers bleibt konsistent.
+     * Replaces the last [replaceLength] characters before the cursor with [newText].
+     * Afterwards the cursor stands behind the new text. Throws on error (errors go up,
+     * KONZEPT.md §2.7); the caller's internal state stays consistent.
      */
     fun replaceBeforeCursor(replaceLength: Int, newText: String)
 
     /**
-     * Bis zu [maxChars] Zeichen Text vor dem Cursor (Kontextabgleich vor jeder
-     * Revision, DESIGN.md §6) oder `null`, wenn der Editor ihn nicht liefert
-     * (Besitz nicht bewiesen).
+     * Up to [maxChars] characters of text before the cursor (context check before every
+     * revision, DESIGN.md §6) or `null` if the editor does not deliver it
+     * (ownership not proven).
      */
     fun textBeforeCursor(maxChars: Int): CharSequence?
 
     /**
-     * Länge des eigenen, eingefügten Bereichs in Zeichen — oder `-1`, wenn
-     * unbekannt. Dient der Besitzprüfung (erwartete Länge vs. Ist-Länge).
+     * Length of the own inserted area in characters — or `-1` if
+     * unknown. Serves the ownership check (expected length vs. actual length).
      */
     fun ownLength(): Int
 
     /**
-     * AP7-E1c (vc33-Abnahme, P0-Blocker): der eigene, eingefügte Text —
-     * synchron zum Schreibvorgang aktuell (der Sink führt Edits auf dem
-     * Editor-Thread aus; ein `restartInput` der App feuert INNERHALB unserer
-     * commitText-Runde, bevor der Worker seine Tracker-Erwartung aktualisieren
-     * kann — diese Quelle ist dann dem Worker-Blick voraus).
-     * Default leer: Implementierungen ohne eigene Textführung degradiert auf
-     * die Tracker-Erwartung.
+     * AP7-E1c (vc33 acceptance, P0 blocker): the own inserted text —
+     * synchronous with the write operation (the sink executes edits on the
+     * editor thread; an app's `restartInput` fires WITHIN our
+     * commitText round, before the worker can update its tracker expectation
+     * — this source is then ahead of the worker's view).
+     * Default empty: implementations without their own text management degrade to
+     * the tracker expectation.
      */
     fun ownText(): String = ""
 
     /**
-     * A5 (v0.1.34): Sitzungswechsel — die eigene Spanne der VORHERIGEN
-     * Diktation-Sitzung ist im neuen Sitzungskontakt nicht mehr bewiesen
-     * (Besitz vererbt sich NICHT über die Sitzungsgrenze; die Sink-Instanz
-     * selbst wird wiederverwendet). Implementierungen mit eigener Textführung
-     * verwerfen sie hier. Default-No-op: frameworkfreie Fakes/Tests bleiben
-     * unverändert.
-     * Aufrufer: `DictationController.start()` (dieselbe Stelle wie der
-     * Typer-/Tracker-Reset); NICHT bei apply-Fehlpfaden — ein fehlgeschlagener
-     * Edit gilt als nicht ausgeführt, die Spanne bleibt dann unverändert.
+     * A5 (v0.1.34): session change — the own span of the PREVIOUS
+     * dictation session is no longer proven in the new session contact
+     * (ownership does NOT carry over the session boundary; the sink instance
+     * itself is reused). Implementations with their own text management
+     * discard it here. Default no-op: framework-free fakes/tests stay
+     * unchanged.
+     * Caller: `DictationController.start()` (the same place as the
+     * typer/tracker reset); NOT on apply error paths — a failed
+     * edit counts as not executed, the span then stays unchanged.
      */
     fun resetSession() {}
 }

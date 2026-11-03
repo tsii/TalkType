@@ -8,7 +8,7 @@ import org.junit.Test
 
 class LocalAgreementTest {
 
-    // (a) 2 gleiche Hypothesen → Präfix freigegeben; 1 Hypothese → nichts
+    // (a) 2 identical hypotheses → prefix released; 1 hypothesis → nothing
 
     @Test fun singleHypothesisYieldsNothing() {
         val la = LocalAgreement()
@@ -18,25 +18,25 @@ class LocalAgreementTest {
     @Test fun twoAgreeingHypothesesReleasePrefix() {
         val la = LocalAgreement()
         la.accept("So, da bin ich", 16_000)
-        // Trenner nach „ich“ liegt AUSSERHALB des gemeinsamen Präfixes (h2 wächst
-        // mit ‚ mal‘) ⇒ committet nur „So, da bin “ (COMMIT_RULE_DECISION T-Fall)
+        // the separator after "ich" lies OUTSIDE the common prefix (h2 grows
+        // with ' mal') ⇒ commits only "So, da bin " (COMMIT_RULE_DECISION T-case)
         assertEquals("So, da bin ", la.accept("So, da bin ich mal", 32_000))
     }
 
-    // (b) Wortgrenze: „Das ist der“ vs „Das ist derzw“ → nur „Das ist “ (strenge Lesart)
+    // (b) word boundary: "Das ist der" vs "Das ist derzw" → only "Das ist " (strict reading)
 
     @Test fun wordBoundaryDoesNotCommitPartialWord() {
         val la = LocalAgreement()
         la.accept("Das ist der", 16_000)
-        // „der“ ist ein unbestätigtes Wort an der Audio-Kante — es bleibt Tail
+        // "der" is an unconfirmed word at the audio edge — it stays a tail
         assertEquals("Das ist ", la.accept("Das ist derzw", 32_000))
     }
 
     @Test fun growingWordCutsBackToLastSpace() {
         val la = LocalAgreement()
-        la.accept("Das ist derzwo", 16_000) // Vorlauf: Historie füllen
-        // gemeinsamer Präfix "Das ist derzw" endet mitten im Wort (beide Hypothesen
-        // führen dort mit anderem Buchstaben weiter) → nur bis zum letzten Leerzeichen
+        la.accept("Das ist derzwo", 16_000) // warm-up: fill the history
+        // the common prefix "Das ist derzw" ends in the middle of a word (both
+        // hypotheses continue there with a different letter) → only up to the last space
         assertEquals("Das ist ", la.accept("Das ist derzwei", 32_000))
     }
 
@@ -49,42 +49,42 @@ class LocalAgreementTest {
     @Test fun sameAudioStateDoesNotCountTwice() {
         val la = LocalAgreement()
         la.accept("So ist", 16_000)
-        assertNull(la.accept("So ist", 16_000)) // derselbe Snapshot ist keine 2. Bestätigung
-        // „ist“ bleibt Tail (kein belegter Trenner dahinter im gemeinsamen Präfix)
+        assertNull(la.accept("So ist", 16_000)) // the same snapshot is not a 2nd confirmation
+        // "ist" stays a tail (no confirmed separator after it within the common prefix)
         assertEquals("So ", la.accept("So ist es", 32_000))
     }
 
-    // (a) S4-01-Gegenprobe: zwei identische Mid-Word-Truncationen committen NIE
-    //     das angebrochene Wort — „derz“ ist an der Audio-Kante nicht beweisbar.
+    // (a) S4-01 counter-check: two identical mid-word truncations NEVER commit
+    //     the partial word — "derz" at the audio edge is not provable.
 
     @Test fun identicalMidWordTruncationsCommitNoHalfWord() {
         val la = LocalAgreement()
         la.accept("Das ist derz", 16_000)
         val result = la.accept("Das ist derz", 32_000)
-        // alte Lesart (endsAtWordBoundary) hätte „Das ist derz“ komplett gefroren
+        // the old reading (endsAtWordBoundary) would have frozen "Das ist derz" completely
         assertEquals("Das ist ", result)
-        // Invariante: committeter Präfix endet immer auf Leerzeichen
+        // invariant: committed prefix always ends with a space
         assertTrue(result!!.endsWith(" "))
         assertFalse(result.contains("derz"))
     }
 
-    // (b) „Das ist der “ (mit Leerzeichen): Commit bis einschließlich Leerzeichen
+    // (b) "Das ist der " (with space): commit up to and including the space
 
     @Test fun trailingSpaceInsidePrefixIsCommitted() {
         val la = LocalAgreement()
         la.accept("Das ist der ", 16_000)
-        // der Trenner NACH „der“ liegt IM gemeinsamen Präfix ⇒ „der“ ist belegt
+        // the separator AFTER "der" lies WITHIN the common prefix ⇒ "der" is confirmed
         assertEquals("Das ist der ", la.accept("Das ist der Zwiebel", 32_000))
     }
 
-    // (c) S4-03-Gegenprobe: Divergenz INNERHALB eines Surrogatpaars
+    // (c) S4-03 counter-check: divergence WITHIN a surrogate pair
 
     @Test fun surrogateDivergenceCutsBeforeThePair() {
         val la = LocalAgreement()
         la.accept("Hallo \uD83E\uDD16", 16_000)
         val result = la.accept("Hallo \uD83E\uDD17", 32_000)
-        // gemeinsamer Präfix endet auf dem High-Surrogate → Grenze Rücknahme
-        // ⇒ kein einsames High-Surrogat, Schnitt am Leerzeichen
+        // the common prefix ends on the high surrogate → pull the boundary back
+        // ⇒ no lone high surrogate, cut at the space
         assertEquals("Hallo ", result)
         assertTrue(result!!.endsWith(" "))
         assertFalse(Character.isHighSurrogate(result.last()))
@@ -98,7 +98,7 @@ class LocalAgreementTest {
         var audio = 16_000L
         for (t in texts) {
             val r = la.accept(t, audio)
-            if (r != null) assertTrue("Präfix muss auf Leerzeichen enden: ‚$r‘", r.endsWith(" "))
+            if (r != null) assertTrue("prefix must end on a space: '$r'", r.endsWith(" "))
             audio += 16_000
         }
     }
@@ -115,7 +115,7 @@ class LocalAgreementTest {
     @Test fun unicodeSurrogatePairStaysIntact() {
         val la = LocalAgreement()
         la.accept("Schöne \uD83E\uDD16 Tastatur", 16_000)
-        // Schnitt am Leerzeichen vor dem wachsenden Wort; \uD83E\uDD16 bleibt intakt
+        // cut at the space before the growing word; \uD83E\uDD16 stays intact
         assertEquals("Schöne \uD83E\uDD16 ", la.accept("Schöne \uD83E\uDD16 Tastaturen", 32_000))
     }
 }

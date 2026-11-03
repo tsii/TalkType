@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Hold-Beweis Kompakt: 62 s Halten (2x 3-s-Pause), 75 s Finalize-Zeit, dann Export.
+# Compact hold proof: 62 s hold (2x 3-s pauses), 75 s finalize time, then export.
 set -u
 cd <workdir>
 ADB="adb -s <device>"
@@ -18,7 +18,7 @@ paplay testdata/hold/hold_korpus_62.wav
 sleep 1
 echo "UP $(ts)"
 $ADB shell input -d 0 motionevent UP 880 1635
-echo "Finalize-Fenster 75s $(ts)"
+echo "finalize window 75s $(ts)"
 sleep 75
 for v in 1 2 3; do
   $ADB shell input tap 1017 1635; sleep 3
@@ -35,7 +35,7 @@ for m in re.finditer(r'text=\"([^\"]*)\"', x):
     t=html.unescape(m.group(1))
     if 'audio_s' in t and 'mic_rel' in t: print(html.unescape(t))
 " > /tmp/sm30_export_hold62.txt
-  if [ -s /tmp/sm30_export_hold62.txt ]; then echo "--- export Versuch $v ok"; break; fi
-  echo "--- Versuch $v leer"; sleep 3
+  if [ -s /tmp/sm30_export_hold62.txt ]; then echo "--- export attempt $v ok"; break; fi
+  echo "--- attempt $v empty"; sleep 3
 done
 echo "=== DONE $(ts)"

@@ -5,24 +5,24 @@ import java.io.File
 import kotlin.math.roundToInt
 
 /**
- * AP1 (docs/PLAN_C2_FABLE_R2.md §1.2): deterministische Latenz-Stub-Engine für
- * C2-Simulationen auf dem Emulator/Gerät — Debug-Sourceset NUR.
+ * AP1 (docs/PLAN_C2_FABLE_R2.md §1.2): deterministic latency stub engine for
+ * C2 simulations on the emulator/device — debug source set ONLY.
  *
- *  - transcribe() schläft `base_ms + α · buffer_s` auf der ECHTZEITUHR
- *    (die Pipeline sieht nur Decode-Dauer und Textlänge; α-Default 38,5 =
- *    Gerätekurve I3, Stress-Varianten 80/150 via debug.vk.engine).
- *  - Pseudo-Text: Länge ∝ buffer_s (`WORDS_PER_SECOND`), Muster „wort<i>",
- *    SATZZEICHEN '.' an jedem 8. Wort (füttert die Segmentregel (a)).
- *    Wort-IDs sind je Fenster von 1 an deterministisch aus der Pufferlänge
- *    abgeleitet — aufeinanderfolgende Decodes des WACHSENDEN Segment-Puffers
- *    sind präfix-stabil (Agreement/Commit laufen realistisch); nach einem
- *    Segment-Restart beginnt die Nummerierung neu (wie eine echte Trans-
- *    kription des Ausschnitts), die [runId] des Controllers bleibt monoton
- *    und wird unverändert durchgereicht.
+ *  - transcribe() sleeps `base_ms + α · buffer_s` on the REAL-TIME CLOCK
+ *    (the pipeline only sees decode duration and text length; α default 38.5 =
+ *    device curve I3, stress variants 80/150 via debug.vk.engine).
+ *  - Pseudo text: length ∝ buffer_s (`WORDS_PER_SECOND`), pattern „wort<i>",
+ *    sentence marker '.' on every 8th word (feeds the segment rule (a)).
+ *    Word IDs are derived deterministically from 1 per window from the buffer length —
+ *    consecutive decodes of the GROWING segment buffer
+ *    are prefix-stable (agreement/commit run realistically); after a
+ *    segment restart the numbering starts over (like a real transcription
+ *    of the excerpt); the controller's [runId] stays monotone
+ *    and is passed through unchanged.
  *
- * Regel 9: Inhalte sind generische Musterwort-Zahlen, niemals Nutzerdaten.
- * Grenze (im Plan dokumentiert): für RSS/OOM- und Qualitätstests ist die
- * ECHTE Engine zu verwenden (debug.vk.engine=real).
+ * Rule 9: contents are generic pattern-word numbers, never user data.
+ * Limit (documented in the plan): for RSS/OOM and quality tests the
+ * REAL engine must be used (debug.vk.engine=real).
  */
 class LatencyStubEngine(
     val alphaMsPerSecond: Double = 38.5,
@@ -31,7 +31,7 @@ class LatencyStubEngine(
 ) : AsrEngine {
 
     override fun load(modelDir: File) {
-        // Kein Modell — die Latenz ist reine Rechenzeit-Simulation.
+        // No model — the latency is a pure compute-time simulation.
     }
 
     override suspend fun transcribe(
@@ -41,13 +41,13 @@ class LatencyStubEngine(
     ): Hypothesis {
         val bufferS = window.samples.size.toDouble() / window.sampleRate
         val sleepMs = baseMs + (alphaMsPerSecond * bufferS).toLong()
-        if (sleepMs > 0) Thread.sleep(sleepMs) // Echtzeituhr, bewusst (AP1)
+        if (sleepMs > 0) Thread.sleep(sleepMs) // real-time clock, deliberate (AP1)
         val wordCount = (bufferS * wordsPerSecond).roundToInt().coerceAtLeast(1)
         val sb = StringBuilder()
         for (i in 1..wordCount) {
             if (i > 1) sb.append(' ')
             sb.append("wort").append(i)
-            if (i % 8 == 0) sb.append('.') // Satzzeichen alle 8 Wörter (Regel a)
+            if (i % 8 == 0) sb.append('.') // sentence marker every 8 words (rule a)
         }
         return Hypothesis(
             IntArray(0), sb.toString(), IntArray(0), sessionId, runId,

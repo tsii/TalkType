@@ -1,38 +1,38 @@
-# Review F14 — Diktat-Kette (StopOutcome, Watchdog, StatusRouting, Diagnose-Export)
+# Review F14 — Dictation chain (StopOutcome, watchdog, status routing, diagnostics export)
 
-**Reviewer:** DeepSeek V4 Pro 0813 · **Datum:** 2026-10-30
-**Umfang:** `dictation/DictationController`, `ime/DictationCoordinator`, `ime/VoiceKeyboardService`, `ime/StatusRouting`, `debug/DebugInfoFormatter`/Collector. Kein Build/Emulator.
+**Reviewer:** DeepSeek V4 Pro 0813 · **Date:** 2026-10-30
+**Scope:** `dictation/DictationController`, `ime/DictationCoordinator`, `ime/VoiceKeyboardService`, `ime/StatusRouting`, `debug/DebugInfoFormatter`/Collector. No build/emulator.
 
 ---
 
-## Befunde
+## Findings
 
-| Sev | Datei:Zeile | Befund | Minimaländerung |
+| Sev | File:Line | Finding | Minimal change |
 |---|---|---|---|
-| **P2** | `VoiceKeyboardService.kt:652-655` (`onDictationStopped`) | **`cleanSuccess` liest einen Live-Zustand, kein Snapshot.** `lastStopOutcome` wird im Worker **atomar** vor `onStopped` gesetzt (`DictationCoordinator.kt:335`), aber `onDictationStopped` liest zusätzlich `c?.failedThisSession` (Z.653) und `c?.visibleError` (Z.658) — **mutable Felder, die der nächste `start()` zurücksetzt** (`failedThisSession=false` in `DictationController.kt:123`). Reihenfolge „schnelles Loslassen → sofortiger Neustart": zwischen A-`controller.stop()` (IDLE, Worker) und A-`onStopped` (Main) läuft `start()` B und nullt `failedThisSession` → A-`cleanSuccess` wird mit B-Zustand beurteilt (falsches Häkchen bzw. unterdrückter Fehler). | `failedThisSession` **und** `visibleError`/`finalError` zusammen mit `lastStopOutcome` im Worker **direkt nach `controller.stop()`** zu einem Snapshot bündeln und diesen an `onStopped` übergeben; `onDictationStopped` darf den Controller nicht mehr neu lesen. |
-| **P2** | `DictationController.kt:100-101` (`currentHypGapMs`) | **`hyp_gap_ms` kann mit injizierter Uhr negativ/absurd werden.** `(clock() − lastHypAt)/1e6` mit `clock=System.nanoTime` ist im Betrieb monoton (ok), aber ein Test-/Injektions-`clock`, der rückwärts läuft, liefert negative Werte in den 🐞-Export (Regel: Diagnose soll robust sein). `nanoTime` ist außerdem relativ, nicht sitzungsgeeignet. | Wert clampen (`max(0, …)`) oder auf `SystemClock.elapsedRealtime` im Produktions-Default umstellen; Negativwerte im Formatter als `0`/`-` ausweisen. |
-| **offen** | `DictationController.kt:157-160, 232-235` (`isEditorSyncTimeout` → `abort(); throw e`) | **Editor-Sync-Timeoute rethrowt `IllegalStateException`** nach oben — ich konnte **nicht belegen**, dass `DictationCoordinator.consume/flush` diesen Fall fängt (`flush` fängt sichtbar nur `OutOfMemoryError`). Falls ungefangen ⇒ Coroutine-/App-Crash statt einer R-2-sticky-Meldung (das wäre dann P1). | Im Coordinator einen expliziten `catch (e: IllegalStateException)` um `controller.feedAudio/stop` ergänzen und `lastError`/`visibleError` setzen (oder den Timeout als StopOutcome statt Exception führen). |
+| **P2** | `VoiceKeyboardService.kt:652-655` (`onDictationStopped`) | **`cleanSuccess` reads a live state, not a snapshot.** `lastStopOutcome` is set in the worker **atomically** before `onStopped` (`DictationCoordinator.kt:335`), but `onDictationStopped` additionally reads `c?.failedThisSession` (line 653) and `c?.visibleError` (line 658) — **mutable fields that the next `start()` resets** (`failedThisSession=false` in `DictationController.kt:123`). Sequence "quick release → immediate restart": between A-`controller.stop()` (IDLE, worker) and A-`onStopped` (Main), `start()` B runs and nulls `failedThisSession` → A-`cleanSuccess` is judged with B's state (false checkmark or suppressed error). | Bundle `failedThisSession` **and** `visibleError`/`finalError` together with `lastStopOutcome` in the worker **directly after `controller.stop()`** into a snapshot and pass that to `onStopped`; `onDictationStopped` must not re-read the controller. |
+| **P2** | `DictationController.kt:100-101` (`currentHypGapMs`) | **`hyp_gap_ms` can become negative/absurd with an injected clock.** `(clock() − lastHypAt)/1e6` with `clock=System.nanoTime` is monotonic in operation (ok), but a test/injection `clock` running backwards yields negative values in the 🐞 export (rule: diagnostics should be robust). `nanoTime` is also relative, not session-suitable. | Clamp the value (`max(0, …)`) or switch to `SystemClock.elapsedRealtime` as the production default; report negative values in the formatter as `0`/`-`. |
+| **open** | `DictationController.kt:157-160, 232-235` (`isEditorSyncTimeout` → `abort(); throw e`) | **Editor sync timeouts rethrow `IllegalStateException`** upward — I could **not prove** that `DictationCoordinator.consume/flush` catches this case (`flush` visibly catches only `OutOfMemoryError`). If uncaught ⇒ coroutine/app crash instead of an R-2 sticky message (that would then be P1). | Add an explicit `catch (e: IllegalStateException)` in the coordinator around `controller.feedAudio/stop` and set `lastError`/`visibleError` (or carry the timeout as a StopOutcome instead of an exception). |
 
 ---
 
-## Antworten
+## Answers
 
-1. **Folgenloser echter Fehler?** FeedAudio-`fail()` → `failedThisSession=true` → `stop()` liefert `NoFinal(lastErrorCode)` → `onDictationStopped` zeigt `mapVisibleError(code)` sticky (Z.655-658). Finale-`fail()` → `FinalRan(finalError)` → ebenso. Stop-auf-IDLE mit `failedThisSession` → `NoFinal`. Watchdog → `Error(…too_long)` (Z.414). Abort (CANCEL/Editorwechsel) ist **kein** Fehler (kein sticky nötig). Einzig nicht belegter Pfad: der Editor-Timeoute-`throw e` (s. „offen").
+1. **Genuine error without consequence?** FeedAudio `fail()` → `failedThisSession=true` → `stop()` returns `NoFinal(lastErrorCode)` → `onDictationStopped` shows `mapVisibleError(code)` sticky (lines 655-658). Finale `fail()` → `FinalRan(finalError)` → likewise. Stop-on-IDLE with `failedThisSession` → `NoFinal`. Watchdog → `Error(…too_long)` (line 414). Abort (CANCEL/editor switch) is **not** an error (no sticky needed). The only unproven path: the editor-timeout `throw e` (see "open").
 
-2. **`lastStopOutcome`-Rennen:** Innerhalb **einer** Sitzung kein Rennen (`lastStopOutcome` wird im selben Coroutine-Happen-before vor `onStopped` gesetzt). Das Rennen liegt **quer**: `onDictationStopped` liest `failedThisSession`/`visibleError` **live** und nicht als Teil des Outcomes → schnelles Loslassen+Neustart verfälscht die Bewertung der Vor-Sitzung (Befund P2).
+2. **`lastStopOutcome` race:** Within **one** session there is no race (`lastStopOutcome` is set in the same coroutine happens-before as `onStopped`). The race is **across sessions**: `onDictationStopped` reads `failedThisSession`/`visibleError` **live** and not as part of the outcome → quick release+restart falsifies the assessment of the previous session (finding P2).
 
-3. **`failedThisSession` erst im nächsten `start()`:** Der *neue* Erfolg wird dadurch **nicht** verdeckt (start() nullt es, Z.123) — das Problem ist die **umgekehrte** Richtung (siehe 2): der *alte* `onStopped` liest den bereits genullten Wert. Kern ist dieselbe unsynchronisierte Live-Lesung.
+3. **`failedThisSession` only in the next `start()`:** The *new* success is **not** obscured by that (start() nulls it, line 123) — the problem is the **opposite** direction (see 2): the *old* `onStopped` reads the already-nulled value. The core is the same unsynchronized live read.
 
-4. **`droppedBlocks`/`hyp_count`:** `dropped` zählt jeden `feedAudio` mit `state != RECORDING` (Z.144) — also auch nach `stop()`/`abort()` gedraines Reste; das ist **korrekt** (es sind verworfene Blöcke). `hyp_count` zählt via `noteHypothesis()` auch das **Finale** (Z.284/236) und nur bei echter `transcribe`-Rückkehr — korrekt. `hyp_gap_ms` s. Befund.
+4. **`droppedBlocks`/`hyp_count`:** `dropped` counts every `feedAudio` with `state != RECORDING` (line 144) — i.e. also remnants drained after `stop()`/`abort()`; that is **correct** (these are discarded blocks). `hyp_count` also counts the **finale** via `noteHypothesis()` (lines 284/236) and only on a genuine `transcribe` return — correct. `hyp_gap_ms` see finding.
 
-5. **Diagnose-Export:** Der Collector liest die 8 Passthroughs (`ctlState/ctlFailed/dropped/hypCount/hypGapMs/audioSeconds/lastStartMs/starting`, `DictationCoordinator.kt:364-380`); `DebugInfoFormatter` emittiert alle als Zahlen/`0`/`1`/Kurzcode (kein Inhalt/Pfad, Regel 9 ✓). Drift-Check `check(lines.size == KEYS.size + 1)` (Z.137, KEYS=24 ⇒ 25 Zeilen) macht ein vergessenes/eines zusätzliches Feld **rot**.
+5. **Diagnostics export:** The collector reads the 8 pass-throughs (`ctlState/ctlFailed/dropped/hypCount/hypGapMs/audioSeconds/lastStartMs/starting`, `DictationCoordinator.kt:364-380`); `DebugInfoFormatter` emits all of them as numbers/`0`/`1`/short code (no content/path, rule 9 ✓). Drift check `check(lines.size == KEYS.size + 1)` (line 137, KEYS=24 ⇒ 25 lines) turns a forgotten field or an extra field **red**.
 
-6. **Regeltreue:** `StatusEvent.Error/Starting/Hint` → nur gemappte Ressourcen-Strings; `strings.xml` unverändert (13 `dictation_*`); keine Autokorrektur/Netzwerk/Inhalte in Nutzertexten. Kein Verstoß.
+6. **Rule compliance:** `StatusEvent.Error/Starting/Hint` → only mapped resource strings; `strings.xml` unchanged (13 `dictation_*`); no autocorrection/network/content in user-facing texts. No violation.
 
 ---
 
-## SUMME
+## TOTAL
 
-**P0 = 0 · P1 = 0 · P2 = 2** (Live-`failedThisSession`-Lesung in `onDictationStopped`; `hyp_gap_ms` ohne Clamp bei injizierter Uhr) · **offen = 1** (Fang-Garantie des Editor-Timeoute-`throw e` im Coordinator).
+**P0 = 0 · P1 = 0 · P2 = 2** (live `failedThisSession` read in `onDictationStopped`; `hyp_gap_ms` without clamp with an injected clock) · **open = 1** (catch guarantee for the editor-timeout `throw e` in the coordinator).
 
-**Nicht belegbar:** der `IllegalStateException`-Fang im Coordinator (kein vollständiges Lesen der `consume/flush`-Catch-Kette), echtes Renn-Verhalten ohne Gerät (nur Codeprüfung), `hyp_gap_ms` unter injizierter Rückwärts-Uhr (kein Testlauf).
+**Not provable:** the `IllegalStateException` catch in the coordinator (no complete reading of the `consume/flush` catch chain), genuine race behavior without a device (code inspection only), `hyp_gap_ms` under an injected backwards clock (no test run).

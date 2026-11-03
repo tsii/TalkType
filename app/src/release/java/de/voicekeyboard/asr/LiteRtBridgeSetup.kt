@@ -1,13 +1,13 @@
 package de.voicekeyboard.asr
 
 /**
- * V13 Release: [LiteRtBridge]-Provider bleibt null — dokumentierter Grund:
- * Variante B (LITERT_CPU) erfüllt das Qualitäts-Gate nicht
- * (docs/VARIANT_B_QUALITY.md: 50,2 % Wort-Identität, 33,2 % CED,
- * Sprach-Kippen Deutsch→Englisch bei 400 ms führender Stille).
- * EngineFactory fällt daher dokumentiert auf ParakeetAsrEngine (ONNX_CPU)
- * zurück; ModelVariant.LITERT_CPU bleibt als Typ erhalten.
+ * V13 release: the [LiteRtBridge] provider stays null — documented reason:
+ * variant B (LITERT_CPU) does not pass the quality gate
+ * (docs/VARIANT_B_QUALITY.md: 50.2 % word identity, 33.2 % CED,
+ * language tipping German→English at 400 ms of leading silence).
+ * Therefore EngineFactory falls back, as documented, to ParakeetAsrEngine (ONNX_CPU);
+ * ModelVariant.LITERT_CPU remains as a type.
  */
 fun installLiteRtBridge() {
-    // Bewusst NICHTS: Provider bleibt null (Release hat keine LiteRT-Klassen).
+    // Deliberately NOTHING: the provider stays null (the release has no LiteRT classes).
 }

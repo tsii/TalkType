@@ -1,673 +1,674 @@
-# Contingency-Plan (Betriebs-Protokoll für den Orchestrator)
+# Contingency plan (operating protocol for the orchestrator)
 
-**Stand:** 2026-10-27 · **Grundlage:** 11 protokollierte Incidents (I1–I11) +
-verifizierte Harness-Fakten (unten, mit Fundstelle). **Zweck:** Stillstand
-vermeiden, Arbeit nicht verlieren, Verifikation nicht aufschieben.
-**Geltung:** verbindlich für jeden Orchestrator-Lauf in diesem Projekt.
+**Status:** 2026-10-27 · **Basis:** 11 logged incidents (I1–I11) + verified harness
+facts (below, with sources). **Purpose:** avoid standstill, don't lose work, don't
+postpone verification.
+**Scope:** binding for every orchestrator run in this project.
 
-## 0. Verifizierte Harness-Fakten (Hebel, keine Vermutungen)
+## 0. Verified harness facts (levers, not guesses)
 
-| Fakt | Wert / Verhalten | Fundstelle |
+| Fact | Value / behavior | Source |
 |---|---|---|
-| Tool-Watchdog | **20 min** pro Tool-Call, via `PI_WEB_TOOL_TIMEOUT_MS` änderbar (ms, `0` = aus) | `pi-web-ui/dist/server/client-state.js` `DEFAULT_TOOL_WATCHDOG_TIMEOUT_MS` |
-| Watchdog-Aufschub durch bash | `bash` mit `args.timeout` (Sekunden) setzt den Watchdog auf `timeout + 5 s`, **wenn** das größer ist als die Basis | `client-state.js` `effectiveToolWatchdogMs()` |
-| Hard-Abort | Wenn `session.abort()` kein `agent_end` liefert: nach **15 s** `forceResetConversation` → Runtime weg, Konversation von Platte neu | `agent-service.js` `HARD_ABORT_TIMEOUT_MS = 15_000`, `interruptRun()` |
-| Dangling-Tool-Reparatur | Force-Reset verwirft das Tool-Result im RAM → `toolCall` ohne `toolResult` → synthetischer Text wird angehängt | `pi-web-ui/dist/server/dangling-tools.js` `DANGLING_TOOL_RESULT_TEXT` |
-| Subagent-Limit | **16** gleichzeitig *in der Konversations-Map* lebende Subagenten (`isSubagent`); `stop` **abortet nur**, es **entfernt nicht** → Slot bleibt belegt | `agent-service.js` `MAX_SUBAGENTS = 16`; `stopSubagent` prüft nur `isStreaming/isIdle` |
-| Slot-Freigabe | Nur **Dismiss/Entfernen** der Subagent-Konversation (UI/`collectSubagentDescendantIds`) gibt den Slot frei | `subagents.js` Modulkopf „完成即移出 (= dismiss)" |
-| Persistente Subagenten | `persist=true` erzeugt eine **normale** Konversation, eigener Deckel **8** pro Projekt | `agent-service.js` `MAX_OPEN_CONVERSATIONS = 8` |
-| Kompaktierungs-Checkpoint | Extension schreibt `state/compaction/<sha256(sessionId)[:24]>.latest.json` mit Snapshots von `HANDOFF.md`, `reminders/ALWAYS.md`, `state/progress.md`, `reports/NEXT.md`, `reports/PROGRESS.md`, `state/project.json` — **nur wenn `AGENTS.md` ODER `HANDOFF.md` im Projekt-Root existiert** | `~/.pi/agent/compaction-handoff.mjs` (`FILES`, früher `return`) |
-| Ist-Zustand Projekt-Root | **kein** `AGENTS.md`, **kein** `HANDOFF.md`, **kein** `state/`, `reports/`, `reminders/` → Checkpoint wurde nie geschrieben | `ls` in `<workdir>` |
-| `schedule_task` | Cron oder Delay (min. **60 s**), one-shot/recurring, liefert den Prompt in **dieselbe** Konversation zurück, rebindet nach Kompaktierung | Tool-Schema |
-| `wait_all` | max. **60 s** pro Aufruf (kein Dauerblockieren) | Tool-Schema |
-| `conversation_read` | `status` = letzter Tool-Call + letzte Assistant-Text + offene Frage; `files` = erzeugte/geänderte Dateien | Tool-Beschreibung |
-| `claim_files` | advisory, first-wins, TTL 30 min, Konflikte werden gemeldet, nie blockierend | Tool-Beschreibung |
+| Tool watchdog | **20 min** per tool call, changeable via `PI_WEB_TOOL_TIMEOUT_MS` (ms, `0` = off) | `pi-web-ui/dist/server/client-state.js` `DEFAULT_TOOL_WATCHDOG_TIMEOUT_MS` |
+| Watchdog deferral via bash | `bash` with `args.timeout` (seconds) sets the watchdog to `timeout + 5 s`, **if** that is larger than the base | `client-state.js` `effectiveToolWatchdogMs()` |
+| Hard abort | If `session.abort()` yields no `agent_end`: after **15 s** `forceResetConversation` → runtime gone, conversation rebuilt from disk | `agent-service.js` `HARD_ABORT_TIMEOUT_MS = 15_000`, `interruptRun()` |
+| Dangling tool repair | Force reset discards the tool result in RAM → `toolCall` without `toolResult` → synthetic text gets appended | `pi-web-ui/dist/server/dangling-tools.js` `DANGLING_TOOL_RESULT_TEXT` |
+| Subagent limit | **16** simultaneously *living* subagents in the conversation map (`isSubagent`); `stop` **only aborts**, it does **not remove** → the slot stays occupied | `agent-service.js` `MAX_SUBAGENTS = 16`; `stopSubagent` only checks `isStreaming/isIdle` |
+| Slot release | Only **dismiss/remove** of the subagent conversation (UI/`collectSubagentDescendantIds`) frees the slot | `subagents.js` module header "完成即移出 (= dismiss)" |
+| Persistent subagents | `persist=true` creates a **normal** conversation, its own cap of **8** per project | `agent-service.js` `MAX_OPEN_CONVERSATIONS = 8` |
+| Compaction checkpoint | Extension writes `state/compaction/<sha256(sessionId)[:24]>.latest.json` with snapshots of `HANDOFF.md`, `reminders/ALWAYS.md`, `state/progress.md`, `reports/NEXT.md`, `reports/PROGRESS.md`, `state/project.json` — **only if `AGENTS.md` OR `HANDOFF.md` exists in the project root** | `~/.pi/agent/compaction-handoff.mjs` (`FILES`, formerly `return`) |
+| Actual state of the project root | **no** `AGENTS.md`, **no** `HANDOFF.md`, **no** `state/`, `reports/`, `reminders/` → the checkpoint was never written | `ls` in `<workdir>` |
+| `schedule_task` | cron or delay (min. **60 s**), one-shot/recurring, delivers the prompt back into the **same** conversation, rebinds after compaction | tool schema |
+| `wait_all` | max. **60 s** per call (no permanent blocking) | tool schema |
+| `conversation_read` | `status` = last tool call + last assistant text + open question; `files` = files created/modified | tool description |
+| `claim_files` | advisory, first-wins, TTL 30 min, conflicts are reported, never blocking | tool description |
 
-> Nicht verifiziert (**Vermutung**): ob das bash-Tool einen eigenen Default-Timeout
-> unterhalb des Watchdogs hat. Für den Plan irrelevant, weil `sleep` im Turn
-> ohnehin verboten ist (§2.5).
+> Not verified (**guess**): whether the bash tool has its own default timeout
+> below the watchdog. Irrelevant for the plan, because `sleep` within a turn is
+> forbidden anyway (§2.5).
 
-## 1. (a) RCA-Tabelle
+## 1. (a) RCA table
 
-| # | Incident | Ursache | Auswirkung | Detektion | Dauerhaft-Vermeidung | Restrisiko |
+| # | Incident | Cause | Impact | Detection | Permanent avoidance | Residual risk |
 |---|---|---|---|---|---|---|
-| I1 | GLM-Coder bricht nach 21–25 min mit „This operation was aborted"; 2× derselbe Auftrag, 3 Dateien + 1 Instrumented-Test | Auftrag zu groß (Feature + Instrumented-Verifikation); Modell-/Provider-Stream-Abbruch beendet die Session ohne Zwischenstand | **2× ~22 min + Stufe-2-Stillstand** bis zur Zerlegung; alle Arbeit weg | Kein Teilergebnis auf Platte; `conversation_read`-`status` endet mit Abort-Text | Auftrag ≤ 4 Dateien / ≤ 2 Builds / ≤ 10 min (§2.1); Instrumented-Test **nie** im Coder-Brief; Zwischenstand nach jedem Datei-Block auf Platte | Provider-Abbruch kann jeden Lauf treffen |
-| I2 | Großauftrag 15 Layout-JSONs + Test, ~20 min, Abbruch ohne Ausgabe | Zu großer Batch (15 Dateien), ein einziger Verifikationslauf am Ende | ~20 min verloren; danach 4 parallele Kleinaufträge 4/4 grün | Keine Ausgabe, keine Dateien | Batch-Grenze 4 Dateien; gleichartige Dateien auf **parallele** Kurzläufe verteilen (§2.3) | 4 parallele Läufe → Slot-/Ressourcendruck |
-| I3 | „Subagent limit reached (16 live)"; done/error-Slots werden nicht frei; `stop` hilft nicht; 5 min Warten/Kompaktierung helfen nicht; `spawn` + `delegate_task` blockiert | Limit zählt **lebende Konversationen**, nicht laufende; `stop` entfernt die Konversation nicht | **15–20 min Delegation unmöglich** | Fehlermeldung beim Spawn | Slot-Budget (§2.4): max. 6 gleichzeitig, Rest per `steer` recyceln; nach Übernahme **Dismiss** im UI veranlassen; `persist=false` bevorzugen | Ohne UI-Dismiss bleibt der Slot belegt; Recycling ist der Notausgang |
-| I4 | Force-Termination-Meldungen bei 2× `steer` im selben Block, 1× `stop`, 1× `sleep 240` („Command aborted") | Watchdog/Hard-Abort + Dangling-Reparatur; `sleep` blockiert einen Turn im Tool-Call | Unklarheit „Arbeit verloren?" → teils Neu-Delegation, teils Wartezeit | Meldung im Transkript (`dangling-tools.js`) | Entscheidungsbaum §2.6; **nie** `sleep`; `stop`/`steer` einzeln absetzen | Force-Reset kann jeden langen Tool-Call treffen |
-| I5 | Session `sa-0fe79…`/`sa-de264…` 30 min „running / (no output yet)", obwohl Edits seit 22:00 auf Platte lagen | `get_result` zeigt Output nur, wenn das Modell Text produziert; Datei-Edits laufen ohne Stream-Text | ~30 min Scheinwartezeit; „hung vs. arbeitend" unklar | `git status`/mtime-Delta vs. `conversation_read(status)` | Liveness wird **am Dateisystem** gemessen, nicht am Output (§2.5.4) | Reine Denkphase ohne Edits bleibt unsichtbar |
-| I6 | Kein Wecker; blockierende `sleep` 300–580 s; Turn endet, Job läuft weiter, niemand schaut nach → „Term verpasst", Stillstand bis Nutzer fragt | Kein Wake-Up-Mechanismus genutzt (`schedule_task` nie verwendet) | **Häufigster Stillstand**: geschätzt 6–10 Fälle × 15–30 min = **2–4 h** | Turn-Ende ohne geplanten Wake-Up ist der Fehler selbst | §2.5: `schedule_task` statt `sleep`, Pflicht-Wake-Up vor jedem Turn-Ende mit laufendem Job | Wake-Up feuert erst ab 60 s; kein „sofort"-Signal |
-| I7 | „Nur schreiben, kein gradle"; Kompilierung erst ~30 min später → rot (`ABSTENT` statt `ABSENT`) | Write-only-Auftrag ohne Sofort-Verifikation; Verifikation ohne Termin | ~30 min + Stillstand bis Mikro-Fix | Erst der späte Build | **Kopplungsregel**: Schreiben ohne Verifikation ist unzulässig; wenn Gradle-Lock belegt: Verifikation als `schedule_task` in ≤ 5 min terminieren (§2.2) | Fremd-Build kann Verifikation weiter verzögern |
-| I8 | Zwei Agenten im selben Verzeichnis, Konflikte ad hoc; `claim_files` nie benutzt | Kein Datei-/Ressourcen-Protokoll; Gradle ist projektweit | Ad-hoc-Konflikte, Debug-Zeit, „kein gradle"-Improvisation (→ I7) | Harness-Hinweis „1 other run in same project directory" | §2.3: `claim_files` vor jedem Multi-Datei-Auftrag; **Gradle = globales Mutex** mit Ankündigung im Turn | Advisory: Claims blocken nichts |
-| I9 | Emulator `-no-audio` → Diktat nicht E2E prüfbar; nach jedem Reinstall IME manuell setzen; Gboard deaktivieren; `adb reboot` nötig | Setup-Wissen nicht als Checkliste fixiert | Je 5–15 min, wiederkehrend | Setup-Schritt fehlt in den Notizen | Checkliste §3(iii), einmalig abarbeiten und Ergebnis in `state/progress.md` | Emulator-Instabilität bleibt |
-| I10 | Nach Kompaktierung: „HANDOFF.md fehlt / state/progress.md fehlt / reports/NEXT.md fehlt / File-Checkpoint nicht vorhanden" | Checkpoint-Extension **opt-in** über `AGENTS.md`/`HANDOFF.md` im Projekt-Root — beides fehlte | Kontextverlust drohte; nur `docs/PROJECT_STATE.md` rettete | Systemmeldung bei Kompaktierung | §2.7: `HANDOFF.md` + `state/progress.md` + `reports/NEXT.md` **im Projekt-Root** anlegen und bei jedem Meilenstein fortschreiben | Extension schreibt nur Datei-Snapshots, keine Semantik |
-| I11 | Referenzdecoder-Bug (PredNet-State bei Blank) → 3/4 Golden-Texte falsch, `min_audio_s`-Messrunde wiederholt | Referenz nicht gegen unabhängige Quelle (istupakov/onnx-asr, NeMo) verifiziert, bevor darauf aufgebaut wurde | Ganze Messrunde + Reviews + 2 Doku-Revisionen | Widerspruch zwischen Doku-Aussagen (2,8-s-Fenster „schlechter") und Reproduktion | §2.8: jede Referenz-Implementierung gegen Fremdimplementierung + 2 Gegenproben validieren, **bevor** abhängige Messungen starten | Externe Referenz kann selbst falsch sein |
+| I1 | GLM coder aborts after 21–25 min with "This operation was aborted"; 2× the same assignment, 3 files + 1 instrumented test | assignment too large (feature + instrumented verification); model/provider stream abort ends the session without intermediate state | **2× ~22 min + stage-2 standstill** until decomposition; all work lost | No partial result on disk; `conversation_read`-`status` ends with abort text | assignment ≤ 4 files / ≤ 2 builds / ≤ 10 min (§2.1); instrumented test **never** in the coder brief; intermediate state on disk after every file block | provider aborts can hit any run |
+| I2 | large assignment 15 layout JSONs + test, ~20 min, abort without output | batch too large (15 files), a single verification run at the end | ~20 min lost; afterwards 4 parallel small assignments 4/4 green | no output, no files | batch limit 4 files; distribute similar files across **parallel** short runs (§2.3) | 4 parallel runs → slot/resource pressure |
+| I3 | "Subagent limit reached (16 live)"; done/error slots are not freed; `stop` does not help; 5 min waiting/compaction do not help; `spawn` + `delegate_task` blocked | the limit counts **living conversations**, not running ones; `stop` does not remove the conversation | **15–20 min delegation impossible** | error message on spawn | slot budget (§2.4): max. 6 simultaneously, recycle the rest via `steer`; after takeover request **dismiss** in the UI; prefer `persist=false` | without UI dismiss the slot stays occupied; recycling is the emergency exit |
+| I4 | force-termination messages with 2× `steer` in the same block, 1× `stop`, 1× `sleep 240` ("Command aborted") | watchdog/hard abort + dangling repair; `sleep` blocks a turn inside a tool call | uncertainty "work lost?" → partly re-delegation, partly waiting time | message in the transcript (`dangling-tools.js`) | decision tree §2.6; **never** `sleep`; issue `stop`/`steer` individually | force reset can hit any long tool call |
+| I5 | session `sa-0fe79…`/`sa-de264…` 30 min "running / (no output yet)" although edits had been on disk since 22:00 | `get_result` shows output only when the model produces text; file edits happen without stream text | ~30 min pseudo-waiting; "hung vs. working" unclear | `git status`/mtime delta vs. `conversation_read(status)` | liveness is measured **on the file system**, not on output (§2.5.4) | pure thinking phases without edits remain invisible |
+| I6 | no alarm; blocking `sleep` 300–580 s; turn ends, job keeps running, nobody checks → "missed the deadline", standstill until the user asks | no wake-up mechanism used (`schedule_task` never used) | **most frequent standstill**: estimated 6–10 cases × 15–30 min = **2–4 h** | turn end without a planned wake-up is the error itself | §2.5: `schedule_task` instead of `sleep`, mandatory wake-up before every turn end with a running job | wake-ups fire only from 60 s; no "immediately" signal |
+| I7 | "just write, no gradle"; compilation only ~30 min later → red (`ABSTENT` instead of `ABSENT`) | write-only assignment without immediate verification; verification without a deadline | ~30 min + standstill until the micro fix | only the late build | **coupling rule**: writing without verification is inadmissible; if the Gradle lock is occupied: schedule the verification as a `schedule_task` within ≤ 5 min (§2.2) | third-party builds can delay verification further |
+| I8 | two agents in the same directory, ad-hoc conflicts; `claim_files` never used | no file/resource protocol; Gradle is project-wide | ad-hoc conflicts, debugging time, "no gradle" improvisation (→ I7) | harness hint "1 other run in same project directory" | §2.3: `claim_files` before every multi-file assignment; **Gradle = global mutex** with an announcement in the turn | advisory: claims block nothing |
+| I9 | emulator `-no-audio` → dictation not E2E-checkable; after every reinstall, set IME manually; disable Gboard; `adb reboot` needed | setup knowledge not pinned as a checklist | 5–15 min each, recurring | setup step missing from the notes | checklist §3(iii), work through once and record the result in `state/progress.md` | emulator instability remains |
+| I10 | after compaction: "HANDOFF.md missing / state/progress.md missing / reports/NEXT.md missing / file checkpoint not present" | checkpoint extension is **opt-in** via `AGENTS.md`/`HANDOFF.md` in the project root — both were missing | context loss loomed; only `docs/PROJECT_STATE.md` saved it | system message at compaction | §2.7: create `HANDOFF.md` + `state/progress.md` + `reports/NEXT.md` **in the project root** and keep updating them at every milestone | the extension writes only file snapshots, no semantics |
+| I11 | reference decoder bug (PredNet state on blank) → 3/4 golden texts wrong, `min_audio_s` measurement round repeated | reference not validated against an independent source (istupakov/onnx-asr, NeMo) before building on it | a whole measurement round + reviews + 2 documentation revisions | contradiction between documentation claims (2.8-s window "worse") and reproduction | §2.8: validate every reference implementation against a third-party implementation + 2 counter-checks, **before** starting dependent measurements | an external reference can itself be wrong |
 
-**Zeitbilanz der Incidents (Schätzung, aus den Angaben):** I6 2–4 h · I1 ≈ 45 min ·
-I2 ≈ 20 min · I7 ≈ 35 min · I5 ≈ 30 min · I3 ≈ 20 min · I9 ≈ 30–60 min gesamt ·
-I4 ≈ 15 min · I8 ≈ 10 min · I10 ≈ 5 min (Glück) · I11 ≈ 40 min.
-→ **Der größte Hebel ist nicht der Watchdog, sondern der fehlende Wecker (I6).**
+**Time balance of the incidents (estimate, from the reports):** I6 2–4 h · I1 ≈ 45 min ·
+I2 ≈ 20 min · I7 ≈ 35 min · I5 ≈ 30 min · I3 ≈ 20 min · I9 ≈ 30–60 min total ·
+I4 ≈ 15 min · I8 ≈ 10 min · I10 ≈ 5 min (luck) · I11 ≈ 40 min.
+→ **The biggest lever is not the watchdog but the missing alarm (I6).**
 
-## 2. (b) Verbindliches Betriebs-Protokoll
+## 2. (b) Binding operating protocol
 
-### 2.1 Auftragsgröße (harte Obergrenzen)
+### 2.1 Assignment size (hard upper limits)
 
-| Größe | Grenze | Begründung |
+| Size | Limit | Rationale |
 |---|---|---|
-| Dateien pro Auftrag | **≤ 4** (3 Produktion + 1 Test), gleichartige Massendateien zählen als **1** *wenn* generiert (z. B. 15 Layout-JSONs per Skript) — sonst ≤ 4 | I1, I2 |
-| Geänderte Zeilen | ≤ ~150 | I1 |
-| Build-/Verifikationsläufe | **≤ 2** (1× Ziel-Test, max. 1× Retry) | I1, I7 |
-| Erwartete Arbeitszeit | ≤ **8–10 min**; Abbruchmarke 15 min | 25 % Puffer zum 20-min-Watchdog |
-| Verifikationstiefe | im Auftrag: `./gradlew :app:testDebugUnitTest --tests "<Klasse>"` (oder `test`), **nie** `connectedDebugAndroidTest` | I1 |
-| Emulator/instrumented | eigener Auftrag, nur Instrumented-Test, kein Feature-Code | I1 |
+| Files per assignment | **≤ 4** (3 production + 1 test); similar mass files count as **1** *if* generated (e.g. 15 layout JSONs via script) — otherwise ≤ 4 | I1, I2 |
+| Changed lines | ≤ ~150 | I1 |
+| Build/verification runs | **≤ 2** (1× target test, max. 1× retry) | I1, I7 |
+| Expected work time | ≤ **8–10 min**; abort mark 15 min | 25% buffer against the 20-min watchdog |
+| Verification depth | in the assignment: `./gradlew :app:testDebugUnitTest --tests "<class>"` (or `test`), **never** `connectedDebugAndroidTest` | I1 |
+| Emulator/instrumented | separate assignment, instrumented test only, no feature code | I1 |
 
-### 2.2 Verifikationspflicht (Kopplung Schreiben ↔ Prüfen)
+### 2.2 Verification duty (coupling writing ↔ checking)
 
-1. **Kein Write-only-Auftrag.** Wer schreibt, verifiziert — oder die Verifikation ist
-   als `schedule_task` in ≤ 5 min terminiert (I7).
-2. Nach jedem akzeptierten Auftrag prüft der **Orchestrator** selbst mindestens:
-   `git status --porcelain -- <Pfade>` (Soll/Ist) **und** ein Build/Test-Kommando.
-   „Coder sagt grün" ist kein Nachweis (I7).
-3. Ist Gradle durch einen Fremdlauf belegt: Testkommando **einmal** anfordern, bei
-   Blockade claimen und in ≤ 5 min nachholen; solange gilt der Auftrag als
-   **nicht abgenommen** (Statuszeile in `state/progress.md`: `UNVERIFIZIERT`).
+1. **No write-only assignment.** Whoever writes verifies — or the verification is
+   scheduled as a `schedule_task` within ≤ 5 min (I7).
+2. After every accepted assignment, the **orchestrator** itself checks at least:
+   `git status --porcelain -- <paths>` (target vs. actual) **and** a build/test command.
+   "Coder says green" is not proof (I7).
+3. If Gradle is occupied by a third-party run: request the test command **once**; if
+   blocked, claim it and follow up within ≤ 5 min; until then the assignment counts as
+   **not accepted** (status row in `state/progress.md`: `UNVERIFIED`).
 
-### 2.3 Parallelität (Datei- und Ressourcen-Scopes)
+### 2.3 Parallelism (file and resource scopes)
 
-| Ressource | Regel |
+| Resource | Rule |
 |---|---|
-| Dateien | Vor jedem Auftrag `claim_files` mit den exakten Pfaden + Grund. Konfliktmeldung ⇒ Auftrag **nicht** starten, Scope teilen. |
-| Gradle | **globales Mutex**: genau ein Gradle-Lauf projektweit. Vor Start im Turn ankündigen (`Gradle-Lock: ich, Dauer ~Xs`), danach freigeben. Kein zweiter Agent parallel. |
-| Emulator/adb | exklusiv; ebenfalls im Turn ankündigen. Kein `assembleDebugAndroidTest` parallel zu `connectedDebugAndroidTest`. |
-| ASR-Modelle | Modellläufe (0,9 GB RSS) nie parallel zum Emulator. |
-| Parallele Subagenten | max. **4** gleichzeitig (nicht 16), max. 2 im selben Paket |
+| Files | Before every assignment, `claim_files` with the exact paths + reason. Conflict report ⇒ do **not** start the assignment, split the scope. |
+| Gradle | **global mutex**: exactly one Gradle run project-wide. Announce in the turn before starting (`Gradle lock: me, duration ~Xs`), release afterwards. No second agent in parallel. |
+| Emulator/adb | exclusive; also announce in the turn. No `assembleDebugAndroidTest` parallel to `connectedDebugAndroidTest`. |
+| ASR models | never run model loads (0.9 GB RSS) in parallel with the emulator. |
+| Parallel subagents | max. **4** simultaneously (not 16), max. 2 in the same package |
 
-### 2.4 Slot-Management (I3)
+### 2.4 Slot management (I3)
 
-1. **Budget:** ≤ **6** lebende Subagenten gleichzeitig (Reserve für Retries).
-2. **Nach Übernahme:** Ergebnis in `state/progress.md` festhalten → Session per
-   **Dismiss im UI** entfernen lassen (dem Nutzer aktiv sagen: „bitte fertige
-   Subagent-Konversationen schließen"), sonst bleibt der Slot belegt (Code schließt
-   Dismiss nur über die Konversations-Entfernung frei, `stop` abortet lediglich).
-3. **Recycling statt Spawn** ist der anerkannte Notausgang: `steer` auf eine
-   `done`-Session mit neuem Brief (funktioniert, I3-Workaround) — aber **eine
-   Carrier-Session pro Modell**, nicht beliebig viele.
-4. Bei „Subagent limit reached": **sofort** (a) laufende `wait_all(60)` bis Ende,
-   (b) Dismiss der fertigen Sessions anfordern, (c) bis dahin Arbeit selbst machen —
-   nicht 5 min warten und nicht kompaktieren (beides nachweislich wirkungslos).
+1. **Budget:** ≤ **6** living subagents simultaneously (reserve for retries).
+2. **After takeover:** record the result in `state/progress.md` → have the session
+   removed via **dismiss in the UI** (actively tell the user: "please close finished
+   subagent conversations"), otherwise the slot stays occupied (code frees the slot
+   only via conversation removal; `stop` merely aborts).
+3. **Recycling instead of spawn** is the accepted emergency exit: `steer` on a
+   `done` session with a new brief (works, I3 workaround) — but **one carrier
+   session per model**, not arbitrarily many.
+4. On "subagent limit reached": **immediately** (a) running `wait_all(60)` until the
+   end, (b) request dismissal of finished sessions, (c) do the work yourself until
+   then — do not wait 5 min and do not compact (both proven ineffective).
 
-### 2.5 Poll-/Wake-Up-Strategie (I5, I6) — ersetzt `sleep` vollständig
+### 2.5 Poll/wake-up strategy (I5, I6) — fully replaces `sleep`
 
-**Grundsatz:** Ein Turn darf **nie** mit `sleep` warten. Warten = Turn beenden +
-`schedule_task`. Der Nutzer sieht dann einen Zwischenstand statt eines Hängers.
+**Principle:** a turn must **never** wait with `sleep`. Waiting = end turn +
+`schedule_task`. The user then sees an intermediate status instead of a hang.
 
-| Situation | Aktion |
+| Situation | Action |
 |---|---|
-| Job gestartet, erwartete Dauer ≤ 2 min | max. **2×** `wait_all(timeoutSeconds=60)` im Turn (≈ 120 s), dann weiter mit 2.5 |
-| Job gestartet, erwartete Dauer > 2 min | Turn beenden mit `schedule_task(schedule="in 4m", prompt="Check: <runId>, kannary §4 prüfen, Ergebnis in state/progress.md")` |
-| Riskanter Job (Gradle/Emulator, > 10 min erwartet) | Wake-Up in **3 min**, danach recurring `*/4 * * * *` bis Abschluss |
-| Laufender Job + Turnende | **Pflicht**-Wake-Up setzen (nie ohne) + Statuszeile an den Nutzer |
-| Wake-Up feuert, Job läuft noch | Liveness-Check (2.5.4), dann neues Wake-Up in 4 min |
-| Job fertig | Wake-Up canceln (`schedule_cancel`), Ergebnis verifizieren, `state/progress.md` fortschreiben |
+| Job started, expected duration ≤ 2 min | max. **2×** `wait_all(timeoutSeconds=60)` in the turn (≈ 120 s), then continue with 2.5 |
+| Job started, expected duration > 2 min | end the turn with `schedule_task(schedule="in 4m", prompt="Check: <runId>, check canaries §4, record result in state/progress.md")` |
+| Risky job (Gradle/emulator, > 10 min expected) | wake-up in **3 min**, afterwards recurring `*/4 * * * *` until completion |
+| Running job + turn end | set a **mandatory** wake-up (never without) + status row to the user |
+| Wake-up fires, job still running | liveness check (2.5.4), then a new wake-up in 4 min |
+| Job done | cancel the wake-up (`schedule_cancel`), verify the result, update `state/progress.md` |
 
-**2.5.4 Liveness wird am Dateisystem gemessen, nicht am Output (I5):**
-`conversation_read(id=<runId>, action=read)` → `status` (letzter Tool-Call/Text) und
-`files` (geänderte Dateien); zusätzlich `git status --porcelain` + `find <scope> -newer <marker>`.
-Kriterium „arbeitet": innerhalb der letzten **6 min** eine neue Datei-mtime **oder**
-ein neuer Tool-Call. Sonst „hängt" → §2.6.
+**2.5.4 Liveness is measured on the file system, not on output (I5):**
+`conversation_read(id=<runId>, action=read)` → `status` (last tool call/text) and
+`files` (modified files); additionally `git status --porcelain` + `find <scope> -newer <marker>`.
+Criterion "working": a new file mtime **or** a new tool call within the last
+**6 min**. Otherwise "hung" → §2.6.
 
-### 2.6 Force-Termination: Entscheidungsbaum (I4)
+### 2.6 Force termination: decision tree (I4)
 
-Sobald die Meldung „force-terminated / synthetic result" erscheint:
+As soon as the message "force-terminated / synthetic result" appears:
 
 ```
-1. NICHTS neu delegieren.
+1. Delegate NOTHING new.
 2. get_result(runId)
-   ├─ "still running"  → Liveness-Check (2.5.4): Datei-Delta?
-   │     ├─ ja  → weiterlaufen lassen, Wake-Up 4 min, Status an Nutzer
-   │     └─ nein→ Kanarienvogel §4 auslösen → stop(runId)
-   └─ "done"/"error"   → Schritt 3
-3. Soll/Ist am Dateisystem: git status --porcelain (nur erwartete Pfade?)
-   + Stichprobe der geforderten Symbole (rg "class X|fun y")
-   ├─ vollständig → Schritt 4
-   └─ unvollständig → steer(runId, "repariere/vervollständige nur X") ; kein neuer spawn
-4. Verifizieren (selbst): ./gradlew … --tests "…"  → grün?
-   ├─ grün → übernehmen, state/progress.md, Wake-Up canceln, Slot dismissen
-   └─ rot  → Mikro-Fix-Auftrag (≤ 2 Dateien, 1 Build)
+   ├─ "still running"  → liveness check (2.5.4): file delta?
+   │     ├─ yes  → let it continue, wake-up 4 min, status to the user
+   │     └─ no   → trigger canary §4 → stop(runId)
+   └─ "done"/"error"   → step 3
+3. Target vs. actual on the file system: git status --porcelain (only expected paths?)
+   + spot-check of the required symbols (rg "class X|fun y")
+   ├─ complete → step 4
+   └─ incomplete → steer(runId, "repair/complete only X"); no new spawn
+4. Verify (yourself): ./gradlew … --tests "…"  → green?
+   ├─ green → take over, state/progress.md, cancel wake-up, dismiss slot
+   └─ red   → micro-fix assignment (≤ 2 files, 1 build)
 ```
-**Merksatz:** Die Meldung ist ein *Transkript*-Defekt, kein Beweis über die Arbeit.
-Ein `stop`/`steer` immer **einzeln** pro Tool-Block absetzen (I4a).
+**Mnemonic:** the message is a *transcript* defect, not proof about the work.
+Issue every `stop`/`steer` **individually** per tool block (I4a).
 
-### 2.7 Vor JEDER Kompaktierung (I10) — Datei-Checkpoint
+### 2.7 Before EVERY compaction (I10) — file checkpoint
 
-Pflichtdateien **im Projekt-Root** (`<workdir>/`), weil die Extension
-sie nur dort findet (`compaction-handoff.mjs`, `FILES`):
+Mandatory files **in the project root** (`<workdir>/`), because the
+extension finds them only there (`compaction-handoff.mjs`, `FILES`):
 
-| Datei | Pflicht | Inhalt (max. ~40 Zeilen) |
+| File | Mandatory | Content (max. ~40 lines) |
 |---|---|---|
-| `HANDOFF.md` | **ja — aktiviert den Checkpoint überhaupt** | aktueller Auftrag, nächster konkreter Schritt, offene Fragen, Fallstricke |
-| `state/progress.md` | ja | Meilenstein-Tabelle mit Status + **Verifikationsstand** (grün/rot/UNVERIFIZIERT) |
-| `reports/NEXT.md` | ja | die nächsten 3–5 Aufgaben in Reihenfolge |
-| `reports/PROGRESS.md` | optional | Ist-Stand je Modul |
-| `state/project.json` | optional | maschinenlesbare Kurzfassung (Phase, aktive Jobs, Locks) |
-| `reminders/ALWAYS.md` | optional | nicht verhandelbare Regeln (z. B. „kein sleep") |
+| `HANDOFF.md` | **yes — activates the checkpoint in the first place** | current assignment, next concrete step, open questions, pitfalls |
+| `state/progress.md` | yes | milestone table with status + **verification state** (green/red/UNVERIFIED) |
+| `reports/NEXT.md` | yes | the next 3–5 tasks in order |
+| `reports/PROGRESS.md` | optional | actual state per module |
+| `state/project.json` | optional | machine-readable short version (phase, active jobs, locks) |
+| `reminders/ALWAYS.md` | optional | non-negotiable rules (e.g. "no sleep") |
 
-Ablauf: `compact_context` **proaktiv** aufrufen (mit `focus`), **nachdem**
-HANDOFF/progress/NEXT geschrieben sind — nicht erst, wenn das System zwangsweise
-kompaktiert. Vor jedem Turn-Ende mit laufendem Job: `HANDOFF.md`-Zeile „laufend:
-<runId> <was> <seit wann>" ergänzen.
+Procedure: call `compact_context` **proactively** (with `focus`), **after**
+HANDOFF/progress/NEXT have been written — not only when the system compacts
+forcibly. Before every turn end with a running job: add a `HANDOFF.md` line
+"running: <runId> <what> <since when>".
 
-### 2.8 Referenz-/Gate-Regel (I11)
+### 2.8 Reference/gate rule (I11)
 
-Bevor eine Messung/Entscheidung auf einer selbstgebauten Referenz basiert:
-(a) fremde Referenzimplementierung benennen (Repo/Funktion), (b) **zwei**
-Gegenproben mit erwartbarem Ergebnis definieren (eine muss fehlschlagen), (c) erst
-dann Messreihen starten. Ergebnis der Validierung in `state/progress.md` notieren.
+Before a measurement/decision rests on a self-built reference:
+(a) name the third-party reference implementation (repo/function), (b) define
+**two** counter-checks with predictable outcome (one must fail), (c) only then
+start measurement series. Record the validation result in `state/progress.md`.
 
-### 2.9 Stillstand aktiv melden (statt schweigen)
+### 2.9 Actively report standstill (instead of silence)
 
-**Regel:** Endet ein Turn, während irgendein Job läuft, ist die Antwort **unvollständig**,
-wenn nicht (1) ein `schedule_task` gesetzt ist **und** (2) der Nutzer eine Statuszeile
-bekommt:
+**Rule:** if a turn ends while any job is running, the answer is **incomplete**
+unless (1) a `schedule_task` is set **and** (2) the user gets a status row:
 
-> **Status:** `<Job>` läuft seit `<mm:ss>`; letzte Dateiänderung `<mm:ss>`; nächste
-> Nachschau `<HH:MM>` (automatisch). Ich melde mich mit Ergebnis oder Abbruch.
+> **Status:** `<job>` running since `<mm:ss>`; last file change `<mm:ss>`; next
+> check `<HH:MM>` (automatic). I will report back with a result or an abort.
 
-Zusätzlich bei jeder Verzögerung > 5 min ohne Fortschritt: Zwischenmeldung mit
-Grund + Optionen (weiter warten / abbrechen / selbst übernehmen).
+Additionally, for every delay > 5 min without progress: an interim report with
+reason + options (keep waiting / abort / take over yourself).
 
 ## 3. (c) Templates
 
-### (i) Coder-Auftragsbrief (kopierfertig)
+### (i) Coder assignment brief (copy-ready)
 
 ```markdown
-AUFTRAG: <ein Satz, ein Deliverable>
-SCOPE (genau diese Dateien, keine anderen):
-  - <pfad/neu.kt>
-  - <pfad/test.kt>
-ZEITBUDGET: 10 min Arbeit / harte Abbruchmarke 15 min. Bei Überschreitung: stoppen und
-  Zwischenstand melden (was fertig ist, was fehlt).
-VERIFIKATION (genau 2 Läufe, in dieser Reihenfolge):
-  1) ./gradlew :app:testDebugUnitTest --tests "*<Klasse>*"
-  2) nur bei Fehlschlag: derselbe Lauf erneut, max. 1×
-  VERBOTEN: connectedDebugAndroidTest, assembleDebugAndroidTest, clean, daemon-Neustart,
-  Emulator, adb, Netzwerk-Downloads.
+ASSIGNMENT: <one sentence, one deliverable>
+SCOPE (exactly these files, no others):
+  - <path/new.kt>
+  - <path/test.kt>
+TIME BUDGET: 10 min of work / hard abort mark 15 min. If exceeded: stop and
+  report an intermediate state (what is done, what is missing).
+VERIFICATION (exactly 2 runs, in this order):
+  1) ./gradlew :app:testDebugUnitTest --tests "*<class>*"
+  2) only on failure: the same run again, max. 1×
+  FORBIDDEN: connectedDebugAndroidTest, assembleDebugAndroidTest, clean, daemon restart,
+  emulator, adb, network downloads.
 MUST DO:
-  - <Regel 1, prüfbar>
-  - <Regel 2, prüfbar>
-  - Nach jeder Datei speichern (Teilergebnis muss auf Platte liegen, auch bei Abbruch).
+  - <rule 1, checkable>
+  - <rule 2, checkable>
+  - Save after every file (a partial result must be on disk, even on abort).
 MUST NOT DO:
-  - Keine anderen Dateien anfassen. Keine Refactorings „nebenbei". Keine neuen Dependencies.
-  - Keine Tests löschen/abschwächen.
-OUTPUT: 5 Zeilen — geänderte Dateien, Testergebnis (exakt), offene Punkte, Risiken.
+  - Touch no other files. No "incidental" refactorings. No new dependencies.
+  - Do not delete/weaken tests.
+OUTPUT: 5 lines — changed files, test result (exact), open points, risks.
 ```
 
-### (ii) `HANDOFF.md` + `state/progress.md` (Vorlagen)
+### (ii) `HANDOFF.md` + `state/progress.md` (templates)
 
 ```markdown
-<!-- HANDOFF.md — max. 40 Zeilen, wird bei Kompaktierung gesnapshottet -->
-## Aktueller Auftrag
-<runId> · <was> · gestartet <HH:MM> · Scope: <pfade>
-## Nächster konkreter Schritt
-1. <Befehl/Datei/Entscheidung — so konkret, dass er ohne Kontext ausführbar ist>
-## Offene Entscheidungen
-- <Frage> → Optionen A/B, Empfehlung, blockiert <was>
-## Fallstricke (aus Incidents)
-- kein sleep im Turn · Gradle = globales Mutex · Instrumented-Test nie im Coder-Brief
+<!-- HANDOFF.md — max. 40 lines, snapshotted at compaction -->
+## Current assignment
+<runId> · <what> · started <HH:MM> · scope: <paths>
+## Next concrete step
+1. <command/file/decision — concrete enough to be executable without context>
+## Open decisions
+- <question> → options A/B, recommendation, blocks <what>
+## Pitfalls (from incidents)
+- no sleep in a turn · Gradle = global mutex · instrumented test never in the coder brief
 ```
 
 ```markdown
 <!-- state/progress.md -->
-| Meilenstein | Status | Verifikation | Beleg |
+| Milestone | Status | Verification | Evidence |
 |---|---|---|---|
-| M2a Commit/LocalAgreement | done | `test` grün 21:12 | commit=abc123 |
-| M2b Editor-Delta | UNVERIFIZIERT | Build blockiert (Gradle-Lock) | — |
-| M3 Layouts 15/15 | done | `LayoutCompletenessTest` grün | 15 Assets |
-## Laufende Jobs
-- <runId> <was> seit <HH:MM>, letzte Dateiänderung <HH:MM>, Wake-Up <HH:MM>
+| M2a commit/LocalAgreement | done | `test` green 21:12 | commit=abc123 |
+| M2b editor delta | UNVERIFIED | build blocked (Gradle lock) | — |
+| M3 layouts 15/15 | done | `LayoutCompletenessTest` green | 15 assets |
+## Running jobs
+- <runId> <what> since <HH:MM>, last file change <HH:MM>, wake-up <HH:MM>
 ```
 
-### (iii) Emulator-Checkliste (I9) — nach jedem Reinstall in dieser Reihenfolge
+### (iii) Emulator checklist (I9) — after every reinstall, in this order
 
 ```bash
-# 1) Emulator (nur für WAV-/UI-Tests; ohne -no-audio ist Diktat-E2E NICHT prüfbar)
+# 1) Emulator (only for WAV/UI tests; without -no-audio, dictation E2E is NOT checkable)
 $ANDROID_HOME/emulator/emulator -avd <avd> -no-snapshot -no-audio &
 adb wait-for-device
-# 2) Fremd-IMEs deaktivieren (sonst klaut Gboard/Google-Voice den Fokus)
-adb shell ime list -s                       # zeigt aktive IMEs
+# 2) Disable third-party IMEs (otherwise Gboard/Google voice steals the focus)
+adb shell ime list -s                       # shows active IMEs
 adb shell ime disable com.google.android.inputmethod.latin
 adb shell ime disable com.google.android.googlequicksearchbox
-# 3) Eigene IME installieren und SETZEN (nach jedem Reinstall nötig!)
+# 3) Install our own IME and SET it (necessary after every reinstall!)
 ./gradlew :app:installDebug
 adb shell ime enable de.voicekeyboard/.ime.VoiceKeyboardService
 adb shell ime set    de.voicekeyboard/.ime.VoiceKeyboardService
-adb shell settings get secure default_input_method     # muss de.voicekeyboard/… sein
-# 4) Nur wenn die IME trotzdem nicht greift (bekannt aus I9): reboot
+adb shell settings get secure default_input_method     # must be de.voicekeyboard/…
+# 4) Only if the IME still does not take effect (known from I9): reboot
 adb reboot && adb wait-for-device
-# 5) Diktat-E2E: nur mit Audio möglich. Ohne -no-audio: Mic-Route prüfen.
-#    Mit -no-audio: ausschließlich WavAudioSource-Injektion, Ergebnis als „nicht E2E" markieren.
+# 5) Dictation E2E: only possible with audio. Without -no-audio: check the mic route.
+#    With -no-audio: WavAudioSource injection only, mark the result as "not E2E".
 ```
 
-Dokumentationspflicht: Ergebnis (welche Schritte nötig waren) in
-`state/progress.md` unter „Gerät".
+Documentation duty: record the result (which steps were necessary) in
+`state/progress.md` under "device".
 
-## 4. (d) Kanarienvögel — 5 harte Abbruchschwellen
+## 4. (d) Canaries — 5 hard abort thresholds
 
-| # | Schwellwert | Messung | Aktion |
+| # | Threshold | Measurement | Action |
 |---|---|---|---|
-| K1 | Tool-Call läuft **> 15 min** ohne Rückkehr (Watchdog bei 20 min) | Zeitstempel des Tool-Blocks vs. jetzt | `stop` + Entscheidungsbaum §2.6 |
-| K2 | **> 6 min** keine Datei-mtime-Änderung im deklarierten Scope **und** kein neuer Tool-Call | `find <scope> -newer <marker>` + `conversation_read(status)` | `steer` mit „Status + nächster Schritt in 60 s", sonst `stop` |
-| K3 | **> 2 Gradle-Läufe** im Auftrag **oder** ein Lauf **> 5 min** | Transkript/Build-Zeit | sofort `stop`, Auftrag halbieren |
-| K4 | **> 60 %** des Zeitbudgets verbraucht und Verifikation **nicht begonnen** | Startzeit vs. jetzt | `stop`, Scope halbieren (I1/I7) |
-| K5 | Datei-Set verlässt die vereinbarte Liste (**Fremdpfade** in `git status`) **oder** > 4 Dateien geändert | `git status --porcelain` | `stop` + `steer` „nur X/Y/Z" (I2/I8) |
+| K1 | tool call running **> 15 min** without returning (watchdog at 20 min) | timestamp of the tool block vs. now | `stop` + decision tree §2.6 |
+| K2 | **> 6 min** no file-mtime change in the declared scope **and** no new tool call | `find <scope> -newer <marker>` + `conversation_read(status)` | `steer` with "status + next step in 60 s", otherwise `stop` |
+| K3 | **> 2 Gradle runs** in the assignment **or** one run **> 5 min** | transcript/build time | immediate `stop`, halve the assignment |
+| K4 | **> 60%** of the time budget consumed and verification **not started** | start time vs. now | `stop`, halve the scope (I1/I7) |
+| K5 | file set leaves the agreed list (**foreign paths** in `git status`) **or** > 4 files changed | `git status --porcelain` | `stop` + `steer` "only X/Y/Z" (I2/I8) |
 
-Zusatz-Guard (kein Kanarienvogel, sondern Vorab-Prüfung): `subagent list` zeigt
-**> 10** lebende Slots → keine neuen Spawns, erst Dismiss/Recycling (§2.4).
+Additional guard (not a canary but a pre-check): `subagent list` shows
+**> 10** living slots → no new spawns, first dismiss/recycle (§2.4).
 
-## 5. Priorisierung: die 3 Maßnahmen mit dem größten Zeitgewinn
+## 5. Prioritization: the 3 measures with the biggest time gain
 
-1. **Wecker statt `sleep` (§2.5 + §2.9) — I6, ~2–4 h.**
-   I6 war laut Protokoll der *häufigste* Stillstandsgrund: Turn endete, Job lief,
-   niemand sah nach, bis der Nutzer fragte. Jeder verpasste Term kostete 15–30 min
-   reine Totzeit. `schedule_task` (Delay ≥ 60 s, recurring) + Pflicht-Statuszeile
-   beseitigt die Klasse vollständig und kostet 10 s pro Turn-Ende.
-2. **Auftragsschnitt + Kopplung Schreiben↔Verifizieren (§2.1/§2.2) — I1, I2, I7, ~1,5 h.**
-   I1 verbrannte denselben 22-min-Auftrag **zweimal** und hielt Stufe 2 an, bis
-   zerlegt wurde; I2 verlor 20 min am 15-Dateien-Batch; I7 kostete 30 min Stillstand
-   plus einen roten Build wegen zwei Tippfehlern. Die 4-Dateien/2-Builds-Regel plus
-   sofortige Verifikation adressiert alle drei mit einer Regel.
-3. **Slot-Recycling + Liveness am Dateisystem (§2.4/§2.5.4) — I3, I5, ~50 min.**
-   I3 blockierte Delegation 15–20 min komplett (und die naheliegenden Gegenmittel
-   `stop`, Warten, Kompaktieren helfen nachweislich nicht, weil der Slot erst beim
-   Dismiss frei wird); I5 erzeugte 30 min Scheinwartezeit auf „(no output yet)",
-   obwohl die Dateien längst geschrieben waren. Beides ist mit einem Blick auf
-   `git status`/`files` in 20 s entscheidbar.
+1. **Alarm instead of `sleep` (§2.5 + §2.9) — I6, ~2–4 h.**
+   Per the log, I6 was the *most frequent* cause of standstill: turn ended, job kept
+   running, nobody checked until the user asked. Every missed deadline cost 15–30 min
+   of pure dead time. `schedule_task` (delay ≥ 60 s, recurring) + a mandatory status
+   row eliminates this class entirely and costs 10 s per turn end.
+2. **Assignment slicing + coupling writing↔verification (§2.1/§2.2) — I1, I2, I7, ~1.5 h.**
+   I1 burned the same 22-min assignment **twice** and held up stage 2 until it was
+   decomposed; I2 lost 20 min on the 15-file batch; I7 cost 30 min of standstill plus
+   a red build because of two typos. The 4-files/2-builds rule plus immediate
+   verification addresses all three with one rule.
+3. **Slot recycling + liveness on the file system (§2.4/§2.5.4) — I3, I5, ~50 min.**
+   I3 blocked delegation for 15–20 min completely (and the obvious countermeasures
+   `stop`, waiting, compaction are provably ineffective, because the slot is freed
+   only on dismiss); I5 generated 30 min of pseudo-waiting on "(no output yet)"
+   although the files had long been written. Both are decidable in 20 s with a look
+   at `git status`/`files`.
 
-Danach (kleiner, aber billig): I10-Checkpoint anlegen (**5 min Einmalaufwand,
-verhindert Kontextverlust**), I8-`claim_files` + Gradle-Mutex, I9-Checkliste,
-I11-Referenz-Gate.
+Afterwards (smaller but cheap): create the I10 checkpoint (**5 min one-time effort,
+prevents context loss**), I8 `claim_files` + Gradle mutex, I9 checklist,
+I11 reference gate.
 
 ---
 
-## 12. Harness-Abbrüche & blockierte Delegierungen (Nachtrag 2026-10-28, Incident I12)
+## 12. Harness aborts & blocked delegations (addendum 2026-10-28, incident I12)
 
-**Fall I12 (belegt):** `subagent(steer)` für M8a um 01:47 UTC lieferte statt eines
-Ergebnisses die Force-Termination-Meldung („tool timeout / hung model stream",
-synthetisches Result). Die Ziel-Session lief weiter, schrieb `KeyboardView.kt` +
-`tools/normalize_symbol_shift.py` (01:47) und alle 15 Layout-Assets (01:48), endete
-dann aber mit einer **Rückfrage** („Ich frage kurz nach:"). Es wurde kein
-`schedule_task` gesetzt; der letzte Wecker war 01:32 abgearbeitet. Ergebnis: 6 h
-Stillstand bis zum manuellen `get_result` um 07:46.
+**Case I12 (documented):** `subagent(steer)` for M8a at 01:47 UTC returned the
+force-termination message instead of a result ("tool timeout / hung model stream",
+synthetic result). The target session kept running, wrote `KeyboardView.kt` +
+`tools/normalize_symbol_shift.py` (01:47) and all 15 layout assets (01:48), but then
+ended with a **question** ("Ich frage kurz nach:" — "let me ask quickly"). No
+`schedule_task` was set; the last alarm had been processed at 01:32. Result: 6 h of
+standstill until the manual `get_result` at 07:46.
 
-**Wurzelursachen (drei, unabhängig):** (1) Force-Reset hat den Turn des Orchestrators
-verworfen — der geplante Nachschau-Schritt existierte nur im RAM; (2) kein Wecker
-gesetzt ⇒ niemand schaut nach; (3) der Auftrag erlaubte eine Rückfrage ⇒ die
-Coder-Session parkte **wartend** (kein Rechenfortschritt, kein Timeout).
+**Root causes (three, independent):** (1) the force reset discarded the orchestrator's
+turn — the planned check step existed only in RAM; (2) no alarm set ⇒ nobody checks;
+(3) the assignment allowed a question ⇒ the coder session parked **waiting** (no
+compute progress, no timeout).
 
-### R12.1 — Wecker ist Teil der Delegierung (Pflicht, keine Ausnahme)
+### R12.1 — The alarm is part of the delegation (mandatory, no exception)
 
-**Kein Delegieren ohne Wecker.** Vor **jedem** `steer`/`delegate_task`/`spawn`:
-(1) `schedule_list` aufrufen (siehe R12.9), (2) `schedule_task` mit
-**Frist ≤ 6 min** setzen, Prompt = „Check <runId>: §4-Kanarien, `git status`-Delta,
-letzter Output; Ergebnis in `state/progress.md`; bei Stillstand §2.6-Entscheidungsbaum".
-Der Wecker muss auch dann auslösen, wenn der **aktuelle Turn stirbt** (er ist ein
-persistenter Scheduler-Job, kein Turn-Konstrukt). Ein Turn, der mit laufendem Job
-endet und **keinen** Wecker hat, ist ein Regelbruch (§2.9).
-Nach Eingang des Ergebnisses: `schedule_cancel`.
-Fristen: Coder-Auftrag **≤ 6 min**, Instrumented/Gradle **10 min** (bei Bedarf
-zweiter Wecker), Recherche **≤ 6 min** — lieber zu früh nachsehen als 6 h warten.
+**No delegation without an alarm.** Before **every** `steer`/`delegate_task`/`spawn`:
+(1) call `schedule_list` (see R12.9), (2) set a `schedule_task` with a **deadline
+≤ 6 min**, prompt = "Check <runId>: §4 canaries, `git status` delta, last output;
+record result in `state/progress.md`; on standstill §2.6 decision tree". The alarm
+must fire even if the **current turn dies** (it is a persistent scheduler job, not a
+turn construct). A turn that ends with a running job and **no** alarm is a rule
+violation (§2.9). After receiving the result: `schedule_cancel`. Deadlines: coder
+assignment **≤ 6 min**, instrumented/Gradle **10 min** (a second alarm if needed),
+research **≤ 6 min** — better to check too early than to wait 6 h.
 
-### R12.2 — Aufträge enden nie offen (Rückfrage-Verbot)
+### R12.2 — Assignments never end open-ended (no questions rule)
 
-Jeder Coder-Brief enthält die Zeile:
-> „Triff bei Unklarheiten selbst eine Entscheidung nach den Regeln in
-> `docs/LAYOUT_REQUIREMENTS.md` / `docs/SETUP_UI_DECISIONS.md`; dokumentiere die
-> Annahme in deiner Schlussmeldung. **Stelle keine Rückfrage** — eine Rückfrage
-> blockiert den Lauf und wird als Abbruch gewertet."
+Every coder brief contains the line:
+> "If anything is unclear, decide yourself according to the rules in
+> `docs/LAYOUT_REQUIREMENTS.md` / `docs/SETUP_UI_DECISIONS.md`; document the
+> assumption in your final report. **Do not ask a question** — a question blocks
+> the run and counts as an abort."
 
-Bekannte Mehrdeutigkeiten werden **vor** dem Delegieren im Brief aufgelöst
-(Pfade, Erwartungslisten, Verbote, Zielzustand). Was der Auftraggeber nicht vorab
-entscheiden kann, wird als „entscheide selbst, melde Abweichung" delegiert.
+Known ambiguities are resolved in the brief **before** delegating (paths,
+expectation lists, prohibitions, target state). Whatever the assigner cannot decide
+upfront is delegated as "decide yourself, report deviations".
 
-### R12.3 — Lücken-Regel (was tut der Coder, wenn der Auftrag nicht reicht?)
+### R12.3 — Gap rule (what does the coder do when the assignment does not suffice?)
 
-Findet der Coder eine Lücke, die den Auftrag sprengt (strukturelle Änderung,
-fehlende Taste, fehlende Datei, widersprüchliche Regel), gilt **nicht** fragen,
-sondern:
-1. die **Teilmenge** fertigstellen, die der Auftrag sicher abdeckt,
-2. die Lücke als eigene Zeile `BLOCKER: <was> — <warum> — <vorgeschlagene Regel>`
-   in die Schlussmeldung schreiben,
-3. nichts außerhalb des Scopes ändern.
-Der Orchestrator entscheidet danach in einem **neuen, kleinen** Auftrag.
+If the coder finds a gap that breaks the assignment (structural change, missing key,
+missing file, contradictory rule), the rule is **not** to ask, but:
+1. finish the **subset** that the assignment safely covers,
+2. write the gap as its own line `BLOCKER: <what> — <why> — <proposed rule>` in the
+   final report,
+3. change nothing outside the scope.
+The orchestrator then decides in a **new, small** assignment.
 
-### R12.4 — Scope-Komplexität pro Delegierung
+### R12.4 — Scope complexity per delegation
 
-| Größe | Grenze |
+| Size | Limit |
 |---|---|
-| Dateien (Produktion) | ≤ 3, dazu ≤ 1 Skript und ≤ 1 Testdatei |
-| Massen-Assets (z. B. 15 Layouts) | nur per Skript; Skript muss **Dry-Run-Report** (was würde geändert) und Idempotenz haben |
-| Erwartungsliste im Brief | ≤ 6 prüfbare Punkte; mehr = Auftrag teilen |
-| Verifikationsläufe | ≤ 2 (1× Ziel-Test, max. 1 Retry) |
-| Zeitbudget | ≤ 10 min Arbeit, Abbruchmarke 15 min |
+| Files (production) | ≤ 3, plus ≤ 1 script and ≤ 1 test file |
+| Bulk assets (e.g. 15 layouts) | only via script; the script must have a **dry-run report** (what would change) and idempotency |
+| Expectation list in the brief | ≤ 6 checkable points; more = split the assignment |
+| Verification runs | ≤ 2 (1× target test, max. 1 retry) |
+| Time budget | ≤ 10 min of work, abort mark 15 min |
 
-### R12.5 — Regelfolge bei „synthetic result" (konkret für diesen Fall)
+### R12.5 — Rule sequence on "synthetic result" (concrete for this case)
 
-1. **Nicht** neu delegieren, **nicht** Auftrag wiederholen.
-2. `subagent list` + `get_result(<runId>)` → Status und letzter Output.
-3. Dateisystem-Soll/Ist: `git status --porcelain`, `ls -l --time-style=+%H:%M <scope>`
-   gegen die im Brief genannten Pfade; erwartete Dateien vorhanden? mtime plausibel?
-4. Erst **dann** selbst verifizieren (`./gradlew … --tests …`).
-5. Entscheidung: **übernehmen** / `steer` (Lücke schließen, gleiche Session) / `stop`.
-6. Ergebnis + Wake-Up-Status in `state/progress.md`, Wecker canceln.
+1. Do **not** re-delegate, do **not** repeat the assignment.
+2. `subagent list` + `get_result(<runId>)` → status and last output.
+3. File-system target vs. actual: `git status --porcelain`, `ls -l --time-style=+%H:%M <scope>`
+   against the paths named in the brief; expected files present? mtime plausible?
+4. Only **then** verify yourself (`./gradlew … --tests …`).
+5. Decision: **take over** / `steer` (close the gap, same session) / `stop`.
+6. Result + wake-up status in `state/progress.md`, cancel the alarm.
 
-### R12.6 — Blockierte Session erkennen und entblocken
+### R12.6 — Recognizing and unblocking a blocked session
 
-**Signal:** `get_result` meldet `running`, aber (a) letzter Assistant-Text endet mit
-einer Frage (`?`, „Ich frage kurz nach", „Soll ich …") **und** (b) seit > 5 min kein
-neuer Tool-Call und keine Datei-mtime-Änderung im Scope. Das ist **kein Rechnen**,
-sondern Warten auf eine Antwort — Warten kann beliebig lange dauern (kein Timeout).
-**Reaktion:** `steer` mit der **Antwort** auf die Frage als knappen Auftrag
-(„Entscheide: X. Setze nur den Test um. Keine Rückfrage."); bei fehlender
-Entscheidungsgrundlage `stop` und Auftrag neu schneiden.
+**Signal:** `get_result` reports `running`, but (a) the last assistant text ends with
+a question (`?`, "let me ask quickly", "should I …") **and** (b) no new tool call and
+no file-mtime change in the scope for > 5 min. That is **not computing** but waiting
+for an answer — waiting can last indefinitely (no timeout).
+**Reaction:** `steer` with the **answer** to the question as a terse assignment
+("Decide: X. Implement only the test. No questions."); if there is no basis for a
+decision, `stop` and re-cut the assignment.
 
-### R12.7 — Pfade nie aus dem Gedächtnis
+### R12.7 — Never write paths from memory
 
-Dateipfade im Brief werden vor dem Absenden mit `rg --files | grep <name>`
-verifiziert. Ein falscher Pfad im Auftrag (hier: `keyboard/LayoutCompletenessTest.kt`
-statt `layouts/LayoutCompletenessTest.kt`) ist ein **Orchestrator-Fehler** und
-erzeugt beim Coder entweder eine Rückfrage (R12.2) oder eine falsche Datei.
+File paths in the brief are verified with `rg --files | grep <name>` before sending.
+A wrong path in the assignment (here: `keyboard/LayoutCompletenessTest.kt` instead
+of `layouts/LayoutCompletenessTest.kt`) is an **orchestrator error** and produces
+either a question (R12.2) or a wrong file in the coder.
 
-### R12.8 — M8a-Nachtrag (Produktregel, bis zur Übernahme in `LAYOUT_REQUIREMENTS.md`)
+### R12.8 — M8a addendum (product rule, until adopted into `LAYOUT_REQUIREMENTS.md`)
 
-**Befund (gemessen, reproduzierbar):** In `symbols` haben alle 15 Assets eine
-⇧-Taste mit `value:"shift"` (die App behandelt `SHIFT` in `symbols`/`symbolsShift`
-als Ebenen-Toggle, `KeyboardView.handleAction`). In `symbolsShift` fehlt diese Taste
-in **5** Layouts: `cs-cz`, `pl-pl`, `ru-ru`, `sv-se`, `tr-tr` (die Orchestrator-Angabe
-„8 von 15" ist mit dieser Messung **nicht** reproduzierbar; die 5 sind es:
+**Finding (measured, reproducible):** in `symbols`, all 15 assets have a ⇧ key with
+`value:"shift"` (the app treats `SHIFT` in `symbols`/`symbolsShift` as a layer
+toggle, `KeyboardView.handleAction`). In `symbolsShift` this key is missing in
+**5** layouts: `cs-cz`, `pl-pl`, `ru-ru`, `sv-se`, `tr-tr` (the orchestrator's claim
+"8 of 15" is **not** reproducible with this measurement; the 5 are it:
 `for f in app/src/main/assets/layouts/*.json; do grep -c '"value": "shift"' $f; done`
-bzw. das Python-Scan-Skript). In diesen 5 trägt der obere linke Key die ID `shift`,
-das Label `?123` und den Wert `layer-base` — also führt er in die **Buchstabenebene**
-statt zurück nach `symbols`.
+or the Python scan script). In those 5, the top-left key carries the id `shift`, the
+label `?123`, and the value `layer-base` — i.e. it leads to the **letter layer**
+instead of back to `symbols`.
 
-**Entscheidung (verbindlich): Variante A — Rückweg in `symbolsShift` ergänzen.**
-Kein Umbau der Symbolebenen (Variante B), kein bewusstes Dead-End (Variante C:
-verstößt gegen KONZEPT „vollständige Tastatur in 15 Sprachen").
+**Decision (binding): variant A — add the way back in `symbolsShift`.**
+No rework of the symbol layers (variant B), no deliberate dead end (variant C:
+violates KONZEPT "complete keyboard in 15 languages").
 
-**Regeltext für den Coder (ohne Rückfrage umsetzbar):**
-1. In **jedem** Asset muss `symbolsShift` genau eine Taste mit `id:"shift"`,
-   `kind:"action"`, `value:"shift"` und `label:"⇧"` enthalten — an derselben
-   Position wie in den 10 bereits korrekten Layouts (obere linke Ecke, `width:1.5`).
-2. Wo diese Taste heute `label:"?123"` / `value:"layer-base"` trägt (die 5 Fälle),
-   werden **nur** diese beiden Felder geändert (`label`→`⇧`, `value`→`shift`); `id`,
-   `width`, Position und alle anderen Tasten bleiben unverändert.
-3. Ein `ABC`-Key (`value:"layer-base"`, `label:"ABC"`) in `symbolsShift` bleibt
-   **zusätzlich** erhalten (direkter Weg in die Buchstabenebene, unabhängig vom
-   Toggle-Zustand).
-4. `symbols` behält seine ⇧-Taste mit `value:"shift"`; es wird **keine** zweite
-   ⇧/⇩-Beschriftung eingeführt (die Bedeutung ⇧/⇩ ergibt sich aus der Ebene).
-5. Der Layout-Test (`LayoutCompletenessTest.checkRequiredActionKeys`) muss die
-   **Lücke schließen**: für die Ebenen `symbols` **und** `symbolsShift` gilt
-   zusätzlich „genau 1× `value == "shift"`" (heute akzeptiert der Test
-   `layer-symbols` **oder** `layer-base` und lässt damit ein Dead-End durch).
-   Gegenprobe: ein Asset ohne die ⇧-Taste in `symbolsShift` muss **rot** werden.
+**Rule text for the coder (implementable without questions):**
+1. In **every** asset, `symbolsShift` must contain exactly one key with
+   `id:"shift"`, `kind:"action"`, `value:"shift"` and `label:"⇧"` — at the same
+   position as in the 10 already-correct layouts (top-left corner, `width:1.5`).
+2. Where this key currently carries `label:"?123"` / `value:"layer-base"` (the 5
+   cases), **only** those two fields are changed (`label`→`⇧`, `value`→`shift`);
+   `id`, `width`, position and all other keys remain unchanged.
+3. An `ABC` key (`value:"layer-base"`, `label:"ABC"`) in `symbolsShift` stays
+   **in addition** (a direct path to the letter layer, independent of the toggle
+   state).
+4. `symbols` keeps its ⇧ key with `value:"shift"`; **no** second ⇧/⇩ labeling is
+   introduced (the meaning of ⇧/⇩ follows from the layer).
+5. The layout test (`LayoutCompletenessTest.checkRequiredActionKeys`) must **close
+   the gap**: for the layers `symbols` **and** `symbolsShift`, "exactly 1×
+   `value == "shift"`" additionally applies (today the test accepts
+   `layer-symbols` **or** `layer-base` and thus lets a dead end through).
+   Counter-check: an asset without the ⇧ key in `symbolsShift` must turn **red**.
 
-### R12.9 — Wecker-Lage VOR jeder Delegierung prüfen (`schedule_list` ist Pflicht)
+### R12.9 — Check the alarm situation BEFORE every delegation (`schedule_list` is mandatory)
 
-**Befund (07:47 UTC, `schedule_list`):** `task-b0pdlx` („M7-Endreview prüfen",
-every 300 s, one-shot, Ziel `reports→c8`) stand **6 h überfällig** mit
-`next 01:46:09` und Status **running**; `task-192pn2` (cron `*/5`, anderes Projekt,
-`reports→c2`) ebenfalls mit Termin in der Vergangenheit. Beide wurden nie ausgeliefert.
+**Finding (07:47 UTC, `schedule_list`):** `task-b0pdlx` ("check M7 final review",
+every 300 s, one-shot, target `reports→c8`) was **6 h overdue** with
+`next 01:46:09` and status **running**; `task-192pn2` (cron `*/5`, another project,
+`reports→c2`) also with a deadline in the past. Neither was ever delivered.
 
-**Mechanismus (verifiziert im Scheduler-Code, `pi-web-ui/dist/server/scheduler-tasks.js`):**
-- `fire()` macht `running.add(id)` → `await executor(task)` → `running.delete(id)` →
-  erst danach wird `next` neu berechnet (`recordRun`).
-- Der Executor ruft `wakeConversation(...)` → `steerForPlugins` →
-  `sendUserMessage(text, { deliverAs: "steer" })` und **wartet darauf**.
-- Endet der laufende Turn der Ziel-Konversation nie (hängender Stream / abgebrochene
-  Session ohne `agent_end`), **resolved der Wake nie** ⇒ `running` bleibt gesetzt ⇒
-  der Job ist für immer „running", `next` bleibt in der Vergangenheit, keine
-  Wiederholung, keine Zustellung.
-- **Präzisierung der These:** Es gibt *keine* globale „Zustellungsschlange dieser
-  Konversation". Blockiert ist der **einzelne Job** (sein `running`-Flag). `tick()`
-  läuft als eigener Timer weiter (`setInterval 10 s`); andere Jobs werden dadurch nur
-  um maximal einen Tick verzögert, nicht ausgehungert. Zwei gleichzeitig hängende
-  Jobs (verschiedene Projekte) bedeuten **zwei** hängende Wakes, nicht eine Queue.
+**Mechanism (verified in the scheduler code, `pi-web-ui/dist/server/scheduler-tasks.js`):**
+- `fire()` does `running.add(id)` → `await executor(task)` → `running.delete(id)` →
+  only afterwards is `next` recomputed (`recordRun`).
+- The executor calls `wakeConversation(...)` → `steerForPlugins` →
+  `sendUserMessage(text, { deliverAs: "steer" })` and **waits** for it.
+- If the target conversation's running turn never ends (hung stream / aborted
+  session without `agent_end`), **the wake never resolves** ⇒ `running` stays set
+  ⇒ the job is "running" forever, `next` stays in the past, no repetition, no
+  delivery.
+- **Sharpening of the thesis:** there is *no* global "delivery queue of this
+  conversation". What is blocked is the **individual job** (its `running` flag).
+  `tick()` keeps running as its own timer (`setInterval 10 s`); other jobs are
+  thereby delayed by at most one tick, not starved. Two simultaneously hung jobs
+  (different projects) mean **two** hung wakes, not one queue.
 
-**Pflicht (vor jeder Delegierung, 20 s):**
-1. `schedule_list` aufrufen und auf **überfällige** Jobs prüfen:
-   `next` in der Vergangenheit **oder** `running` seit > 2 Intervallen **oder**
-   `one-shot` mit `next` < jetzt.
-2. Jeden solchen Job **aktiv ersetzen**: `schedule_cancel(id)` und einen **neuen**
-   Verifikations-Wecker mit frischer Frist (≤ 6 min) anlegen. Nicht warten — ein
-   hängender Job heilt sich nicht (kein Timeout im Scheduler).
-3. Erst danach delegieren. Ein überfälliger Job im `schedule_list` ist ein
-   **Abbruch-Signal** dafür, dass in dieser Konversation ein Turn starb.
+**Mandatory (before every delegation, 20 s):**
+1. Call `schedule_list` and check for **overdue** jobs:
+   `next` in the past **or** `running` for > 2 intervals **or**
+   `one-shot` with `next` < now.
+2. **Actively replace** every such job: `schedule_cancel(id)` and create a **new**
+   verification alarm with a fresh deadline (≤ 6 min). Do not wait — a hung job does
+   not heal itself (no timeout in the scheduler).
+3. Only then delegate. An overdue job in `schedule_list` is an **abort signal**
+   that a turn died in this conversation.
 
-### R12.10 — Reihenfolge NACH jeder Rückkehr aus einem Abbruch (verbindlich)
+### R12.10 — Sequence AFTER every return from an abort (binding)
 
-1. `schedule_list` → überfällige one-shots canceln und **neu** anlegen (R12.9);
-   erst damit ist die Nachschau gesichert.
-2. `subagent list` + `get_result(<runId>)` → Status, letzter Output (Frage-Muster? R12.6).
-3. Dateisystem-Soll/Ist: `git status --porcelain`, `ls -l --time-style=+%H:%M <scope>`,
-   erwartete Symbole per `rg`.
-4. **Selbstverifikation** (`./gradlew … --tests …`) — „Coder sagt grün" zählt nicht.
-5. Erst **dann** `steer` (Lücke schließen) oder `stop` (Auftrag neu schneiden).
-6. Ergebnis + Wecker-Status in `state/progress.md`.
+1. `schedule_list` → cancel overdue one-shots and create them **anew** (R12.9);
+   only then is the follow-up check secured.
+2. `subagent list` + `get_result(<runId>)` → status, last output (question pattern?
+   R12.6).
+3. File-system target vs. actual: `git status --porcelain`, `ls -l --time-style=+%H:%M <scope>`,
+   expected symbols via `rg`.
+4. **Self-verification** (`./gradlew … --tests …`) — "coder says green" does not count.
+5. Only **then** `steer` (close the gap) or `stop` (re-cut the assignment).
+6. Result + alarm status in `state/progress.md`.
 
-**Begründung:** Im Fall I12 lag der Schaden nicht in der Fehlermeldung, sondern im
-Zeitfenster **01:48 → 07:46 = 5 h 58 min** ohne einen einzigen ausgelösten Wecker.
-Der Nutzer musste manuell eingreifen. Genau dieses Fenster verhindert R12.1 (Frist
-≤ 6 min) + R12.9/R12.10 (überfällige Jobs aktiv ersetzen).
+**Rationale:** in case I12 the damage was not in the error message but in the time
+window **01:48 → 07:46 = 5 h 58 min** without a single fired alarm. The user had to
+intervene manually. Exactly this window is prevented by R12.1 (deadline ≤ 6 min) +
+R12.9/R12.10 (actively replacing overdue jobs).
 
-### R12.11 — Rückfrage-Klausel war Mitursache (Auftragsformulierung, verbindlich)
+### R12.11 — The question clause was a contributing cause (assignment wording, binding)
 
-**Bewertung:** Ja. Der Auftragstext bat sinngemäß „wenn unklar: frage kurz nach".
-Der Coder hat genau das getan (Lücke: Tasten fehlen statt falscher Wert) — und damit
-den Lauf **freiwillig beendet**, ohne `agent_end`-Fortschritt und ohne Ergebnis.
-Die Formulierung ist damit eine der drei Ursachen (neben fehlendem Wecker und
-hängendem Turn). Ein Auftrag darf nie mit einer offenen Rückfrage enden dürfen.
+**Assessment:** yes. The assignment text asked, in essence, "if unclear: ask
+briefly". The coder did exactly that (gap: keys missing instead of a wrong value) —
+and thereby **voluntarily ended** the run, without `agent_end` progress and without
+a result. The wording is thus one of the three causes (besides the missing alarm
+and the hung turn). An assignment must never be allowed to end with an open question.
 
-**Ersatz-Wortlaut (wörtlich in jeden Coder-Brief, ersetzt jede Rückfrage-Klausel):**
+**Replacement wording (verbatim into every coder brief, replaces any question clause):**
 
-> „Entscheide bei Unklarheiten **selbst** nach den Regeln in
-> `docs/LAYOUT_REQUIREMENTS.md`, `docs/COMMIT_RULE_DECISION_2.md` bzw.
-> `docs/SETUP_UI_DECISIONS.md`. Dokumentiere jede getroffene Annahme in der
-> Schlussmeldung als Zeile `ANNAHME: <was> — <warum>`. Wenn eine Lücke den Auftrag
-> sprengt: Teilmenge fertigstellen und `BLOCKER: <was> — <warum> — <vorschlag>` in die
-> Schlussmeldung schreiben. **Stelle keine Rückfrage** — eine Rückfrage beendet den
-> Lauf ohne Ergebnis und gilt als Abbruch."
+> "If anything is unclear, decide **yourself** according to the rules in
+> `docs/LAYOUT_REQUIREMENTS.md`, `docs/COMMIT_RULE_DECISION_2.md` or
+> `docs/SETUP_UI_DECISIONS.md`. Document every assumption you make in the final
+> report as a line `ASSUMPTION: <what> — <why>`. If a gap breaks the assignment:
+> finish the subset and write `BLOCKER: <what> — <why> — <proposal>` into the final
+> report. **Do not ask a question** — a question ends the run without a result and
+> counts as an abort."
 
-Zusätzlich gilt: Fragen, die der Orchestrator vorhersehen kann, werden **vor** dem
-Absenden im Brief beantwortet (Zielzustand, Verbote, Pfade, Erwartungsliste).
+Additionally: questions the orchestrator can foresee are answered in the brief
+**before** sending (target state, prohibitions, paths, expectation list).
 
 ---
 
-## 13. Hängende Delegierungen: Verhinderung (U2, 2026-10-28)
+## 13. Hung delegations: prevention (U2, 2026-10-28)
 
-**Anlass:** Nutzer sieht wiederholt „hängende" Subagenten, die „auf Antwort auf ihre
-Tool-Requests warten". Zwei belegte Fälle: (Fall 1, siehe §12/I12) Coder stellt eine
-Rückfrage und beendet den Lauf → `steer` erhält nie ein Ergebnis → 5 h 58 min
-Stillstand; (Fall 2) Coder arbeitet M8b-2 ab und **wartet auf eine echte
-Werkzeug-Freigabe**; erst der Klick des Nutzers setzt den Lauf fort (Ergebnis: 232
-Tests, 0 Fehler, Emoji-Panel + L-02-Fix).
+**Trigger:** the user repeatedly sees "hung" subagents that "wait for a response to
+their tool requests". Two documented cases: (case 1, see §12/I12) the coder asks a
+question and ends the run → `steer` never gets a result → 5 h 58 min of standstill;
+(case 2) the coder works through M8b-2 and **waits for a real tool approval**; only
+the user's click lets the run continue (result: 232 tests, 0 failures, emoji panel +
+L-02 fix).
 
-> **Korrektur (U2-R, Nutzerhinweis):** Die frühere These „das ist nur eine verwaiste
-> Anzeige, die Arbeit war fertig" ist für Fall 2 **falsch**. Es gab eine echte,
-> **blockierende Freigabe-Anfrage** (Bestätigung für einen Tool-Call), die unbegrenzt
-> wartet, bis ein Mensch klickt. Dieser Zustand ist **legal, kein Regelverstoß und kein
-> Fehler** — der Coder hat sich korrekt verhalten. „Fragen ist untersagt" gilt nur für
-> **Inhalts-/Scope-Mehrdeutigkeiten**, nicht für Werkzeug-Freigaben.
+> **Correction (U2-R, user note):** the earlier thesis "that is just an orphaned
+> display, the work was finished" is **wrong** for case 2. There was a real,
+> **blocking approval request** (confirmation for a tool call) that waits
+> indefinitely until a human clicks. This state is **legal, no rule violation and
+> no error** — the coder behaved correctly. "Asking is forbidden" applies only to
+> **content/scope ambiguities**, not to tool approvals.
 
-### R13.1 — Vier Zustände, ein 10-Sekunden-Test (W1–W4)
+### R13.1 — Four states, one 10-second test (W1–W4)
 
-Serverseitig gibt es genau zwei „pending"-Maps: `pendingApprovals` (Werkzeug-Freigabe)
-und `pendingQuestions` (`ask_user_question`); die Harness-Funktion `isWaitingOnUser`
-prüft beide und **nur dort existiert kein Timeout**. Entscheidend ist, **was** aussteht:
-eine Freigabe (legal) oder eine Inhaltsfrage (verboten).
+Server-side there are exactly two "pending" maps: `pendingApprovals` (tool
+approvals) and `pendingQuestions` (`ask_user_question`); the harness function
+`isWaitingOnUser` checks both, and **only there is no timeout**. What matters is
+**what** is pending: an approval (legal) or a content question (forbidden).
 
-| # | Zustand | 10-Sekunden-Erkennung | Legal? | Richtige Reaktion |
+| # | State | 10-second detection | Legal? | Correct reaction |
 |---|---|---|---|---|
-| **W1** | **Wartet auf Werkzeug-Freigabe** (Bestätigung für einen Tool-Call) | `conversation_read(action="status")`/Session-Anzeige nennt eine **ausstehende Bestätigung** (Werkzeug + Befehl); Output endet **mitten im Tool-Call**; seit Minuten kein neuer Dateischreibvorgang; der Lauf ist nicht `done` | **ja, Dauerzustand** | **Nicht `stop`en, nicht neu delegieren.** (a) dem Nutzer die Freigabe **namentlich** nennen (Werkzeug, exakter Befehl, warum nötig); (b) darf der Orchestrator sie selbst erteilen, sofort erteilen; (c) Wecker-Text (R12.1) enthält immer den Zusatz „**Freigabe kann ausstehen** — dann NICHT stoppen, nur melden" |
-| **W2** | **Inhalts-Rückfrage** des Coders („Ich frage kurz nach", `ask_user_question` für Inhalt/Scope/Design) | `conversation_read(status)` meldet pending **question** **oder** letzter Text endet mit „?"/„Soll ich …"; keine ausstehende Bestätigung | **nein** — von uns selbst erzeugt | Ein-Satz-`steer` mit der Entscheidung (R13.7) + „jetzt ABSCHLUSSPROTOKOLL"; bei `ask_user_question` im UI beantworten oder `stop` + neuer Brief mit der Entscheidung im Text |
-| **W3** | Harness-Zwangsabbruch / synthetic result (U1-Fall) | Transkript enthält den Synthetic-Result-Text; Datei-mtime steht seit > 15 min; ggf. `running` ohne Aktivität | nein (Harness) | §2.6-Entscheidungsbaum: `get_result` → Datei-Soll/Ist → selbst verifizieren → `steer`/`stop` |
-| **W4** | Fertig, nur nicht abgeholt (Anzeige „hängt") | `get_result` liefert **sofort** vollständigen Output, `git status` zeigt die Soll-Dateien, **keine** pending Bestätigung/Frage | ja | Ergebnis übernehmen, `state/progress.md`, Session dismissen |
+| **W1** | **Waiting for tool approval** (confirmation for a tool call) | `conversation_read(action="status")`/session view names a **pending confirmation** (tool + command); output ends **mid tool call**; no new file write for minutes; the run is not `done` | **yes, permanent state** | **Do not `stop`, do not re-delegate.** (a) name the approval to the user **explicitly** (tool, exact command, why needed); (b) if the orchestrator may grant it itself, grant it immediately; (c) the alarm text (R12.1) always contains the addendum "**an approval may be pending — then do NOT stop, only report**" |
+| **W2** | **Content question** from the coder ("let me ask briefly", `ask_user_question` about content/scope/design) | `conversation_read(status)` reports a pending **question** **or** the last text ends with "?" / "should I …"; no pending confirmation | **no** — created by us | one-sentence `steer` with the decision (R13.7) + "now run the COMPLETION PROTOCOL"; for `ask_user_question`, answer in the UI or `stop` + a new brief with the decision in the text |
+| **W3** | Harness force abort / synthetic result (U1 case) | transcript contains the synthetic-result text; file mtime stuck for > 15 min; possibly `running` without activity | no (harness) | §2.6 decision tree: `get_result` → file target vs. actual → verify yourself → `steer`/`stop` |
+| **W4** | Done, just not picked up (display shows "hung") | `get_result` delivers the complete output **immediately**, `git status` shows the expected files, **no** pending confirmation/question | yes | take over the result, `state/progress.md`, dismiss the session |
 
-**Merksatz:** „Wartet auf Tool-Antwort" beschreibt **zwei** verschiedene Dinge —
-W1 (Mensch muss klicken, korrekt) und W3 (Harness hat den Call verloren, Fehler).
-Der Test ist immer derselbe Dreiklang: `get_result` (Status + letzter Text) →
-`conversation_read(status)` (**Bestätigung** oder **Frage**?) → `git status`/mtime.
+**Mnemonic:** "waiting for tool response" describes **two** different things —
+W1 (a human must click, correct) and W3 (the harness lost the call, error). The
+test is always the same triad: `get_result` (status + last text) →
+`conversation_read(status)` (**confirmation** or **question**?) → `git status`/mtime.
 
-### R13.2 — ABSCHLUSSPROTOKOLL (Pflichtbestandteil jedes Coder-Briefs, Wortlaut)
+### R13.2 — COMPLETION PROTOCOL (mandatory part of every coder brief, wording)
 
-> **ABSCHLUSSPROTOKOLL (verbindlich).**
-> 1. Der Lauf endet **immer** mit einer Ergebnis-Meldung, auch wenn er unvollständig
->    ist. Die letzten Zeilen haben exakt dieses Format:
->    `FERTIG: <was fertig ist, mit Dateipfaden>` / `OFFEN: <was fehlt>` /
->    `ANNAHME: <getroffene Annahme> — <warum>` (0..n) /
->    `BLOCKER: <was> — <warum> — <vorgeschlagener nächster Schritt>` (0..n) /
->    `VERIFIKATION: <exakter Befehl + Ergebnis>`.
-> 2. **Inhalts-/Scope-Unklarheiten werden niemals als Frage formuliert.** Ein Satz, der
->    mit „?" endet, „Ich frage kurz nach", „Soll ich …" oder „Bitte bestätigen" enthält,
->    ist ein **Regelverstoß** und macht die Lieferung ungültig.
-> 3. **Ausnahme — Werkzeug-Freigaben (W1):** Braucht ein Tool-Call eine Bestätigung des
->    Menschen, ist das **kein** Regelverstoß und **keine** Rückfrage. Dann gilt: eine
->    Zeile `FREIGABE_NOETIG: <werkzeug> — <exakter befehl> — <warum nötig>` schreiben
->    und den Call aufrufen; der Lauf darf warten, bis geklickt wird. Diese Zeile darf
->    **nicht** als `BLOCKER:` umetikettiert werden, um die Freigabe zu umgehen — sonst
->    blockiert der Coder still, statt sauber um Freigabe zu bitten.
-> 3. Reicht die Zeit nicht: Teilmenge fertigstellen, `OFFEN:` + `BLOCKER:` schreiben,
->    **kein** Nachfragen, **kein** Stillstand.
+> **COMPLETION PROTOCOL (binding).**
+> 1. The run **always** ends with a result message, even if incomplete. The last
+>    lines have exactly this format:
+>    `DONE: <what is finished, with file paths>` / `OPEN: <what is missing>` /
+>    `ASSUMPTION: <assumption made> — <why>` (0..n) /
+>    `BLOCKER: <what> — <why> — <proposed next step>` (0..n) /
+>    `VERIFICATION: <exact command + result>`.
+> 2. **Content/scope uncertainties are never phrased as a question.** A sentence
+>    ending in "?", containing "let me ask briefly", "should I …", or "please
+>    confirm" is a **rule violation** and invalidates the delivery.
+> 3. **Exception — tool approvals (W1):** if a tool call needs a human
+>    confirmation, that is **not** a rule violation and **not** a question. Then:
+>    write one line `APPROVAL_NEEDED: <tool> — <exact command> — <why needed>` and
+>    make the call; the run may wait until someone clicks. This line must **not**
+>    be relabeled as `BLOCKER:` to circumvent the approval — otherwise the coder
+>    blocks silently instead of cleanly requesting approval.
+> 3. If time does not suffice: finish the subset, write `OPEN:` + `BLOCKER:`,
+>    **no** asking, **no** standstill.
 
-**Warum R12.11 allein nicht reichte:** R12.11 sagte „keine Rückfrage", definierte aber
-kein **Ausgabeformat** und keine Ausnahme für Freigaben. Der Coder hatte keinen legalen
-Weg, seine *inhaltliche* Unsicherheit loszuwerden — also wählte er den einzigen, den er
-kannte: fragen. Das Protokoll gibt ihm einen erlaubten Kanal (`ANNAHME:`/`BLOCKER:`),
-der den Lauf **nicht** beendet — und trennt sauber davon die **Freigabe** (W1), die
-weiterhin erlaubt und erwartet ist.
+**Why R12.11 alone did not suffice:** R12.11 said "no questions" but defined no
+**output format** and no exception for approvals. The coder had no legal way to get
+rid of his *content* uncertainty — so he chose the only one he knew: asking. The
+protocol gives him a permitted channel (`ASSUMPTION:`/`BLOCKER:`) that does **not**
+end the run — and cleanly separates from it the **approval** (W1), which remains
+allowed and expected.
 
-### R13.3 — Entscheidungsgrundlage + Vollmacht (macht Blockieren strukturell unnötig)
+### R13.3 — Decision basis + authority (makes blocking structurally unnecessary)
 
-Jeder Brief nennt (i) die **Dokumente**, nach denen entschieden werden darf, und
-(ii) diese Vollmacht-Klausel **wörtlich**:
+Every brief names (i) the **documents** by which decisions may be made, and (ii)
+this authority clause **verbatim**:
 
-> „Du hast **Entscheidungsvollmacht** für alles, was diese Dokumente regeln:
+> "You have **decision authority** over everything these documents govern:
 > `docs/LAYOUT_REQUIREMENTS.md`, `docs/COMMIT_RULE_DECISION_2.md`,
 > `docs/SETUP_UI_DECISIONS.md`, `docs/LANGUAGE_EMOJI_DECISIONS.md`,
-> `docs/ASR_CONTRACT.md`. Widerspricht der Auftrag einer dieser Regeln, gilt die
-> **Doku**; du dokumentierst den Widerspruch als `BLOCKER:` und arbeitest nach der
-> Doku weiter. Inhaltliche Fragen sind untersagt, Entscheiden ist Pflicht.
-> **Ausgenommen sind Werkzeug-Freigaben**: braucht ein Befehl eine Bestätigung, meldest
-> du sie mit `FREIGABE_NOETIG: …` und wartest — das ist korrekt."
+> `docs/ASR_CONTRACT.md`. If the assignment contradicts one of these rules, the
+> **documentation** prevails; you document the contradiction as `BLOCKER:` and
+> continue per the documentation. Content questions are forbidden, deciding is
+> mandatory. **Tool approvals are excluded**: if a command needs a confirmation,
+> report it with `APPROVAL_NEEDED: …` and wait — that is correct."
 
-Damit ist die Rangfolge eindeutig: **Doku > Auftragstext > eigene Vermutung**.
+The precedence is thereby unambiguous: **documentation > assignment text > own guess**.
 
-### R13.4 — Zeitmarke mit Zwangsabbruchmeldung
+### R13.4 — Time mark with forced-abort note
 
-Der Brief enthält eine absolute Marke: „Erreiche ich Minute **8** ohne vollständige
-Verifikation, beende ich mit `FERTIG:/OFFEN:/BLOCKER:` (Teilmenge) und **ohne** weitere
-Recherche." Der Orchestrator setzt dazu den Wecker (R12.1, ≤ 6 min). Ein Lauf, der die
-Marke überschreitet, wird von **außen** beendet (§13.6), nicht von innen erhofft.
+The brief contains an absolute mark: "If I reach minute **8** without complete
+verification, I end with `DONE:/OPEN:/BLOCKER:` (subset) and **without** further
+research." The orchestrator sets the alarm for it (R12.1, ≤ 6 min). A run that
+exceeds the mark is ended **from outside** (§13.6), not hoped away from inside.
 
-### R13.5 — Prüfliste VOR jeder Delegierung (60 Sekunden, 5 Punkte)
+### R13.5 — Checklist BEFORE every delegation (60 seconds, 5 points)
 
-1. **Ziel-Konflikt-Check:** Schließen sich zwei Anforderungen aus? (Negativbeispiel aus
-   Fall 1: „Test muss ⇧ in `symbolsShift` verlangen" **+** „keine strukturellen
-   Layoutänderungen" ⇒ unerfüllbar.) Bei Konflikt: Auftrag **nicht** absenden.
-2. **Fakten-Check gegen eigene Messungen:** Jede „muss"-Aussage im Brief gegen den
-   selbst gemessenen Ist-Zustand prüfen (Zahlen aus `git`/Skript in den Brief
-   aufnehmen). Wenn der Brief eine Tatsache behauptet, die ich nicht gemessen habe:
-   messen oder als `ANNAHME` kennzeichnen.
-3. **Scope-Konsistenz:** Dateipfade mit `rg --files | grep <name>` verifizieren; die
-   Dateien im Scope müssen die Dateien sein, die der geforderte Test berührt.
-4. **Entscheidungsgrundlage:** 1–3 Doku-Dateien benennen (R13.3) + alle bekannten
-   Mehrdeutigkeiten **im Brief** auflösen.
-5. **Abschluss + Wecker:** ABSCHLUSSPROTOKOLL (R13.2), Zeitmarke (R13.4), Wecker
-   (R12.1) und Rückfallpfad („wenn X nicht geht, tue Y") sind enthalten.
+1. **Goal-conflict check:** do two requirements exclude each other? (Negative
+   example from case 1: "the test must require ⇧ in `symbolsShift`" **plus** "no
+   structural layout changes" ⇒ unsatisfiable.) On conflict: do **not** send the
+   assignment.
+2. **Fact check against our own measurements:** check every "must" claim in the
+   brief against the measured actual state (put numbers from `git`/scripts into
+   the brief). If the brief asserts a fact I have not measured: measure it or mark
+   it as `ASSUMPTION`.
+3. **Scope consistency:** verify file paths with `rg --files | grep <name>`; the
+   files in scope must be the files the required test touches.
+4. **Decision basis:** name 1–3 documentation files (R13.3) + resolve all known
+   ambiguities **in the brief**.
+5. **Completion + alarm:** COMPLETION PROTOCOL (R13.2), time mark (R13.4), alarm
+   (R12.1), and a fallback path ("if X does not work, do Y") are included.
 
-### R13.6 — Betriebsregel für hängende Sessions (Fristen + Stufen)
+### R13.6 — Operating rule for hung sessions (deadlines + stages)
 
-**Erkennung (eines von drei Signalen genügt):** (a) `conversation_read(status)` meldet
-pending question; (b) letzter Output endet mit Frage und seit **> 5 min** keine neue
-mtime/Tool-Aktivität; (c) Wecker überfällig oder `running` seit > 2 Intervallen.
+**Detection (any one of three signals suffices):** (a) `conversation_read(status)`
+reports a pending question; (b) the last output ends with a question and there has
+been no new mtime/tool activity for **> 5 min**; (c) alarm overdue or `running` for
+> 2 intervals.
 
-**Für W1 (Werkzeug-Freigabe) gilt KEINE Stufenfolge mit `stop`.** Ein `stop` würde
-Arbeit vernichten, die kurz vor der Lieferung steht — genau der M8b-2-Fall (nach dem
-Klick: 232 Tests grün, Emoji-Panel + L-02-Fix). W1 ist ein legaler Dauerzustand.
+**For W1 (tool approval), NO staged escalation with `stop` applies.** A `stop`
+would destroy work that is close to delivery — exactly the M8b-2 case (after the
+click: 232 tests green, emoji panel + L-02 fix). W1 is a legal permanent state.
 
-| Stufe | Wann (ab Delegierung) | Aktion |
+| Stage | When (from delegation) | Action |
 |---|---|---|
-| 0 | sofort, immer | `get_result` + `conversation_read(status)` (Bestätigung? Frage?) + `git status`/mtime — **nie** blind neu delegieren |
-| **W1** | **6 min** | **Nur informieren** (eine Zeile an den Nutzer: welches Werkzeug, welcher Befehl, warum nötig) und **weiter warten**; Wecker recurring (alle 6–10 min) erneuern, **nie** `stop`, **nie** neu delegieren |
-| W2 | **6 min** | **Ein** `steer` mit genau einem Satz Entscheidung + „keine Rückfrage, jetzt ABSCHLUSSPROTOKOLL" |
-| W2 | **11 min** | Zweiter `steer`: „Keine weitere Recherche. Antworte in 60 s mit `FERTIG:/OFFEN:/BLOCKER:`" |
-| W2/W3 | **15 min** | `stop` → selbst verifizieren (`./gradlew … --tests …`) → Lücke als **neuen, kleineren** Auftrag (≤ 2 Dateien) |
-| — | **pending question** (`ask_user_question`) | **Sofort** (keine Frist): im UI beantworten **oder** `stop` + neuer Brief mit der Entscheidung im Text — `steer` beantwortet keine pending question |
+| 0 | immediately, always | `get_result` + `conversation_read(status)` (confirmation? question?) + `git status`/mtime — **never** blindly re-delegate |
+| **W1** | **6 min** | **Only inform** (one line to the user: which tool, which command, why needed) and **keep waiting**; renew the alarm recurring (every 6–10 min), **never** `stop`, **never** re-delegate |
+| W2 | **6 min** | **One** `steer` with exactly one sentence of decision + "no questions, now run the COMPLETION PROTOCOL" |
+| W2 | **11 min** | Second `steer`: "No further research. Reply in 60 s with `DONE:/OPEN:/BLOCKER:`" |
+| W2/W3 | **15 min** | `stop` → verify yourself (`./gradlew … --tests …`) → the gap as a **new, smaller** assignment (≤ 2 files) |
+| — | **pending question** (`ask_user_question`) | **Immediately** (no deadline): answer in the UI **or** `stop` + new brief with the decision in the text — `steer` does not answer a pending question |
 
-**Doppelarbeit verhindern:** Vor jedem neuen Auftrag `git status --porcelain` gegen die
-Soll-Liste; gibt es bereits Änderungen, wird der Auftrag als **„vervollständige X"**
-formuliert, nie als „implementiere X".
+**Prevent double work:** before every new assignment, `git status --porcelain`
+against the expected list; if there are already changes, phrase the assignment as
+**"complete X"**, never as "implement X".
 
-### R13.7 — Was der Orchestrator beim Entblocken schreibt (Ein-Satz-Antwort, Vorlage)
+### R13.7 — What the orchestrator writes when unblocking (one-sentence answer, template)
 
-> „Entscheidung: <konkrete Regel/Antwort>. Arbeite danach weiter, stelle **keine**
-> Rückfrage und schließe mit dem ABSCHLUSSPROTOKOLL (`FERTIG:/OFFEN:/BLOCKER:`)."
+> "Decision: <concrete rule/answer>. Continue accordingly, ask **no** question, and
+> close with the COMPLETION PROTOCOL (`DONE:/OPEN:/BLOCKER:`)."
 
-Beispiel für Fall 1: „Entscheidung: Die ⇧-Taste in `symbolsShift` ist **keine**
-strukturelle Änderung — sie ist Regel 4a; ergänze sie in den 8 Assets per Skript und
-schließe mit dem Protokoll ab."
+Example for case 1: "Decision: the ⇧ key in `symbolsShift` is **not** a structural
+change — it is rule 4a; add it to the 8 assets via script and close with the
+protocol."
 
-### R13.8 — Ist das Problem vermeidbar? (ehrliche Bilanz)
+### R13.8 — Is the problem avoidable? (honest assessment)
 
-| Anteil | Bewertung |
+| Share | Assessment |
 |---|---|
-| **Harness-Mechanik** (A3 synthetic result, A4 falsche „hängt"-Anzeige, hängender Scheduler-Wake) | **Nicht** durch uns behebbar. A4 ist reine Anzeige und verschwindet erst mit `get_result`/Dismiss; A3 bleibt ein Restrisiko bei 20-min-Watchdog/Stream-Hängern. |
-| **Auftragsqualität** (Fall 1: widersprüchlicher Brief) | **Vollständig** unser Einfluss — und der größte Hebel. R13.5 verhindert genau diesen Fall. |
-| **Rollengestaltung** (Coder darf fragen) | **Vollständig** unser Einfluss — R13.2/R13.3 nehmen ihm die Notwendigkeit *und* die Legalität. |
+| **Harness mechanics** (A3 synthetic result, A4 wrong "hung" display, hung scheduler wake) | **Not** fixable by us. A4 is pure display and disappears only with `get_result`/dismiss; A3 remains a residual risk with the 20-min watchdog/hung streams. |
+| **Assignment quality** (case 1: contradictory brief) | **Fully** within our influence — and the biggest lever. R13.5 prevents exactly this case. |
+| **Role design** (the coder may ask) | **Fully** within our influence — R13.2/R13.3 remove both the necessity *and* the legality. |
 
-**Ziel realistisch:** **0 Vorkommnisse sind nicht erreichbar** — W1 (Freigabe) ist ein
-**gewollter** Dauerzustand, W3 (Watchdog) Harness-Mechanik, W4 Anzeige-Semantik.
-Erreichbar und messbar ist: **Erkennung ≤ 6 min** (Wecker + R13.1-Dreiklang) und
-**Meldung ≤ 6 min** (bei W1: Freigabe benannt; bei W2/W3: Entblockung eingeleitet)
-⇒ **maximal ~12 min Stillstand** statt 5 h 58 min. Ein Versprechen „nie wieder
-hängend" wäre Wunschdenken; „nie wieder **unbemerkt** hängend" ist eine prüfbare
-Betriebsregel.
+**Realistic target:** **0 incidents is not achievable** — W1 (approval) is an
+**intended** permanent state, W3 (watchdog) is harness mechanics, W4 display
+semantics. Achievable and measurable: **detection ≤ 6 min** (alarm + R13.1 triad)
+and **reporting ≤ 6 min** (for W1: approval named; for W2/W3: unblocking initiated)
+⇒ **at most ~12 min of standstill** instead of 5 h 58 min. A promise of "never hung
+again" would be wishful thinking; "never hung again **unnoticed**" is a checkable
+operating rule.
 
-### R13.9 — Freigaben vorbeugen (welche Klassen treten hier auf, wie vermeidet man sie)
+### R13.9 — Preventing approvals (which classes occur here, how to avoid them)
 
-**Erfahrungswerte dieses Projekts + eingebaute Regel-Engine** (`approval-rules.js`,
-Standard-Regeln mit `ask`): rekursives Löschen (`rm -rf`), destruktive Git-Operationen,
-`chmod`, Schreiben in Systemverzeichnisse, `.env`/SSH-Keys/Shell-Profile und
-**Schreiben außerhalb des Workspace** (`outside_workspace`). Dazu kommen
-**client-seitig konfigurierte Regeln** (`<dataDir>/approval-rules.json`) — dort landen
-typischerweise `sudo …`, `adb …`, `./gradlew …`, Netzwerk-Befehle (`curl`, `wget`),
-`pip/npm install`. Genau diese sind im Projekt die häufigen Freigaben.
+**Empirical values of this project + built-in rule engine** (`approval-rules.js`,
+default rules with `ask`): recursive deletion (`rm -rf`), destructive git
+operations, `chmod`, writing to system directories, `.env`/SSH keys/shell profiles,
+and **writing outside the workspace** (`outside_workspace`). Additionally there are
+**client-side configured rules** (`<dataDir>/approval-rules.json`) — typically
+`sudo …`, `adb …`, `./gradlew …`, network commands (`curl`, `wget`),
+`pip/npm install` land there. Exactly those are the frequent approvals in this
+project.
 
-**Auftragsformulierungen, die Freigaben vermeiden:**
+**Assignment wordings that avoid approvals:**
 
-1. **Befehle exakt und vollständig ausschreiben** (kein `$(…)`, kein `|`, kein `&&`,
-   kein `xargs`, keine Here-Docs) — der Regelabgleich sieht nur den Befehlsstring;
-   verschachtelte Konstrukte werden als „unbekannt" behandelt und landen im `ask`.
-2. **Keine Pfade außerhalb des Projekts** (`/tmp`, `$HOME`, `/sdcard`): Skripte,
-   Testdaten und Artefakte gehören unter `tools/`, `testdata/`, `dist/`.
-3. **Kein `sudo`** und keine Systempakete in Coder-Aufträgen; Werkzeuginstallation ist
-   ein eigener Orchestrator-Schritt (einmalig, mit Ansage).
-4. **Emulator/adb und `./gradlew`-Volläufe nicht im Coder-Brief** (bereits §2.1/§R12.4)
-   — dort nur `./gradlew :app:testDebugUnitTest --tests "…"`, ein Aufruf.
-5. **Dateischreibzugriffe im Workspace halten**; löschen/umbenennen nur über
-   `git rm`/`mv` im Projekt, nie `rm -rf`.
+1. **Write commands out exactly and completely** (no `$(…)`, no `|`, no `&&`,
+   no `xargs`, no here-docs) — the rule match sees only the command string;
+   nested constructs are treated as "unknown" and land in `ask`.
+2. **No paths outside the project** (`/tmp`, `$HOME`, `/sdcard`): scripts, test
+   data, and artifacts belong under `tools/`, `testdata/`, `dist/`.
+3. **No `sudo`** and no system packages in coder assignments; tool installation
+   is a separate orchestrator step (once, announced).
+4. **No emulator/adb and no full `./gradlew` runs in the coder brief** (already
+   §2.1/R12.4) — only `./gradlew :app:testDebugUnitTest --tests "…"`, one call.
+5. **Keep file writes inside the workspace**; delete/rename only via
+   `git rm`/`mv` in the project, never `rm -rf`.
 
-**Was der Nutzer EINMALIG freigeben müsste** (damit diese Klassen nicht mehr
-nachfragen): im Freigabe-Dialog „**gleiche Klasse erlauben**" wählen bzw. in
-`approval-rules.json` je eine `allow`-Regel für die exakt verwendeten Befehlspräfixe
-anlegen — z. B. `./gradlew ` (Präfix), `python3 tools/` (Präfix),
-`adb shell ime ` (Präfix). Danach bleibt nur noch `sudo` und destruktives Git
-freigabepflichtig — beides kommt in normalen Coder-Aufträgen nicht vor.
+**What the user would have to approve ONCE** (so that these classes stop asking):
+in the approval dialog choose "**allow same class**" or create one `allow` rule
+per exact command prefix in `approval-rules.json` — e.g. `./gradlew ` (prefix),
+`python3 tools/` (prefix), `adb shell ime ` (prefix). Afterwards only `sudo` and
+destructive git remain approval-required — neither occurs in ordinary coder
+assignments.
 
-### R13.10 — Kurz-Tabelle „Was sehe ich, was tue ich"
+### R13.10 — Quick table "what do I see, what do I do"
 
-| Was sehe ich | Was tue ich | Verboten |
+| What I see | What I do | Forbidden |
 |---|---|---|
-| Session steht, **Bestätigung** für ein Tool ausstehend (W1) | Nutzer die Freigabe **namentlich** nennen (Werkzeug, Befehl, Zweck); ggf. selbst erteilen; weiter warten | `stop`, neu delegieren, als `BLOCKER` umdeuten |
-| Session steht, letzter Text ist eine **Frage** (W2) | Ein `steer` mit einem Satz Entscheidung + „jetzt ABSCHLUSSPROTOKOLL" | zweite Rückfrage, Neu-Delegation ohne `stop` |
-| Session `running`, aber Synthetic-Result im Transkript (W3) | `get_result` → Datei-Soll/Ist → selbst verifizieren → `steer`/`stop` | blind neu delegieren (Doppelarbeit) |
-| Session „hängt", `get_result` liefert **sofort** fertigen Output (W4) | Ergebnis übernehmen, `state/progress.md`, Session dismissen | auf „running" starren, Auftrag wiederholen |
+| Session stuck, a **confirmation** for a tool pending (W1) | name the approval to the user **explicitly** (tool, command, purpose); grant it yourself if allowed; keep waiting | `stop`, re-delegate, relabel as `BLOCKER` |
+| Session stuck, the last text is a **question** (W2) | one `steer` with one sentence of decision + "now the COMPLETION PROTOCOL" | a second question, re-delegation without `stop` |
+| Session `running`, but synthetic result in the transcript (W3) | `get_result` → file target vs. actual → verify yourself → `steer`/`stop` | blindly re-delegate (double work) |
+| Session "hung", `get_result` delivers the finished output **immediately** (W4) | take over the result, `state/progress.md`, dismiss the session | stare at "running", repeat the assignment |

@@ -1,144 +1,155 @@
-# Korpus-Diktat-Testplan — echten (gemeinfreien) Audio-Input im Emulator/Phone
+# Corpus dictation test plan — real (public-domain) audio input in the
+emulator/on the phone
 
-**Ziel:** entscheiden, ob der Diktat-Abbruch/Korpus-Fall **jetzt** sinnvoll im
-Simulator/Emulator (<device>, headless) testbar ist — inkl. Einspeisen von echtem
-Audio aus einem Korpus. Nur Doku/Plan, kein Code/Build/git. REGEL 9: keine
-Audio-/Textinhalte in Logs; Korpus = vorhandene Projekt-Test-Assets (bereits in M4d
-genutzt) oder synthetisch.
+**Goal:** decide whether the dictation abort/corpus case is **sensibly testable
+now** in the simulator/emulator (<device>, headless) — including feeding
+real audio from a corpus. Documentation/plan only, no code/build/git. RULE 9:
+no audio/text content in logs; corpus = existing project test assets (already
+used in M4d) or synthetic.
 
-## 0) Ist-Lage (belegt, mit Pfaden)
+## 0) Current situation (evidenced, with paths)
 
-- **AVD/Emulator:** `vk-api36` = **x86_64** / 4 Cores / 1536 MB / API 36
-  `google_apis` (`<workdir>/.android/avd/vk-api36.avd/config.ini`); Container ohne
-  Display ⇒ nur Headless-Betrieb; IME wird dort nicht angezeigt (`mInputShown=false`),
-  `adb`/`connectedDebugAndroidTest` funktionieren. Emulator aktuell nicht gestartet.
-- **Engine:** `onnxruntime-android:1.31.1` x86_64 `.so` → **SIGSEGV im dlopen**
-  (arm64/Gerät ok); Kandidat **F32-B** (Core 1.28.2 aus sherpa-onnx-1.13.8-AAR +
-  1.31.1-Bridge) wird als Probe geprüft (Ergebnis offen; Probe-Material
-  `/tmp/sherpa_tree.json` vorhanden). Modell liegt vor: `.models/` (int8-ONNX, 671 MB).
-- **Nahten:** `AudioSource`-Interface (`app/src/main/java/de/voicekeyboard/audio/
-  AudioSource.kt:24`), Debug-`FakeWavAudioSource` (F30, zeitgetreue 10-ms-Blöcke,
-  Stille/Aussetzer/`stopAfterMs`), androidTests `dictation/DictationPipelineTest.kt`
-  (S1: WAV → `feedAudio` 320-Sample-Blöcke → echte Engine, M4d 6/6 grün **auf arm64**;
-  M3: virtuelles Mikrofon-Recipe), `MicCaptureTest.kt` (echter AudioRecord + Pegel).
-- **Messfelder (alle vorhanden):** `cap_blocks`, `cap_stall_ms`, `loud_s`, `mic_rel`,
-  `status_shown`, `abort_reason`, `hyp_count`, `hyp_gap_ms`, `buffer_s`,
-  `decode_ms_max/p95`, `audio_s`, `first_hyp_ms` (`debug/DebugInfoFormatter.kt`).
+- **AVD/emulator:** `vk-api36` = **x86_64** / 4 cores / 1536 MB / API 36
+  `google_apis` (`<workdir>/.android/avd/vk-api36.avd/config.ini`); container
+  without a display ⇒ headless operation only; the IME is not shown there
+  (`mInputShown=false`), `adb`/`connectedDebugAndroidTest` work. Emulator
+  currently not started.
+- **Engine:** `onnxruntime-android:1.31.1` x86_64 `.so` → **SIGSEGV in dlopen**
+  (arm64/device ok); candidate **F32-B** (core 1.28.2 from the
+  sherpa-onnx-1.13.8 AAR + 1.31.1 bridge) is being checked as a probe (result
+  open; probe material `/tmp/sherpa_tree.json` present). Model is on hand:
+  `.models/` (int8 ONNX, 671 MB).
+- **Seams:** `AudioSource` interface (`app/src/main/java/de/voicekeyboard/audio/
+  AudioSource.kt:24`), debug `FakeWavAudioSource` (F30, time-accurate 10-ms
+  blocks, silence/dropouts/`stopAfterMs`), androidTests
+  `dictation/DictationPipelineTest.kt` (S1: WAV → `feedAudio` 320-sample blocks
+  → real engine, M4d 6/6 green **on arm64**; M3: virtual microphone recipe),
+  `MicCaptureTest.kt` (real AudioRecord + level).
+- **Measurement fields (all present):** `cap_blocks`, `cap_stall_ms`,
+  `loud_s`, `mic_rel`, `status_shown`, `abort_reason`, `hyp_count`,
+  `hyp_gap_ms`, `buffer_s`, `decode_ms_max/p95`, `audio_s`, `first_hyp_ms`
+  (`debug/DebugInfoFormatter.kt`).
 
-## 1) Vier Wege (Aufwand / Risiko / Aussagekraft)
+## 1) Four routes (effort / risk / expressive power)
 
-| | A) androidTest + FakeWavAudioSource + echte Engine (Service-/Coordinator-Ebene) | B) androidTest liest WAV (`/sdcard`/assets) → `AudioSource`-Naht, Realtime-Takt 30–60 s, Assertions auf Hypothesen-Wachstum | C) Emulator-Virtuellmikro (Host-Audio, `-allow-host-audio`) | D) Engine-Stub (kein ONNX), nur Coordinator/Takt/Puffer |
+| | A) androidTest + FakeWavAudioSource + real engine (service/coordinator level) | B) androidTest reads WAV (`/sdcard`/assets) → `AudioSource` seam, realtime cadence 30–60 s, assertions on hypothesis growth | C) emulator virtual microphone (host audio, `-allow-host-audio`) | D) engine stub (no ONNX), only coordinator/cadence/buffer |
 |---|---|---|---|---|
-| **Geprüft** | F30-Quelle + echter Coordinator + echte Engine, volle 🐞-Felder; IME-Service-Wiring | exakt der M4d-S1-Pfad skaliert: Decode-Qualität/-Rückstau (C2), Takt, finale Qualität; `hyp_count`/`buffer_s`/`decode_ms_*` über 30–60 s | **echter AudioRecord + FGS + Routing** (die Schicht, die Export #2 verdächtigt); Pegel via `LevelPeak` | Coordinator/Watchdog/Stille/Status deterministisch (F30/F31-Bestand), CI-fähig |
-| **NICHT geprüft** | echtes Mikro, api-37-Politik | Mikro, FGS, IME-UI | Engine nur, wenn F32-B grün; IME-UI in Headless (s. u.) | **keine Transkription**, kein Rückstau, kein Pegel |
-| **Blocker** | **F32-B** (x86_64-SIGSEGV); Headless-IME-UI | **F32-B** für Emulator — **auf dem Phone (arm64) läuft er SOFORT** (M4d 6/6 grün) | F32-B + Headless-Audio (s. u.) | **kein** — läuft heute |
-| **Aufwand** | ~2–4 h (Test + Wiring, nach F32-B) | ~2 h (Fixture + 1 Testklasse; S1-Muster existiert) | ~2 h Setup (Recipe existiert: `tools/emulator_audio_up.sh`) + Orchestrierung | ~1–2 h (F30-Tests ausbauen, z. B. 30/60-s-Rückstau-Kurven) |
-| **Risiko** | mittel (Emulator-Audio/Timing) | **niedrig** (kein Audio-Stack, deterministisch) | hoch (Qt/Audio-Stack im Container, nur 5560) | **null** (JVM-Test) |
-| **CI-fähig** | ja (nach F32-B, offline) | ja (offline) | **nein** (Host-PulseAudio, exklusiver Emulator) | ja |
+| **Checked** | F30 source + real coordinator + real engine, full 🐞 fields; IME service wiring | exactly the M4d S1 path scaled: decode quality/backlog (C2), cadence, final quality; `hyp_count`/`buffer_s`/`decode_ms_*` over 30–60 s | **real AudioRecord + FGS + routing** (the layer that export #2 suspects); level via `LevelPeak` | coordinator/watchdog/silence/status deterministically (F30/F31 inventory), CI-capable |
+| **NOT checked** | real microphone, api 37 policy | microphone, FGS, IME UI | engine only if F32-B is green; IME UI in headless (see below) | **no transcription**, no backlog, no level |
+| **Blocker** | **F32-B** (x86_64 SIGSEGV); headless IME UI | **F32-B** for the emulator — **on the phone (arm64) it runs IMMEDIATELY** (M4d 6/6 green) | F32-B + headless audio (see below) | **none** — runs today |
+| **Effort** | ~2–4 h (test + wiring, after F32-B) | ~2 h (fixture + 1 test class; the S1 pattern exists) | ~2 h setup (recipe exists: `tools/emulator_audio_up.sh`) + orchestration | ~1–2 h (extend the F30 tests, e.g. 30/60-s backlog curves) |
+| **Risk** | medium (emulator audio/timing) | **low** (no audio stack, deterministic) | high (Qt/audio stack in the container, only on 5560) | **zero** (JVM test) |
+| **CI-capable** | yes (after F32-B, offline) | yes (offline) | **no** (host PulseAudio, exclusive emulator) | yes |
 
-**C-Headless-Prüfung (die wichtige Frage):** Das vermessene Recipe in
-`tools/emulator_audio_up.sh` (Kontrollen 2026-10-30) sagt explizit: **`-no-window`
-geht nicht** (headless-Branch hat keinen `pa`-Treiber, „Could not init `pa' audio
-driver" **und** nullt ohne `-allow-host-audio` das Mikro). **Aber** der vorgesehene
-Ersatz — `QT_QPA_PLATFORM=offscreen` + `-qt-hide-window` — braucht **kein physisches
-Display** (offscreen-QPA rendert in einen Speicherpuffer). ⇒ **C ist im
-displaylosen Container prinzipiell möglich**, aber: (1) der Emulator muss **ohne**
-`-no-window` starten (aktueller Headless-Aufruf anpassen), (2) PulseAudio-Hoststack
-läuft müssen, (3) die **IME-UI bleibt zu** (`mInputShown=false`) — eine echte
-Mic-Halte-Geste ist headless nicht antreibbar; testbar ist in C nur die
-**Capture-Hälfte** (AudioRecord→FGS→Pegel→Coordinator) im Instrumentation-Test
-(M3-Muster), nicht die volle IME-Session.
+**C headless check (the important question):** the measured recipe in
+`tools/emulator_audio_up.sh` (checks 2026-10-30) says explicitly: **`-no-window`
+does not work** (the headless branch has no `pa` driver, "Could not init `pa'
+audio driver" **and** without `-allow-host-audio` the microphone is zeroed).
+**But** the intended replacement — `QT_QPA_PLATFORM=offscreen` +
+`-qt-hide-window` — needs **no physical display** (the offscreen QPA renders
+into a memory buffer). ⇒ **C is in principle possible in the displayless
+container**, but: (1) the emulator must start **without** `-no-window` (adjust
+the current headless invocation), (2) the PulseAudio host stack must run, (3)
+the **IME UI stays closed** (`mInputShown=false`) — a real mic hold gesture
+cannot be driven headless; in C only the **capture half**
+(AudioRecord→FGS→level→coordinator) is testable in an instrumentation test
+(M3 pattern), not the full IME session.
 
-## 2) Korpus — OFFLINE verfügbar (alle Pfade geprüft, heute gemessen)
+## 2) Corpus — available OFFLINE (all paths checked, measured today)
 
-| Asset | Länge | Format | Anmerkung |
+| Asset | Length | Format | Note |
 |---|---|---|---|
-| `testdata/de_smoke.wav` | **6,4 s** | 16 kHz / s16 / mono | M4d-Golden-Quelle (berechtigt als Test-Asset) |
-| `testdata/de_part1.wav` | **2,8 s** | dito | Teil 1 |
-| `testdata/de_part2.wav` | **3,1 s** | dito | Teil 2 |
-| `testdata/de_pause.wav` | **9,9 s** | dito | **laut** (MaxAbs 27281 ≈ **−1,6 dBFS**) — kein Stille-Fixtures trotz des Namens |
-| `testdata/cut/*.wav` | **41 Dateien, Summe 88,9 s** (1–6 s-Segmente) | dito | Cut-Fenster aus `tools/make_cut_windows.py` |
-| `/tmp/seg_de_multi.wav` | 9,6 s | **22 050 Hz** | resample- oder weglassen |
+| `testdata/de_smoke.wav` | **6.4 s** | 16 kHz / s16 / mono | M4d golden source (legitimate as a test asset) |
+| `testdata/de_part1.wav` | **2.8 s** | ditto | part 1 |
+| `testdata/de_part2.wav` | **3.1 s** | ditto | part 2 |
+| `testdata/de_pause.wav` | **9.9 s** | ditto | **loud** (MaxAbs 27281 ≈ **−1.6 dBFS**) — not a silence fixture despite the name |
+| `testdata/cut/*.wav` | **41 files, total 88.9 s** (1–6 s segments) | ditto | cut windows from `tools/make_cut_windows.py` |
+| `/tmp/seg_de_multi.wav` | 9.6 s | **22,050 Hz** | resample or drop |
 
-**Gesamt: ~111 s echte 16-kHz-Deutsch-Audio offline vorhanden** ⇒ 30/60-s-Fixtures
-ohne Netz trivial erzeugen: **Konkatenation** `de_smoke + de_part1 + de_part2 + de_pause`
-= 22,2 s, dann **Schleife mit 0,3 s synthetischer Stille** zwischen Wiederholungen
-bis 30 s bzw. 60 s (einmaliger Python-Schritt, kein Asset-Commit nötig — Fixture im
-Test-Scaffold bauen). **Stille-Abschnitte** (für F31-Tests) **synthetisch erzeugen**
-(Null-Blöcke) — `de_pause` ist trotz des Namens durchgehend laut.
-**Was Schleifen verfälscht:** (a) TDT-Greedy sieht auf wiederholtem Satz wiederholte
-Hypothesen → Assertions dürfen **nicht** auf Neuheit des Texts prüfen, sondern auf
-Zähler/Kurven (Regel 9 ohnehin); (b) Loop-Grenzen können Decodiergrenzen
-künstlich stabilisieren (selbiger Satz, gleiche Kontexte) — **Rückstau/Takt-Messung
-bleibt davon unberührt** (das ist ja die C2-Frage); (c) Pegel bleibt konstant (kein
-natürliches Sprach-Dynamikband) — für Stille-/Watchdog-Tests egal, für
-Qualitäts-Vergleich ein Nachteil. Für echte Qualitätstests gilt: **Phone + M4d-
-Golden** bleibt Referenz, Schleifen-Fixtures beantworten **Timing- und
-Abbruch-Fragen**.
+**Total: ~111 s of real 16-kHz German audio available offline** ⇒ 30/60-s
+fixtures are trivially generated without network: **concatenation**
+`de_smoke + de_part1 + de_part2 + de_pause` = 22.2 s, then **loop with 0.3 s
+of synthetic silence** between repetitions up to 30 s or 60 s (a one-time
+Python step, no asset commit needed — build the fixture in the test scaffold).
+**Silence sections** (for F31 tests) are **generated synthetically** (zero
+blocks) — `de_pause` is continuously loud despite its name.
+**What looping distorts:** (a) TDT greedy sees repeated hypotheses on a
+repeated sentence → assertions must **not** check text novelty but counters/
+curves (rule 9 anyway); (b) loop boundaries can artificially stabilize
+decoding boundaries (same sentence, same contexts) — **backlog/cadence
+measurement remains unaffected** (that is precisely the C2 question); (c) the
+level stays constant (no natural speech dynamic range) — irrelevant for
+silence/watchdog tests, a disadvantage for quality comparison. For real quality
+tests: **phone + M4d golden** stays the reference; loop fixtures answer
+**timing and abort questions**.
 
-## 3) Testprotokoll (Konkret, Ziel: Weg B auf Emulator bzw. Phone)
+## 3) Test protocol (concrete, goal: route B on the emulator or phone)
 
-**Ablauf (Pfad pro Tick):** Fixture (`testdata/de_long30.wav` / `de_long60.wav`,
-im Test-Scaffold aus §2 erzeugt, 16 kHz mono s16) → 10-ms-Blöcke (320 Samples),
-**Realtime-getaktet** (10 ms-Zyklus, `SystemClock`-Referenz; Jitter < 5 ms
-tolerieren, sonst Tick-Marge notieren) → `DictationCoordinator`-Consumer
-(`AudioSource`-Naht, s. Ist-Lage) → `DictationController` → **echte Engine** →
-Zähler. **Variante „ohne Service"** = S1-Muster aus
-`DictationPipelineTest.kt` (bewährt, headless-fähig); Variante „mit Service"
-= A (nach F32-B, mit `FakeWavAudioSource`-Takt).
+**Flow (path per tick):** fixture (`testdata/de_long30.wav` / `de_long60.wav`,
+generated in the test scaffold per §2, 16 kHz mono s16) → 10-ms blocks (320
+samples), **realtime-paced** (10-ms cycle, `SystemClock` reference; tolerate
+jitter < 5 ms, otherwise note the tick margin) → `DictationCoordinator`
+consumer (`AudioSource` seam, see current situation) → `DictationController` →
+**real engine** → counters. **Variant "without service"** = the S1 pattern
+from `DictationPipelineTest.kt` (proven, headless-capable); variant "with
+service" = A (after F32-B, with `FakeWavAudioSource` cadence).
 
-**Dauer/Takt:** 2 Fixtures (30 s, 60 s) × 2 Läufe (Stabilität). Takt-Parameter
-wie Produktion (`DEFAULT_CHUNK_MS` 2000, Pace-Klammern 2000/6000, Guard 2,0 s).
-**Messpunkte:** nach jedem Ticker (2 s) ein 🐞-Snapshot der Felder aus §0 (im Test
-direkt von den Coordinator-/Controller-Gettern — kein Clipboard-Pfad nötig);
-Abschluss-Snapshot nach `stop()` (Endzustand).
+**Duration/cadence:** 2 fixtures (30 s, 60 s) × 2 runs (stability). Cadence
+parameters as in production (`DEFAULT_CHUNK_MS` 2000, pace brackets 2000/6000,
+guard 2.0 s). **Measurement points:** after every tick (2 s) a 🐞 snapshot of
+the fields from §0 (in the test directly from the coordinator/controller
+getters — no clipboard path needed); final snapshot after `stop()` (end state).
 
-**Erfolgs-Kriterien (alle gelten je Lauf, sonst = FEHLER mit Feld-Snapshot):**
+**Success criteria (all apply per run, otherwise = FAILURE with field
+snapshot):**
 
-| # | Kriterium | Wert |
+| # | Criterion | Value |
 |---|---|---|
-| E1 | `hyp_count` wächst über 30 s monoton | ≥ 10 (≈ 14 Ticks × Guard 2 s) bzw. ≥ 20 bei 60 s; **kein** Fenster von > 4 s ohne neue Hypothese |
-| E2 | `hyp_gap_ms` | < 4000 am Ende (gemessen wie 🐞-Export) |
-| E3 | **Kein C2-Rückstau:** `buffer_s` vs. `audio_s` | `buffer_s ≤ audio_s + 1,0` **am Ende**; Zwischen-Snapshots: `buffer_s` darf nicht über 5 s steigen |
-| E4 | `decode_ms_max` / `decode_ms_p95` | < 4000 / < 2000 (RTF ≪ 1 am Emulator 4-Core; Grenzwerte beim ersten Lauf kalibrieren und hier festhalten) |
-| E5 | `abort_reason` | bleibt „-" während des Laufs, am Ende **`final`** (erst durch Test-`stop()`); `lastError` = „-" |
-| E6 | Watchdog-Fehlalarme | **0**× `audio_error:stall`, **0**× `audio_error:silence` bei echtem Korpus-Audio (F31b-`everLoud`-Regression) |
-| E7 | `loud_s` / `cap_blocks` | `loud_s ≈ audio_s ± 1,0`; `cap_blocks ≈ audio_s × 100 ± 5 %` |
-| E8 | Text-Golden (nur Phone-Variante) | Endtext enthält §4.1-Golden (M4d-Muster, Wort-Identität ≥ 95 %) — im Emulator auf Schleifen-Fixture **nicht** ansetzen (s. §2) |
+| E1 | `hyp_count` grows monotonically over 30 s | ≥ 10 (≈ 14 ticks × guard 2 s) or ≥ 20 at 60 s; **no** window of > 4 s without a new hypothesis |
+| E2 | `hyp_gap_ms` | < 4000 at the end (measured as in the 🐞 export) |
+| E3 | **No C2 backlog:** `buffer_s` vs. `audio_s` | `buffer_s ≤ audio_s + 1.0` **at the end**; intermediate snapshots: `buffer_s` must not rise above 5 s |
+| E4 | `decode_ms_max` / `decode_ms_p95` | < 4000 / < 2000 (RTF ≪ 1 on the 4-core emulator; calibrate the limits on the first run and record them here) |
+| E5 | `abort_reason` | stays "-" during the run, at the end **`final`** (only via the test's `stop()`); `lastError` = "-" |
+| E6 | Watchdog false alarms | **0**× `audio_error:stall`, **0**× `audio_error:silence` with real corpus audio (F31b `everLoud` regression) |
+| E7 | `loud_s` / `cap_blocks` | `loud_s ≈ audio_s ± 1.0`; `cap_blocks ≈ audio_s × 100 ± 5 %` |
+| E8 | Text golden (phone variant only) | end text contains the §4.1 golden (M4d pattern, word identity ≥ 95 %) — do **not** attempt this in the emulator on a loop fixture (see §2) |
 
-**Abbruch-Kriterien des Testlaufs (Kill-Schalter, nicht „Test fehlgeschlagen"):**
-`decode_ms_max > 8000` zweimal in Folge → Lauf stoppen und als
-„Engine zu langsam auf x86_64" protokollieren (dann Weg D für Timing-Fragen);
-nativ-SIGSEGV → F32-B-Protokoll (Kandidat dokumentieren, kein Debugging im Test).
+**Abort criteria of the test run (kill switch, not "test failed"):**
+`decode_ms_max > 8000` twice in a row → stop the run and record it as "engine
+too slow on x86_64" (then route D for timing questions); native SIGSEGV →
+F32-B protocol (document the candidate, no debugging in the test).
 
-## 4) Was der Test NICHT kann (und was nur am Phone bleibt)
+## 4) What the test CANNOT do (and what stays phone-only)
 
-- **Echtes Mikro-Hardware-/Routing-DSP** (AGC/Noise-Suppression, `VOICE_RECOGNITION`-
-  Quellen-Verhalten am Gerät): Emulator-Virtuellmikro = sauberes Host-Signal, kein
-  DSP — der **−56,2-dBFS-Nutzerfall ist hier nicht reproduzierbar** (er ist
-  Hardware-/OS-Politik, kein App-Pfad).
-- **FGS-Mikro-Berechtigung api 37 + `POST_NOTIFICATIONS`:** Emulator = api 36 mit
-  lockerer Politik ⇒ der Hauptverdacht aus `ANALYSE_DIKTAT_ABBRUCH_2.md` (system-
-  seitiges Stummschalten nach ~1 s) bleibt **Phone-only**.
-- **IME-UI/Stopp-Gesten** headless: `mInputShown=false` ⇒ Haltegeste, `mic_rel`-
-  Pfade, Statusanzeige nicht antreibbar (F30-Tests decken die Logik ohne UI).
-- **Thermik/Speicher am Phone** bei Dauerlauf — nur annähernd am Emulator.
-⇒ **Phone-only-Verbleib:** 🐞-Export #3 (Entscheidungsbaum `ANALYSE_DIKTAT_ABBRUCH_2.md`
-  §9) bleibt der einzig gültige Beweis für den realen Abbruch; der Testplan
-  eliminiert nur die **App-Hälfte** (Decode-Rückstau, Watchdog-Fehlalarme,
-  Stopp-Pfade) als Ursache-Kandidaten.
+- **Real microphone hardware/routing DSP** (AGC/noise suppression,
+  `VOICE_RECOGNITION` source behavior on the device): emulator virtual
+  microphone = clean host signal, no DSP — the **−56.2-dBFS user case is not
+  reproducible here** (it is hardware/OS policy, not an app path).
+- **FGS microphone permission api 37 + `POST_NOTIFICATIONS`:** emulator =
+  api 36 with a lenient policy ⇒ the main suspect from
+  `ANALYSE_DIKTAT_ABBRUCH_2.md` (system-side muting after ~1 s) stays
+  **phone-only**.
+- **IME UI/stop gestures** headless: `mInputShown=false` ⇒ hold gesture,
+  `mic_rel` paths, status display not drivable (the F30 tests cover the logic
+  without UI).
+- **Thermal/memory on the phone** during continuous runs — only approximately
+  on the emulator.
+⇒ **Stays phone-only:** 🐞 export #3 (decision tree
+`ANALYSE_DIKTAT_ABBRUCH_2.md` §9) remains the only valid evidence for the real
+abort; the test plan only eliminates the **app half** (decode backlog,
+watchdog false alarms, stop paths) as cause candidates.
 
-## 5) Reihenfolge / Empfehlung (mit F32-B-Zweig)
+## 5) Order / recommendation (with the F32-B branch)
 
-| Schritt | Inhalt | Aufwand | Voraussetzung |
+| Step | Content | Effort | Prerequisite |
 |---|---|---|---|
-| 1 | **Weg D ausbauen** (heute, ohne Engine): 30/60-s-„Rückstau-Kurven" aus `FakeAudioScenarioTest`-Muster (Stub-Engine mit konstanter 150-ms-Latenz) ⇒ CI-Netz für Takt/Puffer/Watchdog, unabhängig von F32-B | ~1–2 h | — |
-| 2a | **F32-B grün:** Weg **B auf dem Emulator** (Fixture §2 + S1-Muster, Kriterien §3) — vollständige Decode-/C2-Antwort auf x86_64 | ~2 h | F32-B |
-| 2b | **F32-B rot:** Weg **B auf dem Phone** (arm64, M4d 6/6 grün) per `connectedDebugAndroidTest` — gleiche Fixture, gleiche Kriterien, E8-Golden zusätzlich; Emulator-Engine-Weg wartet auf nächsten Runtime-Kandidaten | ~2 h + 1 adb-Lauf | — (Phone) |
-| 3 | **Weg C** nur, wenn 2a/2b grün und die **FGS/AudioRecord-Schicht** am Emulator zusätzlich abgesichert werden soll (offscreen-Qt-Start ohne `-no-window`, Host-PA, M3-Muster, Capture-Hälfte ohne IME-UI) | ~2 h + Orchestrierung | 2a/2b grün |
-| 4 | **Export #3 vom Phone** (parallel, unabhängig von allen Schritten) — Entscheidungsbaum §9 anwenden | Nutzerlauf | — |
+| 1 | **Extend route D** (today, without engine): 30/60-s "backlog curves" from the `FakeAudioScenarioTest` pattern (stub engine with a constant 150-ms latency) ⇒ CI net for cadence/buffer/watchdog, independent of F32-B | ~1–2 h | — |
+| 2a | **F32-B green:** route **B on the emulator** (fixture §2 + S1 pattern, criteria §3) — complete decode/C2 answer on x86_64 | ~2 h | F32-B |
+| 2b | **F32-B red:** route **B on the phone** (arm64, M4d 6/6 green) via `connectedDebugAndroidTest` — same fixture, same criteria, plus E8 golden; the emulator engine route waits for the next runtime candidate | ~2 h + 1 adb run | — (phone) |
+| 3 | **Route C** only if 2a/2b are green and the **FGS/AudioRecord layer** is additionally to be secured on the emulator (offscreen Qt start without `-no-window`, host PA, M3 pattern, capture half without IME UI) | ~2 h + orchestration | 2a/2b green |
+| 4 | **Export #3 from the phone** (in parallel, independent of all steps) — apply the decision tree §9 | user run | — |
 
-**Entscheidungspunkt:** 2a vs. 2b wird **ausschließlich** durch das F32-B-Ergebnis
-getriggert (Kandidat-Core-1.28.2-dlopen-Test → SIGSEGV weg = 2a, sonst 2b). Weg C wird
-erst nach grünen Decode-Läufen gebaut — sonst wird ein zweites Risiko (Emulator-Audio-
-Stack) auf eine noch nicht bewiesene Engine-Basis gestapelt.
+**Decision point:** 2a vs. 2b is triggered **exclusively** by the F32-B result
+(candidate core 1.28.2 dlopen test → SIGSEGV gone = 2a, otherwise 2b). Route C
+is built only after green decode runs — otherwise a second risk (emulator
+audio stack) is stacked on an engine basis that is not yet proven.

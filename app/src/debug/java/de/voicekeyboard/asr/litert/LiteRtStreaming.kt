@@ -3,11 +3,11 @@ package de.voicekeyboard.asr.litert
 import kotlin.math.sqrt
 
 /**
- * V11a: Welford-Statistik über log_mel-Frames (ptdt.cpp:342
- * compute_global_feature_normalization) — reine JVM-Logik.
+ * V11a: Welford statistics over log_mel frames (ptdt.cpp:342
+ * compute_global_feature_normalization) — pure JVM logic.
  *
  * var = m2 / max(1, n-1), feature_inv_std = 1/(sqrt(var) + 1e-5);
- * bei Stille (var 0) ist inv_std = 1/1e-5 begrenzt — kein NaN/Unendlich.
+ * for silence (var 0) inv_std is bounded at 1/1e-5 — no NaN/infinity.
  */
 class GlobalFeatureStats(private val dims: Int) {
 
@@ -27,7 +27,7 @@ class GlobalFeatureStats(private val dims: Int) {
         }
     }
 
-    /** Liefert (mean[dims], invStd[dims]); bei n==0 Neutral (0/1). */
+    /** Returns (mean[dims], invStd[dims]); for n==0 neutral (0/1). */
     fun finish(): Pair<FloatArray, FloatArray> {
         if (n == 0L) return FloatArray(dims) to FloatArray(dims) { 1f }
         val denom = maxOf(1L, n - 1).toDouble()
@@ -48,8 +48,8 @@ class GlobalFeatureStats(private val dims: Int) {
 }
 
 /**
- * Reine Fenster-Logik der B-Pipeline (ptdt.cpp:400-490), bewiesen gegen
- * tools/arm_litert_reference_decode.py. Keine Modelle, keine Android-Typen.
+ * Pure window logic of the B pipeline (ptdt.cpp:400-490), proven against
+ * tools/arm_litert_reference_decode.py. No models, no Android types.
  */
 object LiteRtStreaming {
 
@@ -59,7 +59,7 @@ object LiteRtStreaming {
     const val CACHE_FRAMES = 9
     const val FEAT_DIM = 128
 
-    /** ptdt.cpp:458: input_length = 9 + gültige Feature-Frames. */
+    /** ptdt.cpp:458: input_length = 9 + valid feature frames. */
     fun inputLengthFor(validFrames: Int): Int = CACHE_FRAMES + validFrames
 
     /** ptdt.cpp:347: valid_feature_frames = min(760, max(0, samples/160)). */
@@ -67,20 +67,20 @@ object LiteRtStreaming {
         minOf(NUM_VALID_FRAMES, maxOf(0, samples / FRAME_HOP))
 
     /**
-     * V14 (L14-01): Cache FÜR DAS FOLGENDE FENSTER aus den letzten
-     * [CACHE_FRAMES] gültigen Frames des AKTUELLEN Fensters.
+     * V14 (L14-01): cache FOR THE FOLLOWING WINDOW from the last
+     * [CACHE_FRAMES] valid frames of the CURRENT window.
      *
-     * Fenster-Ablauf (Vertrag, ptdt.cpp:400-490 — Reihenfolge ist verbindlich):
-     *  (a) Featurizer-EINGANG von Fenster n: pre_encode_feature_cache = der
-     *      Cache, den preEncodeCache(inputFeatures_{n-1}, valid_{n-1}) geliefert hat.
-     *  (b) Featurizer erzeugt input_features_n = [9 Cache-Frames][valid_n] (flat,
-     *      Länge (9+valid_n)*featureSize).
-     *  (c) preEncodeCache(inputFeatures_n, valid_n) ⇒ Cache für Fenster n+1.
-     *  (d) Encoder-Caches (Ausgang cache_last_channel/time/len) ⇒ Eingang des
-     *      nächsten Encoder-Laufs.
+     * Window flow (contract, ptdt.cpp:400-490 — the order is binding):
+     *  (a) featurizer INPUT of window n: pre_encode_feature_cache = the
+     *      cache that preEncodeCache(inputFeatures_{n-1}, valid_{n-1}) returned.
+     *  (b) the featurizer produces input_features_n = [9 cache frames][valid_n] (flat,
+     *      length (9+valid_n)*featureSize).
+     *  (c) preEncodeCache(inputFeatures_n, valid_n) ⇒ cache for window n+1.
+     *  (d) encoder caches (output cache_last_channel/time/len) ⇒ input of the
+     *      next encoder run.
      *
-     * Vertragsbruch ⇒ IllegalArgumentException mit beiden Zahlen — kein stilles
-     * Abschneiden, keine Index-Ausnahme.
+     * Contract violation ⇒ IllegalArgumentException with both numbers — no silent
+     * truncation, no index exception.
      */
     fun preEncodeCacheFlat(
         feats: FloatArray,
@@ -108,8 +108,8 @@ object LiteRtStreaming {
     }
 
     /**
-     * Array-Variante (Zeilen = Frames) mit demselben harten Vertrag —
-     * [feats] muss (9+validFrames) Zeilen haben (input_features-Layout).
+     * Array variant (rows = frames) with the same hard contract —
+     * [feats] must have (9+validFrames) rows (input_features layout).
      */
     fun preEncodeCache(feats: Array<FloatArray>, validFrames: Int, dims: Int): Array<FloatArray> {
         val expected = CACHE_FRAMES + validFrames
@@ -129,7 +129,7 @@ object LiteRtStreaming {
         return out
     }
 
-    /** ptdt.cpp:400: previous_sample = audio[start-1] (start>0), sonst 0. */
+    /** ptdt.cpp:400: previous_sample = audio[start-1] (start>0), otherwise 0. */
     fun previousSampleAt(audio: FloatArray, start: Int): Float =
         if (start > 0 && start <= audio.size) audio[start - 1] else 0f
 }

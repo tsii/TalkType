@@ -1,14 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    <!-- Nur Debug-Build: Activity für Emulator-Verifikation der IME. -->
+    <!-- Debug build only: activity for emulator verification of the IME. -->
     <application>
         <activity
             android:name="de.voicekeyboard.debug.DebugInputActivity"
             android:exported="true"
             android:label="VK Debug Input" />
-        <!-- AP2 (PLAN_C2_FABLE_R2 §1.2): feindlicher Editor für die C2-Simulation —
-             nur Debug-Build, bewusst NICHT exportiert (Start per adb shell am
-             start, Skript §1.3 Schritt 5); Theme/Struktur wie DebugInputActivity. -->
+        <!-- AP2 (PLAN_C2_FABLE_R2 §1.2): hostile editor for the C2 simulation —
+             debug build only, deliberately NOT exported (started via adb shell am
+             start, script §1.3 step 5); theme/structure like DebugInputActivity. -->
         <activity
             android:name="de.voicekeyboard.debug.HostileEditorActivity"
             android:exported="false"

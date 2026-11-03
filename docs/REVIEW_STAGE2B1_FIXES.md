@@ -1,47 +1,47 @@
-# Review Stufe 2 B.1 — FIX-DURCHLAUF (zu REVIEW_STAGE2B1.md)
+# Review Stage 2 B.1 — FIX pass (to REVIEW_STAGE2B1.md)
 
-**Reviewer:** DeepSeek V4 Pro 0813 · **Datum:** 2026-10-27
-**Gegenstand:** Fixes zu SB1-01/03/06/07 aus `docs/REVIEW_STAGE2B1.md`.
-**Nicht ausgeführt:** `./gradlew` (paralleler Emulator-Test) → Manifest-Merge-Report
-nicht einsehbar; Provider-Entfernung daher als **Restrisiko** benannt, nicht behauptet.
+**Reviewer:** DeepSeek V4 Pro 0813 · **Date:** 2026-10-27
+**Subject:** fixes for SB1-01/03/06/07 from `docs/REVIEW_STAGE2B1.md`.
+**Not executed:** `./gradlew` (parallel emulator test) → manifest merge report
+not accessible; the provider removal is therefore named as a **residual risk**, not claimed as done.
 
 ---
 
-## Ergebnis je behauptetem Fix
+## Result per claimed fix
 
-| ID | Sev | Datei:Zeile | Befund | Evidenz | Fix |
+| ID | Sev | File:Line | Finding | Evidence | Fix |
 |---|---|---|---|---|---|
-| SB1-01 ✅ (Filter) | — | `TdtGreedy.kt:59,99` + `ParakeetAsrEngine.kt:130` | **Geschlossen.** Neuer 4-Argumente-Overload nimmt ein `isSpecial: (Int)->Boolean`-Prädikat; Haupt-Loop nutzt `if (!isSpecial(token))` statt des alten ID-Bereichs. Produktionspfad verdrahtet exakt §2.4: `TdtGreedy.decode(joint, encFrames, budget) { vocab.isSpecial(it) }`. `Vocabulary.isSpecial` (Vocabulary.kt:52-61) implementiert `<...>`-Muster (0..233, 244..273) **plus** ID 8192 und lässt Ziffern 234..243 zu — deckungsgleich mit §2.4/§7-4. | `ParakeetAsrEngine.kt:130` `decode(…, budget) { vocab.isSpecial(it) }`; `TdtGreedy.kt:99` `if (!isSpecial(token))`. | — |
-| SB1-01b (neu) | **P2** | `TdtGreedy.kt:50-51` | **Stiller Fehlpfad bleibt.** Der 3-Argumente-Overload `decode(joint, frames, tokenBudget)` defaultet weiter auf die **alte, unvollständige** Regel `{ it in AsrContract.SPECIAL_TOKEN_IDS }` (nur 0..4). Ein künftiger Aufrufer ohne `isSpecial` bekommt den §2.4-Verstoß erneut — ohne Compiler-/Testwarnung. Der Bestandstest `specialTokensNotEmitted` (TdtGreedyTest, „(vii)") übt sogar genau diesen Legacy-Pfad und legitimiert ihn damit. **Bewertung:** kein aktueller Bug (einziger Produktions-Aufrufer nutzt den 4-Arg-Overload), aber echter Footgun. | `TdtGreedy.kt:50-51` `fun decode(joint, frames, tokenBudget) = decode(joint, frames, tokenBudget) { it in AsrContract.SPECIAL_TOKEN_IDS }`. | 3-Arg-Overload entfernen (Aufrufer zwingen, `isSpecial` zu liefern) oder Default auf `Vocabulary.isSpecial` legen; Test „(vii)" auf den 4-Arg-Pfad umstellen. |
-| SB1-03 ⚠️ (Session-Aufbau) | **P2** | `OnnxSessions.kt:70,76` | **Leak behoben, aber Doppel-Close auf dem Validierungs-Fehlpfad.** Bei `createSession(dec)`-Fehler schließt das `finally` korrekt mel+enc (Z.62 schon gefüllt). Im **Erfolgsfall** kein Doppel-Close (`success=true` überspringt `finally`-Close, Z.73/76) — korrekt. **Aber:** wirft die Validierung (`validateMel/Encoder/Decoder`), läuft `s.close()` (Z.70) **und danach** `opened.forEach { it.close() }` (Z.76, weil `success` noch `false`) → mel/enc/dec werden zweimal geschlossen. Kein Use-after-close (kein weiterer Zugriff), kein Leak — aber redundantes/unsicheres Schließen. | Z.64-70 inneres try/catch mit `s.close()`; Z.75-76 `finally { if (!success) opened.forEach { it.close() } }` — beide treffen dieselben drei `OrtSession`-Objekte (s wrappt `opened[0..2]`). | Inneres `s.close()` entfernen und ausschließlich das `finally` schließen lassen (oder `closed`-Flag), damit jeder Pfad genau einmal schließt. |
-| SB1-06 ✅ (NaN-Guard) | — | `ParakeetAsrEngine.kt:118-124` | **Geschlossen.** Guard steht jetzt zwingend **nach** dem Encoder-Run und **vor** `TdtGreedy.decode` (Z.130). Kein Decode auf NaN/Inf-Input mehr. | Z.118-124 `for (v in encOut) { if (!v.isFinite()) throw … }` vor Z.130 `TdtGreedy.decode`. | — |
-| SB1-07 ⚠️ (Telemetry-Provider) | Note | `AndroidManifest.xml:21-23` | **Mechanismus korrekt, Entfernung unverifiziert.** `<provider android:name="ai.onnxruntime.TelemetryInitializer" tools:node="remove" />` mit passendem Provider-Namen (gemäß TECH_FACTS §3). Ob der Merger ihn tatsächlich entfernt, ist hier **nicht prüfbar** (kein `./gradlew` → kein `outputs/logs/manifest-merger-*.txt`). Restrisiko: falls das ORT-AAR den Provider unter anderem Namen/anderen Attributen deklarierte, greift `remove` still nicht. **Als Restrisiko benannt, nicht als verifiziert behauptet.** | Z.21-23 `<provider … tools:node="remove" />`. | Nach dem Build den Manifest-Merge-Report prüfen (Provider darf im gemergten Manifest nicht mehr auftauchen). |
-| SB1-01c (neu) | Note | `TdtGreedyTest.kt` (2 neue Tests) | **Tests beweisen Prädikat-Weitergabe, nicht End-to-End.** Die zwei neuen Tests (`specialTokenLanguageTokenNotEmitted` 78, `specialTokenSplTokenNotEmitted` 244) übergeben eine **hartkodierte** Lambda `{ id in SPECIAL_TOKEN_IDS || id==78 || id==244 }`, nicht `Vocabulary.isSpecial`/eine echte Vokabel. Sie belegen damit, dass der 4-Arg-Overload das Prädikat für 78/244 respektiert — **nicht**, dass `vocab.isSpecial` korrekt verdrahtet ist oder das echte Vokabular 78/244 filtert. Letzteres deckt `VocabularyTest` ab (isSpecial(78)=true, isSpecial(244)=true, Ziffern false). Lücke: kein Test verdrahtet `vocab.isSpecial` in `decode` (die kritische Zeile `ParakeetAsrEngine.kt:130` ist nur per Sichtprüfung belegt). | Neue Tests nutzen Inline-Lambda statt echter Vokabel; Verdrahtung `ParakeetAsrEngine.kt:130` ohne Unit-Test. | Einen Test ergänzen, der `TdtGreedy.decode(joint, frames, budget, ::vocab.isSpecialLike)` mit einem `Vocabulary.parse`-Konstrukt aufruft (78/244 gefiltert, 240 behalten). |
-| SB1-02/04/05 | (deferred) | — | `ModelError`-Typ, Dispatcher/`withContext`, Per-Frame-Allokationen bewusst in die nächste Stufe verschoben. **Weiterhin offen** (P2 aus Vorreview), hier nicht erneut bewertet, aber nicht erledigt. | — | In der Folgestufe aufnehmen. |
+| SB1-01 ✅ (filter) | — | `TdtGreedy.kt:59,99` + `ParakeetAsrEngine.kt:130` | **Closed.** A new 4-argument overload takes an `isSpecial: (Int)->Boolean` predicate; the main loop uses `if (!isSpecial(token))` instead of the old ID range. The production path wires exactly §2.4: `TdtGreedy.decode(joint, encFrames, budget) { vocab.isSpecial(it) }`. `Vocabulary.isSpecial` (Vocabulary.kt:52-61) implements the `<...>` pattern (0..233, 244..273) **plus** ID 8192 and lets digits 234..243 through — identical to §2.4/§7-4. | `ParakeetAsrEngine.kt:130` `decode(…, budget) { vocab.isSpecial(it) }`; `TdtGreedy.kt:99` `if (!isSpecial(token))`. | — |
+| SB1-01b (new) | **P2** | `TdtGreedy.kt:50-51` | **A silent wrong path remains.** The 3-argument overload `decode(joint, frames, tokenBudget)` still defaults to the **old, incomplete** rule `{ it in AsrContract.SPECIAL_TOKEN_IDS }` (only 0..4). A future caller without `isSpecial` gets the §2.4 violation again — without a compiler/test warning. The existing test `specialTokensNotEmitted` (TdtGreedyTest, "(vii)") even exercises exactly this legacy path and thereby legitimizes it. **Assessment:** no current bug (the only production caller uses the 4-arg overload), but a real footgun. | `TdtGreedy.kt:50-51` `fun decode(joint, frames, tokenBudget) = decode(joint, frames, tokenBudget) { it in AsrContract.SPECIAL_TOKEN_IDS }`. | Remove the 3-arg overload (force callers to supply `isSpecial`) or set the default to `Vocabulary.isSpecial`; switch test "(vii)" to the 4-arg path. |
+| SB1-03 ⚠️ (session setup) | **P2** | `OnnxSessions.kt:70,76` | **Leak fixed, but double close on the validation error path.** On a `createSession(dec)` error, the `finally` correctly closes mel+enc (line 62 already populated). In the **success case** no double close (`success=true` skips the `finally` close, lines 73/76) — correct. **But:** if the validation throws (`validateMel/Encoder/Decoder`), `s.close()` runs (line 70) **and afterwards** `opened.forEach { it.close() }` (line 76, because `success` is still `false`) → mel/enc/dec get closed twice. No use-after-close (no further access), no leak — but redundant/unsafe closing. | Lines 64-70 inner try/catch with `s.close()`; lines 75-76 `finally { if (!success) opened.forEach { it.close() } }` — both hit the same three `OrtSession` objects (s wraps `opened[0..2]`). | Remove the inner `s.close()` and let only the `finally` close (or a `closed` flag), so every path closes exactly once. |
+| SB1-06 ✅ (NaN guard) | — | `ParakeetAsrEngine.kt:118-124` | **Closed.** The guard now necessarily sits **after** the encoder run and **before** `TdtGreedy.decode` (line 130). No more decode on NaN/Inf input. | Lines 118-124 `for (v in encOut) { if (!v.isFinite()) throw … }` before line 130 `TdtGreedy.decode`. | — |
+| SB1-07 ⚠️ (telemetry provider) | Note | `AndroidManifest.xml:21-23` | **Mechanism correct, removal unverified.** `<provider android:name="ai.onnxruntime.TelemetryInitializer" tools:node="remove" />` with the correct provider name (per TECH_FACTS §3). Whether the merger actually removes it is **not verifiable** here (no `./gradlew` → no `outputs/logs/manifest-merger-*.txt`). Residual risk: if the ORT AAR declared the provider under a different name/other attributes, `remove` silently does not apply. **Named as a residual risk, not claimed as verified.** | Lines 21-23 `<provider … tools:node="remove" />`. | After the build, check the manifest merge report (the provider must no longer appear in the merged manifest). |
+| SB1-01c (new) | Note | `TdtGreedyTest.kt` (2 new tests) | **Tests prove predicate pass-through, not end-to-end.** The two new tests (`specialTokenLanguageTokenNotEmitted` 78, `specialTokenSplTokenNotEmitted` 244) pass a **hard-coded** lambda `{ id in SPECIAL_TOKEN_IDS || id==78 || id==244 }`, not `Vocabulary.isSpecial`/a real vocabulary. They prove that the 4-arg overload respects the predicate for 78/244 — **not** that `vocab.isSpecial` is correctly wired or that the real vocabulary filters 78/244. The latter is covered by `VocabularyTest` (isSpecial(78)=true, isSpecial(244)=true, digits false). Gap: no test wires `vocab.isSpecial` into `decode` (the critical line `ParakeetAsrEngine.kt:130` is evidenced only by visual inspection). | New tests use an inline lambda instead of a real vocabulary; wiring `ParakeetAsrEngine.kt:130` without a unit test. | Add a test that calls `TdtGreedy.decode(joint, frames, budget, ::vocab.isSpecialLike)` with a `Vocabulary.parse` construct (78/244 filtered, 240 kept). |
+| SB1-02/04/05 | (deferred) | — | `ModelError` type, dispatcher/`withContext`, per-frame allocations deliberately deferred to the next stage. **Still open** (P2 from the prior review), not re-assessed here, but not done either. | — | Take them up in the follow-up stage. |
 
 ---
 
-## Punktgenaue Antworten auf die Prüfaufträge
+## Point-by-point answers to the review assignments
 
-1. **SB1-01 wirklich geschlossen?** **Ja.** Produktionspfad verdrahtet exakt §2.4 (`vocab.isSpecial` = `<...>`-Muster + 8192, Ziffern 234..243 erlaubt). Das Restrisiko ist ausschließlich der **verbleibende 3-Arg-Overload** mit der Alt-Regel (0..4) — P2, da aktuell kein Aufrufer ihn nutzt, aber als Footgun zu beseitigen.
-2. **SB1-03:** enc/dec-Fehler → mel+enc werden im `finally` geschlossen (✔). Erfolgsfall → kein Doppel-Close (✔, `success=true`). **Aber** Validierungsfehler → Doppel-Close über `s.close()` + `finally` (P2). Kein Leak, kein Use-after-close.
-3. **SB1-06:** Guard steht zwingend vor dem Decode (✔).
-4. **SB1-07:** Mechanismus korrekt (Provider-Name passt zu §3), aber Entfernung **im gemergten Manifest nicht verifizierbar** ohne Build → Restrisiko.
-5. **Neue Regressionen:** die Doppel-Close-Lücke (SB1-03) ist eine; die Tests sind nur Prädikat-Weitergabe-Beweise (SB1-01c). Sonst keine funktionalen Regressionen — der Decode-Loop selbst ist unverändert, die Lambda-Verwendung ist äquivalent.
-6. **Merge-Fähigkeit unten (Verdikt).**
+1. **SB1-01 really closed?** **Yes.** The production path wires exactly §2.4 (`vocab.isSpecial` = `<...>` pattern + 8192, digits 234..243 allowed). The only residual risk is the **remaining 3-arg overload** with the old rule (0..4) — P2, since currently no caller uses it, but it must be removed as a footgun.
+2. **SB1-03:** enc/dec error → mel+enc get closed in the `finally` (✔). Success case → no double close (✔, `success=true`). **But** validation error → double close via `s.close()` + `finally` (P2). No leak, no use-after-close.
+3. **SB1-06:** guard necessarily sits before the decode (✔).
+4. **SB1-07:** mechanism correct (provider name matches §3), but the removal **cannot be verified in the merged manifest** without a build → residual risk.
+5. **New regressions:** the double-close gap (SB1-03) is one; the tests are only predicate pass-through proofs (SB1-01c). Otherwise no functional regressions — the decode loop itself is unchanged, the lambda usage is equivalent.
+6. **Mergeability below (verdict).**
 
 ---
 
-## Verdikt
+## Verdict
 
-**Merge freigeben.**
+**Release for merge.**
 
-Das einzige P1 aus dem Vorreview (SB1-01, verbindlicher §2.4-Filter) ist **echt geschlossen** — der Produktionspfad verdrahtet `Vocabulary.isSpecial` exakt nach §2.4/§7-4, und der Guard-Fix (SB1-06) sowie die Leak-Beseitigung (SB1-03 Kern) sind korrekt. **Keine offenen P0/P1.** Die verbleibenden P2 (3-Arg-Footgun, Doppel-Close im Validierungsfehlpfad) und die verschobenen P2 (SB1-02/04/05) sind nicht merge-blockierend, gehören aber in die nächste Stufe bzw. ins Cleanup.
+The only P1 from the prior review (SB1-01, mandatory §2.4 filter) is **genuinely closed** — the production path wires `Vocabulary.isSpecial` exactly per §2.4/§7-4, and the guard fix (SB1-06) as well as the leak removal (SB1-03 core) are correct. **No open P0/P1.** The remaining P2s (3-arg footgun, double close on the validation error path) and the deferred P2s (SB1-02/04/05) are not merge-blocking but belong in the next stage or the cleanup.
 
-## Restrisiken
+## Residual risks
 
-1. **P2 — Doppel-Close** bei Validierungsfehler (`OnnxSessions.kt:70+76`): unsicher, falls `OrtSession.close()` nicht idempotent ist (folgenlos, da der Pfad ohnehin mit Fehler endet).
-2. **P2 — Footgun 3-Arg-Overload** (`TdtGreedy.kt:50-51`): alte unvollständige Regel bleibt als stiller Default erreichbar und wird von Test „(vii)" geübt.
-3. **Note — SB1-07 unverifiziert:** Provider-Entfernung erst nach Build über den Manifest-Merge-Report belegen.
-4. **Note — Testlücke:** kein Test verdrahtet `vocab.isSpecial` in `decode` (Zeile `ParakeetAsrEngine.kt:130` nur sichtgeprüft).
-5. **Offen (deferred):** SB1-02 (`ModelError`), SB1-04 (Dispatcher), SB1-05 (Frame-Allokationen) — gemäß Plan in der nächsten Stufe.
+1. **P2 — double close** on validation error (`OnnxSessions.kt:70+76`): unsafe if `OrtSession.close()` is not idempotent (consequence-free, since the path ends in an error anyway).
+2. **P2 — footgun 3-arg overload** (`TdtGreedy.kt:50-51`): the old incomplete rule remains reachable as a silent default and is exercised by test "(vii)".
+3. **Note — SB1-07 unverified:** prove the provider removal only after a build via the manifest merge report.
+4. **Note — test gap:** no test wires `vocab.isSpecial` into `decode` (line `ParakeetAsrEngine.kt:130` visually inspected only).
+5. **Open (deferred):** SB1-02 (`ModelError`), SB1-04 (dispatcher), SB1-05 (frame allocations) — per plan in the next stage.

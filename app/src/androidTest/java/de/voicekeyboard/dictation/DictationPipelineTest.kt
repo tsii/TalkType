@@ -25,55 +25,55 @@ import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
 
 /**
- * Instrumentierter Diktat-Pipeline-Test (M4d, E4-Szenarien ohne Mikrofon):
- * echte ASR-Engine (echtes Modell aus filesDir/models), echte WAV-Fixtures,
- * Fake-/Low-Level-Editoren. Beweist die Kette ab Audio-Puffer bis Text —
- * alles außer Mic-Treiber/Route (Geräte-Gate, DESIGN §10.4; `-no-audio`-
- * Emulator: kein E2E, nur Pipeline).
+ * Instrumented dictation pipeline test (M4d, E4 scenarios without a microphone):
+ * real ASR engine (real model from filesDir/models), real WAV fixtures,
+ * fake/low-level editors. Proves the chain from the audio buffer to text —
+ * everything except mic driver/route (device gate, DESIGN §10.4; `-no-audio`
+ * emulator: no E2E, pipeline only).
  *
- * Szenarien (E4):
- *  S1 echte Engine + de_smoke.wav → Endtext enthält den §4.1-Golden-Text;
- *     committed-Präfix wurde nie gelöscht (Monotonie der Operationen).
- *  S2 InputConnectionSink gegen Fake-InputConnection: Batch-Paarung auch bei
- *     Wurf, UTF-16-Löschung korrekt, Surrogatpaare/`ä` unzerrt.
- *  S3 Besitzverlust (Nutzer tippt dazwischen): danach keine Schreibop mehr.
- *  S4 60-Zeichen-Revisionsgrenze: Alttext-Präfix bleibt, Append-only.
+ * Scenarios (E4):
+ *  S1 real engine + de_smoke.wav → final text contains the §4.1 golden text;
+ *     the committed prefix was never deleted (monotonicity of operations).
+ *  S2 InputConnectionSink against a fake InputConnection: batch pairing even on
+ *     throw, UTF-16 deletion correct, surrogate pairs/`ä` unbroken.
+ *  S3 ownership loss (user types in between): no write op afterwards.
+ *  S4 60-character revision limit: the old-text prefix stays, append-only.
  */
 @RunWith(AndroidJUnit4::class)
 class DictationPipelineTest {
 
     /**
-     * M3 aus `docs/PLAN_AUDIO_UND_LAYOUT.md` §1.3 — der Königsbeweis: derselbe
-     * Golden-Nachweis wie S1, aber der Ton kommt über das **MIKROFON** (vom Host
-     * in das virtuelle Mikrofon eingespeist), nicht aus einer WAV-Datei.
+     * M3 from `docs/PLAN_AUDIO_UND_LAYOUT.md` §1.3 — the royal proof: the same
+     * golden verification as S1, but the sound comes in via the **MICROPHONE**
+     * (fed from the host into the virtual microphone), not from a WAV file.
      *
-     * Ausführung (nur Orchestrator):
+     * Execution (orchestrator only):
      *   tools/emulator_audio_up.sh
      *   ( for i in 1..8: paplay testdata/de_smoke.wav ) &
      *   adb -s <device> shell am instrument -w \
      *       -e class de.voicekeyboard.dictation.DictationPipelineTest#m3_realEngineFromMicrophone_commitsGoldenText \
      *       de.voicekeyboard.test/androidx.test.runner.AndroidJUnitRunner
      *
-     * Toleranz: Wort-Identität ≥ 95 % statt exakter Übereinstimmung — der Host-Pfad
-     * resampelt 48 → 16 kHz und überträgt das Signal über zwei Stufen.
+     * Tolerance: word identity ≥ 95 % instead of an exact match — the host path
+     * resamples 48 → 16 kHz and passes the signal through two stages.
      */
     @Test
     fun m3_realEngineFromMicrophone_commitsGoldenText() {
         val storeDir2 = File(appContext().filesDir, "models")
         val aktiv = File(storeDir2, "active.txt").takeIf { it.isFile }?.readText()?.trim()
         val versionen = File(storeDir2, "versions").listFiles()?.map { f -> f.name } ?: emptyList()
-        println("M3-DIAG zeiger=" + aktiv + " versionen=" + versionen + " inhaltsverzeichnis=" + File(storeDir2, "versions/" + (aktiv ?: "-")).listFiles()?.map { f -> f.name })
+        println("M3-DIAG pointer=" + aktiv + " versions=" + versionen + " listing=" + File(storeDir2, "versions/" + (aktiv ?: "-")).listFiles()?.map { f -> f.name })
         val modelDir = modelDirOrNull()
         assertTrue(
-            "Modellpfad nicht aufloesbar: Zeiger='" + (aktiv ?: "keine active.txt") +
-                "' Versionen=" + versionen + " aufgeloest=" + (modelDir?.name ?: "null"),
+            "model path not resolvable: pointer='" + (aktiv ?: "no active.txt") +
+                "' versions=" + versionen + " resolved=" + (modelDir?.name ?: "null"),
             modelDir != null,
         )
         assertModelIntegrity(modelDir!!)
 
-        // 1) 7,5 s echtes Mikrofon-Signal in 20-ms-Blöcke sammeln (320 Samples)
+        // 1) collect 7.5 s of real microphone signal into 20-ms blocks (320 samples)
         val quelle = de.voicekeyboard.audio.AudioRecordSource(maxDurationMs = 15_000)
-        assertTrue("Mikrofon-Start fehlgeschlagen", quelle.start(1L))
+        assertTrue("microphone start failed", quelle.start(1L))
         val puffer = ShortArray(320)
         val blocks = ArrayList<ShortArray>()
         val startMs = System.currentTimeMillis()
@@ -83,9 +83,9 @@ class DictationPipelineTest {
         }
         quelle.release()
         val samples = blocks.sumOf { it.size }
-        assertTrue("nur $samples Samples vom Mikrofon gelesen (erwartet > ${16_000 * 3})", samples > 16_000 * 3)
+        assertTrue("only $samples samples read from the microphone (expected > ${16_000 * 3})", samples > 16_000 * 3)
 
-        // 2) dieselbe Pipeline wie S1: echter Controller, echte Engine, echtes Modell
+        // 2) the same pipeline as S1: real controller, real engine, real model
         val sink = RecordingSink()
         val tracker = OwnershipTracker()
         val engine = ParakeetAsrEngine()
@@ -103,7 +103,7 @@ class DictationPipelineTest {
         runBlocking { controller.stop() }
         engine.close()
 
-        // 3) Bewertung gegen §4.1: Wort-Identität, und die harte Sprachprüfung
+        // 3) evaluation against §4.1: word identity, and the hard language check
         val endtext = sink.text
         val normal = { t: String -> t.lowercase().split(" ").map { w -> w.trim('.', ',', '!', '?', ':', ';') }.filter { it.isNotEmpty() } }
         val golden = normal(GOLDEN_SMOKE)
@@ -111,12 +111,12 @@ class DictationPipelineTest {
         val treffer = golden.count { w -> ist.contains(w) }
         val identitaet = 100 * treffer / golden.size
         assertTrue(
-            "Wort-Identitaet ${identitaet}% unter 95 %; Ist='${endtext.take(160)}'",
+            "word identity ${identitaet}% below 95 %; actual='${endtext.take(160)}'",
             identitaet >= 95,
         )
         val englisch = listOf("the", "and", "you", "not", "sure", "with", "that")
         assertTrue(
-            "fremdsprachiger Output (${ist.count { it in englisch }} englische Woerter): '${endtext.take(140)}'",
+            "foreign-language output (${ist.count { it in englisch }} English words): '${endtext.take(140)}'",
             ist.count { it in englisch } == 0,
         )
     }
@@ -129,25 +129,25 @@ class DictationPipelineTest {
         private const val CHUNK_MS = 20
     }
 
-    // ---- Fixtures ----
+    // ---- fixtures ----
 
     private fun appContext() = InstrumentationRegistry.getInstrumentation().targetContext
 
     /**
-     * Modell-Bereitschaft (Assume-Schnellcheck): alle 4 Dateinamen aus
-     * [de.voicekeyboard.model.ModelManifest.DEFAULT] liegen im Verzeichnis,
-     * Größen stimmen mit sizeBytes überein. Akzeptiert BEIDE Layouts:
-     * filesDir/models im Store-Layout (aktive Version) ODER einen flachen
-     * Ordner (z. B. /data/local/tmp/models ohne active.txt/versions/ —
-     * Store-konformes Layout wird nicht verlangt). Die volle SHA-256-Prüfung
-     * läuft NICHT hier, sondern als Assertion im Testkörper.
+     * Model readiness (assume quick check): all 4 file names from
+     * [de.voicekeyboard.model.ModelManifest.DEFAULT] lie in the directory,
+     * sizes match sizeBytes. Accepts BOTH layouts:
+     * filesDir/models in the store layout (active version) OR a flat
+     * folder (e.g. /data/local/tmp/models without active.txt/versions/ —
+     * a store-compliant layout is not required). The full SHA-256 check
+     * does NOT run here, but as an assertion in the test body.
      */
     private fun modelDirOrNull(): File? {
-        // 1) App-interner Store (Layout mit active.txt + Hash-Verifikation)
+        // 1) app-internal store (layout with active.txt + hash verification)
         val storeDir = File(appContext().filesDir, "models")
-        // Reihenfolge zaehlt: die Dateien liegen NIE in der Store-Wurzel, sondern
-        // in versions/<aktiv>. Der Store meldet "bereit" und waehlt selbst die
-        // Variante (Manifest je Build-Variante) — fuer die Engine ist beides egal.
+        // the order matters: the files NEVER lie in the store root, but
+        // in versions/<active>. The store reports "ready" and picks the
+        // variant itself (manifest per build variant) — for the engine both are equal.
         runCatching {
             val aktiv = File(storeDir, "active.txt").readText().trim()
             val dir = File(storeDir, "versions/$aktiv")
@@ -163,14 +163,14 @@ class DictationPipelineTest {
             file.isFile && file.length() == f.sizeBytes
         }
 
-    /** Volle Integritätsprüfung (SHA-256 über alle Dateien) — normale Assertion. */
+    /** Full integrity check (SHA-256 over all files) — a normal assertion. */
     private fun assertModelIntegrity(dir: File) {
         for (entry in de.voicekeyboard.model.ModelManifest.DEFAULT) {
             val f = File(dir, entry.storeName)
-            assertTrue("Modell-Datei fehlt in ${dir.name}: ${entry.storeName}", f.isFile)
-            assertEquals("Größe falsch: ${entry.storeName}", entry.sizeBytes, f.length())
+            assertTrue("model file missing in ${dir.name}: ${entry.storeName}", f.isFile)
+            assertEquals("wrong size: ${entry.storeName}", entry.sizeBytes, f.length())
             assertEquals(
-                "SHA-256 weicht ab: ${entry.storeName}",
+                "SHA-256 deviates: ${entry.storeName}",
                 entry.sha256,
                 de.voicekeyboard.model.Sha256.ofFile(f),
             )
@@ -179,17 +179,17 @@ class DictationPipelineTest {
 
     private fun assumeWav(name: String): File {
         val f = File(TESTDATA, name)
-        assumeTrue("Test-WAV fehlt: $f (Emulator-Setup)", f.isFile)
+        assumeTrue("test WAV missing: $f (emulator setup)", f.isFile)
         return f
     }
 
-    /** RIFF/WAVE-Parser (Stil wie ParakeetGoldenTest): PCM16 mono 16 kHz. */
+    /** RIFF/WAVE parser (style like ParakeetGoldenTest): PCM16 mono 16 kHz. */
     private fun parseWav(file: File): ShortArray {
         RandomAccessFile(file, "r").use { raf ->
             val header = ByteArray(12)
             raf.readFully(header)
-            require(String(header, 0, 4, Charsets.US_ASCII) == "RIFF") { "Kein RIFF" }
-            require(String(header, 8, 4, Charsets.US_ASCII) == "WAVE") { "Kein WAVE" }
+            require(String(header, 0, 4, Charsets.US_ASCII) == "RIFF") { "no RIFF" }
+            require(String(header, 8, 4, Charsets.US_ASCII) == "WAVE") { "no WAVE" }
             var fmt: ByteArray? = null
             var data: ByteArray? = null
             while (raf.filePointer < raf.length() - 8) {
@@ -203,11 +203,11 @@ class DictationPipelineTest {
                     else -> raf.seek(raf.filePointer + size + (size % 2))
                 }
             }
-            val f = fmt ?: error("kein fmt")
-            require(leShort(f, 0).toInt() and 0xFFFF == 1) { "Kein PCM" }
-            require(leShort(f, 2).toInt() == 1) { "Nicht mono" }
-            require(leInt(f, 4) == 16_000) { "Nicht 16 kHz" }
-            val d = data ?: error("kein data")
+            val f = fmt ?: error("no fmt")
+            require(leShort(f, 0).toInt() and 0xFFFF == 1) { "not PCM" }
+            require(leShort(f, 2).toInt() == 1) { "not mono" }
+            require(leInt(f, 4) == 16_000) { "not 16 kHz" }
+            val d = data ?: error("no data")
             val n = d.size / 2
             val out = ShortArray(n)
             for (i in 0 until n) out[i] = leShort(d, i * 2)
@@ -222,11 +222,11 @@ class DictationPipelineTest {
     private fun leShort(b: ByteArray, o: Int) =
         ((b[o].toInt() and 0xFF) or ((b[o + 1].toInt() and 0xFF) shl 8)).toShort()
 
-    // ---- Fakes ----
+    // ---- fakes ----
 
-    /** Thread-sicherer In-Memory-Sink: protokolliert JEDE Operation. */
+    /** Thread-safe in-memory sink: records EVERY operation. */
     private class RecordingSink : EditorSink {
-        val ops = CopyOnWriteArrayList<String>() // "repl:<len>:<len>" (keine Textinhalte in Logs)
+        val ops = CopyOnWriteArrayList<String>() // "repl:<len>:<len>" (no text contents in logs)
         private val buf = StringBuilder()
         private val lock = Any()
         val text: String get() = synchronized(lock) { buf.toString() }
@@ -249,7 +249,7 @@ class DictationPipelineTest {
         override fun ownLength(): Int = synchronized(lock) { buf.length }
     }
 
-    /** Fake-InputConnection (StringBuilder, Thread-sicher) für Szenario 2/3/4. */
+    /** Fake InputConnection (StringBuilder, thread-safe) for scenarios 2/3/4. */
     private class FakeInputConnection(initial: String = "") : InputConnection {
         val buf = StringBuilder(initial)
         private val lock = Any()
@@ -291,11 +291,11 @@ class DictationPipelineTest {
                 true
             }
 
-        // ---- verbotene Operationen: harter Guard (Sink darf sie nicht rufen) ----
+        // ---- forbidden operations: hard guard (the sink must not call them) ----
         override fun setComposingText(text: CharSequence, newCursorPosition: Int): Boolean =
-            error("setComposingText verboten (DESIGN §6)")
+            error("setComposingText forbidden (DESIGN §6)")
 
-        // ---- restliche Interface-Member: neutrale Defaults ----
+        // ---- remaining interface members: neutral defaults ----
         override fun getSelectedText(flags: Int): CharSequence? = synchronized(lock) { "" }
         override fun setSelection(start: Int, end: Int): Boolean = true
         override fun performEditorAction(actionCode: Int): Boolean = true
@@ -322,14 +322,14 @@ class DictationPipelineTest {
         override fun getHandler(): android.os.Handler? = null
     }
 
-    // ---- Szenario 1: echte Engine, echte WAV, Fake-Editor ----
+    // ---- scenario 1: real engine, real WAV, fake editor ----
 
     @Test
     fun s1_realEngine_realWav_commitsGoldenWithoutDeletingCommittedPrefix() {
         val modelDir = modelDirOrNull()
-        assumeTrue("Kein Modell (filesDir/models noch /data/local/tmp/models)", modelDir != null)
+        assumeTrue("no model (neither filesDir/models nor /data/local/tmp/models)", modelDir != null)
         val wav = assumeWav("de_smoke.wav")
-        assertModelIntegrity(modelDir!!) // volle SHA-256-Prüfung als Assertion, nicht Assume
+        assertModelIntegrity(modelDir!!) // full SHA-256 check as an assertion, not assume
 
         val sink = RecordingSink()
         val tracker = OwnershipTracker()
@@ -337,11 +337,11 @@ class DictationPipelineTest {
         val controller = DictationController(engine, sink, tracker = tracker)
         engine.load(modelDir!!)
 
-        // WAV in 20-ms-Blöcke (16000 Hz → 320 Samples) — WavAudioSource-Semantik
+        // WAV into 20-ms blocks (16000 Hz → 320 samples) — WavAudioSource semantics
         val pcm = parseWav(wav)
         val chunk = 320
         controller.start()
-        tracker.onOwnEdit("") // Anfangsbesitz: leerer erwarteter Text, Editor leer
+        tracker.onOwnEdit("") // initial ownership: empty expected text, editor empty
         for (off in pcm.indices step chunk) {
             val len = minOf(chunk, pcm.size - off)
             val block = PcmBlock((off / chunk).toLong(), off.toLong(), pcm.copyOfRange(off, off + len))
@@ -349,20 +349,20 @@ class DictationPipelineTest {
         }
         runBlocking { controller.stop() }
 
-        // Endtext enthält den §4.1-Golden-Text (Modellfehler „Dikti-Funktion" inklusive)
+        // the final text contains the §4.1 golden text (model error „Dikti-Funktion" included)
         val finalText = sink.text
         assertTrue(
-            "Endtext enthält nicht den Golden-Text; Ist='${finalText.take(120)}'",
+            "the final text does not contain the golden text; actual='${finalText.take(120)}'",
             finalText.contains(GOLDEN_SMOKE),
         )
-        // Monotonie: keine Operation löschte hinter der Commit-Grenze —
-        // belegbar über maxDelete <= 60 (DeltaTyper-Revisionsschwelle) und
-        // die NeverShrink-Eigenschaft des Endtextes: jede Operation verlängert
-        assertTrue("committed-Präfix-Löschung: maxDelete=${sink.maxDelete.get()}", sink.maxDelete.get() <= 60)
+        // monotonicity: no operation deleted beyond the commit boundary —
+        // provable via maxDelete <= 60 (DeltaTyper revision threshold) and
+        // the never-shrink property of the final text: every operation lengthens
+        assertTrue("committed-prefix deletion: maxDelete=${sink.maxDelete.get()}", sink.maxDelete.get() <= 60)
         engine.close()
     }
 
-    // ---- Szenario 2: InputConnectionSink gegen Fake-InputConnection ----
+    // ---- scenario 2: InputConnectionSink against a fake InputConnection ----
 
     @Test
     fun s2_inputConnectionSink_minimalDeltas_utf16_batches() {
@@ -375,36 +375,37 @@ class DictationPipelineTest {
         val typer = de.voicekeyboard.editor.DeltaTyper(sink)
 
         tracker.onOwnEdit("")
-        // Partielle Revisionen: "abc" → "abcd" → "abcd€!" (Surrogatpaar € U+20AC)
+        // partial revisions: "abc" → "abcd" → "abcd€!" (surrogate pair € U+20AC)
         typer.reviseOutcome("abc").delta
         assertEquals("abc", ic.text)
         typer.reviseOutcome("abcd").delta
         assertEquals("abcd", ic.text)
         typer.reviseOutcome("abcd€!").delta
         assertEquals("abcd€!", ic.text)
-        // Löschung zählt UTF-16-Einheiten: "€" = 2 Einheiten — "abcd€" → "abcd"
+        // deletion counts UTF-16 units: "€" = 2 units — "abcd€" → "abcd"
         typer.reviseOutcome("abcd").delta
         assertEquals("abcd", ic.text)
-        // Korrekte DeltaTyper-Semantik: OHNE commitUpTo wird der komplette Tail
-        // revidiert ("abcd" → "ä" ersetzt alles). Präfix-Schutz greift erst mit
-        // commitUpTo — danach bleibt "abcd" unangetastet und "ä" wird angehängt.
-        typer.commitUpTo(4) // "abcd" einfrieren
+        // correct DeltaTyper semantics: WITHOUT commitUpTo the complete tail
+        // is revised ("abcd" → "ä" replaces everything). The prefix protection
+        // only kicks in with commitUpTo — afterwards "abcd" stays untouched and
+        // "ä" is appended.
+        typer.commitUpTo(4) // freeze "abcd"
         typer.reviseOutcome("abcdä").delta
         assertEquals("abcdä", ic.text)
 
-        // Batch-Paarung auch bei Wurf: Editor lehnt ab
+        // batch pairing also on throw: the editor rejects
         ic.rejectAll.set(true)
         try {
             sink.replaceBeforeCursor(1, "X")
-            org.junit.Assert.fail("EditorWriteException erwartet")
+            org.junit.Assert.fail("EditorWriteException expected")
         } catch (e: de.voicekeyboard.editor.EditorWriteException) {
-            // erwartet
+            // expected
         }
-        // endBatchEdit lief in finally: Paarung blieb gewahrt (Anzahl >= Anzahl commits)
+        // endBatchEdit ran in finally: the pairing stayed intact (count >= count of commits)
         assertTrue(ic.batchPairs.get() >= 1)
     }
 
-    // ---- Szenario 3: Ownership-Verlust (Nutzer tippt dazwischen) ----
+    // ---- scenario 3: ownership loss (the user types in between) ----
 
     @Test
     fun s3_ownershipLoss_noWritesAfterwards() {
@@ -420,39 +421,39 @@ class DictationPipelineTest {
         val opsAtLoss = ic.commits.get() + ic.deletes.get()
         assertTrue(opsAtLoss > 0)
 
-        // Nutzer tippt: Cursor bewegt sich fremd → Besitz verloren
+        // the user types: the cursor moves externally → ownership lost
         tracker.onUpdateSelection(7, 7, 3, 3)
-        ic.commitText("X", 1) // simulierter Fremdtext (User-Eingabe)
-        // Diktat weiter: Tracker verweigert
+        ic.commitText("X", 1) // simulated external text (user input)
+        // dictation continues: the tracker refuses
         val before = ic.commits.get() + ic.deletes.get()
-        org.junit.Assert.assertNull("nach Besitzverlust KEINE Schreiboperation", typer.reviseOutcome("das ist mehr").delta)
+        org.junit.Assert.assertNull("no write operation after ownership loss", typer.reviseOutcome("das ist mehr").delta)
         assertEquals(before, ic.commits.get() + ic.deletes.get())
     }
 
-    // ---- Szenario 4: 60-Zeichen-Grenze ----
+    // ---- scenario 4: the 60-character limit ----
 
     @Test
     fun s4_revisionLimit_altPrafixUnveraendert_appendOnly() {
-        val ic = FakeInputConnection("A".repeat(80)) // ~80 Zeichen Alttext
+        val ic = FakeInputConnection("A".repeat(80)) // ~80 characters of old text
         val sink = InputConnectionSink(
             connectionProvider = { ic },
             editExecutor = InputConnectionSink.DIRECT_EXECUTOR,
         )
         val tracker = OwnershipTracker()
         val typer = de.voicekeyboard.editor.DeltaTyper(sink)
-        // Besitz über den FULL matchenden Alttext herstellen (80 Zeichen expected)
+        // establish ownership over the FULL matching old text (80 characters expected)
         val alt = ic.text
         tracker.onOwnEdit(alt)
-        // Langer neuer Text, der >60 Zeichen zurücknehmen würde: DeltaTyper
-        // muss auf Append-only entscheiden — Alttext-Präfix bleibt unangetastet.
-        typer.reviseOutcome(alt.substring(0, 20) + "NEU").delta // 60 Zeichen Differenz in der Tail-Revision
+        // a long new text that would take back >60 characters: DeltaTyper
+        // must decide on append-only — the old-text prefix stays untouched.
+        typer.reviseOutcome(alt.substring(0, 20) + "NEU").delta // 60 characters of difference in the tail revision
         val after = ic.text
         assertTrue(
-            "Alttext muss unverändertes Präfix enthalten; Ist=${after.take(90)}",
+            "the old text must contain an unchanged prefix; actual=${after.take(90)}",
             after.startsWith(alt.take(80 - 60)) || after.length >= alt.length,
         )
-        // Kein Löschdelta > 60:_fake zählt deleteSurroundingText-Aufrufe;
-        // der Sink/DeltaTyper hat max. 60 UTF-16-Einheiten gelöscht (Regel 2)
+        // no delete delta > 60: the fake counts deleteSurroundingText calls;
+        // the sink/DeltaTyper deleted at most 60 UTF-16 units (rule 2)
         assertTrue(ic.deletes.get() == 0 || ic.text.length >= alt.length - 60)
     }
 }

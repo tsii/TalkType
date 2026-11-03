@@ -1,237 +1,234 @@
-# Review Stufe 1 — FIX-DURCHLAUF (VK-01 … VK-07)
+# Review Stage 1 — FIX pass (VK-01 … VK-07)
 
-**Reviewer:** DeepSeek V4 Pro 0813 · **Datum:** 2026-10-27
-**Geprüft:** Fixes zu VK-01…VK-07 (plus nebenbei VK-12/VK-13), eingebracht von GLM 5.3.
-**Nicht angefasst/geprüft (parallel in Arbeit):** `app/src/main/java/de/voicekeyboard/asr/`,
-`app/src/test/java/de/voicekeyboard/asr/` — diese Pfade wurden **nicht** verändert.
+**Reviewer:** DeepSeek V4 Pro 0813 · **Date:** 2026-10-27
+**Reviewed:** fixes for VK-01…VK-07 (plus incidentally VK-12/VK-13), contributed by GLM 5.3.
+**Untouched/not reviewed (work in progress in parallel):** `app/src/main/java/de/voicekeyboard/asr/`,
+`app/src/test/java/de/voicekeyboard/asr/` — these paths were **not** changed.
 
 ---
 
-## 0. Verifikation (Build & Tests)
+## 0. Verification (build & tests)
 
-`ANDROID_HOME=/opt/android-sdk ./gradlew --offline test` → **BUILD SUCCESSFUL**, 19 Tests grün:
+`ANDROID_HOME=/opt/android-sdk ./gradlew --offline test` → **BUILD SUCCESSFUL**, 19 tests green:
 
-| Testklasse | Tests | Fehler |
+| Test class | Tests | Failures |
 |---|---|---|
 | `de.voicekeyboard.keyboard.KeyboardModelTest` | 6 | 0 |
 | `de.voicekeyboard.layouts.CaseMapperTest` | 4 | 0 |
 | `de.voicekeyboard.layouts.LayoutCompletenessTest` | 1 | 0 |
 | `de.voicekeyboard.layouts.LayoutParserTest` | 8 | 0 |
-| **Summe** | **19** | **0** |
+| **Total** | **19** | **0** |
 
-**Wichtiger Kontext (nicht GLM anzulasten):** Gegen Ende des Durchlaufs ist der *parallele*
-ASR-Agent mitten in der Arbeit; seine (hier nicht relevanten) Dateien
-`app/src/test/java/de/voicekeyboard/asr/TdtGreedyTest.kt` standen zeitweise auf einem
-nicht-kompilierenden Stand (`No parameter with name 'frames' found` → `framesIn`). Die obigen
-19 Tests betreffen ausschließlich die Layout-/Keyboard-Ebene (nicht `asr`). Für die isolierte
-Mutationsprobe wurde der `asr`-Testquellbaum temporär per Init-Script `-I` von der
-Kompilierung ausgeschlossen (Dateien selbst unangetastet, Script danach entfernt).
+**Important context (not to be held against GLM):** towards the end of the run the *parallel*
+ASR agent was mid-work; its (here irrelevant) files
+`app/src/test/java/de/voicekeyboard/asr/TdtGreedyTest.kt` were temporarily in a
+non-compiling state (`No parameter with name 'frames' found` → `framesIn`). The 19 tests
+above concern exclusively the layout/keyboard layer (not `asr`). For the isolated
+mutation probe the `asr` test source tree was temporarily excluded from compilation
+via an init script `-I` (files themselves untouched, script removed afterwards).
 
 ---
 
-## 1. Status je Finding
+## 1. Status per finding
 
-Legende: BEHOBEN / TEILWEISE / OFFEN.
+Legend: RESOLVED / PARTIAL / OPEN.
 
-| ID | Sev | Status | Codebeleg |
+| ID | Sev | Status | Code evidence |
 |---|---|---|---|
-| **VK-01** ä ö ü ß als eigene `base`-Taste | P0 | **BEHOBEN** | `app/src/main/assets/layouts/de-de.json` Row 1 `{"id":"ue",…,"value":"ü"}` (Z.20), Row 2 `{"id":"oe",…,"value":"ö"}` + `{"id":"ae",…,"value":"ä"}` (Z.30/31), Row 3 `{"id":"eszett",…,"value":"ß"}` (Z.39). Emulator-Gegenprobe (Text-Commit): Taps auf diese Koordinaten ergeben „qüäöß1" im EditText. |
-| **VK-02** Ziffern-/Symbolebene verdrahten | P0 | **TEILWEISE** | `KeyboardView.kt:246` `KeyActions.LAYER_SYMBOLS -> switchLayer(if (symbolShift) "symbolsShift" else "symbols", fromSymbols = true)` + `:247` `LAYER_BASE -> switchLayer("base", …)`. funktioniert: base→symbols (`?123`) und symbols→base (`ABC`). **NICHT** funktioniert: symbols→symbolsShift (neues Finding, s. u.). |
-| **VK-03** Backspace graphem-/codepointsicher | P1 | **BEHOBEN** | `VoiceKeyboardService.kt:50-62`: `getTextBeforeCursor(32,0)`, leer/null → `sendKeyEvent(KEYCODE_DEL)` (up/down), sonst `lastGraphemeLength(before)` + `deleteSurroundingText(units,0)`. `lastGraphemeLength` (Z.90-101) nutzt `BreakIterator.getCharacterInstance()` mit Codepoint-Fallback (`codePointBefore`/`charCount`). Emulator: Backspace löscht genau 1 Zeichen (kein Doppel-Löschen). |
-| **VK-04** Verbotene Label-Artefakte `=\<`/`⌇` | P1 | **BEHOBEN** | `de-de.json` symbols-shift-Taste jetzt `{"id":"shift","label":"⇧",…,"value":"layer-symbols"}` (Z.145); `question` in symbolsShift jetzt `"¿"` (war `⌇`). `en-us.json` analog (shift-`⇧`, kein `=\<`/`⌇`). Kein Label `\` `<` `>` `&` mehr vorhanden. |
-| **VK-05** Accessibility-Integration | P1 | **BEHOBEN** | `KeyboardView.kt:279-373`: `getAccessibilityNodeProvider()` liefert virtuelle Knoten je Taste mit `contentDescription`, `setBoundsInScreen/Parent`, `ACTION_CLICK`/`ACTION_ACCESSIBILITY_FOCUS`; `performAction(ACTION_CLICK)` ruft `handleKey(key,…)` — derselbe Pfad wie Touch. `sendAccessibilityEvent(TYPE_WINDOW_CONTENT_CHANGED)` nach Ebenen-/Shift-Wechsel. Kleinere Lücken s. neue Findings. |
-| **VK-06** `LayoutCompletenessTest` fehlte | P1 | **BEHOBEN** | Datei existiert jetzt: `app/src/test/java/de/voicekeyboard/layouts/LayoutCompletenessTest.kt`. Mutationsprobe belegt ROT-Verhalten (s. §3). Coverage-Lücken s. neue Findings. |
-| **VK-07** `ß→ẞ` in `shift` | P1 | **BEHOBEN** | `de-de.json` shift: `{"id":"eszett","label":"ẞ",…,"value":"ẞ"}` (Z.131). Test `checkShiftPairs` verlangt das Paar `"ß" to "ẞ"` (Z.43) und erzwingt es als eigene shift-Taste. |
-| VK-12 (`shiftActive` toter Zustand) — nebenbei | P2 | BEHOBEN | `KeyboardView.kt` hat kein `shiftActive` mehr; Zustand läuft sauber über `shiftTemporary`/`capsLock`/`symbolShift` (`:55-68`, `:236-254`). Ein Shift-Tap bei CapsLock deaktiviert CapsLock korrekt. |
-| VK-13 (`sourceKey` O(n²) im `onDraw`) — nebenbei | P2 | BEHOBEN | `KeyboardView.kt:63` `sourceKeys = layer.rows.flatten().associateBy { it.id }` einmal in `rebuildModel`; `displayLabel`/`textFor` greifen per `sourceKeys[key.id]` zu (`:141`, `:178`). |
+| **VK-01** ä ö ü ß as own `base` keys | P0 | **RESOLVED** | `app/src/main/assets/layouts/de-de.json` row 1 `{"id":"ue",…,"value":"ü"}` (line 20), row 2 `{"id":"oe",…,"value":"ö"}` + `{"id":"ae",…,"value":"ä"}` (lines 30/31), row 3 `{"id":"eszett",…,"value":"ß"}` (line 39). Emulator cross-check (text commit): taps on these coordinates yield "qüäöß1" in the EditText. |
+| **VK-02** wire the digit/symbol layer | P0 | **PARTIAL** | `KeyboardView.kt:246` `KeyActions.LAYER_SYMBOLS -> switchLayer(if (symbolShift) "symbolsShift" else "symbols", fromSymbols = true)` + `:247` `LAYER_BASE -> switchLayer("base", …)`. Works: base→symbols (`?123`) and symbols→base (`ABC`). **NOT** working: symbols→symbolsShift (new finding, see below). |
+| **VK-03** backspace grapheme/codepoint-safe | P1 | **RESOLVED** | `VoiceKeyboardService.kt:50-62`: `getTextBeforeCursor(32,0)`, empty/null → `sendKeyEvent(KEYCODE_DEL)` (up/down), otherwise `lastGraphemeLength(before)` + `deleteSurroundingText(units,0)`. `lastGraphemeLength` (lines 90-101) uses `BreakIterator.getCharacterInstance()` with codepoint fallback (`codePointBefore`/`charCount`). Emulator: backspace deletes exactly 1 character (no double deletion). |
+| **VK-04** forbidden label artifacts `=\<`/`⌇` | P1 | **RESOLVED** | `de-de.json` symbols shift key now `{"id":"shift","label":"⇧",…,"value":"layer-symbols"}` (line 145); `question` in symbolsShift now `"¿"` (was `⌇`). `en-us.json` analogous (shift-`⇧`, no `=\<`/`⌇`). No label `\` `<` `>` `&` remains. |
+| **VK-05** accessibility integration | P1 | **RESOLVED** | `KeyboardView.kt:279-373`: `getAccessibilityNodeProvider()` provides virtual nodes per key with `contentDescription`, `setBoundsInScreen/Parent`, `ACTION_CLICK`/`ACTION_ACCESSIBILITY_FOCUS`; `performAction(ACTION_CLICK)` calls `handleKey(key,…)` — the same path as touch. `sendAccessibilityEvent(TYPE_WINDOW_CONTENT_CHANGED)` after layer/shift changes. Minor gaps: see new findings. |
+| **VK-06** `LayoutCompletenessTest` was missing | P1 | **RESOLVED** | File now exists: `app/src/test/java/de/voicekeyboard/layouts/LayoutCompletenessTest.kt`. Mutation probe proves RED behavior (see §3). Coverage gaps: see new findings. |
+| **VK-07** `ß→ẞ` in `shift` | P1 | **RESOLVED** | `de-de.json` shift: `{"id":"eszett","label":"ẞ",…,"value":"ẞ"}` (line 131). Test `checkShiftPairs` requires the pair `"ß" to "ẞ"` (line 43) and enforces it as an own shift key. |
+| VK-12 (`shiftActive` dead state) — incidentally | P2 | RESOLVED | `KeyboardView.kt` no longer has `shiftActive`; state runs cleanly via `shiftTemporary`/`capsLock`/`symbolShift` (`:55-68`, `:236-254`). One shift tap with caps lock active correctly disables caps lock. |
+| VK-13 (`sourceKey` O(n²) in `onDraw`) — incidentally | P2 | RESOLVED | `KeyboardView.kt:63` `sourceKeys = layer.rows.flatten().associateBy { it.id }` once in `rebuildModel`; `displayLabel`/`textFor` access via `sourceKeys[key.id]` (`:141`, `:178`). |
 
 ---
 
-## 2. Neue Findings aus diesem Durchlauf
+## 2. New findings from this pass
 
-### **NEW-01 — P1 — `symbolsShift`-Ebene ist unerreichbar (State-Machine broken)**
+### **NEW-01 — P1 — `symbolsShift` layer is unreachable (state machine broken)**
 
-**Ort:** `app/src/main/java/de/voicekeyboard/keyboard/KeyboardView.kt:246,262-264` in Kombination mit
-`app/src/main/assets/layouts/de-de.json:145` (symbolebene `shift`-Taste `value:"layer-symbols"`).
+**Location:** `app/src/main/java/de/voicekeyboard/keyboard/KeyboardView.kt:246,262-264` in combination with
+`app/src/main/assets/layouts/de-de.json:145` (symbol layer `shift` key `value:"layer-symbols"`).
 
-**Befund:** Die geforderte Folge `base→symbols→symbolsShift→symbols→base` ist an 2 von 4
-Übergängen kaputt:
-- `symbols→symbolsShift` funktioniert **nicht**: `LAYER_SYMBOLS` ruft
-  `switchLayer(if (symbolShift) "symbolsShift" else "symbols")`. Beim Eintritt in `symbols` ist
-  `symbolShift=false` (wird in `switchLayer` erst bei Ziel `symbolsShift` auf `true` gesetzt,
-  Z.262-264) → ein Tipp auf die Symbolebenen-Shift-Taste (`value:"layer-symbols"`) mappt erneut
-  auf `"symbols"` (Selbst-No-Op). Es gibt **keinen** Pfad, der `symbolShift=true` setzt, ohne
-  vorher in `symbolsShift` zu sein → Zirkelschluss, `symbolsShift` ist nie erreichbar.
-- `symbolsShift→symbols` fehlt ebenfalls: die symbolsShift-Shift-Taste ist `value:"layer-base"`
-  (`de-de.json:197`) und springt direkt nach `base`.
-- Der Parameter `fromSymbols` in `switchLayer` (Z.257) ist **unbenutzt** (toter Parameter,
-  stützt das „Stub"-Signal).
+**Finding:** The required sequence `base→symbols→symbolsShift→symbols→base` is broken at 2 of 4
+transitions:
+- `symbols→symbolsShift` does **not** work: `LAYER_SYMBOLS` calls
+  `switchLayer(if (symbolShift) "symbolsShift" else "symbols")`. On entering `symbols`,
+  `symbolShift=false` (it is only set to `true` in `switchLayer` when the target is `symbolsShift`,
+  lines 262-264) → a tap on the symbol-layer shift key (`value:"layer-symbols"`) maps again
+  to `"symbols"` (self no-op). There is **no** path that sets `symbolShift=true` without
+  being in `symbolsShift` beforehand → circular reasoning, `symbolsShift` is never reachable.
+- `symbolsShift→symbols` is also missing: the symbolsShift shift key is `value:"layer-base"`
+  (`de-de.json:197`) and jumps directly to `base`.
+- The parameter `fromSymbols` in `switchLayer` (line 257) is **unused** (dead parameter,
+  supports the "stub" signal).
 
-**Evidenz (reproduziert):** Im Emulator bei aktiver Symbolebene auf die Shift-Taste getippt und
-auf Position „1" getippt → Feld wurde `…ß11` statt `…ß¹` (es bleibt `1`, nicht `¹` aus
-symbolsShift). D. h. das Umschalten auf die Shift-Gegenstücke (Klammern, Währungen, `¹²³`
-aus LAYOUT_REQUIREMENTS §2.1/§1 Regel 9) schlägt still fehl.
+**Evidence (reproduced):** In the emulator, with the symbol layer active, tapped the shift key and
+tapped position "1" → the field became `…ß11` instead of `…ß¹` (it stays `1`, not `¹` from
+symbolsShift). I.e. switching to the shift counterparts (brackets, currencies, `¹²³`
+from LAYOUT_REQUIREMENTS §2.1/§1 rule 9) silently fails.
 
-**Minimaler Fix:** `LAYER_SYMBOLS` als echten Toggle implementieren: ist man bereits in `symbols`
-oder `symbolsShift`, zwischen den beiden togglen (`symbols ↔ symbolsShift`); ist man in einer
-Buchstabenebene, nach `symbols`. `fromSymbols` verwenden oder entfernen und den Toggle in einem
-Test absichern (Zustandsmatrix).
+**Minimal fix:** Implement `LAYER_SYMBOLS` as a genuine toggle: if already in `symbols`
+or `symbolsShift`, toggle between the two (`symbols ↔ symbolsShift`); if in a letter
+layer, go to `symbols`. Use or remove `fromSymbols` and secure the toggle in a
+test (state matrix).
 
-### **NEW-02 — P2 — `LayoutCompletenessTest` deckt die de-DE-Matrix-Spalte B nicht ab**
+### **NEW-02 — P2 — `LayoutCompletenessTest` does not cover the de-DE matrix column B**
 
-**Ort:** `app/src/test/java/de/voicekeyboard/layouts/LayoutCompletenessTest.kt:43`.
+**Location:** `app/src/test/java/de/voicekeyboard/layouts/LayoutCompletenessTest.kt:43`.
 
-**Befund:** `MatrixRow("de-de", listOf("ä","ö","ü","ß"), shiftPairs=…)` hat `requiredReachable`
-leer. LAYOUT_REQUIREMENTS §2.2 verlangt für de-DE zusätzlich `é è ê á à â ç` **erreichbar**
-(Stufe B). Der Test prüft nur die A-Menge (eigene Tasten) und `ß→ẞ`; die B-Menge für die **einzige
-aktuell vorhandene** nicht-ASCII-Sprache ist ungeprüft (dieselbe Lücke würde `en-us`-Punktzeichen
-`' – — … £ $ °` betreffen, die nur teilweise/unscharf als `requiredReachable` erfasst sind).
-Außerdem prüft der Test nicht §1 Regel 9 (Ziffern 0–9 je einmal auf `symbols`) und nicht §2.1
-global/§2.2 Satzzeichen (dafür wäre ohnehin ein eigener `PunctuationCoverageTest` nötig, der noch
-fehlt); tr-TR-Matrixzeile (Z.51) lässt das geforderte eigene `i` aus (`A = ç ğ ı i ö ş ü`).
+**Finding:** `MatrixRow("de-de", listOf("ä","ö","ü","ß"), shiftPairs=…)` has `requiredReachable`
+empty. LAYOUT_REQUIREMENTS §2.2 additionally requires for de-DE `é è ê á à â ç` **reachable**
+(stage B). The test checks only the A-set (own keys) and `ß→ẞ`; the B-set for the **only
+currently existing** non-ASCII language is unchecked (the same gap would affect `en-us` punctuation
+`' – — … £ $ °`, which are only partially/vaguely captured as `requiredReachable`).
+Moreover, the test does not check §1 rule 9 (digits 0–9 once each on `symbols`) nor §2.1
+global/§2.2 punctuation (for that a dedicated `PunctuationCoverageTest` would be needed, which is still
+missing); the tr-TR matrix row (line 51) omits the required own `i` (`A = ç ğ ı i ö ş ü`).
 
-**Minimaler Fix:** `requiredReachable = listOf("é","è","ê","á","à","â","ç")` für de-de ergänzen;
-`i` in die tr-A-Zeile; Regel 9 (Ziffern) und Satzzeichen-Abdeckung ergänzen bzw. `PunctuationCoverageTest`
-nachliefern.
+**Minimal fix:** Add `requiredReachable = listOf("é","è","ê","á","à","â","ç")` for de-de;
+add `i` to the tr A row; add rule 9 (digits) and punctuation coverage, or deliver a `PunctuationCoverageTest`.
 
-### **NEW-03 — P2 — Graphem-Backspace (VK-03) hat keinen Unit-Test**
+### **NEW-03 — P2 — Grapheme backspace (VK-03) has no unit test**
 
-**Ort:** `VoiceKeyboardService.kt:90-101` (`lastGraphemeLength` ist `internal`, aber ungetestet).
+**Location:** `VoiceKeyboardService.kt:90-101` (`lastGraphemeLength` is `internal`, but untested).
 
-**Befund:** Kein `VoiceKeyboardServiceTest`/`LastGraphemeTest` vorhanden (`find app/src/test` →
-nur Layout-/Keyboard-Tests). Die Kerndefektlücke von VK-03 (Surrogatpaare/Emoji nicht zerlegen)
-ist damit nicht regressiongeschützt; `BreakIterator.getCharacterInstance()` nutzt die
-Default-Locale (unbestimmt).
+**Finding:** No `VoiceKeyboardServiceTest`/`LastGraphemeTest` exists (`find app/src/test` →
+only layout/keyboard tests). The core defect gap of VK-03 (do not split surrogate pairs/emoji)
+is thus not regression-protected; `BreakIterator.getCharacterInstance()` uses the
+default locale (undetermined).
 
-**Minimaler Fix:** Test ergänzen: `lastGraphemeLength("…😀")==2`, `("e\u0301")==2`,
-`("abc")==1`, `("")==0`, Familien-Emoji (ZWJ) — plus robuster Locale-Super (`BreakIterator.getCharacterInstance(Locale)`).
+**Minimal fix:** Add a test: `lastGraphemeLength("…😀")==2`, `("e\u0301")==2`,
+`("abc")==1`, `("")==0`, family emoji (ZWJ) — plus a more robust locale setup (`BreakIterator.getCharacterInstance(Locale)`).
 
-### **NEW-04 — P2 — `performClick()` ist ein No-Op; Klickpfad inkonsistent belegt**
+### **NEW-04 — P2 — `performClick()` is a no-op; click path inconsistently evidenced**
 
-**Ort:** `KeyboardView.kt:187` (`performClick()` in `ACTION_DOWN`).
+**Location:** `KeyboardView.kt:187` (`performClick()` in `ACTION_DOWN`).
 
-**Befund:** Es ist kein `OnClickListener` gesetzt; die eigentliche Aktivierung passiert in
-`ACTION_UP` über `handleKey` (`:218-223`). `performClick()` ohne Listener liefert `false` und
-bewirkt nichts (wird zudem auf `DOWN` statt `UP` gerufen). Der a11y-Pfad (`performAction` →
-`handleKey`) ist zwar bewusst deckungsgleich mit Touch, aber `performClick()` selbst ist toter
-Code/Rauschen und `onPopulateAccessibilityEvent(TYPE_VIEW_CLICKED)` (`:375-379`) hängt an einem
-Klick-Event, das mangels Listener nicht zuverlässig ausgelöst wird.
+**Finding:** No `OnClickListener` is set; the actual activation happens in
+`ACTION_UP` via `handleKey` (`:218-223`). `performClick()` without a listener returns
+`false` and does nothing (and is moreover called on `DOWN` instead of `UP`). The a11y path
+(`performAction` → `handleKey`) is deliberately identical with touch, but `performClick()` itself
+is dead code/noise and `onPopulateAccessibilityEvent(TYPE_VIEW_CLICKED)` (`:375-379`) hangs on a
+click event that, lacking a listener, is not reliably fired.
 
-**Minimaler Fix:** Aktivierung auf den Standard-Klickpfad legen (Kommit in `performClick`/
-`OnClickListener`, onTouchEvent ruft `performClick()` bei `ACTION_UP`), damit Touch, a11y-Click
-und das TalkBack-Klick-Event denselben einzigen Pfad teilen.
+**Minimal fix:** Put the activation on the standard click path (commit in `performClick`/
+`OnClickListener`, onTouchEvent calls `performClick()` on `ACTION_UP`), so that touch, a11y click
+and the TalkBack click event all share the same single path.
 
-### **NEW-05 — P2 — Accessibility-NodeProvider-Lücken + CapsLock-Status nach Ebenen-Roundtrip**
+### **NEW-05 — P2 — Accessibility node provider gaps + caps lock state after a layer round trip**
 
-**Ort:** `KeyboardView.kt:315` (`findFocus` → `null`), `:285-296` (virtuelle IDs = Listenindex),
+**Location:** `KeyboardView.kt:315` (`findFocus` → `null`), `:285-296` (virtual IDs = list index),
 `switchLayer`/`applyLayerState` (`:257-278`).
 
-**Befund:** (a) `findFocus` liefert immer `null` (TalkBack-Fokus-Rückfragen unbeantwortet);
-(b) virtuelle View-IDs sind schlichte Indizes in `model.keys` — nach `rebuildModel` (Layer-Wechsel)
-zeigen gleiche IDs auf andere Tasten (abgemildert durch `TYPE_WINDOW_CONTENT_CHANGED`, aber nicht
-stabil); (c) `switchLayer("base")` setzt `activeLayerName="base"`, ohne `applyLayerState()` zu
-rufen → bei aktivem `capsLock` zeigt die Tastatur danach **Kleinbuchstaben**, während die
-Shift-Taste weiter `⇪`/hervorgehoben ist (`showShift()`=`capsLock`=true, `textFor` aber
-`shiftShowing`=`activeLayerName=="shift"`=false) — der kommentierte „Shift-Zustand einfrieren/
-wiederherstellen" wird faktisch nicht wiederhergestellt. (d) `FLAG_CONTENT_SENSITIVE` wird nicht
-gesetzt (Design-Entscheidung, hier nur Hinweis).
+**Finding:** (a) `findFocus` always returns `null` (TalkBack focus queries unanswered);
+(b) virtual view IDs are plain indices into `model.keys` — after `rebuildModel` (layer change)
+the same IDs point to different keys (mitigated by `TYPE_WINDOW_CONTENT_CHANGED`, but not
+stable); (c) `switchLayer("base")` sets `activeLayerName="base"` without calling `applyLayerState()` →
+with active `capsLock` the keyboard afterwards shows **lowercase letters**, while the shift key
+still shows `⇪`/highlighted (`showShift()`=`capsLock`=true, but `textFor`
+`shiftShowing`=`activeLayerName=="shift"`=false) — the commented "freeze/restore shift state"
+is in fact not restored. (d) `FLAG_CONTENT_SENSITIVE` is not set (design decision, here only a note).
 
-**Minimaler Fix:** `findFocus` auf dem virtuellen Fokus implementieren (oder Klick-Fokus in
-`performAction` zurückgeben); virtuelle ID→Key-Zuordnung über eine stabile Quelle (z. B.
-`sourceKeys`-Reihenfolge/Hash statt Liste) oder `notifyViewInvalidated`; nach `switchLayer` auf
-Buchstabenebenen `applyLayerState()` ausführen, damit `activeLayerName` den `capsLock`/Shift-Zustand
-widerspiegelt.
+**Minimal fix:** Implement `findFocus` on the virtual focus (or return click focus in
+`performAction`); base the virtual ID→key mapping on a stable source (e.g.
+`sourceKeys` order/hash instead of the list) or `notifyViewInvalidated`; after `switchLayer` to
+letter layers run `applyLayerState()` so that `activeLayerName` reflects the `capsLock`/shift state.
 
 ---
 
-## 3. Mutationsprobe (`LayoutCompletenessTest`)
+## 3. Mutation probe (`LayoutCompletenessTest`)
 
-**Ablauf:** `ü`-eigene Taste aus `de-de.json` entfernt (Value `"ü"` → `"ux"` an Taste `id:"ue"`),
-Test isoliert ausgeführt, Datei exakt wiederhergestellt.
+**Procedure:** removed the `ü` own key from `de-de.json` (value `"ü"` → `"ux"` on key `id:"ue"`),
+ran the test in isolation, restored the file exactly.
 
-| Schritt | Ergebnis | SHA-256 |
+| Step | Result | SHA-256 |
 |---|---|---|
-| Original (Backup) | — | `1e0badeb45118a17b4a1e4f2e1464b4213a348cd5873830267c352676f1e4539` |
-| Mutation (`ü`→`ux`) | Test **ROT**: `LayoutCompletenessTest … FAILED` (AssertionError Z.108) | `0a3d7528…` |
-| Fehlermeldung | `Asset 'de-de': Pflichtzeichen fehlen als eigene base-Taste: [ü] (alternates zählen NICHT, LAYOUT_REQUIREMENTS Grundregel 1)` | — |
-| Wiederhergestellt | Hash identisch zum Backup | `1e0badeb45118a17b4a1e4f2e1464b4213a348cd5873830267c352676f1e4539` ✔ |
+| Original (backup) | — | `1e0badeb45118a17b4a1e4f2e1464b4213a348cd5873830267c352676f1e4539` |
+| Mutation (`ü`→`ux`) | Test **RED**: `LayoutCompletenessTest … FAILED` (AssertionError line 108) | `0a3d7528…` |
+| Error message | `Asset 'de-de': Pflichtzeichen fehlen als eigene base-Taste: [ü] (alternates zählen NICHT, LAYOUT_REQUIREMENTS Grundregel 1)` | — |
+| Restored | hash identical to the backup | `1e0badeb45118a17b4a1e4f2e1464b4213a348cd5873830267c352676f1e4539` ✔ |
 
-**Skip-Logik geprüft:** `LayoutCompletenessTest.asset()` gibt nur bei *fehlendem/lesbarem*
-Asset `null` zurück (→ Matrixzeile wird übersprungen); ein **vorhandenes** Asset, das die
-Anforderung verletzt, löst `fail()` aus (kein stilles Grün). `assertTrue(checked > 0)` verhindert
-„alle übersprungen". Ein vorhandenes aber unparsebares Asset wirft eine `LayoutException` (Test
-error → rot), wird also ebenfalls **nicht** still grün.
+**Skip logic checked:** `LayoutCompletenessTest.asset()` returns `null` only for a *missing/readable*
+asset (→ matrix row is skipped); a **present** asset that violates the
+requirement triggers `fail()` (no silent green). `assertTrue(checked > 0)` prevents
+"all skipped". A present but unparseable asset throws a `LayoutException` (test
+error → red), so it also is **not** silently green.
 
 ---
 
-## 4. Emulator-Gegenprobe (`adb -s <device>`, IME aktiv)
+## 4. Emulator cross-check (`adb -s <device>`, IME active)
 
-Build `assembleDebug` (BUILD SUCCESSFUL) installiert (`Success`), `de.voicekeyboard/.ime.VoiceKeyboardService`
-als IME gesetzt (`ime set` → „selected for user #0"). `DebugInputActivity` gestartet
+Build `assembleDebug` (BUILD SUCCESSFUL) installed (`Success`), `de.voicekeyboard/.ime.VoiceKeyboardService`
+set as IME (`ime set` → "selected for user #0"). `DebugInputActivity` started
 (`de.voicekeyboard/.debug.DebugInputActivity`), `dumpsys input_method` → `mInputShown=true`,
 `mBoundToMethod=true`.
 
-Belege über **Text-Commits** (`uiautomator dump` auf das EditText; Feld akkumuliert die Eingaben):
+Evidence via **text commits** (`uiautomator dump` on the EditText; the field accumulates the inputs):
 
-| Aktion (Tap auf Tastenposition) | Feldinhalt nachher | Beleg |
+| Action (tap on key position) | Field content afterwards | Evidence |
 |---|---|---|
-| `q` (44,1839) | `q` | Taste committet |
-| `ü`(1042,1839) `ä`(1042,1991) `ö`(942,1991) `ß`(881,2143) | `qüäöß` | **ä ö ü ß als eigene Tasten vorhanden und funktional** |
-| `?123`(58,2295) → `1`(44,1839) | `qüäöß1` | **`?123` aktiviert die Ziffernebene** |
-| Symbolebenen-Shift (66,2143) → `1`(44,1839) | `qüäöß11` | **`symbolsShift` schaltet NICHT um** (erwartet `¹`) → NEW-01 |
-| Backspace (1057,2143) | `qüäöß1` | genau 1 Zeichen gelöscht (kein Doppel-Löschen) |
-| `ABC`(58,2295) → `shift`(66,2143) → `q`(44,1839) | `qüäöß1Q` | base→shift (Großform) funktioniert |
+| `q` (44,1839) | `q` | key commits |
+| `ü`(1042,1839) `ä`(1042,1991) `ö`(942,1991) `ß`(881,2143) | `qüäöß` | **ä ö ü ß present and functional as own keys** |
+| `?123`(58,2295) → `1`(44,1839) | `qüäöß1` | **`?123` activates the digit layer** |
+| Symbol-layer shift (66,2143) → `1`(44,1839) | `qüäöß11` | **`symbolsShift` does NOT switch** (expected `¹`) → NEW-01 |
+| Backspace (1057,2143) | `qüäöß1` | exactly 1 character deleted (no double deletion) |
+| `ABC`(58,2295) → `shift`(66,2143) → `q`(44,1839) | `qüäöß1Q` | base→shift (uppercase) works |
 
-Hinweis: `uiautomator dump` zeigt weiterhin nur die Host-App-Nodes, **nicht** die IME-Tasten —
-das IME-Fenster ist `NOT_FOCUSABLE` und wird vom Standard-Dump nicht erfasst (kein Rückschritt
-gegenüber VK-05; die Tasten liegen als virtuelle NodeProvider-Knoten vor, aber außerhalb des
-App-Fenster-Dumps).
-
----
-
-## 5. Regressions-Check (Schema/Zeilensummen/IDs/ẞ/Konsistenz)
-
-- **Schema-Validität:** beide vorhandenen Assets (`de-de`, `en-us`) parsen (`LayoutParserTest`
-  8 Tests grün; `LayoutCompletenessTest` prüft beide).
-- **Zeilensummen:** `LayoutParser.validateSemantics` (Zeilensummen je Index über `shift`/`symbols`/
-  `symbolsShift` identisch zu `base`) — grün.
-- **Doppelte IDs:** je Ebene geprüft; „shift" in 4 Ebenen ist zulässig (duplikatfrei *innerhalb*
-  einer Ebene) — grün.
-- **`ẞ`-Taste:** `de-de.json` shift `eszett`=`ẞ` vorhanden; `CaseMapper.upper("ß","de-DE")=="SS"`
-  bleibt getrennt korrekt (Label vs. Text-Transformation).
-- **base/shift-Tasten-Konsistenz:** beide 46 Keys, identische Struktur/Positionen; `validateSemantics`
-  erzwingt Shift-Gegenstück für jede base-TEXT-Taste; `LayoutCompletenessTest.checkShiftPairs`
-  prüft Großformen. Keine Regression.
-- **Keine Doppel-Löschung/keine Artefakte:** siehe §4 und VK-04.
+Note: `uiautomator dump` still shows only the host-app nodes, **not** the IME keys —
+the IME window is `NOT_FOCUSABLE` and is not captured by the standard dump (no regression
+versus VK-05; the keys exist as virtual node-provider nodes, but outside the
+app-window dump).
 
 ---
 
-## 6. Verdikt
+## 5. Regression check (schema/row sums/IDs/ẞ/consistency)
 
-**OK mit Notes (Merge freigeben) — keine P0-Mehrblocker verbleiben.**
-
-Die beiden P0 der Stufe 1 sind gelöst: VK-01 (ä ö ü ß als eigene Tasten) ist belegt durch JSON +
-Emulator-Text-Commit, VK-02 ist zum Kern (Ziffern-/Symbolebene erreichbar) verdrahtet. Alle
-P1-Vorgaben (VK-03/04/05/06/07) sind substantiell behoben und belegt.
-
-**Vor Release zwingend beheben (P1):** **NEW-01** — `symbolsShift` ist unerreichbar; die in
-LAYOUT_REQUIREMENTS §2.1/§1 Regel 9 geforderten Shift-Gegenstücke (Klammern, Währungen, `¹²³`)
-sind dadurch nicht erreichbar. Das ist die verbleibende Hälfte des ursprünglichen VK-02.
+- **Schema validity:** both existing assets (`de-de`, `en-us`) parse (`LayoutParserTest`
+  8 tests green; `LayoutCompletenessTest` checks both).
+- **Row sums:** `LayoutParser.validateSemantics` (row sums per index across `shift`/`symbols`/
+  `symbolsShift` identical to `base`) — green.
+- **Duplicate IDs:** checked per layer; "shift" in 4 layers is permissible (duplicate-free *within*
+  a layer) — green.
+- **`ẞ` key:** `de-de.json` shift `eszett`=`ẞ` present; `CaseMapper.upper("ß","de-DE")=="SS"`
+  remains separately correct (label vs. text transformation).
+- **base/shift key consistency:** both 46 keys, identical structure/positions; `validateSemantics`
+  enforces a shift counterpart for every base TEXT key; `LayoutCompletenessTest.checkShiftPairs`
+  checks uppercase forms. No regression.
+- **No double deletion/no artifacts:** see §4 and VK-04.
 
 ---
 
-## Die 5 nächsten Maßnahmen (Reihenfolge)
+## 6. Verdict
 
-1. **NEW-01 (P1)** — `LAYER_SYMBOLS` als echten Toggle in `KeyboardView.handleAction`
-   implementieren (`symbols ↔ symbolsShift`) und die Zustandsmatrix `base→symbols→symbolsShift→
-   symbols→base` als Test festschreiben.
-2. **NEW-02 (P2)** — `LayoutCompletenessTest` um die de-DE-B-Menge (`é è ê á à â ç`) und
-   §1-Regel-9-/Satzzeichen-Abdeckung (bzw. `PunctuationCoverageTest`) erweitern; tr-Zeile um `i`.
-3. **NEW-03 (P2)** — Unit-Test für `lastGraphemeLength` ergänzen (Surrogat/Emoji/ZWJ/leer),
-   Locale explizit setzen.
-4. **NEW-05 (P2)** — CapsLock/Shift-Zustand nach Ebenen-Roundtrip konsistent halten
-   (`applyLayerState` beim Rückschalten) und `AccessibilityNodeProvider` vervollständigen
-   (`findFocus`, stabile virtuelle IDs).
-5. **NEW-04 (P2)** — `performClick()`/`OnClickListener` als *einzigen* Klickpfad etablieren
-   (Touch-`ACTION_UP` und a11y-`ACTION_CLICK` identisch) und den doppelten Mic (VK-09) beim
-   Mic-Stufenausbau zusammenführen.
+**OK with notes (release for merge) — no additional P0 blockers remain.**
+
+The two P0s of stage 1 are solved: VK-01 (ä ö ü ß as own keys) is evidenced by JSON +
+emulator text commit, VK-02 is wired to the core (digit/symbol layer reachable). All
+P1 requirements (VK-03/04/05/06/07) are substantially fixed and evidenced.
+
+**Mandatory to fix before release (P1):** **NEW-01** — `symbolsShift` is unreachable; the shift
+counterparts required by LAYOUT_REQUIREMENTS §2.1/§1 rule 9 (brackets, currencies, `¹²³`)
+are thereby unreachable. That is the remaining half of the original VK-02.
+
+---
+
+## The 5 next measures (in order)
+
+1. **NEW-01 (P1)** — Implement `LAYER_SYMBOLS` as a genuine toggle in `KeyboardView.handleAction`
+   (`symbols ↔ symbolsShift`) and pin the state matrix `base→symbols→symbolsShift→
+   symbols→base` as a test.
+2. **NEW-02 (P2)** — Extend `LayoutCompletenessTest` with the de-DE B-set (`é è ê á à â ç`) and
+   §1 rule 9/punctuation coverage (or a `PunctuationCoverageTest`); add `i` to the tr row.
+3. **NEW-03 (P2)** — Add a unit test for `lastGraphemeLength` (surrogate/emoji/ZWJ/empty),
+   set the locale explicitly.
+4. **NEW-05 (P2)** — Keep the caps lock/shift state consistent after a layer round trip
+   (`applyLayerState` when switching back) and complete the `AccessibilityNodeProvider`
+   (`findFocus`, stable virtual IDs).
+5. **NEW-04 (P2)** — Establish `performClick()`/`OnClickListener` as the *single* click path
+   (touch `ACTION_UP` and a11y `ACTION_CLICK` identical) and merge the duplicated mic (VK-09)
+   when building out the mic stage.

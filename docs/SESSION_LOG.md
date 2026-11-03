@@ -1,7 +1,43 @@
-- 2026-10-30 16:49 UTC: SSH-Deploy-Key-Paar fuer GitHub erzeugt: ~/.ssh/voice_keyboard_github_deploy (ed25519, SHA256:LMjwQnpHd+jkU6dLPKwC+J5MG7x80A1pdiFJZzGDFmo), Host-Alias '<ssh-alias>' in ~/.ssh/config ergaenzt. Oeffentlicher Schlüssel an Nutzer uebergeben; privater Schluessel bleibt im Container. Befund: bestehender Eintrag 'Host github.com' zeigt auf ~/.ssh/id_deploy, existiert nicht (IdentitiesOnly yes) -> direkte git@github.com-Operationen schlagen fehl; nicht geaendert.
-- 2026-10-30 16:49 UTC: Nutzerentscheidung: englisches Diktat ist geklaert, Thema MULTILANG/D12 bleibt liegen (kein Auftrag, kein Build). Offene Themen damit nur noch: Diktat-Pegel (wartet auf 🐞-Export aus 0.1.10 bzw. Antwort 'A/B') und Rest-Screenshots (Caps/gedrueckt/Emoji-Panel/2. Oeffnung, hell+dunkel).
-- 2026-10-30 16:58 UTC: Erstveroeffentlichung auf GitHub: Remote origin = <ssh-alias>:tsii/Voice-Keyboard.git (Deploy-Key ed25519, Alias '<ssh-alias>'), main = 8b5644f, 217 Dateien. Signier-Passwort in HANDOFF.md/docs/* geschwaerzt, state/ und keystore/ neu ignoriert, 11,8 GiB tmp_pack-Muell in .git entfernt.
+- 2026-10-30 16:49 UTC: SSH deploy key pair for GitHub generated:
+  ~/.ssh/voice_keyboard_github_deploy (ed25519,
+  SHA256:LMjwQnpHd+jkU6dLPKwC+J5MG7x80A1pdiFJZzGDFmo), host alias
+  '<ssh-alias>' added to ~/.ssh/config. Public key handed to the
+  user; the private key stays in the container. Finding: the existing entry
+  'Host github.com' points to ~/.ssh/id_deploy, which does not exist
+  (IdentitiesOnly yes) -> direct git@github.com operations fail; not
+  changed.
+- 2026-10-30 16:49 UTC: user decision: English dictation is clarified, the
+  MULTILANG/D12 topic stays parked (no task, no build). The remaining open
+  topics are thus only: dictation level (waiting for the 🐞 export from
+  0.1.10 resp. an answer 'A/B') and the remaining screenshots
+  (caps/pressed/emoji panel/2nd opening, light+dark).
+- 2026-10-30 16:58 UTC: first publication on GitHub: remote origin =
+  <ssh-alias>:tsii/Voice-Keyboard.git (deploy key ed25519, alias
+  '<ssh-alias>'), main = 8b5644f, 217 files. Signing password
+  redacted in HANDOFF.md/docs/*, state/ and keystore/ newly ignored, 11.8
+  GiB of tmp_pack garbage removed from .git.
 
-## 2026-11-02 (Multimodal-Looker Delegation)
-- installiert: tesseract-ocr + tesseract-ocr-deu (apt) — Bildablesung IME-Statuszeile (Screenshot-Beweise C2-Matrix).
-- 2026-11-02 13:3x UTC: 0.1.32 ENDABNAHME NACH P0-NACHSCHLAG. Erste Abnahme REIN (editor_rebaseline_lost bei 8,5s, restart:20) — Nutzer waehlte (a) P0-fix. Zwei Todes-Modi ueberfuehrt (exp/act-Diagnose in VK-SESS machte sie sofort trennbar): A) restartInput INNERHALB unseres commits — tracker-Erwartung worker-seitig einen Zyklus veraltet, Suffix-Test faelscht Verlust (Fix AP7-E1c: sink.ownText-Praefix-Adoption, Test (g)); B) getTextBeforeCursor=null im Re-Bind-Fenster, sterbende alte IC (Fix AP7-E1d: 150ms-Einzel-Retry + Baseline reopen gegen stillen Schreibstopp, Test (h)). E1-Re-Abnahme PASS: audio_s=122.0, editor_len=339, restart_inputs=6, rebases=7, E1d-Retry live bewiesen (kept=1 exp=213 act=213), kein Abort. Debug-Vollsuite exit=0; EditorRestartSurvival (a)/(e) = Last-Flaky (A/B vorbestehend, iso stabil). F54-Screens: Vermerk — adb-injizierte Langduecke (345/480@2170, 0.45-0.8s) oeffnete das Satzzeichen-Menue im Screen nicht einfangbar (Pixel-Diff gegen Tastatur-Basis ohne Aenderung im Tastaturbereich); Tesseract-Gesamt-OCR fand '( )' in f54_period.png; delegierte Bildablesung meldete 8 Zellen ', ! ? : ; ( )', steht wegen Pixel-Widerspruchs NICHT als Beleg. Release/Debug dist 0.1.32 neu gebaut (SHA256 d526…5628 / f7f4…cb0d). Kimi-Doku-Session sa-2f4fe32e existiert nicht mehr — Doku ersatzweise hier + an Nutzer.
+## 2026-11-02 (multimodal looker delegation)
+- installed: tesseract-ocr + tesseract-ocr-deu (apt) — reading the IME status
+  row from images (screenshot evidence for the C2 matrix).
+- 2026-11-02 13:3x UTC: 0.1.32 FINAL ACCEPTANCE AFTER P0 FOLLOW-UP. The first
+  acceptance was CLEAN (editor_rebaseline_lost at 8.5 s, restart:20) — the
+  user chose (a) the P0 fix. Two death modes convicted (the exp/act diagnosis
+  in VK-SESS made them immediately separable): A) restartInput WITHIN our
+  commit — the tracker expectation was one cycle stale on the worker side,
+  the suffix test falsely reports loss (fix AP7-E1c: sink.ownText prefix
+  adoption, test (g)); B) getTextBeforeCursor=null in the re-bind window, a
+  dying old IC (fix AP7-E1d: a 150-ms single retry + baseline reopen against
+  the silent write stop, test (h)). E1 re-acceptance PASS: audio_s=122.0,
+  editor_len=339, restart_inputs=6, rebases=7, the E1d retry proven live
+  (kept=1 exp=213 act=213), no abort. Debug full suite exit=0;
+  EditorRestartSurvival (a)/(e) = load flaky (A/B pre-existing, stable in
+  isolation). F54 screenshots: note — adb-injected long-presses
+  (345/480@2170, 0.45–0.8 s) opening the punctuation menu were not capturable
+  in the screenshot (pixel diff against the keyboard base showed no change in
+  the keyboard area); overall Tesseract OCR found '( )' in f54_period.png;
+  the delegated image reading reported 8 cells ', ! ? : ; ( )', which does
+  NOT count as evidence due to the pixel contradiction. Release/debug dist
+  0.1.32 newly built (SHA256 d526…5628 / f7f4…cb0d). The Kimi documentation
+  session sa-2f4fe32e no longer exists — documentation instead here + to the
+  user.

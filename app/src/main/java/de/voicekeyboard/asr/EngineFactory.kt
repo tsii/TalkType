@@ -4,36 +4,36 @@ import de.voicekeyboard.model.ModelStore
 import de.voicekeyboard.model.ModelVariant
 
 /**
- * V0/V3 (MODEL_VARIANT_SWITCH_MEMO): Fabrik für die AsrEngine je Variante.
+ * V0/V3 (MODEL_VARIANT_SWITCH_MEMO): factory for the AsrEngine per variant.
  *
- * V13: LITERT_CPU liefert eine LiteRT-Engine NUR im Debug-Build (LiteRtBridge
- * — Variante B ist qualitätsgesteuert aus Release entfernt, Quellcode bleibt
- * im Debug-Source-Set) UND nur wenn der Store ein vollständiges B-Modell hat
- * ([ModelStore.isReady]). Sonst dokumentierter Fallback auf die bestehende
- * ONNX-Engine (Release: IMMER Fallback — Provider ist dort null).
+ * V13: LITERT_CPU delivers a LiteRT engine ONLY in the debug build (LiteRtBridge
+ * — variant B was removed from release via quality gate, the source code stays
+ * in the debug source set) AND only if the store has a complete B model
+ * ([ModelStore.isReady]). Otherwise documented fallback to the existing
+ * ONNX engine (release: ALWAYS fallback — the provider is null there).
  *
- * [create] ist die alte Signatur (V0: immer ONNX-Engine); [create] mit
- * Store-Abfrage ist die V3-Produktionssignatur mit [Result.usedVariant].
+ * [create] is the old signature (V0: always the ONNX engine); [create] with
+ * a store query is the V3 production signature with [Result.usedVariant].
  */
 object EngineFactory {
 
-    /** Ergebnis: gebaute Engine + die tatsächlich verwendete Variante (Fallback sichtbar). */
+    /** Result: built engine + the actually used variant (fallback visible). */
     data class Result(val engine: AsrEngine, val usedVariant: ModelVariant)
 
-    /** Liefert die Engine für [variant]; V0: immer die bestehende ONNX-Engine. */
+    /** Delivers the engine for [variant]; V0: always the existing ONNX engine. */
     fun create(variant: ModelVariant): AsrEngine = ParakeetAsrEngine()
 
     /**
-     * V3: Variante nur nutzen, wenn das Modell READY ist; sonst Fallback A.
-     * [store] entscheidet per [ModelStore.isReady] (variantengetrennt, V1).
+     * V3: use the variant only if the model is READY; otherwise fallback A.
+     * [store] decides via [ModelStore.isReady] (variant-separated, V1).
      */
     fun create(variant: ModelVariant, store: ModelStore): Result {
         if (variant == ModelVariant.LITERT_CPU && store.isReady(ModelVariant.LITERT_CPU)) {
             val engine = LiteRtBridge.acquire()?.invoke()
             if (engine != null) return Result(engine, ModelVariant.LITERT_CPU)
-            // Release: Provider null => dokumentierter Fallback (V13)
+            // Release: provider null => documented fallback (V13)
         }
-        // Dokumentierter Fallback: A-Engine + usedVariant=ONNX_CPU
+        // Documented fallback: A engine + usedVariant=ONNX_CPU
         return Result(ParakeetAsrEngine(), ModelVariant.ONNX_CPU)
     }
 }

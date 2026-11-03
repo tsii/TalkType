@@ -5,12 +5,12 @@ import kotlin.math.max
 import kotlin.math.min
 
 /**
- * Token-Budget nach ASR_CONTRACT.md §6 / KONZEPT.md 3.1:
+ * Token budget per ASR_CONTRACT.md §6 / KONZEPT.md 3.1:
  * B(s) = max(256, min(4096, ceil(12 * s) + 64))
  *
- * 12 Tokens/s liegt ~2,3× über der höchsten gemessenen Emissionsrate (5,3 Tokens/s
- * bei Zifferndiktat). Das Budget ist KEIN Runaway-Schutz — Schleifenschutz ist
- * ausschließlich das Pro-Frame-Limit in TdtGreedy (§3c).
+ * 12 tokens/s lies ~2.3× above the highest measured emission rate (5.3 tokens/s
+ * for digit dictation). The budget is NOT a runaway protection — loop protection is
+ * exclusively the per-frame limit in TdtGreedy (§3c).
  */
 object TokenBudget {
 
@@ -19,10 +19,10 @@ object TokenBudget {
     const val TOKENS_PER_SECOND = 12.0
     const val BASE_TOKENS = 64
 
-    /** Budget für die GESAMTLÄNGE des übergebenen Audios (inkl. Links-Kontext, KONZEPT 3.1). */
+    /** Budget for the TOTAL LENGTH of the given audio (incl. left context, KONZEPT 3.1). */
     fun budgetTokens(audioSeconds: Double): Int =
         max(MIN_BUDGET, min(MAX_BUDGET, ceil(TOKENS_PER_SECOND * audioSeconds).toInt() + BASE_TOKENS))
 
-    /** true, wenn ein weiterer Token das Budget überschreiten würde. */
+    /** true if one more token would exceed the budget. */
     fun budgetExceeded(emittedTokens: Int, tokenBudget: Int): Boolean = emittedTokens >= tokenBudget
 }

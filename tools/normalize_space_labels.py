@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
-"""Normalisiert das Label der SPACE-Taste in allen Layout-Assets (E11).
+"""Normalizes the label of the SPACE key in all layout assets (E11).
 
-M9b: Jede Ebene (base, symbols, symbolsShift) bekommt dasselbe sprachgerechte
-Wort-Label aus docs/SPACE_LABEL_DECISIONS.md. Das Skript veraendert
-AUS SCHLIESSLICH das `label`-Feld von Tasten mit `value == "space"` —
-kein anderes Feld, keine Reihenfolge, keine neuen Tasten.
+M9b: every layer (base, symbols, symbolsShift) gets the same language-appropriate
+word label from docs/SPACE_LABEL_DECISIONS.md. The script changes
+EXCLUSIVELY the `label` field of keys with `value == "space"` —
+no other field, no order, no new keys.
 
-Idempotent: zweiter Lauf aendert nichts. --check prueft ohne zu schreiben
-(Exit-Code 1 bei Abweichung). Formatierung: 2-Space-Indent, ensure_ascii=False.
+Idempotent: a second run changes nothing. --check verifies without writing
+(exit code 1 on deviation). Formatting: 2-space indent, ensure_ascii=False.
 """
 import json
 import pathlib
@@ -15,7 +15,7 @@ import sys
 
 ASSET_DIR = pathlib.Path(__file__).resolve().parents[1] / "app/src/main/assets/layouts"
 
-# E11-Werte (verbindlich aus docs/SPACE_LABEL_DECISIONS.md)
+# E11 values (binding, from docs/SPACE_LABEL_DECISIONS.md)
 LABELS = {
     "de-de": "Leer",
     "en-us": "Space",
@@ -43,7 +43,7 @@ def main() -> int:
         asset_id = path.stem
         expected = LABELS.get(asset_id)
         if expected is None:
-            print(f"{path.name}: keine E11-Vorgabe, uebersprungen")
+            print(f"{path.name}: no E11 specification, skipped")
             continue
         text = path.read_text(encoding="utf-8")
         data = json.loads(text)
@@ -68,8 +68,8 @@ def main() -> int:
                     encoding="utf-8",
                 )
         else:
-            print(f"{path.name}: 0 Aenderungen (bereits normalisiert)")
-    print(f"Gesamt: {total_files} Datei(en), {total_keys} Taste(n) geaendert")
+            print(f"{path.name}: 0 changes (already normalized)")
+    print(f"total: {total_files} file(s), {total_keys} key(s) changed")
     return 1 if (check_only and total_keys > 0) else 0
 
 

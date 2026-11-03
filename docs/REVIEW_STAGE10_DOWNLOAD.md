@@ -1,43 +1,43 @@
-# Review Stufe 10 — Download (D1: Fehlerklassifikation, 416/200-Resume, Retry, Fern-Diagnose)
+# Review Stage 10 — Download (D1: error classification, 416/200 resume, retry, remote diagnosis)
 
-**Reviewer:** DeepSeek V4 Pro 0813 · **Datum:** 2026-10-28
-**Gegenstand:** `DownloadPolicy.userMessageKey`, `ModelError.detailForUser`, `ModelDownloader` (416/200/Retry), `SetupActivity`, `strings.xml`. **Kein Build/Emulator** (Orchestrator: 242 Tests/0 Fehler; SHA des CDN = Manifest, Range/206 bedient).
+**Reviewer:** DeepSeek V4 Pro 0813 · **Date:** 2026-10-28
+**Subject:** `DownloadPolicy.userMessageKey`, `ModelError.detailForUser`, `ModelDownloader` (416/200/retry), `SetupActivity`, `strings.xml`. **No build/emulator** (orchestrator: 242 tests/0 failures; SHA of the CDN = manifest, Range/206 served).
 
 ---
 
-## Befundtabelle
+## Findings table
 
-| ID | Sev | Datei:Zeile | Befund | Evidenz | Fix |
+| ID | Sev | File:Line | Finding | Evidence | Fix |
 |---|---|---|---|---|---|
-| D1-01 | **P2** | `ModelError.kt:47-51` (`scrub`) | **Scrub ist nicht exhaustiv (Defense-in-depth-Lücke, kein aktueller Leak).** `scrub` entfernt nur `https?://\S+` und `[?&](Signature|Expires|xip)=\S*` — ein URL **ohne** Schema (Bare-Hostname/Pfad, `ftp://`) oder ein Dateisystempfad unter `files/` bliebe stehen; auch URL-dekodierte Reste (`%2F`) nicht behandelt. In **dieser** Codebasis gelangt aber nie eine URL in ein Detail: `Http.detail="für <filename>"`, `HashMismatch.fileName` (whitelisted), `Storage` → fest „Speicher", nur `Network.detail = IOException.message` (systemgeneriert, meist „Connection refused/newtwork unreachable", ohne URL). Ein künftiger `opener`, der URLs in den Exception-Text schreibt, würde vom Scrub nur teils gefangen. | `scrub = s.replace(Regex("https?://\\S+"),"").replace(…Signature…Expires…xip…,"").trim().take(48)`. | Scrub härten: auch `ftp://`, `\S+://`, bare `\S+/\S+`-Pfade und `files/…`-Muster entfernen; zusätzlich „nur Wörter/Zahlen/-/·"-Allowlist statt Blacklist. |
-| D1-02 | Note | `DownloadPolicy.kt:64` (`in 400..499 -> "server"`) | **`Http(416)` läuft unter „server" und liest sich als „Server hat die Datei abgelehnt" — irreführend** für ein Range-Satisfiability-/Resume-Problem. 416 erreicht den Nutzer nur nach dem Ein-Restart-Fallback (frischer Range-loser Request lieferte trotzdem 416 = echte Server-Anomalie), also selten — aber „abgelehnt" passt nicht zur Kausalität. | `when(statusCode){ 408,429->"warte"; in 400..499->"server"; else->"netz" }` (416 ∈ 400..499). | 416 explizit vorziehen (eigener Schlüssel „datei"/`setup_error_range` oder weiter „neues versuchen"), damit die Meldung nicht „Server verweigert" suggeriert. |
-| D1-03 | Note | `ModelDownloader.kt` (Retry-Loop + Backoff) | **Bis zu 5 Versuche (Initial + 4 Retries) × 652 MB bei instabiler Leitung.** Backoff 1/2/4/8 s; die `.part` wird über Versuche wiederverwendet (kein Neustart, außer `200`/`>sizeBytes` truncate) — Fortschritt resettet also nur bei echter Kürzung, was korrekt ist. Summe kann bei dauerhaft kippender Verbindung ~5+ min „Retry ohne sichtbaren Fortschritt" ergeben; kein Endloslauf (`attempt<=maxRetries`), `Cancelled` nie retry-bar. | `while (attempt <= maxRetries)`, `Thread.sleep(backoffBaseMs shl (attempt-1).coerceAtMost(4))`. | Optional: Fortschritts-Listener mit „Versuch n/5"-Signal füttern, damit die UI nicht still steht. |
-| D1-04 | Note | `ModelDownloader.kt` (`else { written = part.length() }`) | **Toter Zweig.** `input` ist nach der frühen 416-Behandlung nie mehr `null` (416 kehrt vorher zurück; 200/206 liefern immer `inputStream`) — der `else`-Zweig mit `written = part.length()` ist Restcode. Harmlos, aber verwirrend. | `val input = connection.inputStream` (nie null nach 416-Rückkehr); `else { written = part.length() }`. | Zweig entfernen oder bewusst leer lassen. |
-| D1-05 | ✓ | `ModelDownloader.kt` (200/416/`>sizeBytes`) | **Integrität hält in allen Ästen.** 200-statt-206 ⇒ `RandomAccessFile.setLength(0)` (Kein Anhängen) + Digest ab 0; 416 vollständig ⇒ Direkt-Hash; 416 kleiner ⇒ ein Neustart, dann `Http(416)`; `written > sizeBytes` ⇒ `.part` auf 0 + `Network` (retry-bar). End-zu-Ende-Hash läuft **in jedem** Pfad (Prefix eingelesen + Body im Digest, `written != sizeBytes` → Fehler). Keine gekürzte `.part` gilt je als fertig. | `RandomAccessFile(part,"rw").use{ it.setLength(0) }` bei `!rangeAccepted`; `raf.setLength(0); throw Network(...)` bei `written>sizeBytes`. | — |
-| D1-06 | ✓ | `DownloadPolicy.kt:56-68` + `SetupActivity.kt:291-299` | **Klassifikationsrichtung korrekt + vollständig verdrahtet.** 408/429 → „warte" (temporär), 400..499 → „server" (dauerhaft 4xx), 5xx/Rest → „netz". Der tote `if(>=500) "netz" else "netz"`-Zweig ist beseitigt. `SetupActivity` mappt `"server"→setup_error_server`, `"warte"→setup_error_wait`, `"netz"→setup_error_network` und zeigt zusätzlich `detailForUser()` (keine Fallback-auf-„abgebrochen"-Regression). | Z.295-296 `"server"/"warte"`; Z.299 `detailForUser()`. | — |
-| D1-07 | ✓ | `ModelError.kt:56-66` (`detailForUser`) | **Fern-Diagnose kurz + diktierbar.** `"HTTP 403 · encoder-model.int8.onnx"` (≤48 Z., ohne URL/Token); `Network` nur gescrubbtes `detail`; `Storage`/`Cancelled` feste Wörter. Enthält nichts, das per Ferndiktat gefährlich wäre. | `take(48)`, `removePrefix("für ")`. | — |
+| D1-01 | **P2** | `ModelError.kt:47-51` (`scrub`) | **Scrub is not exhaustive (defense-in-depth gap, no current leak).** `scrub` removes only `https?://\S+` and `[?&](Signature|Expires|xip)=\S*` — a URL **without** a scheme (bare hostname/path, `ftp://`) or a filesystem path under `files/` would remain; URL-decoded remnants (`%2F`) are also not handled. In **this** code base, however, a URL never gets into a detail: `Http.detail="für <filename>"`, `HashMismatch.fileName` (whitelisted), `Storage` → fixed "Speicher", only `Network.detail = IOException.message` (system-generated, mostly "Connection refused/network unreachable", without URL). A future `opener` that writes URLs into exception text would be only partially caught by the scrub. | `scrub = s.replace(Regex("https?://\\S+"),"").replace(…Signature…Expires…xip…,"").trim().take(48)`. | Harden the scrub: also remove `ftp://`, `\S+://`, bare `\S+/\S+` paths and `files/…` patterns; additionally a "only words/digits/-/·" allowlist instead of a blacklist. |
+| D1-02 | Note | `DownloadPolicy.kt:64` (`in 400..499 -> "server"`) | **`Http(416)` falls under "server" and reads as "server refused the file" — misleading** for a range-satisfiability/resume problem. 416 reaches the user only after the single-restart fallback (a fresh range-less request nevertheless returned 416 = a genuine server anomaly), so rarely — but "refused" does not fit the causality. | `when(statusCode){ 408,429->"warte"; in 400..499->"server"; else->"netz" }` (416 ∈ 400..499). | Give 416 explicit precedence (its own key "datei"/`setup_error_range` or continue "neues versuchen"), so the message does not suggest "server refuses". |
+| D1-03 | Note | `ModelDownloader.kt` (retry loop + backoff) | **Up to 5 attempts (initial + 4 retries) × 652 MB on an unstable line.** Backoff 1/2/4/8 s; the `.part` is reused across attempts (no restart, except `200`/`>sizeBytes` truncate) — progress resets only on a genuine truncation, which is correct. On a persistently flapping connection the total can produce ~5+ min of "retry with no visible progress"; no endless loop (`attempt<=maxRetries`), `Cancelled` never retried. | `while (attempt <= maxRetries)`, `Thread.sleep(backoffBaseMs shl (attempt-1).coerceAtMost(4))`. | Optional: feed the progress listener with an "attempt n/5" signal, so the UI does not stand still silently. |
+| D1-04 | Note | `ModelDownloader.kt` (`else { written = part.length() }`) | **Dead branch.** After the early 416 handling, `input` is never `null` again (416 returns beforehand; 200/206 always provide an `inputStream`) — the `else` branch with `written = part.length()` is leftover code. Harmless, but confusing. | `val input = connection.inputStream` (never null after the 416 return); `else { written = part.length() }`. | Remove the branch or leave it consciously empty. |
+| D1-05 | ✓ | `ModelDownloader.kt` (200/416/`>sizeBytes`) | **Integrity holds in every branch.** 200 instead of 206 ⇒ `RandomAccessFile.setLength(0)` (no appending) + digest from 0; 416 complete ⇒ direct hash; 416 short ⇒ one restart, then `Http(416)`; `written > sizeBytes` ⇒ `.part` to 0 + `Network` (retryable). The end-to-end hash runs in **every** path (prefix read into the digest + body, `written != sizeBytes` → error). No truncated `.part` is ever considered complete. | `RandomAccessFile(part,"rw").use{ it.setLength(0) }` on `!rangeAccepted`; `raf.setLength(0); throw Network(...)` on `written>sizeBytes`. | — |
+| D1-06 | ✓ | `DownloadPolicy.kt:56-68` + `SetupActivity.kt:291-299` | **Classification direction correct + fully wired.** 408/429 → "warte" (temporary), 400..499 → "server" (permanent 4xx), 5xx/rest → "netz". The dead `if(>=500) "netz" else "netz"` branch is eliminated. `SetupActivity` maps `"server"→setup_error_server`, `"warte"→setup_error_wait`, `"netz"→setup_error_network` and additionally shows `detailForUser()` (no fallback-to-"abgebrochen" regression). | Lines 295-296 `"server"/"warte"`; line 299 `detailForUser()`. | — |
+| D1-07 | ✓ | `ModelError.kt:56-66` (`detailForUser`) | **Remote diagnosis short + dictable.** `"HTTP 403 · encoder-model.int8.onnx"` (≤48 chars, without URL/token); `Network` only the scrubbed `detail`; `Storage`/`Cancelled` fixed words. Contains nothing that would be dangerous via remote dictation. | `take(48)`, `removePrefix("für ")`. | — |
 
 ---
 
-## Punktgenaue Antworten
+## Point-by-point answers
 
-1. **Privatsphäre:** `detailForUser` liefert im Ist-Code nie eine URL/Pfad/Header — `Http` trägt nur den Dateinamen, `HashMismatch` ebenso, `Storage`→„Speicher"; einzige offene Stelle ist `Network.detail` (IOException-Text), der systemgeneriert und URL-frei ist. Der Regex-Scrub ist **nicht** exhaustiv (Schema-lose URLs/Bare-Pfade schlüpfen durch), daher P2 als Härtungslücke, kein aktuelles Leak (D1-01).
-2. **Klassifikation:** Richtung korrekt (4xx dauerhaft, 408/429 temporär, 5xx transcient); 416 fällt als 4xx unter „server" und klingt („Datei abgelehnt") fürs Resume-Szenario leicht falsch (D1-02).
-3. **Integrität:** Kein Pfad, in dem eine gekürzte `.part` ohne Hash als fertig gilt; 200-Trunkierung und `>sizeBytes` sind abgedeckt (D1-05).
-4. **Retry:** begrenzt (5 Versuche, Backoff), Resume erhalten, kein Endloslauf; nur Dauer ~5+ min möglich (D1-03).
-5. **Regressionen:** Cancel nie retry-bar ✓, alle neuen Schlüssel verdrahtet (D1-06), keine neuen Permissions/Netz-Nebeneffekte erkennbar.
-6. **Fern-Diagnose:** kurz, diktierbar, ohne Sensibles (D1-07).
+1. **Privacy:** in the current code `detailForUser` never delivers a URL/path/header — `Http` carries only the file name, `HashMismatch` likewise, `Storage`→"Speicher"; the only open spot is `Network.detail` (IOException text), which is system-generated and URL-free. The regex scrub is **not** exhaustive (scheme-less URLs/bare paths slip through), hence a P2 as a hardening gap, not a current leak (D1-01).
+2. **Classification:** direction correct (4xx permanent, 408/429 temporary, 5xx transient); as a 4xx, 416 falls under "server" and sounds slightly wrong ("file refused") for the resume scenario (D1-02).
+3. **Integrity:** no path in which a truncated `.part` is considered complete without a hash; 200 truncation and `>sizeBytes` are covered (D1-05).
+4. **Retry:** bounded (5 attempts, backoff), resume preserved, no endless loop; only the duration of ~5+ min is possible (D1-03).
+5. **Regressions:** cancel never retried ✓, all new keys wired (D1-06), no new permissions/network side effects recognizable.
+6. **Remote diagnosis:** short, dictable, without anything sensitive (D1-07).
 
 ---
 
-## Verdikt
+## Verdict
 
-**freigabefähig für eine Diagnose-/Release-APK** — **0 P0, 0 P1, 2 P2** (D1-01 Scrub-Härtung, D1-02 416-Labeling) + 2 Notes. Die D1-Echtklassifikation behebt den gemeldeten „Netzwerkfehler bei Datei 2"-Bug korrekt; Integrität und Retry sind solide.
+**ready for release for a diagnosis/release APK** — **0 P0, 0 P1, 2 P2** (D1-01 scrub hardening, D1-02 416 labeling) + 2 notes. The D1 real classification correctly fixes the reported "network error on file 2" bug; integrity and retry are solid.
 
-**Nicht geprüft (kein echtes CDN hinter VPN):** tatsächliches 403/429-Verhalten des CDN, Range-Redirect (200-statt-206) am echten Endpoint, WireGuard-Route-Interaktion, Fortschrittswahrnehmung über mehrere 652-MB-Retries.
+**Not checked (no real CDN behind a VPN):** the CDN's actual 403/429 behavior, range redirects (200 instead of 206) at the real endpoint, WireGuard route interaction, progress perception across multiple 652-MB retries.
 
 ## Top-3
 
-1. **D1-01 (P2)** — `scrub` auf Allowlist umstellen (nur Wörter/Zahlen/`·`/`-`), damit auch Schema-lose URLs/Bare-Pfade künftig ausgeschlossen sind.
-2. **D1-02 (Note)** — `Http(416)` einen eigenen Schlüssel geben (kein „Server abgelehnt").
-3. **D1-04 (Note)** — toten `else`-Zweig in `downloadAttempt` entfernen.
+1. **D1-01 (P2)** — Switch `scrub` to an allowlist (only words/digits/`·`/`-`), so that scheme-less URLs/bare paths are excluded in the future too.
+2. **D1-02 (Note)** — Give `Http(416)` its own key (no "server refused").
+3. **D1-04 (Note)** — Remove the dead `else` branch in `downloadAttempt`.

@@ -9,20 +9,20 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
 /**
- * T4 (v0.1.35, docs/PLAN_LONGPRESS_SYMBOLS.md §2/§4): Langdruck-Menüs auf den
- * Symbolebenen — sprachneutral IDENTISCH in allen 15 Assets. Gegenproben-
- * Charakter: der Test liest die JSON direkt über den Parser und fällt bei
- * Löschung, Umbau oder Erweiterung einer Menge.
+ * T4 (v0.1.35, docs/PLAN_LONGPRESS_SYMBOLS.md §2/§4): long-press menus on the
+ * symbol layers — language-neutral IDENTICAL in all 15 assets. Counter-check
+ * character: the test reads the JSON directly via the parser and fails on
+ * deletion, restructuring or extension of a set.
  *
- *  - Ziffern (symbols r0, Label 0–9; IDs je Asset "1"/"s49"/"one"…) bleiben OHNE Menü;
- *  - exakte Mengen je id nach Plan §2 (symbols: –— \| [{< ]}> ‘’‚ „“”‘’‚ … ¿ ¡ ‰ ±;
- *    symbolsShift: $ → €£¥, NUR wo der Schlüssel existiert — 8 Assets haben kein $);
- *  - alles Übrige ohne Menü (Ausnahme Bestand: el-gr semicolon → [·], vor T4
- *    vorhanden — griechischer Sonderweg, bleibt unangetastet);
- *  - Hygiene je Alternate: ≤ 8, 1 Codepoint, NFC, ≠ eigenes Zeichen, keine
- *    Duplikate; KEIN hint auf Symbol-Tasten (Plan §1 — withHint würde ihn sonst
- *    als Zelle anhängen);
- *  - Parität: jede Plan-id trägt über alle 15 Assets dieselbe Menge.
+ *  - digits (symbols r0, label 0–9; IDs per asset "1"/"s49"/"one"…) stay WITHOUT a menu;
+ *  - exact sets per id per plan §2 (symbols: –— \| [{< ]}> ‘’‚ „“”‘’‚ … ¿ ¡ ‰ ±;
+ *    symbolsShift: $ → €£¥, ONLY where the key exists — 8 assets have no $);
+ *  - everything else without a menu (inventory exception: el-gr semicolon → [·],
+ *    present before T4 — Greek special path, stays untouched);
+ *  - hygiene per alternate: ≤ 8, 1 codepoint, NFC, ≠ own character, no
+ *    duplicates; NO hint on symbol keys (plan §1 — withHint would otherwise
+ *    append it as a cell);
+ *  - parity: every plan id carries the same set across all 15 assets.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35])
@@ -36,7 +36,7 @@ class SymbolLongpressAcrossAssetsTest {
     private fun asset(id: String) =
         LayoutParser.parse(java.io.File("src/main/assets/layouts/$id.json").readText())
 
-    /** Plan §2, symbols-Hauptebene: id → exakte alternates-Menge (sprachneutral). */
+    /** Plan §2, symbols main layer: id → exact alternates set (language-neutral). */
     private val symbolsMenus = mapOf(
         "hyphen" to listOf("–", "—"),
         "slash" to listOf("\\", "|"),
@@ -53,74 +53,74 @@ class SymbolLongpressAcrossAssetsTest {
 
     @Test
     fun symbolLangdruckMenusGeltenSprachneutralInAllen15Assets() {
-        assertEquals("Layout-Assets zahlen", 15, assetIds.size)
-        // Mengen je Plan-id über alle Assets einsammeln (Parität am Ende).
+        assertEquals("layout assets count", 15, assetIds.size)
+        // collect the sets per plan id across all assets (parity at the end).
         val perId = mutableMapOf<String, MutableSet<List<String>>>()
         for (id in assetIds) {
             val asset = asset(id)
             val symbols = asset.layers.getValue("symbols").rows.flatten()
             val shift = asset.layers.getValue("symbolsShift").rows.flatten()
 
-            // (a) Ziffern bleiben OHNE Menü (Plan §2 [D]: Fraktions-Menüs bewusst raus).
+            // (a) digits stay WITHOUT a menu (plan §2 [D]: fraction menus deliberately out).
             for (key in symbols) {
                 if (key.label.length == 1 && key.label[0] in '0'..'9') {
-                    assertTrue("$id/symbols Ziffer ${key.label} ohne Menü", key.alternates.isEmpty())
+                    assertTrue("$id/symbols digit ${key.label} without a menu", key.alternates.isEmpty())
                 }
             }
 
-            // (b) exakte Mengen je id (symbols) — Plan §2 wörtlich.
+            // (b) exact sets per id (symbols) — plan §2 verbatim.
             val byId = symbols.associateBy { it.id }
             for ((keyId, expected) in symbolsMenus) {
                 assertEquals("$id/symbols/$keyId", expected, byId.getValue(keyId).alternates)
                 perId.getOrPut(keyId) { mutableSetOf() }.add(byId.getValue(keyId).alternates)
             }
 
-            // (c) symbolsShift: $ (id "dollar") → [€ £ ¥] — nur wo der Schlüssel
-            //     existiert (8 Assets haben kein $: da-de/el-gr/fi-fi/… führen €
-            //     als Direkttaste; alles übrige bleibt ohne Menü).
+            // (c) symbolsShift: $ (id "dollar") → [€ £ ¥] — only where the key
+            //     exists (8 assets have no $: da-de/el-gr/fi-fi/… carry €
+            //     as a direct key; everything else stays without a menu).
             val dollar = shift.firstOrNull { it.id == "dollar" }
             if (dollar != null) {
                 assertEquals("$id/symbolsShift/dollar", listOf("€", "£", "¥"), dollar.alternates)
             }
 
-            // (d) ALLES ÜBRIGE ohne Menü — Ausnahme Bestand el-gr/semicolon → [·]
-            //     (vor T4 vorhanden, griechischer Sonderweg, unangetastet).
+            // (d) EVERYTHING ELSE without a menu — inventory exception el-gr/semicolon → [·]
+            //     (present before T4, Greek special path, untouched).
             for (key in symbols) {
                 if (key.id !in symbolsMenus && !(id == "el-gr" && key.id == "semicolon")) {
-                    assertTrue("$id/symbols/${key.id} darf kein Menü haben (${key.alternates})",
+                    assertTrue("$id/symbols/${key.id} must not have a menu (${key.alternates})",
                         key.alternates.isEmpty())
                 }
             }
             for (key in shift) {
                 if (key.id != "dollar") {
-                    assertTrue("$id/symbolsShift/${key.id} darf kein Menü haben (${key.alternates})",
+                    assertTrue("$id/symbolsShift/${key.id} must not have a menu (${key.alternates})",
                         key.alternates.isEmpty())
                 }
             }
 
-            // (e) Hygiene je Alternate (Plan §1): ≤ 8, 1 Codepoint, NFC, ≠ eigenes
-            //     Zeichen, keine Duplikate; KEIN hint auf Symbol-Tasten.
+            // (e) hygiene per alternate (plan §1): ≤ 8, 1 codepoint, NFC, ≠ own
+            //     character, no duplicates; NO hint on symbol keys.
             for (layerKeys in listOf(symbols, shift)) {
                 for (key in layerKeys) {
                     assertTrue("$id ${key.id} ≤ 8 alternates", key.alternates.size <= 8)
-                    assertNull("$id ${key.id} kein hint auf Symbol-Taste (Plan §1)", key.hint)
-                    assertEquals("$id ${key.id} keine Duplikate",
+                    assertNull("$id ${key.id} no hint on symbol key (plan §1)", key.hint)
+                    assertEquals("$id ${key.id} no duplicates",
                         key.alternates.size, key.alternates.toSet().size)
                     for (alt in key.alternates) {
-                        assertEquals("$id ${key.id} alternate '$alt' ist 1 Codepoint",
+                        assertEquals("$id ${key.id} alternate '$alt' is 1 codepoint",
                             1, alt.codePointCount(0, alt.length))
                         assertTrue("$id ${key.id} alternate '$alt' NFC",
                             java.text.Normalizer.isNormalized(alt, java.text.Normalizer.Form.NFC))
-                        assertTrue("$id ${key.id} alternate '$alt' ≠ eigenes Zeichen",
+                        assertTrue("$id ${key.id} alternate '$alt' ≠ own character",
                             alt != key.value && alt != key.label)
                     }
                 }
             }
         }
 
-        // (f) Parität: jede Plan-id hat über alle 15 Assets DIESELBE Menge.
+        // (f) parity: every plan id has THE SAME set across all 15 assets.
         for ((keyId, sets) in perId) {
-            assertEquals("Parität $keyId über 15 Assets", 1, sets.size)
+            assertEquals("parity $keyId across 15 assets", 1, sets.size)
         }
     }
 }

@@ -1,270 +1,287 @@
-# D9 – AOSP-Stock-Look für Voice Keyboard
+# D9 – AOSP stock look for Voice Keyboard
 
-## 0. Entscheidung, Referenz und Grenzen
+## 0. Decision, reference, and limits
 
-**Ziel:** flache AOSP-LatinIME-Anmutung in Hell/Dunkel, nicht Gboard/Pixel-Material-You-Pills.
-Alle jetzigen Zeichen und Aktionen bleiben erreichbar und sichtbar; Status/Diagnose bleibt,
-🐞/Info bleibt **in der Leiste oberhalb** der Zeichentasten. Keine noch nicht benannte
-„spätere Ausnahme“ wird vorweggenommen. Keine Stock-Bereinigung durch Entfernen von
-Umlauten, Cursortasten, Mic, Emoji oder einer ganzen Reihe.
+**Goal:** flat AOSP LatinIME look in light/dark, not Gboard/Pixel Material You pills.
+All current characters and actions remain reachable and visible; status/diagnostics
+remains, 🐞/info remains **in the strip above** the character keys. No not-yet-named
+"later exception" is pre-empted. No stock cleanup by removing umlauts, cursor keys,
+mic, emoji, or a whole row.
 
-Gelesen: aktueller KeyboardView, KeyboardModel, KeyboardHeight, ImeRootView,
-EmojiPanelView, Service-Debug-Button, themes.xml und Struktur aller 15 Layoutassets.
-`keyboard/KeyboardTheme.kt` und `res/values/colors.xml` existieren im gelesenen Stand
-**nicht**. Die tatsächlichen Layouts liegen unter `app/src/main/assets/layouts/`,
-nicht `keyboard/assets/`. Es wurden nur Quellen gelesen und dieses Dokument erstellt;
-kein Build, kein adb, keine Änderung am parallel bearbeiteten T19.
+Read: current KeyboardView, KeyboardModel, KeyboardHeight, ImeRootView,
+EmojiPanelView, service debug button, themes.xml, and the structure of all 15
+layout assets. `keyboard/KeyboardTheme.kt` and `res/values/colors.xml` do **not**
+exist in the read state. The actual layouts live under
+`app/src/main/assets/layouts/`, not `keyboard/assets/`. Only sources were read and
+this document created; no build, no adb, no change to the parallel T19.
 
-### Tatsächliche AOSP-Referenz
+### Actual AOSP reference
 
-Die folgenden Originalquellen wurden lesend unter `android16-release` geprüft:
-Basis-URL **https://android.googlesource.com/platform/packages/inputmethods/LatinIME/+/refs/heads/android16-release/java/res/**
-- `values/colors.xml:43–78`: LXX_Light/LXX_Dark-Farben, einschließlich Press-Overlays.
-- `values/themes-lxx-light.xml:45–55`, `themes-lxx-dark.xml:45–55`: Zuordnung von Key-/Funktionshintergrund und Textfarben.
-- `drawable/btn_keyboard_key_lxx_light.xml:34–43`, entsprechende Dark-Datei: normale Tasten mit flächigen Farben, Presszustand als Farbzustand; Funktionstasten entsprechende Selektoren.
-- `xml/rows_qwerty.xml:27–50`: 10%-Zeichenraster, Shift 15 %, Delete rechts; `values/themes-lxx.xml:31–41`: normaler Typeface und größenabhängige Typografie.
-- `values/config-common.xml:100–101`: seitliches Keyboard-Padding 0; LXX-Popupstil nennt horizontalGap 0, ist aber **kein Beleg für alle Haupttastenabstände**.
+The following original sources were checked by reading under `android16-release`:
+base URL **https://android.googlesource.com/platform/packages/inputmethods/LatinIME/+/refs/heads/android16-release/java/res/**
+- `values/colors.xml:43–78`: LXX_Light/LXX_Dark colors, including press overlays.
+- `values/themes-lxx-light.xml:45–55`, `themes-lxx-dark.xml:45–55`: assignment of
+  key/function backgrounds and text colors.
+- `drawable/btn_keyboard_key_lxx_light.xml:34–43`, corresponding dark file: normal
+  keys with solid colors, press state as a color state; function keys corresponding
+  selectors.
+- `xml/rows_qwerty.xml:27–50`: 10 % character grid, shift 15 %, delete on the right;
+  `values/themes-lxx.xml:31–41`: normal typeface and size-dependent typography.
+- `values/config-common.xml:100–101`: lateral keyboard padding 0; the LXX popup
+  style names horizontalGap 0, but is **no evidence for all main key gaps**.
 
-**Wichtig:** Android 16 allein definiert keine universelle feste dp-Tastenhöhe für alle
-Bildschirme/OEMs; LatinIME arbeitet auch mit Ressourcenvarianten und Größenverhältnissen.
-Unten stehen **Originalfarben und Rasterprinzipien**, ergänzt durch ausdrücklich eigene,
-verbindliche dp-Designwerte für unseren Renderer. Das ist kein erfundener pixelgenauer
-Screenshot-Nachbau eines hier nicht geöffneten AOSP-Geräts.
+**Important:** Android 16 alone does not define a universal fixed dp key height for
+all screens/OEMs; LatinIME also works with resource variants and size ratios.
+Below are **original colors and grid principles**, supplemented by explicitly our
+own, binding dp design values for our renderer. This is not an invented
+pixel-perfect screenshot replica of an AOSP device not opened here.
 
-## 1. Konkrete Geometrie und Typografie
+## 1. Concrete geometry and typography
 
-Alle dp-Zahlen sind Layout-/Darstellungsmaße; Text wird als sp mit gleichem Nennwert
-bei fontScale=1 umgesetzt, statt wie bisher ausschließlich mit density zu skalieren.
+All dp numbers are layout/display measures; text is implemented as sp with the same
+nominal value at fontScale=1, instead of scaling exclusively with density as before.
 
-| Bestandteil | Normalangebot / Zielwert | Begrenztes Angebot |
+| Component | Normal offer / target value | Limited offer |
 |---|---|---|
-| Oberleiste mit Status, vorhandenen Mic-/Info-Aktionen | **48 dp**, immer sichtbar; Info-Touchziel 48×48 dp | Nicht auf 24 dp quetschen, solange dort interaktive 48-dp-Aktionen bleiben |
-| Vier Tastenreihen | **55 dp je logischer Reihe**, einschließlich Fußreihe; 220 dp zusammen | Alle vier gleichmäßig aus dem tatsächlich verbleibenden Budget ableiten |
-| PT base/shift: fünf Reihen | **44 dp je Reihe**, 220 dp zusammen; alle Akzenttasten bleiben | Alle fünf proportional erhalten, keine abgeschnittene oder gestrichene fünfte Reihe |
-| Seitlicher Außenabstand / Abstand oben-unten im Tastenblock | **0 dp / 0 dp** | Keine zusätzlichen versteckten Mindesthöhen |
-| Physische Modelllücken horizontal / vertikal | **0 dp / 0 dp** im Stock-Stil | Eindeutige aneinandergrenzende logische Zellen, keine überlappenden virtuellen Ziele |
-| Normale Tastenfläche | Gleiche Farbe wie Keyboard-Hintergrund, keine sichtbaren Einzelkarten | Druckfläche innerhalb ihrer eigenen Zelle, keine Übermalung von Nachbarn |
-| Radius | **0 dp** normale/gedrückte Zeichentasten; **18 dp** maximal für den bewusst eigenen Mic-Aufnahmeindikator | Mic-Indikator höchstens `min(36 dp, Reihenhöhe−4 dp)` Durchmesser |
-| Buchstaben / Ziffern | **24 sp / 22 sp** | Bei engen Zeichenspalten bis 18 sp absenken, keine Zeichen kürzen oder verstecken |
-| Funktionswörter ?123/ABC / Space / Status | **14 sp / 12 sp / 12 sp** | Lange Space-Wörter nur nach bestehender SPACE_LABEL-Entscheidung zu ␣ verdichten; kein „Leer“-Hardcode |
-| Normale Icons | Backspace, Enter, Shift, Mic: **24×24 dp**, einfarbig; Strichstärke **2 dp** | Innerhalb jeder gemessenen Zelle zentriert, keine Emoji-Font-Boundingbox als Positionsgrundlage |
-| Prominenter Fuß-Mic | Icon **26 dp**; Akzent/Recording-Indikator, nicht durch Entfernen des Enter-Platzes vergrößern | Größe auf echte Zelle begrenzen; kein neuer 96-dp-Breitenanspruch in diesem Stock-Auftrag |
-| Elevation / Schatten | **0 dp / keine**, auch kein Textschatten | Keine künstlichen Reliefkanten oder systemabhängigen Button-Schatten |
-| Trennlinien | Keine zwischen Buchstabentasten; **1 dp** unter der Diagnoseleiste | Einzige feste Linie, auch in Emoji-Ansicht konsistent |
+| Top strip with status, existing mic/info actions | **48 dp**, always visible; info touch target 48×48 dp | Do not squeeze to 24 dp as long as interactive 48-dp actions remain there |
+| Four key rows | **55 dp per logical row**, including the footer; 220 dp together | Derive all four evenly from the actually remaining budget |
+| PT base/shift: five rows | **44 dp per row**, 220 dp together; all accent keys remain | Preserve all five proportionally, no cut-off or dropped fifth row |
+| Lateral outer distance / distance top-bottom in the key block | **0 dp / 0 dp** | No additional hidden minimum heights |
+| Physical model gaps horizontal / vertical | **0 dp / 0 dp** in the stock style | Unambiguous adjacent logical cells, no overlapping virtual targets |
+| Normal key surface | Same color as the keyboard background, no visible individual cards | Press surface within its own cell, no painting over neighbors |
+| Radius | **0 dp** normal/pressed character keys; **18 dp** maximum for the deliberately own mic recording indicator | Mic indicator at most `min(36 dp, row height−4 dp)` diameter |
+| Letters / digits | **24 sp / 22 sp** | Lower to 18 sp in tight character columns, do not cut or hide characters |
+| Function words ?123/ABC / space / status | **14 sp / 12 sp / 12 sp** | Condense long space words to ␣ only per the existing SPACE_LABEL decision; no "space" hardcode |
+| Normal icons | Backspace, enter, shift, mic: **24×24 dp**, monochrome; stroke width **2 dp** | Centered within each measured cell, no emoji font bounding box as the position basis |
+| Prominent footer mic | Icon **26 dp**; accent/recording indicator, do not enlarge by removing the enter space | Limit the size to the real cell; no new 96-dp width claim in this stock assignment |
+| Elevation / shadow | **0 dp / none**, no text shadow either | No artificial relief edges or system-dependent button shadows |
+| Dividers | None between letter keys; **1 dp** below the diagnostics strip | The only fixed line, consistent in the emoji view too |
 
-Damit wird die vertikale Zielsumme **48 + 220 = 268 dp ohne Navigation**;
-mit nominal 8 dp Navigation **276 dp**. Das ist eine Root-Gesamtsumme, nicht die
-Höhe, die KeyboardView zusätzlich zur Leiste beanspruchen darf. 55 dp ist die logische
-Tastenhöhe ohne den bisherigen 6-dp-Zwischenraum, keine 55+6-dp-Zeile.
+This makes the vertical target sum **48 + 220 = 268 dp without navigation**;
+with nominally 8 dp navigation **276 dp**. That is a total root sum, not the height
+that KeyboardView may additionally claim on top of the strip. 55 dp is the logical
+key height without the previous 6-dp gap, not a 55+6-dp row.
 
-### Breitenverhältnisse und tatsächliche Layouts
+### Width ratios and actual layouts
 
-- EN-Referenz: Reihe 1 zehn Zellen à **10 %**; Reihe 2 neun à 10 % mit **5 %** Rand
-  links/rechts; letzte Zeichenreihe Shift **15 %**, sieben Buchstaben à 10 %, Delete **15 %**.
-- Diese Einrückung gilt nur bei passender vorhandener Struktur: zweite reine
-  Zeichenreihe kürzer als erste → mittig im gleichen Grundraster; keine Texttaste löschen.
-- DE elf Zeichen → **9,09 %** statt 10 %; FR/IT/CZ zwölf → **8,33 %** in reinen
-  Zwölferreihen. Allgemein Anteil `key.width / sum(row.width)`; vorhandene Sondergewichte
-  und Case-Positionen bleiben. Eine größere Reihe wird vollständig eingepasst, nicht beschnitten.
-- Aktuelle Fußreihe bei Gewichtssumme 13: ?123/ABC und Enter je **11,54 %**,
-  Space **38,46 %**, 🌐/😊/‹/›/Mic je **7,69 %**; nichts davon verschwindet für einen
-  vermeintlich „saubereren“ Stock-Look. Rendering ohne sichtbare Kästchen lässt sie ruhiger wirken.
-- Strikte **48×48 dp für jede Taste** ist mit diesen Zeichenmengen auf Smartphonebreite
-  weiterhin unmöglich. D9 behauptet diese frühere harte Forderung **nicht** als erfüllt:
-  beispielsweise neun oder elf schmale Buchstabenzellen sind keine 48-dp-Quadrate.
-  Aktionsleiste/Info behalten ihr 48-dp-Ziel; die Texttasten folgen dem Stock-Raster.
-  Falls die frühere Quadrat-Untergrenze unverändert bindend bleibt, ist dies ein
-  offener Produktkonflikt, nicht durch ein Theme lösbar.
+- EN reference: row 1 ten cells at **10 %**; row 2 nine at 10 % with **5 %** margin
+  left/right; last character row shift **15 %**, seven letters at 10 %, delete
+  **15 %**.
+- This indentation applies only with a matching existing structure: second pure
+  character row shorter than the first → centered in the same base grid; do not
+  delete any text key.
+- DE eleven characters → **9.09 %** instead of 10 %; FR/IT/CZ twelve → **8.33 %** in
+  pure twelve-key rows. Generally share `key.width / sum(row.width)`; existing
+  special weights and case positions remain. A larger row is fitted completely,
+  not trimmed.
+- Current footer at weight sum 13: ?123/ABC and enter each **11.54 %**,
+  space **38.46 %**, 🌐/😊/‹/›/mic each **7.69 %**; none of that disappears for a
+  supposedly "cleaner" stock look. Rendering without visible boxes makes them
+  appear calmer.
+- Strict **48×48 dp for every key** remains impossible with these character sets at
+  smartphone width. D9 does **not** claim this earlier hard requirement as
+  fulfilled: for example, nine or eleven narrow letter cells are not 48-dp squares.
+  The action strip/info keeps its 48-dp target; the text keys follow the stock
+  grid. If the earlier square lower bound remains binding unchanged, this is an
+  open product conflict, not solvable by a theme.
 
-### Farben – ARGB, Hell/Dunkel
+### Colors – ARGB, light/dark
 
-Normale Text-/Funktionsflächen sind flach, nicht weiß/hellgrau gegeneinander gekachelt.
-Pressfarben mit Alpha sind **Overlays über der vorher gefüllten Tastaturfläche**, keine
-alleinige transparente Fensterfarbe; dadurch scheint kein Ziel-App-Inhalt durch.
+Normal text/function surfaces are flat, not tiled white/light gray against each
+other. Press colors with alpha are **overlays over the previously filled keyboard
+surface**, not a sole transparent window color; no target app content shows
+through.
 
-| Token/Zustand | Hell | Dunkel | Herkunft/Verwendung |
+| Token/State | Light | Dark | Origin/use |
 |---|---|---|---|
-| Keyboard-/Status-Hintergrund | **#FFECEFF1** | **#FF263238** | AOSP key_background_lxx_*; Root und Canvas deckend füllen |
-| Normale Tastenfüllung | **#FFECEFF1** | **#FF263238** | Identisch zum Hintergrund; keine Kartenoptik |
-| Gedrückt, normales/funktionales Ziel | **#2637474F** Overlay | **#19FFFFFF** Overlay | AOSP key_background_pressed_lxx_* |
-| Normaler Buchstaben-/Zifferntext | **#FF37474F** | **#CCFFFFFF** | AOSP key_text_color_lxx_* |
-| Funktionsglyphen/-text, nicht aktiv | **#CC37474F** | **#CCFFFFFF** | AOSP key_functional_text_color_* |
-| Akzent/Indikatorfläche | **#FF4DB6AC** | **#FF80CBC4** | AOSP highlight_color_lxx_* |
-| Getoggelt: Shift/Caps-/Symbol-Glyphe | **#FF00796B** | **#FF80CBC4** | Eigene dunklere Hell-Variante für Lesbarkeit; keine grüne ganze Taste |
-| Getoggelt: Füllung | Wie Normal; Press-Overlay nur während Druck | Wie Normal; Press-Overlay nur während Druck | Caps zusätzlich mit 2-dp-Marker, nicht allein Farbwechsel |
-| Aufnahme-Mic: Fläche / Glyph | **#FF4DB6AC / #FF263238** | **#FF80CBC4 / #FF263238** | Eigene Recording-Semantik mit AOSP-Akzent, kein belegter AOSP-ASR-Zustand |
-| Sekundärer Status-/Space-Text | **#B337474F** | **#B3FFFFFF** | AOSP sekundäre Text-/Space-Farben |
-| Deaktiviertes Funktionsziel | **#6137474F** | **#61FFFFFF** | Eigene Disabled-Abstufung, nicht für Fehlermeldungstext |
-| Trennlinie | **#2637474F** | **#26FFFFFF** | Eigener dezenter 1-dp-Separator |
-| Fehlerstatus | **#FFB3261E** | **#FFFFB4AB** | Eigene gut erkennbare Fehlerfarbe, nicht AOSP-LXX-Quellwert |
+| Keyboard/status background | **#FFECEFF1** | **#FF263238** | AOSP key_background_lxx_*; fill root and canvas opaquely |
+| Normal key fill | **#FFECEFF1** | **#FF263238** | Identical to the background; no card look |
+| Pressed, normal/functional target | **#2637474F** overlay | **#19FFFFFF** overlay | AOSP key_background_pressed_lxx_* |
+| Normal letter/digit text | **#FF37474F** | **#CCFFFFFF** | AOSP key_text_color_lxx_* |
+| Function glyphs/text, not active | **#CC37474F** | **#CCFFFFFF** | AOSP key_functional_text_color_* |
+| Accent/indicator surface | **#FF4DB6AC** | **#FF80CBC4** | AOSP highlight_color_lxx_* |
+| Toggled: shift/caps glyph | **#FF00796B** | **#FF80CBC4** | Our own darker light variant for legibility; no green whole key |
+| Toggled: fill | Like normal; press overlay only while pressed | Like normal; press overlay only while pressed | Caps additionally with a 2-dp marker, not a mere color change |
+| Recording mic: surface / glyph | **#FF4DB6AC / #FF263238** | **#FF80CBC4 / #FF263238** | Our own recording semantics with the AOSP accent, no evidenced AOSP ASR state |
+| Secondary status/space text | **#B337474F** | **#B3FFFFFF** | AOSP secondary text/space colors |
+| Disabled functional target | **#6137474F** | **#61FFFFFF** | Our own disabled gradation, not for error message text |
+| Divider | **#2637474F** | **#26FFFFFF** | Our own subtle 1-dp separator |
+| Error state | **#FFB3261E** | **#FFFFB4AB** | Our own clearly recognizable error color, not the AOSP LXX source value |
 
-Gedrückt verändert die Textfarbe nicht; getoggelt bleibt bis zum echten Zustandswechsel
-sichtbar, nicht bis zum nächsten Frame. Farbzustände: normal → gedrückt → normal bzw.
-normal → getoggelt; gedrückt+getoggelt behält die aktive Glyphe über dem Press-Overlay.
-System Hell/Dunkel entscheidet die Palette; kein Thema aus der Ziel-App erraten und
-keine Cloud-/Dynamic-Color-Abhängigkeit. Dark muss auch bei Root/Emoji/nativen Buttons
-greifen, nicht nur bei den Buchstaben.
+Pressing does not change the text color; toggled stays visible until the real state
+change, not until the next frame. Color states: normal → pressed → normal and
+normal → toggled; pressed+toggled keeps the active glyph over the press overlay.
+The system light/dark decision governs the palette; no theme guessed from the
+target app and no cloud/dynamic color dependency. Dark must also apply to
+root/emoji/native buttons, not only to the letters.
 
-Monochrome Icons ersetzen nur die **Darstellung** der vorhandenen Aktionen: ⌫, ⏎,
-Shift-Pfeil mit Caps-Marker und Mikrofon als konsistente Silhouetten/Strichpfade;
-Globus/Emoji-Funktion ebenfalls einfarbig, nicht als bunte Font-Emoji. 🐞/Info darf
-seine erkennbare Diagnosebedeutung behalten, 22-dp-Icon in einer 48-dp-Zelle.
-Es wird keine Aktion umbenannt oder entfernt. Native Button-Elevation/Tints werden
-explizit an die Palette gebunden, nicht vom stets hellen Activity-Theme übernommen.
+Monochrome icons replace only the **display** of the existing actions: ⌫, ⏎,
+shift arrow with caps marker, and microphone as consistent silhouettes/stroke
+paths; globe/emoji function also monochrome, not as colorful font emoji. 🐞/info
+may keep its recognizable diagnostics meaning, a 22-dp icon in a 48-dp cell.
+No action is renamed or removed. Native button elevation/tints are explicitly
+bound to the palette, not taken over from the always-light activity theme.
 
-Space zeigt das lokalisierte Asset-Wort dezent zentriert bei 12 sp; es wird weder
-Spracherkennung noch Autokorrektur suggeriert. Keine neue Sprachbezeichnung anstelle
-des vorhandenen Space-Labels. Bei gleicher Ebene/Breite bleibt die Beschriftung gleich.
+Space shows the localized asset word subtly centered at 12 sp; it suggests
+neither speech recognition nor autocorrection. No new language label in place of
+the existing space label. With the same layer/width, the labeling stays the same.
 
-## 2. Delta zum gelesenen Istzustand
+## 2. Delta against the read actual state
 
-Aufwand = grobe **geänderte/neu geschriebene Zeilen**, keine gemessene Arbeitszeit;
-Werte überlappen, deshalb nicht blind addieren. Zeilenanker gelten vor Paralleländerungen.
+Effort = rough **changed/newly written lines**, not measured working time;
+values overlap, so do not add them blindly. Line anchors apply before parallel
+changes.
 
-| Aktuell → Ziel | Fundstelle / zu ändernde Datei:Zeile | Aufwand |
+| Current → target | Location / file:line to change | Effort |
 |---|---|---|
-| keyHeight 52 dp + rowGap 6 dp → tatsächliches Budget/alle Reihen; nominal 55 dp bei vier, 44 dp bei fünf Reihen, Gap 0 | `app/src/main/java/de/voicekeyboard/keyboard/KeyboardView.kt:42–44,108–120,135–163`; `keyboard/KeyboardModel.kt:32–67` | ca. 35–65 |
-| keyGap 4 dp, Padding 0 → Gap 0, optionale Stock-Einrückung rein kurzer Zeichenreihe | `keyboard/KeyboardView.kt:44`; `keyboard/KeyboardModel.kt:14–16,37–65` | ca. 15–30 |
-| Radius 6 dp, gezeichnete Einzelkacheln → flache Normalfläche/Radius 0 | `keyboard/KeyboardView.kt:45,195–205` | ca. 10–20 |
-| DKGRAY / Text 20×density → Hell/Dunkel-Tokens, 24/22/14/12 sp nach Tastentyp | `keyboard/KeyboardView.kt:65–70,205–210` | ca. 25–45 |
-| Press/Toggle gemeinsam #FF4CAF50, funktional #FFE0E0E0, normal #FFF5F5F5 → getrennte Quellpaletten und Press-/Togglezustände | `keyboard/KeyboardView.kt:197–205`; **neu vorgeschlagen** `keyboard/KeyboardTheme.kt` | ca. 70–110 inkl. Tokens |
-| ⌫/⏎/⇧/🎤 teils Text-/Emoji-Font → einheitliche 24-dp-Glyphen; semantische Labels behalten | `keyboard/KeyboardView.kt:214–234` plus Zeichenpfade im selben Renderer | ca. 40–70 |
-| SPACE folgt bereits SpaceLabelRule → erhalten, sekundär/12 sp stylen, kein deutscher Override | `keyboard/KeyboardView.kt:222–227`; Labels in `app/src/main/assets/layouts/*.json` | ca. 5–12, **0 Assetzeilen** |
-| Root ohne einheitliche Palette; StatusText 13 sp/28 dp, tatsächliche Leiste durch Debugziel 48 dp → explizit 48 dp, 12 sp, deckender Hintergrund/1-dp-Linie | `app/src/main/java/de/voicekeyboard/ime/ImeRootView.kt:48–69,105–120` | ca. 20–40 |
-| Debug-Button wird im Service 48×48 dp rechts angehängt → dort belassen, Theme/State statt Standardbutton-Relief | `app/src/main/java/de/voicekeyboard/ime/VoiceKeyboardService.kt:350–368` | ca. 10–20 |
-| T19 bestimmt Rasterhöhe und blendet letzte Reihen aus → ganze vorhandene Tafel ins Budget einpassen, kein Keyverlust | `keyboard/KeyboardHeight.kt:15–29,47–75`; `keyboard/KeyboardView.kt:157,182–190,422` | ca. 35–65, **zuerst mit T19 koordinieren** |
-| Emoji #FFFAFAFA, Linie #FFC0C0C0, Text DKGRAY → dieselbe Palette/Separator/Navigation | `keyboard/EmojiPanelView.kt:48–60,145–180`; nativer Footer `ime/ImeRootView.kt:87–99` | ca. 15–30 |
-| 15 Roh-Layouts mit 4 Ebenen, PT base/shift 5 Reihen → Daten unverändert, nur Darstellung/Geometrie auswerten | `app/src/main/assets/layouts/`: alle 15 Dateien; `keyboard/KeyboardModel.kt:41–65` | **0 Assets / 0 JSON-Zeilen** |
-| `colors.xml`/`KeyboardTheme.kt` fehlen; Activity-Theme stets Material.Light → Rendererpalette eigenständig nach Nachtmodus; kein notwendiger Setup-Theme-Umbau | `app/src/main/res/values/themes.xml:3`; neue Theme-Datei statt nicht vorhandene colors.xml „ändern“ | ca. 50–80 im neuen Tokenvertrag, siehe oben |
+| keyHeight 52 dp + rowGap 6 dp → actual budget/all rows; nominally 55 dp for four, 44 dp for five rows, gap 0 | `app/src/main/java/de/voicekeyboard/keyboard/KeyboardView.kt:42–44,108–120,135–163`; `keyboard/KeyboardModel.kt:32–67` | approx. 35–65 |
+| keyGap 4 dp, padding 0 → gap 0, optional stock indentation only for a short character row | `keyboard/KeyboardView.kt:44`; `keyboard/KeyboardModel.kt:14–16,37–65` | approx. 15–30 |
+| Radius 6 dp, drawn individual tiles → flat normal surface/radius 0 | `keyboard/KeyboardView.kt:45,195–205` | approx. 10–20 |
+| DKGRAY / text 20×density → light/dark tokens, 24/22/14/12 sp per key type | `keyboard/KeyboardView.kt:65–70,205–210` | approx. 25–45 |
+| Press/toggle together #FF4CAF50, functional #FFE0E0E0, normal #FFF5F5F5 → separate source palettes and press/toggle states | `keyboard/KeyboardView.kt:197–205`; **newly proposed** `keyboard/KeyboardTheme.kt` | approx. 70–110 incl. tokens |
+| ⌫/⏎/⇧/🎤 partly text/emoji font → uniform 24-dp glyphs; keep semantic labels | `keyboard/KeyboardView.kt:214–234` plus character paths in the same renderer | approx. 40–70 |
+| SPACE already follows SpaceLabelRule → preserve, style secondary/12 sp, no German override | `keyboard/KeyboardView.kt:222–227`; labels in `app/src/main/assets/layouts/*.json` | approx. 5–12, **0 asset lines** |
+| Root without a uniform palette; StatusText 13 sp/28 dp, actual strip through debug target 48 dp → explicitly 48 dp, 12 sp, opaque background/1-dp line | `app/src/main/java/de/voicekeyboard/ime/ImeRootView.kt:48–69,105–120` | approx. 20–40 |
+| Debug button is appended in the service at 48×48 dp on the right → leave it there, theme/state instead of the standard button relief | `app/src/main/java/de/voicekeyboard/ime/VoiceKeyboardService.kt:350–368` | approx. 10–20 |
+| T19 determines the grid height and hides last rows → fit the whole existing panel into the budget, no key loss | `keyboard/KeyboardHeight.kt:15–29,47–75`; `keyboard/KeyboardView.kt:157,182–190,422` | approx. 35–65, **coordinate with T19 first** |
+| Emoji #FFFAFAFA, line #FFC0C0C0, text DKGRAY → same palette/separator/navigation | `keyboard/EmojiPanelView.kt:48–60,145–180`; native footer `ime/ImeRootView.kt:87–99` | approx. 15–30 |
+| 15 raw layouts with 4 layers, PT base/shift 5 rows → data unchanged, only evaluate display/geometry | `app/src/main/assets/layouts/`: all 15 files; `keyboard/KeyboardModel.kt:41–65` | **0 assets / 0 JSON lines** |
+| `colors.xml`/`KeyboardTheme.kt` missing; activity theme always Material.Light → renderer palette itself by night mode; no necessary setup theme rework | `app/src/main/res/values/themes.xml:3`; new theme file instead of "changing" a non-existent colors.xml | approx. 50–80 in the new token contract, see above |
 
-Präfix `keyboard/...` in dieser Tabelle = `app/src/main/java/de/voicekeyboard/keyboard/...`.
-Es werden keine erfundenen bestehenden Theme-Felder/API-Namen vorausgesetzt.
+The prefix `keyboard/...` in this table = `app/src/main/java/de/voicekeyboard/keyboard/...`.
+No invented existing theme field/API names are presupposed.
 
-## 3. Statuszeile, Info und schwankende Höhenangebote
+## 3. Status row, info, and fluctuating height offers
 
-**Entscheidung: Oberleiste bleibt immer 48 dp sichtbar.** Nicht „nur bei Bedarf“,
-nicht plötzlich GONE beim zweiten Öffnen. Text darin maximal zwei 14-dp-Zeilen bei
-12 sp, vertikal zentriert; links Status/Diagnose, rechts vorhandene Bedienelemente
-inklusive 🐞/Info. Fehler ersetzen den Status, bleiben gemäß R-2 stehen und werden
-nicht durch Redraw/Themewechsel zu „Bereit“ zurückgesetzt.
+**Decision: the top strip stays 48 dp visible always.** Not "only when needed",
+not suddenly GONE on the second opening. Text in it at most two 14-dp lines at
+12 sp, vertically centered; status/diagnostics on the left, existing controls
+including 🐞/info on the right. Errors replace the status, remain per R-2, and are
+not reset to "ready" by a redraw/theme switch.
 
-Ein 24-dp-Textband wäre optisch ruhig, aber ein darin angeordneter 48-dp-Info-Button
-würde die echte Leiste trotzdem auf 48 dp ziehen oder Nachbarzeilen überdecken.
-Deshalb wird die tatsächliche Gesamthöhe gerechnet, nicht die 28-dp-TextView mit der
-Elternhöhe verwechselt. Keine unsichtbaren überlappenden Touch-Rechtecke über Q.
+A 24-dp text band would be visually calm, but a 48-dp info button arranged in it
+would pull the real strip to 48 dp anyway or cover neighboring rows. That is why
+the actual total height is computed, not the 28-dp TextView confused with the
+parent height. No invisible overlapping touch rectangles over Q.
 
-### Ein einziger Höhenhaushalt – Integrationsvertrag für T19
+### A single height budget – integration contract for T19
 
-Dichte 420 dpi entspricht **2,625 px/dp**. N = tatsächlich zum Root gehöriger
-Navigationsinset, nicht immer 8 dp; 8 dp ist nur das nominale Rechenbeispiel.
-Root-Gesamtziel = 268 dp + N. Root angebotene Höhe H; nutzbarer Tastenblock
-= `min(H, 268 dp + N) − N − 48 dp`. Alle vorhandenen R Reihen teilen diesen Rest.
+Density 420 dpi corresponds to **2.625 px/dp**. N = the navigation inset actually
+belonging to the root, not always 8 dp; 8 dp is only the nominal worked example.
+Total root target = 268 dp + N. Root offered height H; usable key block =
+`min(H, 268 dp + N) − N − 48 dp`. All existing R rows share this remainder.
 
-| Root-Angebot | Beispiel N | Effektiver Root / Tastenblock | Vier Reihen / PT fünf Reihen |
+| Root offer | Example N | Effective root / key block | Four rows / PT five rows |
 |---|---|---|---|
-| **829 px = 315,81 dp** | 8 dp = 21 px | Kappe 276 dp = 724,5 px, ganzzahlig höchstens ca. 725 px; Keys 220 dp | **55 dp / 44 dp** |
-| **650 px = 247,62 dp** | 8 dp = 21 px | Kein Erzwingen der 276 dp; Keys = (650−21−126)/2,625 = **191,62 dp** | **47,90 dp / 38,32 dp**, alle Reihen bleiben |
-| **650 px**, wenn Navigation außerhalb des Angebots liegt | N wird hier **nicht erneut** abgezogen | Keys = (650−126)/2,625 = **199,62 dp** | **49,90 dp / 39,92 dp** |
+| **829 px = 315.81 dp** | 8 dp = 21 px | Cap 276 dp = 724.5 px, integer at most about 725 px; keys 220 dp | **55 dp / 44 dp** |
+| **650 px = 247.62 dp** | 8 dp = 21 px | No enforcing of 276 dp; keys = (650−21−126)/2.625 = **191.62 dp** | **47.90 dp / 38.32 dp**, all rows remain |
+| **650 px**, if navigation lies outside the offer | N is **not deducted again** here | keys = (650−126)/2.625 = **199.62 dp** | **49.90 dp / 39.92 dp** |
 
-**ANNAHME:** Die übergebenen Requested-Höhen sind ein Root-/Window-Angebot.
-Falls sie tatsächlich die bereits um Status/Insets reduzierte Child-MeasureSpec-Size
-von KeyboardView bezeichnen, gilt diese Tabelle **nicht direkt**: dann erhält die
-Child bereits ihr Budget und darf nichts nochmals abziehen. T19 muss Ebene, Spec-Modus
-und aktuelle Insets im Geometriebeweis mitloggen; Root und KeyboardView dürfen nicht
-beide „zur Sicherheit“ Status und Navigation abziehen.
+**ASSUMPTION:** The handed-over requested heights are a root/window offer. If they
+actually denote the child MeasureSpec size of KeyboardView already reduced by
+status/insets, this table does **not apply directly**: the child already receives
+its budget and may not deduct anything again. T19 must log the level, spec mode,
+and current insets in the geometry proof; root and KeyboardView may not both
+deduct status and navigation "to be safe".
 
-48 dp entspricht 126 px; **276 dp entspricht 724,5 px, nicht 727 px**. Rundungsreste
-werden einmal auf Reihen verteilt; letzte Unterkante ist exakt das Inhaltsende.
-EXACTLY/AT_MOST werden respektiert, kein Mindest-Reihenboden über dem Angebot.
-Zeichnung, VK-HIT, Accessibility und reale sichtbare Zellen verwenden dieselben Rects.
-Einfach eine kleinere View melden, die alten 52-dp-Rects aber beibehalten, ist kein Fix.
+48 dp corresponds to 126 px; **276 dp corresponds to 724.5 px, not 727 px**.
+Rounding remainders are distributed once over the rows; the last lower edge is
+exactly the content end. EXACTLY/AT_MOST are respected; no minimum row floor
+above the offer. Drawing, VK-HIT, accessibility, and real visible cells use the
+same rects. Merely reporting a smaller view while keeping the old 52-dp rects is
+not a fix.
 
-**Aktueller T19-Vertrag ist noch nicht D9-konform:** KeyboardHeight dokumentiert das
-vollständige Entfallen einer nicht passenden Reihe; `visibleKeys()`/`keyAtVisible()`
-setzen dies um. „Ganz weg statt halb weg“ verletzt **alle Tasten bleiben erhalten**
-ebenfalls – gerade Space/Mic/Enter. Die passende Forderung lautet jetzt: **alle Reihen
-neu in den aktuellen Platz einmessen, nie eine existierende Aktionsreihe entfernen**.
-Die Änderung muss der T19-Coder übernehmen; dieser Dokumentauftrag editiert seine Datei nicht.
+**The current T19 contract is not yet D9-conformant:** KeyboardHeight documents the
+complete removal of a non-fitting row; `visibleKeys()`/`keyAtVisible()` implement
+that. "Completely gone instead of half gone" likewise violates **all keys remain
+preserved** — precisely space/mic/enter. The fitting requirement now reads: **fit
+all rows into the current space anew, never remove an existing action row.** The
+T19 coder must make the change; this document assignment does not edit his file.
 
-Für noch kleinere Angebote/große Schrift gilt: keinen erfolgreichen Fit erfinden.
-Fehlende Lesbarkeit/Bedienbarkeit ist als solcher Grenzfall zu melden; weder Glyphen
-abschneiden noch unbekannte neue Paging-Modi versteckt einführen. Die obigen 650/829-px-
-Fälle sind konkrete Pflichtfälle, kein allgemeiner Beweis für alle Displaykonfigurationen.
+For even smaller offers/large fonts: do not invent a successful fit. Missing
+legibility/operability is to be reported as such a boundary case; neither cut
+glyphs nor secretly introduce unknown new paging modes. The 650/829-px cases
+above are concrete mandatory cases, not a general proof for all display
+configurations.
 
-## 4. Maximal vier Mikro-Aufträge, test-first
+## 4. At most four micro assignments, test-first
 
-Gemeinsames Budget: **höchstens zwei APK-Builds insgesamt**, keine Builds in diesem
-Designauftrag. Erst alle zusammenhängenden Änderungen/testbaren Verträge integrieren,
-dann Build 1 und Geräteabnahme; Build 2 nur für eine gebündelte Korrektur. Kein
-zusätzlicher kosmetischer dritter Build. T19 besitzt bis zum Handoff die Höhen-Dateien.
-Neue Datei-/Testnamen unten sind Vorschläge, keine schon existierenden APIs.
+Shared budget: **at most two APK builds in total**, no builds in this design
+assignment. First integrate all related changes/testable contracts, then build 1
+and device acceptance; build 2 only for a bundled correction. No additional
+cosmetic third build. T19 owns the height files until handoff. New file/test
+names below are proposals, not already-existing APIs.
 
-| Reihenfolge | Maximal vier Dateien | Test zuerst, dann Änderung |
+| Order | At most four files | Test first, then change |
 |---|---|---|
-| **S1 – T19-Höhenvertrag abschließen** | `keyboard/KeyboardHeight.kt`; vorhandener `app/src/test/java/de/voicekeyboard/keyboard/KeyboardHeightTest.kt`; `keyboard/KeyboardModel.kt`; vorhandener `app/src/test/java/de/voicekeyboard/keyboard/KeyboardModelTest.kt` | Parameterisiert 650/829 px, 4/5 Reihen, Status nur einmal, Navigation nur einmal: kein Ziel entfällt, kein unterer Rand überschreitet sein Budget; falscher alter Row-Drop muss rot werden. Vollständige Rects aus dem Budget erzeugen. |
-| **S2 – Messintegration und Zweitöffnung** | `ime/ImeRootView.kt`; `keyboard/KeyboardView.kt`; **neu** `app/src/androidTest/java/de/voicekeyboard/keyboard/StockKeyboardFitTest.kt` | Zweimal öffnen/Feldwechsel/Emoji-Rückkehr, DE und PT: alle vorherigen IDs vollständig gezeichnet, treffbar und im Parent sichtbar; 48-dp-Leiste bleibt, kein kumulativer Abzug. Einrückung darf keine ID verschieben/verlieren. |
-| **S3 – Palette, Typografie und Glyphen** | **neu** `keyboard/KeyboardTheme.kt`; `keyboard/KeyboardView.kt`; `keyboard/EmojiPanelView.kt`; **neu** `app/src/test/java/de/voicekeyboard/keyboard/KeyboardThemeTest.kt` | Hell/Dunkel-Tokenmatrix und Press≠Toggle zuerst; dann AOSP-Farben, flache Flächen, 24/22/14/12-sp-Hierarchie und monochrome Pfade integrieren. Bilder nicht durch bloße Token-Tests als bestanden erklären. |
-| **S4 – Leiste und gesamte Sichtabnahme** | `ime/ImeRootView.kt`; `ime/VoiceKeyboardService.kt`; `app/src/main/res/values/strings.xml`; **neu** `app/src/androidTest/java/de/voicekeyboard/keyboard/StockStatusBarTest.kt` | Status/Fehler persistent, Info über den Tasten 48×48 dp, kein Themewechsel-Reset, native Mic-/Rückbuttons ohne fremdes Relief; vor/nach Palette gleiche Aktionsanzahl. Danach Screenshots Hell/Dunkel, normal/pressed/Caps, zweite Öffnung und Emoji aus genau derselben APK. |
+| **S1 – conclude the T19 height contract** | `keyboard/KeyboardHeight.kt`; existing `app/src/test/java/de/voicekeyboard/keyboard/KeyboardHeightTest.kt`; `keyboard/KeyboardModel.kt`; existing `app/src/test/java/de/voicekeyboard/keyboard/KeyboardModelTest.kt` | Parameterized 650/829 px, 4/5 rows, status only once, navigation only once: no target dropped, no lower edge exceeds its budget; the wrong old row drop must go red. Generate complete rects from the budget. |
+| **S2 – measurement integration and second opening** | `ime/ImeRootView.kt`; `keyboard/KeyboardView.kt`; **new** `app/src/androidTest/java/de/voicekeyboard/keyboard/StockKeyboardFitTest.kt` | Open twice/field switch/emoji return, DE and PT: all previous IDs fully drawn, hittable, and visible in the parent; 48-dp strip remains, no cumulative deduction. The indentation may not shift/lose any ID. |
+| **S3 – palette, typography, and glyphs** | **new** `keyboard/KeyboardTheme.kt`; `keyboard/KeyboardView.kt`; `keyboard/EmojiPanelView.kt`; **new** `app/src/test/java/de/voicekeyboard/keyboard/KeyboardThemeTest.kt` | Light/dark token matrix and press≠toggle first; then integrate AOSP colors, flat surfaces, the 24/22/14/12-sp hierarchy, and monochrome paths. Do not declare images passed by mere token tests. |
+| **S4 – strip and complete visibility acceptance** | `ime/ImeRootView.kt`; `ime/VoiceKeyboardService.kt`; `app/src/main/res/values/strings.xml`; **new** `app/src/androidTest/java/de/voicekeyboard/keyboard/StockStatusBarTest.kt` | Status/error persistent, info 48×48 dp above the keys, no theme switch reset, native mic/back buttons without foreign relief; before/after palette the same action count. Then screenshots light/dark, normal/pressed/caps, second opening, and emoji from exactly the same APK. |
 
-`keyboard/` und `ime/` sind jeweils unter `app/src/main/java/de/voicekeyboard/` zu lesen.
-**Keiner der vier Aufträge ändert ein Layout-Asset: Ziel 0 von 15.** Keine UI-Reparatur
-über beliebige JSON-Löschungen, Backspace-Umzüge oder neue Sprachvarianten im selben Build.
-Die beiden vorhandenen JVM-Testpfade wurden lesend gegen das Projekt geprüft.
+`keyboard/` and `ime/` are each to be read under `app/src/main/java/de/voicekeyboard/`.
+**None of the four assignments changes a layout asset: target 0 of 15.** No UI
+repair via arbitrary JSON deletions, backspace moves, or new language variants in
+the same build. The two existing JVM test paths were checked against the project by
+reading.
 
-## 5. Konflikte und verbindliche Empfehlungen
+## 5. Conflicts and binding recommendations
 
-| Konflikt | Empfehlung |
+| Conflict | Recommendation |
 |---|---|
-| AOSP-Minimalismus vs. alle heutigen Aktionen | Erhalt gewinnt: Cursor, Emoji, Globus, ?123/ABC, Space, Backspace, Enter und Mic bleiben; kein unveröffentlichtes „Ausnahme“-Budget. Stock-Farben/Hierarchie statt Löschen. |
-| Unterer rechter Mic-Wunsch vs. aktueller Enter unten rechts | Gelesene Rohassets haben Mic **vor** Enter, nicht als allerletzte Taste. D9 ist ein Look-/Fit-Auftrag und autorisiert diesen zusätzlichen Positionsumbau nicht; beide bleiben vorerst an ihrem tatsächlichen Ort. „Mic ganz rechts“ benötigt einen getrennten, eindeutigen Reflow-Vertrag unter Erhalt aller Aktionen. |
-| Zwei Mic-Darstellungen, oben und in Fußreihe | Keine stillschweigende Entfernung einer heutigen Taste; gleiche Aufnahmezustände themen, keinen dritten Mic hinzufügen. Eine spätere ausdrücklich benannte Ausnahme darf diesen Doppelweg vereinfachen. |
-| 🐞/Info über den Tasten vs. frühere D-LAYOUT-Empfehlung neben Q | **Neuere Nutzerentscheidung gewinnt:** obere Leiste; kein Debugziel in der Buchstabenreihe. |
-| Permanente Diagnose vs. Stock ohne Diagnosewerkzeug | Dauerhafte 48-dp-Leiste im selben Hintergrund, kleine Typografie, 1-dp-Trenner; nicht als Vorschlags-/Autokorrekturleiste tarnen. |
-| Emoji-V2 vs. Stock-Emoji-Ebene | Stack-Ersatzmodus und nativer „Zur Tastatur“-Rückweg bleiben; Farben/Icons angleichen, keine Rückkehr zum Overlay. Kein Height-Fit durch Weglassen des Rückbuttons. |
-| 15 Sprachen/Umlaute vs. starres 10%-EN-Raster | Lokale Buchstaben und Pflichtzeichen bleiben eigene Tasten; tatsächliche Gewichte/Zeilenzahl respektieren, nur passende kurze Reihen einrücken. PT bleibt fünfzeilig. |
-| 48-dp-Quadrate vs. dichte Smartphone-Tafel | Nicht als erfüllt behaupten. D9 priorisiert den ausdrücklich verlangten vollständigen Stock-Rasterbestand; vor bindender Quadrat-Zusage bleibt der alte geometrische Konflikt separat offen. |
-| T19 „Reihe entfällt“ vs. alle Tasten erhalten | Row-Drop ist **kein akzeptierter Fix**; T19-Hand-off vor Stock-Freigabe nach S1/S2 korrigieren. |
-| Stock-Pixelperfektion vs. spezielle Fehler-/Aufnahmestati | Eigene klar markierte Zustandsfarben/Marker sind absichtliche Erweiterungen; Originalquellfarben und eigene Tokens getrennt halten. |
+| AOSP minimalism vs. all current actions | Preservation wins: cursor, emoji, globe, ?123/ABC, space, backspace, enter, and mic remain; no unpublished "exception" budget. Stock colors/hierarchy instead of deletion. |
+| Lower-right mic wish vs. current enter bottom right | The read raw assets have mic **before** enter, not as the very last key. D9 is a look/fit assignment and does not authorize this additional position rework; both stay at their actual location for now. "Mic far right" needs a separate, unambiguous reflow contract while preserving all actions. |
+| Two mic presentations, top and in the footer | No silent removal of a current key; theme the same recording states, add no third mic. A later explicitly named exception may simplify this double path. |
+| 🐞/info above the keys vs. the earlier D-LAYOUT recommendation next to Q | **The newer user decision wins:** top strip; no debug target in the letter row. |
+| Permanent diagnostics vs. stock without a diagnostics tool | Permanent 48-dp strip in the same background, small typography, 1-dp divider; do not disguise it as a suggestion/autocorrect strip. |
+| Emoji V2 vs. stock emoji layer | Stack replacement mode and native "back to keyboard" return path remain; align colors/icons, no return to the overlay. No height fit by dropping the back button. |
+| 15 languages/umlauts vs. rigid 10 % EN grid | Local letters and mandatory characters remain their own keys; respect the actual weights/row count, indent only matching short rows. PT stays five-row. |
+| 48-dp squares vs. dense smartphone panel | Do not claim as fulfilled. D9 prioritizes the explicitly demanded complete stock grid inventory; before a binding square promise, the old geometric conflict remains separately open. |
+| T19 "row dropped" vs. all keys preserved | Row drop is **not an accepted fix**; correct the T19 hand-off before the stock release after S1/S2. |
+| Stock pixel perfection vs. special error/recording states | Our own clearly marked state colors/markers are deliberate extensions; keep original source colors and own tokens separate. |
 
-## Abschluss
+## Conclusion
 
-**ABGESEGNET:** AOSP-LatinIME-LXX-Farb-/Rasterrichtung, konkrete Hell/Dunkel-Tokens,
-flache Anmutung, konstante Diagnose-/Infoleiste und 0 Assetänderungen als Umsetzungsziel.
-**NICHT ABGESEGNET:** ein Build, der bei 650 px die unterste Reihe vollständig statt
-halb entfernt, Diagnose verschwinden lässt oder eine heutige Taste für Stock-Ästhetik löscht.
-**OFFEN:** T19-Integration mit korrekter Root-/Child-Budgetebene und nachfolgende
-Hell/Dunkel-/Zweitöffnungs-Screenshots auf dem Gerät; echte 48-dp-Quadrate sind nicht nachgewiesen.
-**VERIFIKATION:** Nur lesende lokale/Original-AOSP-Quellenprüfung und dieses neue Dokument;
-keine Builds, kein adb, keine parallelen Quell-/Assetdateien geändert.
+**APPROVED:** AOSP LatinIME LXX color/grid direction, concrete light/dark tokens,
+flat look, constant diagnostics/info strip, and 0 asset changes as the
+implementation target.
+**NOT APPROVED:** a build that at 650 px removes the bottom row completely instead
+of half, lets diagnostics disappear, or deletes a current key for stock aesthetics.
+**OPEN:** T19 integration with the correct root/child budget level and subsequent
+light/dark/second-opening screenshots on the device; real 48-dp squares are not
+proven.
+**VERIFICATION:** Only a reading check of local/original AOSP sources and this new
+document; no builds, no adb, no parallel source/asset files changed.
 
-## D11 — Rueckmeldung gedrückte Taste (entschieden 2026-10-30)
+## D11 — Pressed key feedback (decided 2026-10-30)
 
-Dieser Nachtrag ersetzt die schwache Press-Deckkraft und die reine Caps-Glyphen-
-Rückmeldung aus §1; sonst bleiben Palette, Geometrie und Bedienlogik unverändert.
-Der übergebene Emulatorbefund (27/255 hell, 21/255 dunkel) trägt die Entscheidung;
-hier wurden weder neue Screenshots gemessen noch Kotlin-Dateien geändert.
+This addendum replaces the weak press opacity and the pure caps glyph feedback
+from §1; otherwise palette, geometry, and interaction logic remain unchanged.
+The handed-over emulator finding (27/255 light, 21/255 dark) carries the
+decision; no new screenshots were measured and no Kotlin files changed here.
 
-| Punkt | Verbindlicher Entscheid | Begründung |
+| Point | Binding decision | Rationale |
 |---|---|---|
-| **1. Gedrückte Fläche** | **Ja, deutlich sichtbarer:** Hell Alpha **0x66** (40 %), Overlay **#6637474F** über **#FFECEFF1**; Dunkel Alpha **0x4D** (rund 30 %), Overlay **#4DFFFFFF** über **#FF263238**. Weiter SrcOver-Komposition zu einer deckenden Fläche; vorhandene Textfarben bleiben. | Dieselben vorhandenen RGB-Farben, nur höhere Deckkraft: das verbessert die erkennbare Druckreaktion, ohne die flache Stock-Anmutung durch Rahmen, Schatten, Rundungen oder neue Farbfamilien zu verlassen. |
-| **2. Buchstaben-Popup** | **Bewusst kein Popup** in diesem Änderungsumfang, auch kein erzwungenes Großbuchstaben-Preview. | Der stärkere Tastendruckzustand liefert die unmittelbare Rückmeldung; ein Popup der obersten Reihe könnte die Diagnose-/Infoleiste verdecken und verlangte zusätzliche Positionierungs-/Clippinglogik, deren Ungefährlichkeit bei unseren schwankenden Höhen nicht belegt ist. |
-| **3. Caps-Zustand** | **Die aktuelle reine Glyphenfärbung reicht nicht:** Bei tatsächlich eingerastetem **capsLock** wird die Shift-Tastenfläche dauerhaft mit dem vorhandenen **accent** gefüllt: Hell **#FF4DB6AC**, Dunkel **#FF80CBC4**; dazu die bereits vorhandene kontrastierende **micRecordingGlyph**-Farbe, Hell **#FF37474F**, Dunkel **#FF263238**. Der **⇪**-Caps-Marker bleibt. | Eine gefüllte bestehende Rechteckfläche mit kontrastierender Glyphe unterscheidet Caps klar vom kurzen Shift-Zustand; vorhandene Akzent-/Gegenfarben verhindern zugleich Akzent-auf-Akzent, ohne neuen Pfeilpfad, Custom-Form oder zusätzliche Farben. |
+| **1. Pressed surface** | **Yes, clearly visible:** light alpha **0x66** (40 %), overlay **#6637474F** over **#FFECEFF1**; dark alpha **0x4D** (about 30 %), overlay **#4DFFFFFF** over **#FF263238**. Continue SrcOver composition to an opaque surface; existing text colors remain. | The same existing RGB colors, just higher opacity: this improves the recognizable press reaction without leaving the flat stock look through frames, shadows, rounding, or new color families. |
+| **2. Letter popup** | **Deliberately no popup** in this change scope, and no forced uppercase preview either. | The stronger key press state delivers the immediate feedback; a popup of the topmost row could cover the diagnostics/info strip and would require additional positioning/clipping logic whose safety is not evidenced with our fluctuating heights. |
+| **3. Caps state** | **The current pure glyph coloring is not enough:** with **capsLock** actually latched, the shift key surface is permanently filled with the existing **accent**: light **#FF4DB6AC**, dark **#FF80CBC4**; plus the already existing contrasting **micRecordingGlyph** color, light **#FF37474F**, dark **#FF263238**. The **⇪** caps marker remains. | A filled existing rectangular surface with a contrasting glyph clearly distinguishes caps from the brief shift state; existing accent/counter colors simultaneously prevent accent-on-accent, without a new arrow path, custom shape, or additional colors. |
 
-Die Press-Alphas sind eine **bewusste projektspezifische Verstärkung** der zuvor
-belegten AOSP-LXX-Werte 0x26/0x19, keine Behauptung, AOSP Android 16 verwende diese
-neuen Werte exakt. Der Gboard-Vergleich ist eine Wahrnehmbarkeitsreferenz, kein
-Wechsel unseres visuellen Referenzprodukts.
+The press alphas are a **deliberate project-specific reinforcement** of the
+previously evidenced AOSP LXX values 0x26/0x19, not a claim that AOSP Android 16
+uses these new values exactly. The Gboard comparison is a perceptibility
+reference, not a switch of our visual reference product.
 
-Caps-Füllung wird ausschließlich aus dem echten Caps-Zustand abgeleitet, nicht aus
-„letzte Eingabe war groß“: Shift+q→A allein beweist keinen eingerasteten CapsLock.
-Temporäres Shift bleibt wie bisher akzentuiert; symbolsShift ist kein Caps-Zustand.
-Gedrückt+Caps behält diese Akzentfüllung mit Gegenfarbe, ohne zusätzlichen Overlayauftrag;
-nach Loslassen bleibt sie bei Caps erhalten, nach Deaktivieren verschwindet sie. Keine Änderung an
-Doppeltipp, Eingabetext, Touchflächen oder Mic-Aufnahmepriorität.
+The caps fill is derived exclusively from the real caps state, not from "the last
+input was uppercase": shift+q→A alone proves no latched capsLock. Temporary shift
+stays accented as before; symbolsShift is not a caps state. Pressed+caps keeps
+this accent fill with the counter color, without an additional overlay
+application; after release it remains with caps, after deactivation it
+disappears. No change to double tap, input text, touch areas, or the mic
+recording priority.
 
-**Abnahme für GLM:** Hell/Dunkel jeweils normal/gedrückt und Caps an/aus aus derselben
-APK vergleichen: klar sichtbare flächige Druckreaktion ohne Rahmen/Schatten, kein
-Popup über der Leiste, Caps-Füllung bleibt nach UP und verschwindet nach Abschalten.
-Keine eingegebenen Inhalte in Diagnose-/Logtexten. Umsetzung klein halten: zwei
-Overlay-Alphas und zustandsabhängige Wiederverwendung vorhandener Akzent-/Gegenfarben;
-kein neuer Theme-/Window-/Layoutmechanismus. Gerätebeweis steht noch aus.
+**Acceptance for GLM:** compare light/dark normal/pressed and caps on/off from the
+same APK: a clearly visible solid press reaction without frame/shadow, no popup
+over the strip, the caps fill remains after UP and disappears after switching off.
+No entered content in diagnostics/log texts. Keep the implementation small: two
+overlay alphas and state-dependent reuse of existing accent/counter colors; no
+new theme/window/layout mechanism. Device evidence is still outstanding.

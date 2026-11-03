@@ -25,8 +25,8 @@ class KeyboardModelTest {
         ),
     )
 
-    // Bestandsschutz: alle Bestandstests bleiben DETERMINISTISCH (fit = null),
-    // unabhängig davon, welcher andere Test zuletzt einen Fit veröffentlicht hat.
+    // Stock protection: all stock tests stay DETERMINISTIC (fit = null),
+    // regardless of which other test published a fit last.
     private fun model(
         width: Float = 300f,
         keyHeight: Float = 50f,
@@ -35,7 +35,7 @@ class KeyboardModelTest {
     ) = KeyboardModel(layer(), width, keyHeightPx = keyHeight, rowGapPx = rowGap, keyGapPx = keyGap, fit = null)
 
     @Test
-    fun `Breitensumme entspricht nutzbarer Breite pro Zeile`() {
+    fun `width sum equals the usable width per row`() {
         val width = 300f
         val gap = 4f
         val m = model(width, keyGap = gap)
@@ -46,13 +46,13 @@ class KeyboardModelTest {
     }
 
     @Test
-    fun `Hoehe ist Zeilenzahl mal Zeilenhoehe plus Luecken`() {
+    fun `height is row count times row height plus gaps`() {
         val m = model(keyHeight = 50f, rowGap = 6f)
         assertEquals(50f + 6f + 50f, m.heightPx, 0.01f)
     }
 
     @Test
-    fun `Treffer in Tastenmitte liefert die richtige Taste`() {
+    fun `hit in the key center returns the right key`() {
         val m = model()
         val b = m.keys.first { it.id == "b" }
         assertEquals("b", m.keyAt(b.centerX, b.centerY)?.id)
@@ -61,83 +61,82 @@ class KeyboardModelTest {
     }
 
     @Test
-    fun `Treffer in der Luecke zwischen Tasten liefert die naechste Taste`() {
+    fun `hit in the gap between keys returns the next key`() {
         val m = model()
         val a = m.keys.first { it.id == "a" }
         val b = m.keys.first { it.id == "b" }
         val gapX = (a.right + b.left) / 2f
-        // In der Lücke: eine der beiden angrenzenden Tasten (nicht null).
+        // in the gap: one of the two adjacent keys (not null).
         val hit = m.keyAt(gapX, a.centerY)
         assertEquals(true, hit != null && (hit.id == "a" || hit.id == "b"))
     }
 
     @Test
-    fun `Punkt ausserhalb der Tastatur liefert null`() {
+    fun `point outside the keyboard returns null`() {
         val m = model()
         assertNull(m.keyAt(-50f, 25f))
         assertNull(m.keyAt(150f, 999f))
     }
 
     @Test
-    fun `Relative Breiten werden proportional verteilt`() {
+    fun `relative widths are distributed proportionally`() {
         val m = model()
         val a = m.keys.first { it.id == "a" }
         val b = m.keys.first { it.id == "b" }
         assertEquals(2f * (a.right - a.left), (b.right - b.left), 0.01f)
     }
 
-    // ---- T20/S1: skalierte Reihen aus dem Budget — KEIN Row-Drop ----
+    // ---- T20/S1: scaled rows from the budget — NO row drop ----
 
     /**
-     * S1-Pflichtfall: bei begrenztem Budget werden ALLE Reihen (und damit alle
-     * Tasten-IDs) skaliert; die Rects sind vollständig (keine halb gezeichnete
-     * Taste), der untere Rand bleibt im Budget, die Breitenverhältnisse bleiben
-     * proportional.
+     * S1 mandatory case: with a limited budget ALL rows (and thereby all key
+     * IDs) are scaled; the rects are complete (no half-drawn key), the lower
+     * edge stays within the budget, the width ratios remain proportional.
      */
     @Test
-    fun `Fit skaliert alle Reihen - alle IDs mit vollstaendigen Rects im Budget`() {
-        // Angebot 350 px (2 Reihen): Keys-Budget = 350-126-21 = 203 px < Bedarf 294 px
+    fun `fit scales all rows - all IDs with complete rects within the budget`() {
+        // offer 350 px (2 rows): keys budget = 350-126-21 = 203 px < demand 294 px
         val fit = KeyboardHeight.fitHeight(
             offeredPx = 350, rows = 2, desiredRowPx = 144, desiredRowGapPx = 6,
             statusLinePx = 126, navInsetPx = 21, maxPx = 725, minKeyHeightPx = 84,
         )
         assertEquals(2, fit.rows)
-        assertTrue("muss skaliert sein", fit.rowPx < 144)
+        assertTrue("must be scaled", fit.rowPx < 144)
 
         val m = KeyboardModel(
             layer(), 300f, keyHeightPx = 144f, rowGapPx = 6f, keyGapPx = 4f, fit = fit,
         )
-        // ALLE Tasten-IDs erhalten (kein Row-Drop — T19 hätte Reihe 2 verworfen):
+        // ALL key IDs kept (no row drop — T19 would have discarded row 2):
         assertEquals(setOf("a", "b", "c", "shift", "space"), m.keys.map { it.id }.toSet())
-        // Vollständige Rects: jede Taste GENAU eine Reihenhöhe hoch, keine halbe Taste:
+        // complete rects: every key EXACTLY one row height tall, no half key:
         for (k in m.keys) {
-            assertEquals("Taste ${k.id} muss die volle Reihenhoehe haben", fit.rowPx.toFloat(), k.bottom - k.top, 0.01f)
+            assertEquals("key ${k.id} must have the full row height", fit.rowPx.toFloat(), k.bottom - k.top, 0.01f)
         }
-        // Unterer Rand im Budget: letzte Unterkante == Keys-Höhe, nicht darüber:
+        // lower edge within the budget: last bottom edge == keys height, not above it:
         assertEquals(fit.keysHeightPx.toFloat(), m.heightPx, 0.5f)
-        assertTrue("unterer Rand ueberschreitet das Budget", m.heightPx <= fit.keysHeightPx + 0.5f)
-        // Breitenverhaeltnisse bleiben proportional (Tastenbreite unangetastet):
+        assertTrue("the bottom edge exceeds the budget", m.heightPx <= fit.keysHeightPx + 0.5f)
+        // width ratios remain proportional (key width untouched):
         val a = m.keys.first { it.id == "a" }
         val b = m.keys.first { it.id == "b" }
         assertEquals(2f * (a.right - a.left), (b.right - b.left), 0.01f)
     }
 
-    /** Defensive: ein Fit mit ANDERER Reihenzahl (Ebenenwechsel) wird ignoriert. */
+    /** Defensive: a fit with a DIFFERENT row count (layer switch) is ignored. */
     @Test
-    fun `Fit mit abweichender Reihenzahl wird ignoriert`() {
+    fun `fit with a differing row count is ignored`() {
         val wrongRows = KeyboardHeight.fitHeight(
-            350, 5, 144, 6, 126, 21, 725, 84, // 5 Reihen, Layer hat 2
+            350, 5, 144, 6, 126, 21, 725, 84, // 5 rows, layer has 2
         )
         val m = KeyboardModel(layer(), 300f, keyHeightPx = 144f, rowGapPx = 6f, keyGapPx = 4f, fit = wrongRows)
         assertEquals("feste Masse, Fit ignoriert", 144f, m.keys.first().bottom - m.keys.first().top, 0.01f)
         assertEquals(144f + 6f + 144f, m.heightPx, 0.01f)
     }
 
-    // F27a2: MARGIN wird wie jede Taste in die Zeilenbreite eingeplant (zählt ins
-    // Σ ein) und belegt die Breite, hat aber kein Label/keine Glyphe (view-seitig
-    // ignoriert Hit-Test/Draw — KeyboardView.keyAtVisible/onDraw).
+    // F27a2: MARGIN is budgeted into the row width like any key (counts into
+    // the Σ) and occupies the width, but has no label/no glyph (view side,
+    // hit test/draw ignore it — KeyboardView.keyAtVisible/onDraw).
     @Test
-    fun `F27a2 margin zaehlt ins Zeilen-Sigma ein und belegt Breite`() {
+    fun `F27a2 margin counts into the row sigma and occupies width`() {
         val m = KeyboardModel(
             LayoutLayer(
                 name = "base",
@@ -162,12 +161,12 @@ class KeyboardModelTest {
         assertEquals("", margin.label)
     }
 
-    // F27d: D10_FOOTER.composeRow ist no-op, wenn die Zeile KEIN enter traegt.
-    // Neues Footer-Zielbild (Stock-Geometrie): enter liegt in r2, die Fussreihe r3
-    // hat KEIN enter — compose darf sie unveraendert lassen (keine Mic/Enter-
-    // Umplatzung, keine Space->Mic-Breiten-Abgabe).
+    // F27d: D10_FOOTER.composeRow is a no-op if the row carries NO enter.
+    // New footer target image (stock geometry): enter sits in r2, the footer
+    // row r3 has NO enter — compose must leave it unchanged (no mic/enter
+    // relocation, no space->mic width transfer).
     @Test
-    fun `F27d composeRow ist no-op ohne enter in der Zeile`() {
+    fun `F27d composeRow is a no-op without enter in the row`() {
         val footer = listOf(
             LayoutKey("symbols", "?123", 1.5, KeyKind.ACTION, "layer-symbols"),
             LayoutKey("language", "\uD83C\uDF10", 1.0, KeyKind.ACTION, "language"),
@@ -177,12 +176,12 @@ class KeyboardModelTest {
             LayoutKey("mic", "\uD83C\uDFA4", 1.5, KeyKind.ACTION, "mic"),
         )
         val composed = D10_FOOTER.compose(listOf(footer))
-        assertEquals("Zeilenanzahl unveraendert", 1, composed.size)
+        assertEquals("line count unchanged", 1, composed.size)
         val out = composed[0]
         assertEquals("Tastenanzahl unveraendert", footer.size, out.size)
-        assertEquals("Reihenfolge/IDs unveraendert", footer.map { it.id }, out.map { it.id })
+        assertEquals("order/IDs unchanged", footer.map { it.id }, out.map { it.id })
         assertEquals("Breiten unveraendert", footer.map { it.width }, out.map { it.width })
-        assertEquals("mic bleibt 1.5 (bekommt ohne enter nichts)", 1.5, out.first { it.id == "mic" }.width, 0.0)
-        assertEquals("space bleibt 7 (gibt ohne enter nichts ab)", 7.0, out.first { it.id == "space" }.width, 0.0)
+        assertEquals("mic stays 1.5 (gets nothing without enter)", 1.5, out.first { it.id == "mic" }.width, 0.0)
+        assertEquals("space stays 7 (gives nothing away without enter)", 7.0, out.first { it.id == "space" }.width, 0.0)
     }
 }

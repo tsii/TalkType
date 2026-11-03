@@ -5,71 +5,71 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * B2 (PLAN_V0130 §6.2 Option A + §6.3-B2): reine Warn-Entscheidung
- * [holdWarnDue] für die 900-s-Obergrenze — Muster [StartGateTest] (extrahierte
- * Service-Entscheidungen, JVM ohne Robolectric).
+ * B2 (PLAN_V0130 §6.2 option A + §6.3-B2): pure warning decision
+ * [holdWarnDue] for the 900-s upper limit — pattern [StartGateTest] (extracted
+ * service decisions, JVM without Robolectric).
  *
- * Vertrag: Warnung GENAU EINMAL pro Session, ab 13 min Session-Audio
- * (780 000 ms = 900 s Obergrenze minus 2 min Vorlauf); das warned-Flag
- * blockt Wiederholungen und wird nur vom Session-Ende-Pfad zurückgesetzt.
+ * Contract: warning EXACTLY ONCE per session, from 13 min of session audio
+ * (780,000 ms = 900 s upper limit minus 2 min lead time); the warned flag
+ * blocks repetitions and is reset only by the session end path.
  */
 class HoldWarnTest {
 
-    // ---- (1) unter 13 min: keine Warnung ----
+    // ---- (1) below 13 min: no warning ----
 
     @Test
-    fun `unter 13 min keine Warnung - auch nicht knapp davor`() {
-        assertFalse("bei 0 ms", holdWarnDue(sessionMs = 0L, warned = false))
-        assertFalse("bei 10 min (600 s)", holdWarnDue(sessionMs = 600_000L, warned = false))
-        assertFalse("knapp davor (779 999 ms)", holdWarnDue(sessionMs = 779_999L, warned = false))
+    fun `below 13 min no warning - not even just before`() {
+        assertFalse("at 0 ms", holdWarnDue(sessionMs = 0L, warned = false))
+        assertFalse("at 10 min (600 s)", holdWarnDue(sessionMs = 600_000L, warned = false))
+        assertFalse("just below (779 999 ms)", holdWarnDue(sessionMs = 779_999L, warned = false))
     }
 
-    // ---- (2) ab 13 min: genau einmal fällig ----
+    // ---- (2) from 13 min: due exactly once ----
 
     @Test
-    fun `ab 780 s wird die Warnung faellig - exakt an der Schwelle`() {
-        assertTrue("exakt 780 000 ms", holdWarnDue(sessionMs = 780_000L, warned = false))
-        assertTrue("weit darüber (899 s)", holdWarnDue(sessionMs = 899_999L, warned = false))
+    fun `from 780 s the warning becomes due - exactly at the threshold`() {
+        assertTrue("exactly 780 000 ms", holdWarnDue(sessionMs = 780_000L, warned = false))
+        assertTrue("far above (899 s)", holdWarnDue(sessionMs = 899_999L, warned = false))
     }
 
-    // ---- (3) warned-Flag blockt Wiederholungen ----
+    // ---- (3) the warned flag blocks repetitions ----
 
     @Test
-    fun `warned-Flag blockt Wiederholung - auch weiter steigende Session`() {
+    fun `warned flag blocks repetition - even with a session rising further`() {
         assertFalse(
-            "nach der Warnung (14 min): nicht erneut",
+            "after the warning (14 min): not again",
             holdWarnDue(sessionMs = 840_000L, warned = true),
         )
         assertFalse(
-            "kurz vor Obergrenze (899 s): nicht erneut",
+            "just before the upper limit (899 s): not again",
             holdWarnDue(sessionMs = 899_999L, warned = true),
         )
     }
 
-    // ---- (4) Session-Ende setzt zurück: nächste Session warnt wieder ----
+    // ---- (4) the session end resets: the next session warns again ----
 
     @Test
-    fun `Session-Ende setzt zurueck - naechste Session warnt wieder genau einmal`() {
-        // Erste Session: Warnung bei 780 s …
+    fun `session end resets - the next session warns again exactly once`() {
+        // first session: warning at 780 s …
         assertTrue(holdWarnDue(sessionMs = 780_000L, warned = false))
-        // … Flag gesetzt, keine Wiederholung:
+        // … flag set, no repetition:
         assertFalse(holdWarnDue(sessionMs = 850_000L, warned = true))
-        // Session-ENDE: Flag zurück (Service: onDictationStopped/abort/onAborted)
-        // — die NÄCHSTE Session beginnt bei 0 und warnt erneut ab 780 s:
-        assertFalse("neue Session Anfang: noch nicht", holdWarnDue(sessionMs = 0L, warned = false))
-        assertTrue("neue Session ab 780 s: wieder genau einmal", holdWarnDue(sessionMs = 780_000L, warned = false))
+        // session END: flag back (service: onDictationStopped/abort/onAborted)
+        // — the NEXT session starts at 0 and warns again from 780 s:
+        assertFalse("new session start: not yet", holdWarnDue(sessionMs = 0L, warned = false))
+        assertTrue("new session from 780 s: again exactly once", holdWarnDue(sessionMs = 780_000L, warned = false))
     }
 
-    // ---- (5) Defensive: absurde Eingaben, Flag dominiert immer ----
+    // ---- (5) defensive: absurd inputs, the flag always dominates ----
 
     @Test
-    fun `Hysterese-frei - Schwelle scharf, Flag dominiert, absurd nie`() {
-        // Schwelle scharf: 779 999 nein / 780 000 ja (keine Gleit-Logik).
+    fun `hysteresis-free - threshold sharp, flag dominates, never for absurd values`() {
+        // threshold sharp: 779,999 no / 780,000 yes (no drifting logic).
         assertFalse(holdWarnDue(sessionMs = 779_999L, warned = false))
         assertTrue(holdWarnDue(sessionMs = 780_000L, warned = false))
-        // Flag dominiert IMMER — auch bei absurd großen Werten nie erneut.
+        // the flag ALWAYS dominates — never again even for absurdly large values.
         assertFalse(holdWarnDue(sessionMs = Long.MAX_VALUE / 2, warned = true))
-        // Negative/restliche Eingaben unterhalb der Schwelle: nie.
+        // negative/remaining inputs below the threshold: never.
         assertFalse(holdWarnDue(sessionMs = -1L, warned = false))
     }
 }

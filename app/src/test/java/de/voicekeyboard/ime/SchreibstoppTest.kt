@@ -18,23 +18,23 @@ import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.atomic.AtomicLong
 
 /**
- * A2b (PLAN_V0133 §1 A2b) — Schreibstopp-Familie:
- *  1. W3d-Burst blockiert nur EINE Hypothese (Session bleibt RECORDING),
- *     write_w3d=1, danach wächst write_delta;
- *  2. Finale nach W3d committed den VOLLSTÄNDIGEN finalen Zielstand;
- *  3. W1 mit E1c-Suffixbeweis (actualBeforeCursor, fresherExpected=
- *     sink.ownText()) re-baselined und schreibt; Fremdtext ⇒ W1 ohne
- *     Sink-Zugriff, lost bleibt;
- *  4. E1c-Präfixregel: frischer Sink-Text vor älterer Tracker-Erwartung;
- *     lost=false NUR nach positivem Suffixbeweis (ownEditFresh allein reicht
- *     NICHT).
+ * A2b (PLAN_V0133 §1 A2b) — write-stop family:
+ *  1. a W3d burst blocks only ONE hypothesis (the session stays RECORDING),
+ *     write_w3d=1, afterwards write_delta grows;
+ *  2. a final after W3d commits the COMPLETE final target state;
+ *  3. W1 with an E1c suffix proof (actualBeforeCursor, fresherExpected=
+ *     sink.ownText()) re-baselines and keeps writing; foreign text ⇒ W1
+ *     without sink access, lost stays;
+ *  4. E1c prefix rule: fresher sink text over an older tracker expectation;
+ *     lost=false ONLY after a positive suffix proof (ownEditFresh alone
+ *     does NOT suffice).
  *
- * Nur Zahlen/Codes/Längen in Annahmen und Assertions (Regel 9) — keine
- * Transkriptinhalte in Logs.
+ * Only numbers/codes/lengths in assumptions and assertions (rule 9) — no
+ * transcript contents in logs.
  */
 class SchreibstoppTest {
 
-    /** A2b: Sink mit Fremdtext-PRÄFIX und getrennter eigener Spanne. */
+    /** A2b: sink with a foreign-text PREFIX and a separate own span. */
     private class OwnSpanSink : EditorSink {
         var foreign: String = ""
         var own: String = ""
@@ -53,7 +53,7 @@ class SchreibstoppTest {
         override fun ownText(): String = own
     }
 
-    /** A2b: Engine mit Skript-Warteschlange (ein Text je Decode-Lauf). */
+    /** A2b: engine with a script queue (one text per decode run). */
     private class ScriptedEngine(texts: List<String>) : AsrEngine {
         private val queue = ConcurrentLinkedQueue(texts)
 
@@ -74,19 +74,19 @@ class SchreibstoppTest {
     private fun newController(sink: EditorSink, tracker: OwnershipTracker) =
         DictationController(ScriptedEngine(emptyList()), sink, tracker = tracker)
 
-    /** 0,2 s Audio: rückt die Agreement-Audioposition vor, ohne den 2-s-Partial-
-     *  Guard auszulösen (LocalAgreement zählt gleiche Audiopositionen NICHT
-     *  als zweite Bestätigung — DESIGN §5.4). */
+    /** 0.2 s of audio: advances the agreement audio position without triggering
+     *  the 2-s partial guard (LocalAgreement does NOT count equal audio
+     *  positions as a second confirmation — DESIGN §5.4). */
     private suspend fun DictationController.tick() =
         feedAudio(PcmBlock(0, 0, ShortArray(3_200)))
 
-    // A2b-Rote-Test 1: Controller-Session mit W3d-Burst bleibt RECORDING; die
-    // NÄCHSTE Hypothese schreibt; write_w3d=1, danach wächst write_delta.
-    @Test fun `A2b W3d-Burst blockiert nur eine Hypothese und Zaehler laufen mit`() {
+    // A2b red test 1: a controller session with a W3d burst stays RECORDING; the
+    // NEXT hypothesis writes; write_w3d=1, afterwards write_delta grows.
+    @Test fun `A2b W3d burst blocks only one hypothesis and the counters move along`() {
         val sink = OwnSpanSink()
         val c = newController(sink, OwnershipTracker())
         assertTrue(c.start())
-        assertEquals("last_write_audio_s=-1 vor erstem DELTA", -1.0, c.lastWriteAudioS, 1e-9)
+        assertEquals("last_write_audio_s=-1 before the first DELTA", -1.0, c.lastWriteAudioS, 1e-9)
 
         val t = "aa bb cc dd ee ff gg hh ii jj kk ll mm nn"
         kotlinx.coroutines.runBlocking {
@@ -95,34 +95,34 @@ class SchreibstoppTest {
                 assertTrue(c.applyPartial(hyp(t, c.sessionId)))
             }
         }
-        assertTrue("Agreement muss den Praefix committen", c.committedLen > 0)
+        assertTrue("agreement must commit the prefix", c.committedLen > 0)
         val callsAtCommit = sink.calls.size
 
-        // W3d-Burst: Hypothese divergiert frueh im committeten Bereich —
-        // Rollback verboten (>= 2 Leerzeichen im Loeschbereich)
+        // W3d burst: the hypothesis diverges early in the committed region —
+        // rollback forbidden (>= 2 spaces in the delete region)
         val d = "xy aa bb cc dd ee ff gg hh ii jj kk ll mm nn"
         kotlinx.coroutines.runBlocking {
             c.tick()
             assertTrue(c.applyPartial(hyp(d, c.sessionId)))
         }
-        assertEquals("Session endet NICHT durch W3d selbst", DictationState.RECORDING, c.state)
-        assertEquals("genau EIN W3d", 1, c.writeW3dCount)
-        assertEquals("kein Schreibversuch im blockierten Schritt", callsAtCommit, sink.calls.size)
+        assertEquals("the session does NOT end via W3d itself", DictationState.RECORDING, c.state)
+        assertEquals("exactly ONE W3d", 1, c.writeW3dCount)
+        assertEquals("no write attempt in the blocked step", callsAtCommit, sink.calls.size)
         assertEquals(t, sink.own)
         assertEquals("w3d", c.writeReason)
 
-        // NÄCHSTE Hypothese schreibt (A2a-Latch): write_delta wächst
+        // NEXT hypothesis writes (A2a latch): write_delta grows
         kotlinx.coroutines.runBlocking {
             c.tick()
             assertTrue(c.applyPartial(hyp(d, c.sessionId)))
         }
-        assertEquals("write_delta wächst (T#1 war bereits DELTA 1)", 2, c.writeDeltaCount)
+        assertEquals("write_delta grows (T#1 was already DELTA 1)", 2, c.writeDeltaCount)
         assertEquals(d, sink.own)
-        assertEquals("W3d bleibt bei genau 1", 1, c.writeW3dCount)
+        assertEquals("W3d stays at exactly 1", 1, c.writeW3dCount)
         assertEquals(DictationState.RECORDING, c.state)
-        assertTrue("last_write_audio_s gesetzt nach erstem DELTA", c.lastWriteAudioS >= 0.0)
+        assertTrue("last_write_audio_s set after the first DELTA", c.lastWriteAudioS >= 0.0)
 
-        // weiteres Schreiben laesst write_delta weiter wachsen
+        // further writing lets write_delta keep growing
         kotlinx.coroutines.runBlocking {
             c.tick()
             assertTrue(c.applyPartial(hyp(d + " oo", c.sessionId)))
@@ -131,9 +131,9 @@ class SchreibstoppTest {
         assertEquals(d + " oo", sink.own)
     }
 
-    // A2b-Rote-Test 2: Finale nach W3d committed den VOLLSTÄNDIGEN finalen
-    // Zielstand — keine alte Teilhypothese bleibt stehen.
-    @Test fun `A2b Finale nach W3d committed den vollstaendigen Zielstand`() {
+    // A2b red test 2: a final after W3d commits the COMPLETE final target state
+    // — no old partial hypothesis is left standing.
+    @Test fun `A2b final after W3d commits the complete target state`() {
         val sink = OwnSpanSink()
         val finalText = "zz yu aa bb cc dd ee ff gg hh ii jj kk ll mm nn oo pp"
         val c = DictationController(ScriptedEngine(listOf(finalText)), sink)
@@ -147,27 +147,27 @@ class SchreibstoppTest {
         }
         val d = "xy aa bb cc dd ee ff gg hh ii jj kk ll mm nn"
         kotlinx.coroutines.runBlocking {
-            c.tick() // W3d-Blocker (einmalig)
+            c.tick() // W3d blocker (once)
             assertTrue(c.applyPartial(hyp(d, c.sessionId)))
-            c.tick() // Latch: DELTA, Sperre konsumiert
+            c.tick() // latch: DELTA, lock consumed
             assertTrue(c.applyPartial(hyp(d, c.sessionId)))
-            repeat(3) { // Agreement neu aufbauen
+            repeat(3) { // rebuild the agreement
                 c.tick()
                 assertTrue(c.applyPartial(hyp(d, c.sessionId)))
             }
         }
-        assertTrue("committeter Praefix vor dem Finale wieder da", c.committedLen > 0)
+        assertTrue("the committed prefix is back before the final", c.committedLen > 0)
         val sinkBeforeFinal = sink.own
 
         val outcome = kotlinx.coroutines.runBlocking { c.stop() }
-        assertTrue("Finale muss laufen", outcome is StopOutcome.FinalRan)
-        assertEquals("VOLLSTAENDIGER finaler Zielstand", finalText, sink.own)
-        assertTrue("alte Teilhypothese darf nicht stehen bleiben", sinkBeforeFinal != sink.own)
-        assertEquals("kein zweites W3d im Finale", 1, c.writeW3dCount)
+        assertTrue("the final must run", outcome is StopOutcome.FinalRan)
+        assertEquals("the COMPLETE final target state", finalText, sink.own)
+        assertTrue("the old partial must not stay standing", sinkBeforeFinal != sink.own)
+        assertEquals("no second W3d in the final", 1, c.writeW3dCount)
         assertEquals("delta", c.writeReason)
         assertEquals(DictationState.IDLE, c.state)
 
-        // Counter werden beim Start genullt (nächste Session frisch)
+        // the counters are zeroed on start (the next session fresh)
         assertTrue(c.start())
         assertEquals(0, c.writeSameCount)
         assertEquals(0, c.writeW1Count)
@@ -177,10 +177,10 @@ class SchreibstoppTest {
         assertEquals("-", c.writeReason)
     }
 
-    // A2b-Rote-Test 3: W1 mit actualBeforeCursor-Suffixbeweis und
-    // fresherExpected=sink.ownText() darf re-baselinen und danach schreiben.
-    // Fremder/abweichender Editorinhalt ⇒ W1, kein Sink-Zugriff, lost bleibt.
-    @Test fun `A2b W1-Rebaseline mit Suffixbeweis schreibt - Fremdtext bleibt W1`() {
+    // A2b red test 3: W1 with an actualBeforeCursor suffix proof and
+    // fresherExpected=sink.ownText() may re-baseline and keep writing afterwards.
+    // Foreign/differing editor content ⇒ W1, no sink access, lost stays.
+    @Test fun `A2b W1 re-baseline with suffix proof writes - foreign text stays W1`() {
         val sink = OwnSpanSink()
         val clock = AtomicLong(1_000_000L)
         val tracker = OwnershipTracker(nowMs = { clock.get() })
@@ -189,108 +189,110 @@ class SchreibstoppTest {
         assertTrue(c.applyPartial(hyp("hallo welt", c.sessionId)))
         assertEquals("hallo welt", sink.own)
 
-        // Nutzer tippt VOR unserem Text (Suffix bleibt beweisbar); der Tracker
-        // meldet Fremdeingabe (Range-Selektion) — ohne Fix ein W1-Stopp.
+        // the user types BEFORE our text (the suffix stays provable); the
+        // tracker reports foreign input (range selection) — without the fix a
+        // W1 stop.
         sink.foreign = "User "
-        c.onUpdateSelection(0, 0, 2, 5) // Range (2 != 5) ⇒ lost=true
-        assertTrue("lost gesetzt", tracker.ownershipLost)
-        clock.addAndGet(500) // Frische-Fenster deterministisch geschlossen
+        c.onUpdateSelection(0, 0, 2, 5) // range (2 != 5) ⇒ lost=true
+        assertTrue("lost set", tracker.ownershipLost)
+        clock.addAndGet(500) // freshness window deterministically closed
 
         assertTrue(
-            "Re-Baseline mit Suffixbeweis ⇒ dieselbe Hypothese wird geschrieben",
+            "re-baseline with a suffix proof ⇒ the same hypothesis is written",
             c.applyPartial(hyp("hallo welt mehr", c.sessionId)),
         )
-        assertEquals("geschrieben", "hallo welt mehr", sink.own)
-        assertEquals("Fremdpraefix byteweise unangetastet", "User ", sink.foreign)
-        assertFalse("lost nach Suffixbeweis aufgehoben", tracker.ownershipLost)
-        assertEquals("kein W3d gezaehlt", 0, c.writeW3dCount)
-        assertEquals("write_delta gewachsen (Erstschrieb + Rebase-Schrieb)", 2, c.writeDeltaCount)
+        assertEquals("written", "hallo welt mehr", sink.own)
+        assertEquals("foreign prefix untouched byte-wise", "User ", sink.foreign)
+        assertFalse("lost cleared after the suffix proof", tracker.ownershipLost)
+        assertEquals("no W3d counted", 0, c.writeW3dCount)
+        assertEquals("write_delta grew (initial write + rebase write)", 2, c.writeDeltaCount)
 
-        // Gegenprobe: App ERSETZT unseren Text (kein Suffix) — lost bleibt,
-        // KEIN Sink-Zugriff, Zaehler meldet W1.
+        // counter-check: the app REPLACES our text (no suffix) — lost stays,
+        // NO sink access, the counter reports W1.
         sink.own = "GANZ ANDERER TEXT"
-        c.onUpdateSelection(0, 0, 2, 5) // Range ⇒ lost wieder true
+        c.onUpdateSelection(0, 0, 2, 5) // range ⇒ lost true again
         clock.addAndGet(500)
         val callsBeforeForeign = sink.calls.size
         val deltaBefore = c.writeDeltaCount
         assertFalse(
-            "Fremdtext ⇒ Hypothese wird nicht ausgefuehrt",
+            "foreign text ⇒ the hypothesis is not executed",
             c.applyPartial(hyp("hallo welt nochmehr", c.sessionId)),
         )
-        assertEquals("kein Sink-Zugriff", callsBeforeForeign, sink.calls.size)
-        assertEquals("W1 gezaehlt", 1, c.writeW1Count)
-        assertEquals("write_delta unveraendert", deltaBefore, c.writeDeltaCount)
-        assertTrue("lost bleibt gesetzt", tracker.ownershipLost)
-        assertEquals("Fremdtext byteweise unangetastet", "GANZ ANDERER TEXT", sink.own)
+        assertEquals("no sink access", callsBeforeForeign, sink.calls.size)
+        assertEquals("W1 counted", 1, c.writeW1Count)
+        assertEquals("write_delta unchanged", deltaBefore, c.writeDeltaCount)
+        assertTrue("lost stays set", tracker.ownershipLost)
+        assertEquals("foreign text untouched byte-wise", "GANZ ANDERER TEXT", sink.own)
         assertEquals("w1", c.writeReason)
     }
 
-    // P2 (REVIEW_A2_A4): Eine GELUNGENE W1-Re-Baseline ist KEIN Besitzverlust —
-    // ownershipDeniedCount/-AtS zählen nur ECHTE Verweigerungen (Zähler und
-    // Stempel wanderten hinter den Re-Baseline-Versuch in den Ablehnungs-Zweig).
-    @Test fun `P2 gelungene W1-Rebaseline zaehlt keinen Besitzverlust`() {
+    // P2 (REVIEW_A2_A4): a SUCCESSFUL W1 re-baseline is NOT an ownership loss —
+    // ownershipDeniedCount/-AtS count only REAL denials (counter and stamp
+    // had drifted behind the re-baseline attempt into the rejection branch).
+    @Test fun `P2 a successful W1 re-baseline counts no ownership loss`() {
         val sink = OwnSpanSink()
         val clock = AtomicLong(1_000_000L)
         val tracker = OwnershipTracker(nowMs = { clock.get() })
         val c = newController(sink, tracker)
         assertTrue(c.start())
         assertTrue(c.applyPartial(hyp("hallo welt", c.sessionId)))
-        assertEquals("vor dem Fremdgriff: nie verloren", -1.0, c.ownershipDeniedAtS, 1e-9)
+        assertEquals("before the foreign grab: never lost", -1.0, c.ownershipDeniedAtS, 1e-9)
 
-        // Besitz weg, aber Suffix beweisbar: Re-Baseline gelingt, die Hypothese
-        // schreibt — das ist KEINE Verweigerung, kein Besitzverlust-Stempel:
+        // ownership gone, but the suffix provable: the re-baseline succeeds,
+        // the hypothesis writes — that is NOT a denial, no ownership-loss stamp:
         sink.foreign = "User "
-        c.onUpdateSelection(0, 0, 2, 5) // Range ⇒ lost=true
+        c.onUpdateSelection(0, 0, 2, 5) // range ⇒ lost=true
         clock.addAndGet(500)
-        assertTrue("Re-Baseline gelingt (Suffixbeweis)", c.applyPartial(hyp("hallo welt mehr", c.sessionId)))
-        assertEquals("gelungene Re-Baseline zaehlt NICHT", 0, c.ownershipDeniedCount)
-        assertEquals("kein Besitzverlust-Stempel", -1.0, c.ownershipDeniedAtS, 1e-9)
+        assertTrue("re-baseline succeeds (suffix proof)", c.applyPartial(hyp("hallo welt mehr", c.sessionId)))
+        assertEquals("a successful re-baseline does NOT count", 0, c.ownershipDeniedCount)
+        assertEquals("no ownership-loss stamp", -1.0, c.ownershipDeniedAtS, 1e-9)
 
-        // echter Fremdfall: Zaehler und Stempel gesetzt wie bisher
+        // a real foreign case: counter and stamp set as before
         sink.own = "GANZ ANDERER TEXT"
         c.onUpdateSelection(0, 0, 2, 5)
         clock.addAndGet(500)
         assertFalse(c.applyPartial(hyp("hallo welt nochmehr", c.sessionId)))
-        assertEquals("echte Verweigerung zaehlt", 1, c.ownershipDeniedCount)
-        assertTrue("Stempel gesetzt", c.ownershipDeniedAtS >= 0.0)
+        assertEquals("a real denial counts", 1, c.ownershipDeniedCount)
+        assertTrue("stamp set", c.ownershipDeniedAtS >= 0.0)
     }
 
-    // A2b-Rote-Test 4: E1c-Koordinate — frischer Sink-Text hat Vorrang nach
-    // Präfixregel vor älterer Tracker-Erwartung; lost=false NUR nach positivem
-    // Suffixbeweis; der ownEditFresh-Sonderfall allein gilt NICHT.
-    @Test fun `A2b E1c-Praefixregel - lost nur nach Suffixbeweis`() {
+    // A2b red test 4: E1c coordinate — fresher sink text takes precedence
+    // under the prefix rule over an older tracker expectation; lost=false
+    // ONLY after a positive suffix proof; the ownEditFresh special case
+    // alone does NOT count.
+    @Test fun `A2b E1c prefix rule - lost only after a suffix proof`() {
         val clock = AtomicLong(1_000_000L)
 
-        // (a) Präfixregel hebt die ältere Erwartung an; Beweis löscht lost:
+        // (a) the prefix rule lifts the older expectation; the proof clears lost:
         val t = OwnershipTracker(nowMs = { clock.get() })
-        t.onUpdateSelection(0, 0, 0, 0) // System-Baseline
-        t.onOwnEdit("abc def ghi") // ältere (längere) Tracker-Erwartung
-        t.onUpdateSelection(0, 0, 2, 5) // Range: Fremdeingabe ⇒ lost=true
-        assertTrue("lost nach Fremdeingabe", t.ownershipLost)
-        clock.addAndGet(500) // Frische-Fenster geschlossen
+        t.onUpdateSelection(0, 0, 0, 0) // system baseline
+        t.onOwnEdit("abc def ghi") // older (longer) tracker expectation
+        t.onUpdateSelection(0, 0, 2, 5) // range: foreign input ⇒ lost=true
+        assertTrue("lost after foreign input", t.ownershipLost)
+        clock.addAndGet(500) // freshness window closed
 
-        // Ohne Lift fiele der Suffixtest gegen die alte Erwartung ("abc def"
-        // ist kein Suffix von "user abc def ghi") — der frischere Sink-Stand
-        // (Präfix-Verwandter, kürzer) hat Vorrang:
+        // without the lift the suffix test would run against the old
+        // expectation ("abc def" is not a suffix of "user abc def ghi") — the
+        // fresher sink state (prefix relative, shorter) takes precedence:
         val lifted = t.rebaseline("user abc def", "abc def")
-        assertTrue("Präfixregel: frischer Sink-Stand hebt die Erwartung an", lifted)
-        assertFalse("lost=NUR nach positivem Suffixbeweis löschen", t.ownershipLost)
+        assertTrue("prefix rule: a fresh sink state raises the expectation", lifted)
+        assertFalse("clear lost=ONLY after a positive suffix proof", t.ownershipLost)
 
-        // (b) ownEditFresh allein gilt NICHT als Suffixbeweis:
+        // (b) ownEditFresh alone does NOT count as a suffix proof:
         val t2 = OwnershipTracker(nowMs = { clock.get() })
         t2.onUpdateSelection(0, 0, 0, 0)
-        t2.onOwnEdit("alt") // Fenster läuft
-        t2.onUpdateSelection(0, 0, 2, 5) // Range ⇒ lost=true (Fenster noch frisch)
-        assertTrue("RE-SYNC bleibt zugesagt (true)", t2.rebaseline("FREMDES ZEUG"))
-        assertTrue("ownEditFresh allein löscht lost NICHT", t2.ownershipLost)
+        t2.onOwnEdit("alt") // window runs
+        t2.onUpdateSelection(0, 0, 2, 5) // range ⇒ lost=true (window still fresh)
+        assertTrue("RE-SYNC stays promised (true)", t2.rebaseline("FREMDES ZEUG"))
+        assertTrue("ownEditFresh alone does NOT clear lost", t2.ownershipLost)
 
-        // (c) actual==null ist kein Beweis:
+        // (c) actual==null is no proof:
         val t3 = OwnershipTracker(nowMs = { clock.get() })
         t3.onUpdateSelection(0, 0, 0, 0)
         t3.onOwnEdit("abc")
         t3.onUpdateSelection(0, 0, 2, 5)
         clock.addAndGet(500)
-        assertFalse("null-Lesefenster bleibt ablehnbar", t3.rebaseline(null))
-        assertTrue("kein lost-Löschen bei actual==null", t3.ownershipLost)
+        assertFalse("a null read window stays refusable", t3.rebaseline(null))
+        assertTrue("no lost-clearing with actual==null", t3.ownershipLost)
     }
 }

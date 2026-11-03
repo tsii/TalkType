@@ -8,38 +8,39 @@ import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
 /**
- * V8: Featurizer-Wrapper für `parakeet_tdt_nemo_featurizer_int8_dynamic_litert.tflite`.
+ * V8: featurizer wrapper for `parakeet_tdt_nemo_featurizer_int8_dynamic_litert.tflite`.
  *
- * Manifest (vom Orchestrator aus dem offiziellen parakeet-Manifest gemessen):
- *  [0] raw_wav                    [1,121600] float32 (7,6 s @ 16 kHz, FESTE Form)
- *  [1] sample_mask                [1,121600] float32 (1.0 echt, 0.0 Polster)
- *  [2] frame_mask                 [1,760,1]  float32 (1.0 für Frames mit echtem Audio)
+ * Manifest (measured by the orchestrator from the official parakeet manifest):
+ *  [0] raw_wav                    [1,121600] float32 (7.6 s @ 16 kHz, FIXED shape)
+ *  [1] sample_mask                [1,121600] float32 (1.0 real, 0.0 padding)
+ *  [2] frame_mask                 [1,760,1]  float32 (1.0 for frames with real audio)
  *  [3] feature_mean               [1,1,128]  float32
  *  [4] feature_inv_std            [1,1,128]  float32
- *  [5] pre_encode_feature_cache  [1,9,128]  float32 (Merkmale der vorigen Fenstergrenze)
- *  [6] previous_sample            [1]        float32 (letzter Sample des vorigen Fensters)
+ *  [5] pre_encode_feature_cache  [1,9,128]  float32 (features of the previous window boundary)
+ *  [6] previous_sample            [1]        float32 (last sample of the previous window)
  *  OUT[0] input_features [1,769,128] float32 · OUT[1] log_mel [1,760,128] float32
  *
- * ENCODER-Zustände (für V9, hier nur dokumentiert): cache_last_channel
- * [1,24,190,1024] (~18,6 MB), cache_last_time [1,24,1024,4], cache_last_channel_len [1].
+ * ENCODER states (for V9, only documented here): cache_last_channel
+ * [1,24,190,1024] (~18.6 MB), cache_last_time [1,24,1024,4], cache_last_channel_len [1].
  *
- * Fensterregel: 121 600 Samples fest; kürzere Eingaben werden mit NULLPOLSTER
- * gefüllt, sample_mask/frame_mask markieren die echten Bereiche.
+ * Window rule: 121 600 samples fixed; shorter inputs are padded with ZERO PADDING,
+ * sample_mask/frame_mask mark the real areas.
  *
- * V9-Gerätebefund (2026-10-29, tflite-runtime + Arm-Sample beckett.wav, Sinus,
- * Stille): Ausgang 1 log_mel ist TOT (bei Sprache/Sinus/Stille konstant
- * -16,636, Varianz 0,0) — Statistik daraus ist unbrauchbar, er wird NIRGENDWO
- * verwendet/assertet. Ausgang 0 input_features [1,769,128] ist der LEBENDE
- * Feature-Strom (Varianz 3,20 Sprache / 31,31 Sinus / 0,0 Stille) und der
- * Eingang für den Encoder (V10). Statistik-Modus: NEUTRAL (mean 0/inv_std 1)
- * mit folgender BEGRÜNDUNG: die Dataset-Statistiken fehlen (Arm liefert keine
- * öffentlichen mean/inv_std-Werte); fromMel wäre aus dem toten log_mel
- * abzuleiten und ist damit wertlos. V10 liefert die echten Werte nach.
+ * V9 device finding (2026-10-29, tflite-runtime + ARM sample beckett.wav, sine,
+ * silence): output 1 log_mel is DEAD (constant -16.636 for speech/sine/silence,
+ * variance 0.0) — statistics derived from it are useless, it is used/asserted
+ * NOWHERE. Output 0 input_features [1,769,128] is the LIVING feature stream
+ * (variance 3.20 speech / 31.31 sine / 0.0 silence) and the input
+ * for the encoder (V10). Statistics mode: NEUTRAL (mean 0/inv_std 1)
+ * with the following JUSTIFICATION: the dataset statistics are missing (ARM
+ * provides no public mean/inv_std values); fromMel would have to be derived
+ * from the dead log_mel and is therefore worthless. V10 delivers the real values
+ * afterwards.
  */
 class LiteRtFeaturizer(file: File, numThreads: Int = 2) {
 
     companion object {
-        const val WINDOW_SAMPLES = 121_600   // 7,6 s @ 16 kHz (feste Tensorform)
+        const val WINDOW_SAMPLES = 121_600   // 7.6 s @ 16 kHz (fixed tensor shape)
         const val FRAME_HOP = 160            // 10 ms @ 16 kHz
         const val FRAME_COUNT = 760          // 121600 / 160
         const val FEATURE_DIM = 128
@@ -48,17 +49,17 @@ class LiteRtFeaturizer(file: File, numThreads: Int = 2) {
         const val OUTPUT_COUNT = 2
     }
 
-    /** Ergebnis eines Featurizer-Laufs: beide Ausgaben + Formen + Frame-Maske. */
+    /** Result of a featurizer run: both outputs + shapes + frame mask. */
     data class Result(
-        /** LEBENDER Feature-Strom [769*128] (V9: der Eingang für den Encoder). */
+        /** LIVING feature stream [769*128] (V9: the input for the encoder). */
         val inputFeatures: FloatArray,
-        /** TOT: im Arm-Artefakt konstant -16,636 (Gerätemessung 2026-10-29) —
-         *  verworfen, nur für Form-Diagnose behalten. */
+        /** DEAD: constant -16.636 in the ARM artifact (device measurement 2026-10-29) —
+         *  discarded, kept only for shape diagnostics. */
         val logMel: FloatArray,
         val inputFeaturesShape: IntArray, // [1,769,128]
         val logMelShape: IntArray,        // [1,760,128]
-        val frameMask: BooleanArray,      // true = Frame enthält echtes Audio
-        val statsMode: String,            // V9: immer "neutral" (s. KDoc)
+        val frameMask: BooleanArray,      // true = frame contains real audio
+        val statsMode: String,            // V9: always "neutral" (see KDoc)
     )
 
     private val interpreter: Interpreter
@@ -73,7 +74,7 @@ class LiteRtFeaturizer(file: File, numThreads: Int = 2) {
                 .apply { put(bytes) }.apply { flip() },
             opts,
         )
-        // Form-Vertrag prüfen (Abweichung = AsrNotReadyException mit Grundtext)
+        // check the shape contract (deviation = AsrNotReadyException with a reason text)
         val inputs = interpreter.getInputTensorCount()
         if (inputs != INPUT_COUNT) {
             interpreter.close()
@@ -92,7 +93,7 @@ class LiteRtFeaturizer(file: File, numThreads: Int = 2) {
         }
     }
 
-    /** Namen der Eingänge zur Laufzeit (Diagnose, keine Inhalte — Regel 9). */
+    /** Names of the inputs at runtime (diagnostics, no contents — rule 9). */
     fun inputNames(): List<String> =
         (0 until INPUT_COUNT).map { i -> inputName(interpreter.getInputTensor(i)) }
 
@@ -105,14 +106,14 @@ class LiteRtFeaturizer(file: File, numThreads: Int = 2) {
         }
 
     /**
-     * Führt die Featurizer-Inferenz aus. Alle 7 Eingänge werden aus der einen
-     * Eingabe ([pcm] echt bis [pcmLen], Rest Nullpolster) gebaut:
-     *  - raw_wav: pcm[0..pcmLen), Rest 0
-     *  - sample_mask: 1.0 für i<pcmLen, sonst 0.0
-     *  - frame_mask: 1.0 für floor(i/160) < ceil(pcmLen/160), sonst 0.0
-     *  - feature_mean/inv_std: NEUTRAL (V9; log_mel ist tot, Dataset-Werte
-     *    fehlen — V10 liefert echte Statistiken nach).
-     *  - pre_encode_feature_cache: prevCache oder Nullen
+     * Runs the featurizer inference. All 7 inputs are built from the single
+     * input ([pcm] real up to [pcmLen], remainder zero padding):
+     *  - raw_wav: pcm[0..pcmLen), rest 0
+     *  - sample_mask: 1.0 for i<pcmLen, otherwise 0.0
+     *  - frame_mask: 1.0 for floor(i/160) < ceil(pcmLen/160), otherwise 0.0
+     *  - feature_mean/inv_std: NEUTRAL (V9; log_mel is dead, dataset values
+     *    missing — V10 delivers real statistics afterwards).
+     *  - pre_encode_feature_cache: prevCache or zeros
      *  - previous_sample: prevSample ?: 0
      */
     fun featurize(
@@ -137,10 +138,10 @@ class LiteRtFeaturizer(file: File, numThreads: Int = 2) {
         }
         val prevS = prevSample ?: 0f
 
-        // V9: Statistik-Modus NEUTRAL (mean 0/inv_std 1) — BEGRÜNDUNG: Ausgang 1
-        // log_mel ist im Arm-Artefakt KONSTANT -16,636 (gerätemessen, var=0),
-        // fromMel wäre wertlos; Dataset-Statistiken fehlen (V10 liefert sie nach).
-        // EIN Lauf (keine doppelte Inferenz mehr).
+        // V9: statistics mode NEUTRAL (mean 0/inv_std 1) — JUSTIFICATION: output 1
+        // log_mel is CONSTANT -16.636 in the ARM artifact (device-measured, var=0),
+        // fromMel would be worthless; dataset statistics missing (V10 delivers them later).
+        // ONE run (no more double inference).
         val out = runOnce(rawWav, sampleMask, frameMask,
             FeaturizerStats.neutralMean(), FeaturizerStats.neutralInvStd(), cache, prevS)
         val maskBool = BooleanArray(FRAME_COUNT) { frameMask[it] > 0.5f }
@@ -155,7 +156,7 @@ class LiteRtFeaturizer(file: File, numThreads: Int = 2) {
         )
     }
 
-    /** Ein runForMultipleInputsOutputs-Lauf mit den 7 Eingangs-Buffern. */
+    /** One runForMultipleInputsOutputs run with the 7 input buffers. */
     private fun runOnce(
         rawWav: FloatArray, sampleMask: FloatArray, frameMask: FloatArray,
         mean: FloatArray, invStd: FloatArray, cache: FloatArray, prevSample: Float,
@@ -168,7 +169,7 @@ class LiteRtFeaturizer(file: File, numThreads: Int = 2) {
         }
         fun flat(shape: IntArray): Int = shape.fold(1) { acc, v -> acc * (if (v > 0) v else 1) }
 
-        // Eingangs-Formen je Tensor abfragen und die Puffer entsprechend formen
+        // query the input shapes per tensor and form the buffers accordingly
         val inShapes = (0 until INPUT_COUNT).map { interpreter.getInputTensor(it).shape() }
         val inputs = arrayOf<Any>(
             buf(rawWav, inShapes[0]),
@@ -179,7 +180,7 @@ class LiteRtFeaturizer(file: File, numThreads: Int = 2) {
             buf(cache, inShapes[5]),
             buf(floatArrayOf(prevSample), inShapes[6]),
         )
-        // Ausgabe-Puffer in deklarierten Formen (feste Formen lt. Manifest)
+        // output buffers in declared shapes (fixed shapes per the manifest)
         val ifShape = intArrayOf(1, FRAME_COUNT + 1, FEATURE_DIM) // [1,769,128]
         val lmShape = intArrayOf(1, FRAME_COUNT, FEATURE_DIM)      // [1,760,128]
         val outIf = ByteBuffer.allocateDirect(flat(ifShape) * 4).order(ByteOrder.nativeOrder())
@@ -188,9 +189,9 @@ class LiteRtFeaturizer(file: File, numThreads: Int = 2) {
         try {
             interpreter.runForMultipleInputsOutputs(inputs, outputs)
         } catch (e: Exception) {
-            // V9: LiteRT-Originalmeldung SICHTBAR machen (vorher verschluckt),
-            // aber regel-9-bereinigt: pro Token alles ab '/' auf den Dateinamen
-            // kuerzen (kein Pfad, keine URL), max. 160 Zeichen. cause anhaengen.
+            // V9: make the original LiteRT message VISIBLE (previously swallowed),
+            // but rule-9-scrubbed: per token shorten everything from '/' to the file name
+            // (no path, no URL), max. 160 characters. append the cause.
             val scrubbed = e.message?.let { scrubForUser(it) } ?: "(keine Meldung)"
             val ex = LiteRtAsrEngine.AsrNotReadyException(
                 "Featurizer-Inferenz fehlgeschlagen (${e.javaClass.simpleName}: $scrubbed)",
@@ -218,8 +219,8 @@ class LiteRtFeaturizer(file: File, numThreads: Int = 2) {
         if (closed.compareAndSet(false, true)) interpreter.close()
     }
 
-    /** V9/Regel 9: Meldung bereinigen — Token mit '/'/'\\' auf den Dateinamen
-     *  kuerzen (kein Pfad, keine URL), max. 160 Zeichen. */
+    /** V9/rule 9: scrub the message — tokens with '/'/'\\' shortened to the file name
+     *  (no path, no URL), max. 160 characters. */
     private fun scrubForUser(msg: String): String {
         val sb = StringBuilder()
         for (tok in msg.split(Regex("[\\s]+"))) {

@@ -13,30 +13,30 @@ import java.nio.ByteOrder
 import java.util.concurrent.atomic.AtomicLong
 
 /**
- * V3-SKELETT / V6a: LiteRT-Engine für Variante B
+ * V3-SKELETON / V6a: LiteRT engine for variant B
  * (Arm/parakeet-tdt-0-6b-v3-int8-litert).
  *
- * - `load()` öffnet die vier `.tflite`-Dateien aus [ModelManifest.forVariant]
- *   (LITERT_CPU) mit dem LiteRT-CPU-Interpreter (kein NPU, kein AOT).
- * - V6a: [featurize] führt eine ECHTE Inferenz auf dem Featurizer aus —
- *   Input-Form/-Typ werden ZUR LAUFZEIT aus dem Interpreter abgefragt
- *   (nicht geraten): `getInputTensor(0)`, `shape()`, `dataType()`.
- * - Streaming-Cache ist Instanz-Zustand und wird bei Session-Wechsel VERWORFEN.
- * - `transcribe()` bleibt in dieser Stufe typisiert gesperrt
- *   ([AsrNotReadyException]) — keine stille Leer-Text-Rückgabe (Regel A1).
- * - `close()` gibt alle Interpreter frei.
+ * - `load()` opens the four `.tflite` files from [ModelManifest.forVariant]
+ *   (LITERT_CPU) with the LiteRT CPU interpreter (no NPU, no AOT).
+ * - V6a: [featurize] runs a REAL inference on the featurizer —
+ *   input shape/type are queried FROM THE INTERPRETER AT RUNTIME
+ *   (not guessed): `getInputTensor(0)`, `shape()`, `dataType()`.
+ * - The streaming cache is instance state and is DISCARDED on session change.
+ * - `transcribe()` stays blocked in a typed way at this stage
+ *   ([AsrNotReadyException]) — no silent empty-text return (rule A1).
+ * - `close()` releases all interpreters.
  */
 class LiteRtAsrEngine : AsrEngine, Closeable {
 
-    /** Typisierter, bewusster Fehler: Inferenz-Schritt in dieser Stufe nicht verdrahtet. */
+    /** Typed, deliberate error: inference step not wired at this stage. */
     class AsrNotReadyException(message: String) : IllegalStateException(message)
 
     private var interpreters: List<Interpreter> = emptyList()
 
-    /** Featurizer-Interpreter (Index im Manifest: parakeet_…_featurizer_…tflite). */
+    /** Featurizer interpreter (index in the manifest: parakeet_…_featurizer_…tflite). */
     private var featurizer: Interpreter? = null
 
-    /** Streaming-Cache: nur innerhalb EINER sessionId gültig (Session-Wechsel ⇒ neu). */
+    /** Streaming cache: valid only within ONE sessionId (session change ⇒ new). */
     private var cachedSessionId: Long = -1L
     private val cacheGeneration = AtomicLong(0)
 
@@ -50,11 +50,11 @@ class LiteRtAsrEngine : AsrEngine, Closeable {
         val opened = ArrayList<Interpreter>(files.size)
         try {
             for (entry in files) {
-                // V10 (L1-01): Interpreter aus der DATEI via LiteRtLoader —
-                // KEIN readBytes()/Heap-Kopie des 648-MB-Encoders (mmap über
-                // Interpreter(File, Options)); Größenpruefung gegen das Manifest
-                // im Loader, VOR dem open. Throwable-Grenze (auch Errors) im Loader
-                // mit typisiertem Fehler + bereinigter Ursache.
+                // V10 (L1-01): interpreter from the FILE via LiteRtLoader —
+                // NO readBytes()/heap copy of the 648 MB encoder (mmap via
+                // Interpreter(File, Options)); size check against the manifest
+                // in the loader, BEFORE the open. Throwable boundary (errors too) in the loader
+                // with a typed error + scrubbed cause.
                 val loaded = LiteRtLoader.open(
                     File(modelDir, entry.storeName),
                     threadsForDevice(),
@@ -67,29 +67,29 @@ class LiteRtAsrEngine : AsrEngine, Closeable {
             }
             interpreters = opened
         } catch (t: Throwable) {
-            // SB1-03-Muster: bei Folgefehler (auch Errors) alle bereits geoeffneten
-            // Interpreter schliessen — keine halboffenen Hybrid-Zustaende.
+            // SB1-03 pattern: on a follow-up error (errors too) close all already opened
+            // interpreters — no half-open hybrid states.
             opened.forEach { runCatching { it.close() } }
             featurizer = null
             throw t
         }
     }
 
-    /** True, wenn load() erfolgreich war (Engine betriebsbereit für featurize). */
+    /** True if load() succeeded (engine ready for featurize). */
     val isLoaded: Boolean
         get() = featurizer != null
 
     /**
-     * V6a-Testzugang (androidTest): öffnet NUR den Featurizer aus [file] —
-     * für den Einzelbeweis, ohne die anderen drei B-Dateien. Produktionspfad
-     * bleibt [load] (alle vier, Größen-/Namensprüfung gegen das Manifest).
+     * V6a test access (androidTest): opens ONLY the featurizer from [file] —
+     * for the single proof, without the other three B files. The production path
+     * stays [load] (all four, size/name check against the manifest).
      */
     /**
-     * V8: Featurizer-Lauf ueber [LiteRtFeaturizer] — alle 7 Eingaenge aus dem
-     * offiziellen Arm-Manifest (raw_wav, sample_mask, frame_mask, feature_mean,
-     * feature_inv_std, pre_encode_feature_cache, previous_sample). Die
-     * 1-Eingangs-Annahme aus V6a ist ersetzt; AsrNotReadyException nur noch
-     * bei echten Abweichungen (falsche Tensorzahl, Formabweichung vom Manifest).
+     * V8: featurizer run via [LiteRtFeaturizer] — all 7 inputs from the
+     * official ARM manifest (raw_wav, sample_mask, frame_mask, feature_mean,
+     * feature_inv_std, pre_encode_feature_cache, previous_sample). The
+     * 1-input assumption from V6a is replaced; AsrNotReadyException only for
+     * real deviations (wrong tensor count, shape deviation from the manifest).
      */
     fun featurize(pcm: ShortArray, sampleRate: Int): IntArray =
         featurize(FloatArray(pcm.size) { pcm[it] / Short.MAX_VALUE.toFloat() }, pcm.size)
@@ -103,7 +103,7 @@ class LiteRtAsrEngine : AsrEngine, Closeable {
         return f.featurize(pcm, pcmLen, prevCache, prevSample).inputFeaturesShape
     }
 
-    /** Voller Featurizer-Zugang (Instrumented-Test / Produktion V9). */
+    /** Full featurizer access (instrumented test / production V9). */
     fun featurizeFull(
         pcm: FloatArray, pcmLen: Int,
         prevCache: FloatArray? = null, prevSample: Float? = null,
@@ -114,12 +114,12 @@ class LiteRtAsrEngine : AsrEngine, Closeable {
     }
 
 
-    // ---- V11a: Signature-basierte Streaming-Pipeline (Vorpass + Fenster) ----
+    // ---- V11a: signature-based streaming pipeline (pre-pass + window) ----
 
     private var signatureFeaturizer: LiteRtSignature? = null
     private var signatureEncoder: LiteRtSignature? = null
 
-    /** Encoder-Cache-Zustand (ptdt.cpp: Fenster zu Fenster weiterschleifen). */
+    /** Encoder cache state (ptdt.cpp: pass the window on from window to window). */
     private var encCacheChannel = FloatArray(24 * 190 * 1024)
     private var encCacheTime = FloatArray(24 * 1024 * 4)
     private var encCacheLen = longArrayOf(0L)
@@ -135,10 +135,10 @@ class LiteRtAsrEngine : AsrEngine, Closeable {
     }
 
     /**
-     * ptdt.cpp:342: Vorpass über die GANZE Aufnahme — Welford über log_mel
-     * (NEUTRAL-Läufe), liefert (mean[128], invStd[128]).
-     * MUSS vor dem ersten Dekodiervorpass laufen (Encoder braucht normalisierte
-     * Features; log_mel lebt NUR im Signature-Pfad — s. LiteRtSignature-KDoc).
+     * ptdt.cpp:342: pre-pass over the WHOLE recording — Welford over log_mel
+     * (NEUTRAL runs), returns (mean[128], invStd[128]).
+     * MUST run before the first decode pre-pass (the encoder needs normalized
+     * features; log_mel lives ONLY in the signature path — see LiteRtSignature KDoc).
      */
     fun precomputeGlobalStats(audio: FloatArray, length: Int): Pair<FloatArray, FloatArray> {
         val f = signatureFeaturizer
@@ -163,7 +163,7 @@ class LiteRtAsrEngine : AsrEngine, Closeable {
         return stats.finish()
     }
 
-    /** Ein Featurizer-Signature-Lauf mit Nullpolsterung (ptdt.cpp:400-434). */
+    /** One featurizer signature run with zero padding (ptdt.cpp:400-434). */
     private fun runFeaturizerSignature(
         f: LiteRtSignature, audio: FloatArray, start: Int, n: Int,
         mean: FloatArray, invStd: FloatArray,
@@ -190,9 +190,9 @@ class LiteRtAsrEngine : AsrEngine, Closeable {
     }
 
     /**
-     * V11a Fenster-Schritt (ptdt.cpp:458-505): Featurizer (mit Statistik +
-     * Fenster-Cache + previous_sample), Encoder mit input_length = 9 + valid,
-     * Encoder-Caches als Ein-/Ausgänge weitergeschleift. Liefert
+     * V11a window step (ptdt.cpp:458-505): featurizer (with statistics +
+     * window cache + previous_sample), encoder with input_length = 9 + valid,
+     * encoder caches passed on as inputs/outputs. Returns
      * (poolerOutput[95][1024], encoderLength).
      */
     fun encodeWindow(
@@ -229,7 +229,7 @@ class LiteRtAsrEngine : AsrEngine, Closeable {
             is Long -> el
             else -> throw AsrNotReadyException("encoder_output_length fehlt: ${e.outputNames}")
         }
-        // Caches aktualisieren (ptdt.cpp: NICHT intern!)
+        // update the caches (ptdt.cpp: NOT internally!)
         (encOut["cache_last_channel"] as? Array<Array<FloatArray>>)?.let {
             encCacheChannel = it[0][0]
         }
@@ -240,11 +240,11 @@ class LiteRtAsrEngine : AsrEngine, Closeable {
         return pool to encLen
     }
 
-    /** Cache für das nächste Fenster aus den letzten 9 gültigen Frames (ptdt.cpp:470). */
+    /** Cache for the next window from the last 9 valid frames (ptdt.cpp:470). */
     fun nextWindowCache(feats: Array<FloatArray>, validFrames: Int): Array<FloatArray> =
         LiteRtStreaming.preEncodeCache(feats, validFrames, LiteRtStreaming.FEAT_DIM)
 
-    /** V8: Featurizer-Wrapper; oeffnet die Datei mit Thread-Anzahl aus der Konfig. */
+    /** V8: featurizer wrapper; opens the file with the thread count from the config. */
     private var featurizerHandle: LiteRtFeaturizer? = null
 
     fun attachFeaturizer(file: File) {
@@ -258,7 +258,7 @@ class LiteRtAsrEngine : AsrEngine, Closeable {
     ).intraOpThreads
 
     fun openFeaturizerOnly(file: File) {
-        // V8: derselbe Pfad wie die Produktion — der 7-Eingangs-Featurizer
+        // V8: same path as production — the 7-input featurizer
         check(file.isFile) { "Featurizer fehlt: ${file.name}" }
         attachFeaturizer(file)
     }
@@ -267,12 +267,12 @@ class LiteRtAsrEngine : AsrEngine, Closeable {
         check(interpreters.isNotEmpty()) {
             "AsrEngine nicht geladen — load() vor transcribe() aufrufen"
         }
-        // Streaming-Cache: Session-Wechsel verwirft den Cache (V3/V6a-Invariante).
+        // Streaming cache: a session change discards the cache (V3/V6a invariant).
         if (cachedSessionId != sessionId) {
             cachedSessionId = sessionId
             cacheGeneration.incrementAndGet()
         }
-        // Bewusst gesperrt bis V4: typisierter Fehler statt Leer-Text
+        // Deliberately blocked until V4: typed error instead of empty text
         throw AsrNotReadyException(
             "LiteRT-Transkription in dieser Stufe nicht verdrahtet (V4) — Cache-Generation ${cacheGeneration.get()}",
         )
@@ -290,7 +290,7 @@ class LiteRtAsrEngine : AsrEngine, Closeable {
     companion object {
         private const val TFLITE_COUNT = 4
 
-        /** Test-Hook: Cache-Generation (Session-Wechsel inkrementiert). */
+        /** Test hook: cache generation (session change increments). */
         fun cacheGenerationOf(engine: LiteRtAsrEngine): Long = engine.cacheGeneration.get()
     }
 }

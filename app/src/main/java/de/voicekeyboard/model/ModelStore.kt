@@ -5,8 +5,8 @@ import java.io.IOException
 import java.security.MessageDigest
 
 /**
- * SHA-256-Hilfsfunktionen (JVM/Android gemeinsam, keine Android-Typen).
- * Hex-Kleinbuchstaben, wie in docs/MODEL_SHA256.txt.
+ * SHA-256 helper functions (JVM/Android shared, no Android types).
+ * Lower-case hex, as in docs/MODEL_SHA256.txt.
  */
 object Sha256 {
 
@@ -28,7 +28,7 @@ object Sha256 {
 
     fun hex(digest: ByteArray): String = digest.joinToString("") { "%02x".format(it) }
 
-    /** Konstante-Zeit-Vergleich (kein vorzeitiger Abbruch bei Präfix-Abweichung). */
+    /** Constant-time comparison (no early abort on a prefix deviation). */
     fun constantTimeEquals(a: String, b: String): Boolean {
         if (a.length != b.length) return false
         var diff = 0
@@ -37,28 +37,28 @@ object Sha256 {
     }
 }
 
-/** Status des Modellstands (IMPLEMENTATION_PLAN §B.1). */
+/** Status of the model state (IMPLEMENTATION_PLAN §B.1). */
 enum class ModelStatus { ABSENT, DOWNLOADING, VERIFYING, READY, BROKEN }
 
 /**
- * Dateisystem-Store für Modellstände (IMPLEMENTATION_PLAN M7, DESIGN „atomare
- * Aktivierung, keine Mischung alter und neuer Graphen").
+ * File system store for model states (IMPLEMENTATION_PLAN M7, DESIGN „atomare
+ * Aktivierung, keine Mischung alter und neuer Graphen“).
  *
- * Layout unter [root]:
+ * Layout below [root]:
  * ```
  * root/
- *   active.txt            # Zeiger auf aktive Version (atomar via tmp+rename)
- *   versions/v-<id>/      # je Version: alle 4 Modelldateien, hash-geprüft
- *   downloads/<name>.part # Resume-Dateien des aktuellen Downloads
- *   downloads/<name>.etag # zugehöriger Server-ETag (Resume-Guard)
+ *   active.txt            # pointer to the active version (atomic via tmp+rename)
+ *   versions/v-<id>/      # per version: all 4 model files, hash-checked
+ *   downloads/<name>.part # resume files of the current download
+ *   downloads/<name>.etag # associated server ETag (resume guard)
  * ```
  *
- * Aktivierung = einzelner Zeiger-Rename — es gibt nie einen Mischzustand;
- * alte Versionen werden nach dem Swap gelöscht.
+ * Activation = a single pointer rename — there is never a mixed state;
+ * old versions are deleted after the swap.
  *
- * Sicherheit: JEDER Dateizugriff läuft über [safeChild]/[safePart] — Dateinamen
- * werden gegen die Manifest-Whitelist geprüft und kanonisch im Baum verankert
- * (Pfad-Traversal-Schutz). Kein Schreiben außerhalb des übergebenen Baums.
+ * Security: EVERY file access runs through [safeChild]/[safePart] — file names
+ * are checked against the manifest whitelist and canonically anchored in the tree
+ * (path traversal protection). No writing outside the passed tree.
  */
 class ModelStore(
     private val root: File,
@@ -68,10 +68,10 @@ class ModelStore(
     private val versionsDir get() = File(root, "versions")
     private val downloadsDir get() = File(root, "downloads")
 
-    /** V1: Zeiger je Variante — aktive-<variante>.txt; alter active.txt gilt als A. */
+    /** V1: pointer per variant — aktive-<variante>.txt; an old active.txt counts as A. */
     private fun pointerFile(variant: ModelVariant = ModelVariant.ONNX_CPU): File =
         if (variant == ModelVariant.ONNX_CPU) {
-            // Abwärtsskompatibilität: alter Zeiger active.txt bleibt Variante A
+            // Downward compatibility: old pointer active.txt stays variant A
             val legacy = File(root, "active.txt")
             val v1 = File(root, "active-onnx-cpu.txt")
             if (v1.isFile) v1 else legacy
@@ -79,22 +79,22 @@ class ModelStore(
             File(root, "active-${variant.id}.txt")
         }
 
-    /** V1: Manifest je Variante (Parameter gewinnt — Kompatibilität zu Mini-Manifesten in Tests). */
+    /** V1: manifest per variant (parameter wins — compatibility with mini manifests in tests). */
     private fun manifestFor(variant: ModelVariant): List<ModelFile> =
         if (manifest !== ModelManifest.DEFAULT) manifest else ModelManifest.forVariant(variant)
 
     init {
-        // Nur die eigenen Strukturen anlegen; nichts außerhalb von root berühren.
+        // Only create the own structures; touch nothing outside root.
         versionsDir.mkdirs()
         downloadsDir.mkdirs()
     }
 
-    // ---- Abfragen ----
+    // ---- queries ----
 
-    /** Aktives Modellverzeichnis (evtl. noch nicht vorhanden — Aufrufer prüft isReady). */
+    /** Active model directory (possibly not present yet — caller checks isReady). */
     fun modelDir(): File = modelDir(ModelVariant.ONNX_CPU)
 
-    /** V1: Modellverzeichnis der aktiven Version je Variante. */
+    /** V1: model directory of the active version per variant. */
     fun modelDir(variant: ModelVariant): File {
         val version = activeVersion(variant) ?: return File(versionsDir, "v-none-${variant.id}")
         return File(versionsDir, version)
@@ -102,7 +102,7 @@ class ModelStore(
 
     fun activeVersion(): String? = activeVersion(ModelVariant.ONNX_CPU)
 
-    /** V1: aktive Versions-ID je Variante (alter Zeiger ⇒ Variante A). */
+    /** V1: active version ID per variant (old pointer ⇒ variant A). */
     fun activeVersion(variant: ModelVariant): String? =
         if (pointerFile(variant).isFile) {
             pointerFile(variant).readText().trim().takeIf { it.isNotEmpty() }
@@ -110,7 +110,7 @@ class ModelStore(
             null
         }
 
-    /** True, wenn alle Dateien der aktiven Version vorhanden sind (ohne Hashprüfung). */
+    /** True if all files of the active version are present (without a hash check). */
     fun isPresent(): Boolean = isPresent(ModelVariant.ONNX_CPU)
 
     fun isPresent(variant: ModelVariant): Boolean {
@@ -119,7 +119,7 @@ class ModelStore(
         return activeVersion(variant) != null && m.all { safeChild(dir, it.storeName, variant).isFile }
     }
 
-    /** Vollprüfung: vorhanden + jede Datei hash-korrekt (teuer, nur Setup/Wartung). */
+    /** Full check: present + every file hash-correct (expensive, setup/maintenance only). */
     fun verifyInstalled(): Boolean = verifyInstalled(ModelVariant.ONNX_CPU)
 
     fun verifyInstalled(variant: ModelVariant): Boolean {
@@ -136,27 +136,27 @@ class ModelStore(
     }
 
     /**
-     * Pro Prozess mindestens einmal vollständig verifizierte Varianten.
-     * Dient nur dazu, die Vollprüfung nicht bei jeder interaktiven Abfrage
-     * erneut über ~670 MB laufen zu lassen.
+     * Variants fully verified at least once per process.
+     * Serves only to avoid running the full check over ~670 MB
+     * again on every interactive query.
      */
     private val verifiedThisProcess = java.util.concurrent.ConcurrentHashMap<String, Boolean>()
 
     /**
-     * BEREIT für interaktive Pfade (Mic-Taste, 🐞-Export): ohne zu hashen.
+     * READY for interactive paths (Mic key, 🐞 export): without hashing.
      *
-     * Grund (Gemessen 2026-10-30, <device>): `isReady()` = Vollprüfung über
-     * ~670 MB. Auf dem Main-Thread der IME war die Tastatur nach 5 000 ms nicht
-     * mehr ansprechbar — `am_anr: InputMethod is not responding. Waited 5000ms for
-     * MotionEvent` genau auf den Mic-Tap — und der Nutzererindruck war „Eingaben
-     * werden ignoriert“. Integritaet wird weiterhin hart geprueft: bei jeder
-     * Aktivierung (`activate`, ModelStore:216) und bei `verifyInstalled()`.
+     * Reason (measured 2026-10-30, <device>): `isReady()` = full check over
+     * ~670 MB. On the IME main thread the keyboard was no longer responsive
+     * after 5 000 ms — `am_anr: InputMethod is not responding. Waited 5000ms for
+     * MotionEvent` exactly on the Mic tap — and the user impression was „Eingaben
+     * werden ignoriert“. Integrity is still checked hard: on every
+     * activation (`activate`, ModelStore:216) and in `verifyInstalled()`.
      */
     fun isReadyQuick(variant: ModelVariant = ModelVariant.ONNX_CPU): Boolean =
         isPresent(variant) &&
             (verifiedThisProcess[variant.name] == true || sizesMatch(variant))
 
-    /** Wie [status], aber ohne Voll-Hash — fuer Hauptthread-Aufrufe. */
+    /** Like [status], but without a full hash — for main-thread callers. */
     fun statusQuick(variant: ModelVariant = ModelVariant.ONNX_CPU): ModelStatus = when {
         marker(VERIFY_MARKER) -> ModelStatus.VERIFYING
         marker(DOWNLOAD_MARKER) -> ModelStatus.DOWNLOADING
@@ -164,7 +164,7 @@ class ModelStore(
         else -> if (isReadyQuick(variant)) ModelStatus.READY else ModelStatus.BROKEN
     }
 
-    /** Existenz + Groessen je Manifesteintrag, kein Hash. */
+    /** Existence + sizes per manifest entry, no hash. */
     private fun sizesMatch(variant: ModelVariant): Boolean {
         if (!isPresent(variant)) return false
         val dir = modelDir(variant)
@@ -179,7 +179,7 @@ class ModelStore(
 
     fun status(): ModelStatus = status(ModelVariant.ONNX_CPU)
 
-    /** V1: Status je Variante. */
+    /** V1: status per variant. */
     fun status(variant: ModelVariant): ModelStatus = when {
         marker(VERIFY_MARKER) -> ModelStatus.VERIFYING
         marker(DOWNLOAD_MARKER) -> ModelStatus.DOWNLOADING
@@ -188,19 +188,19 @@ class ModelStore(
     }
 
     private fun absentOrPartial(): ModelStatus =
-        // Zeiger fehlt: ABSENT, außer es liegen Downloadreste → weiterhin DOWNLOADING-Spur
+        // Pointer missing: ABSENT, except download remnants exist → keep the DOWNLOADING trail
         if (downloadsDir.listFiles()?.any { it.name.endsWith(PART_SUFFIX) } == true) {
             ModelStatus.DOWNLOADING
         } else {
             ModelStatus.ABSENT
         }
 
-    // ---- Downloads / Resume ----
+    // ---- downloads / resume ----
 
-    /** Part-Datei (downloads/<name>.part) für Resume — nur whitelisted Namen. */
+    /** Part file (downloads/<name>.part) for resuming — whitelisted names only. */
     fun partFile(name: String): File = safePart(name)
 
-    /** ETag-Sidecar zum Resume-Guard; null, wenn keines gespeichert wurde. */
+    /** ETag sidecar for the resume guard; null if none was stored. */
     fun etagFor(name: String): String? {
         val f = File(downloadsDir, safeName(name) + ETAG_SUFFIX)
         return if (f.isFile) f.readText().trim().takeIf { it.isNotEmpty() } else null
@@ -211,7 +211,7 @@ class ModelStore(
         if (etag == null) f.delete() else f.writeText(etag)
     }
 
-    /** Neue, leere Staging-Version. */
+    /** New, empty staging version. */
     fun newStagingDir(): File {
         val dir = File(versionsDir, "v-${System.nanoTime()}")
         check(dir.mkdirs() || dir.isDirectory) { "Staging nicht anlegbar: ${dir.path}" }
@@ -219,13 +219,13 @@ class ModelStore(
     }
 
     /**
-     * Verschiebt eine fertige, hash-geprüfte Part-Datei per ATOMEM RENAME
-     * (File.renameTo auf demselben Dateisystem) in die Staging-Version.
+     * Moves a finished, hash-checked part file via ATOMIC RENAME
+     * (File.renameTo on the same file system) into the staging version.
      */
     fun movePartToStaging(name: String, stagingDir: File): Boolean =
         movePartToStaging(name, stagingDir, ModelVariant.ONNX_CPU)
 
-    /** V5: Variante wird durchgereicht — B-Namen sind nur fuer B erlaubt. */
+    /** V5: the variant is passed through — B names are allowed only for B. */
     fun movePartToStaging(name: String, stagingDir: File, variant: ModelVariant): Boolean {
         val src = safePart(name, variant)
         val dst = safeChild(stagingDir, name, variant)
@@ -240,14 +240,14 @@ class ModelStore(
     }
 
     /**
-     * Aktiviert eine Staging-Version: prüft alle Dateien (Vorhanden +
-     * Größe + SHA-256), schreibt den Zeiger atomar (tmp+rename) und löscht
-     * alle NICHT aktiven Versionen. Bei Misserfolg bleibt die bisher aktive
-     * Version unberührt (DESIGN: „aktive Version bleibt intakt").
+     * Activates a staging version: checks all files (present +
+     * size + SHA-256), writes the pointer atomically (tmp+rename) and deletes
+     * all NON-active versions. On failure the previously active
+     * version stays untouched (DESIGN: „aktive Version bleibt intakt“).
      */
     fun activate(stagingDir: File): Boolean = activate(stagingDir, ModelVariant.ONNX_CPU)
 
-    /** V1: Aktivierung je Variante (Pruefung gegen das Varianten-Manifest). */
+    /** V1: activation per variant (checked against the variant manifest). */
     fun activate(stagingDir: File, variant: ModelVariant): Boolean {
         if (!stagingDir.isDirectory) return false
         val stagingName = stagingDir.name
@@ -259,7 +259,7 @@ class ModelStore(
                 return false
             }
         }
-        // Atomarer Zeiger-Wechsel: tmp schreiben, fsync-los (Rename ist die Barriere)
+        // Atomic pointer swap: write tmp, no fsync (the rename is the barrier)
         val target = pointerFile(variant)
         val tmp = File(root, target.name + ".tmp")
         tmp.writeText(stagingName)
@@ -269,13 +269,13 @@ class ModelStore(
         }
         sweepStaleVersions()
         clearMarkers()
-        // F11 P2: die soeben gehashte Version gilt in diesem Prozess als geprüft —
-        // interaktive Pfade (Mic-Tap, 🐞-Export) müssen nie erneut über ~670 MB.
+        // F11 P2: the version just hashed counts as checked in this process —
+        // interactive paths (Mic tap, 🐞 export) never have to run over ~670 MB again.
         verifiedThisProcess[variant.name] = true
         return true
     }
 
-    /** Löscht alle Versionen außer der aktiven (Platz zurückgewinnen). */
+    /** Deletes all versions except the active one (reclaim space). */
     fun sweepStaleVersions() {
         val active = activeVersion() ?: return
         versionsDir.listFiles()?.forEach { dir ->
@@ -283,13 +283,13 @@ class ModelStore(
         }
     }
 
-    /** Verwirft alle Downloadreste (.part/.etag) und Marker. */
+    /** Discards all download remnants (.part/.etag) and markers. */
     fun clearDownloads() {
         downloadsDir.listFiles()?.forEach { it.delete() }
         clearMarkers()
     }
 
-    // ---- Marker (DOWNLOADING/VERIFYING für die Statusanzeige) ----
+    // ---- markers (DOWNLOADING/VERIFYING for the status display) ----
 
     fun markDownloading() = writeMarker(DOWNLOAD_MARKER)
     fun markVerifying() = writeMarker(VERIFY_MARKER)
@@ -304,12 +304,12 @@ class ModelStore(
 
     private fun marker(name: String): Boolean = File(root, name).isFile
 
-    // ---- Pfad-Traversal-Schutz ----
+    // ---- path traversal protection ----
 
-    /** Erlaubter Basisname aus dem Manifest — ohne '/', '..' etc. */
+    /** Allowed base name from the manifest — no '/', '..' etc. */
     private fun safeName(name: String): String = safeName(name, ModelVariant.ONNX_CPU)
 
-    /** V5: Whitelist-Pruefung gegen die VARIANTE (Store kennt seine via manifestFor). */
+    /** V5: whitelist check against the VARIANT (store knows its own via manifestFor). */
     private fun safeName(name: String, variant: ModelVariant): String {
         require(isAllowedName(name, variant)) { "Dateiname nicht whitelistet: $name" }
         return name
@@ -321,9 +321,9 @@ class ModelStore(
             manifestFor(variant).any { it.storeName == name }
 
     /**
-     * Kind-Pfad mit Doppelschutz: (1) der Name (ggf. mit ".part"-Suffix) muss
-     * zur Manifest-Whitelist passen, (2) der kanonische Pfad muss direkt im
-     * kanonischen Elternverzeichnis liegen (Traversal).
+     * Child path with double protection: (1) the name (possibly with ".part" suffix)
+     * must match the manifest whitelist, (2) the canonical path must lie directly in
+     * the canonical parent directory (traversal).
      */
     private fun safeChild(dir: File, name: String): File = safeChild(dir, name, ModelVariant.ONNX_CPU)
 

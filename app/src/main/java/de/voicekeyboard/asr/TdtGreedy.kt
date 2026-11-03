@@ -1,23 +1,23 @@
 package de.voicekeyboard.asr
 
 /**
- * Reiner TDT-Greedy-Decoder nach ASR_CONTRACT.md §3 (Rev 2).
- * Keine Android-Abhängigkeiten — Joint-Schritt wird über [JointStep] injiziert.
+ * Pure TDT greedy decoder per ASR_CONTRACT.md §3 (Rev 2).
+ * No Android dependencies — the joint step is injected via [JointStep].
  *
- * Verbindliche Regeln:
- *  (a) PredNet-States NUR bei Nicht-Blank übernehmen (§3a).
- *  (b) t += dur bei dur > 0 (auch bei Blank); sonst t += 1 nur bei Blank
- *      oder erschöpftem Pro-Frame-Symbolbudget (§3b/§3c).
- *  (c) `emitted` ist ein Pro-Frame-Zähler, Reset bei Frame-Wechsel (§3c).
- *  (d) Argmax deterministisch (kleinster Index bei Gleichstand), kein Softmax.
- *  (e) Sondertokens (per [isSpecial]-Prädikat, Default: IDs 0..4) und BLANK
- *      werden nicht emittiert. Der Aufrufer (ParakeetAsrEngine) verdrahtet
- *      die vollständige Regel aus ASR_CONTRACT §2.4/§7-4: Vocabulary.isSpecial
- *      (<...>-Muster 0..233 und 244..273, plus ID 8192); Ziffern 234..243
- *      bleiben erlaubt.
- *  (f) Token-Budget: bei Erreichen incomplete=true, reason="budget".
- *  (g) Sicherheitsnetz: globales Schrittlimit frames*(MAX_SYMBOLS_PER_FRAME+2).
- *  (h) frames wird auf >= 0 geklemmt.
+ * Binding rules:
+ *  (a) adopt the PredNet states ONLY on non-blank (§3a).
+ *  (b) t += dur when dur > 0 (also on blank); otherwise t += 1 only on blank
+ *      or an exhausted per-frame symbol budget (§3b/§3c).
+ *  (c) `emitted` is a per-frame counter, reset on frame change (§3c).
+ *  (d) argmax deterministic (smallest index on a tie), no softmax.
+ *  (e) special tokens (via [isSpecial] predicate, default: IDs 0..4) and BLANK
+ *      are not emitted. The caller (ParakeetAsrEngine) wires
+ *      the complete rule from ASR_CONTRACT §2.4/§7-4: Vocabulary.isSpecial
+ *      (<...> pattern 0..233 and 244..273, plus ID 8192); digits 234..243
+ *      stay allowed.
+ *  (f) token budget: on reaching it incomplete=true, reason="budget".
+ *  (g) safety net: global step limit frames*(MAX_SYMBOLS_PER_FRAME+2).
+ *  (h) frames is clamped to >= 0.
  */
 data class JointOut(
     val tokenLogits: FloatArray,   // [8193]
@@ -28,15 +28,15 @@ data class JointOut(
 
 fun interface JointStep {
     /**
-     * Ein Joint-Aufruf für Frame [frameIndex] mit letztem Label [lastLabel]
-     * und den aktuellen PredNet-States (nur bei Nicht-Blank ändern sie sich).
+     * One joint call for frame [frameIndex] with the last label [lastLabel]
+     * and the current PredNet states (they change only on non-blank).
      */
     fun step(frameIndex: Int, lastLabel: Int, states1: FloatArray, states2: FloatArray): JointOut
 }
 
 data class DecodeResult(
     val tokenIds: IntArray,
-    val frameTimes: IntArray, // Frame-Index je emittiertem Token
+    val frameTimes: IntArray, // frame index per emitted token
     val incomplete: Boolean,
     val steps: Int,
     val reason: String?,
@@ -48,7 +48,7 @@ object TdtGreedy {
     const val REASON_STEP_LIMIT = "stepLimit"
 
     fun decode(joint: JointStep, frames: Int, tokenBudget: Int, isSpecial: (Int) -> Boolean): DecodeResult {
-        if (frames < 0) return decode(joint, 0, tokenBudget, isSpecial) // (h) Klemmung
+        if (frames < 0) return decode(joint, 0, tokenBudget, isSpecial) // (h) clamping
         val maxSteps = frames * (AsrContract.MAX_SYMBOLS_PER_FRAME + 2) // (g)
         val tokens = ArrayList<Int>(minOf(tokenBudget, 1024))
         val times = ArrayList<Int>(64)
@@ -56,11 +56,11 @@ object TdtGreedy {
         var state1 = FloatArray(2 * AsrContract.PRED_HIDDEN)
         var state2 = FloatArray(2 * AsrContract.PRED_HIDDEN)
         var lastLabel = AsrContract.BLANK
-        var emitted = 0   // Pro-Frame-Zähler (c)
+        var emitted = 0   // per-frame counter (c)
         var t = 0
         var steps = 0
 
-        fun argmax(v: FloatArray, from: Int, until: Int): Int { // (d) kleinster Index bei Gleichstand
+        fun argmax(v: FloatArray, from: Int, until: Int): Int { // (d) smallest index on a tie
             var best = from
             var bestVal = v[from]
             for (i in from + 1 until until) {
@@ -81,12 +81,12 @@ object TdtGreedy {
             val dur = argmax(out.durationLogits, 0, out.durationLogits.size)
 
             if (token != AsrContract.BLANK) {
-                // (a) States NUR bei Nicht-Blank übernehmen
+                // (a) adopt the states ONLY on non-blank
                 state1 = out.states1
                 state2 = out.states2
                 lastLabel = token
                 emitted++
-                // (e) Sondertokens per Prädikat nicht emittieren; Blank kann hier nicht sein
+                // (e) do not emit special tokens per predicate; blank cannot be here
                 if (!isSpecial(token)) {
                     if (tokens.size >= tokenBudget) { // (f)
                         return DecodeResult(tokens.toIntArray(), times.toIntArray(), true, steps, REASON_BUDGET)
@@ -96,9 +96,9 @@ object TdtGreedy {
                 }
             }
 
-            if (dur > 0) {                    // (b) gilt auch bei Blank
+            if (dur > 0) {                    // (b) also applies on blank
                 t += dur
-                emitted = 0                  // (c) Frame-Wechsel
+                emitted = 0                  // (c) frame change
             } else if (token == AsrContract.BLANK || emitted >= AsrContract.MAX_SYMBOLS_PER_FRAME) {
                 t += 1
                 emitted = 0

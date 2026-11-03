@@ -1,35 +1,35 @@
-# Review F22/F22-K/M/L — Langdruck-Menü (LongPressMenu, Bewaffnung, Popup)
+# Review F22/F22-K/M/L — Long-press menu (LongPressMenu, arming, popup)
 
-**Reviewer:** DeepSeek V4 Pro 0813 · **Datum:** 2026-10-30
-**Umfang:** `keyboard/LongPressMenu.kt` (reine Naht), `KeyboardView` (Bewaffnung/Popup/Geste), `KeyboardTheme` (POPUP-*/LONG_PRESS-Konstanten). Kein Build/Emulator (Gerätebefunde des Orchestrators übernommen).
+**Reviewer:** DeepSeek V4 Pro 0813 · **Date:** 2026-10-30
+**Scope:** `keyboard/LongPressMenu.kt` (pure seam), `KeyboardView` (arming/popup/gesture), `KeyboardTheme` (POPUP-*/LONG_PRESS constants). No build/emulator (orchestrator device findings adopted).
 
 ---
 
-## Befundtabelle
+## Findings table
 
-| Sev | Datei:Zeile | Befund | Minimaländerung |
+| Sev | File:Line | Finding | Minimal change |
 |---|---|---|---|
-| Note | `KeyboardView.kt:418` + `LongPressMenu.kt:13-14` (KDoc) | **Veraltete Kommentarwerte:** „Polsterstreifen (4 dp)" und „126·3 + 10·4 = 418" sind Stale — `KeyboardTheme.POPUP_PAD_DP = 8` ⇒ `padPx = 21 px`, d. h. n=3 ⇒ 126·3 + 21·4 = **462**, nicht 418. Zeichnung **und** Trefferlogik nutzen beide `p.padPx` (21 px) — konsistent; nur die Kommentare/Testbeispiele (pad=10 → 418) referenzieren den alten Wert. | Kommentare auf „Polsterstreifen (8 dp = 21 px)" und „126·3 + 21·4 = 462" korrigieren (rein dokumentarisch). |
-| Note | `KeyboardView.kt:648-653` (VK-HIT) | **VK-HIT-Debugzeile loggt `value` = statisches Tastenlabel** (z. B. „ä"/„e"), keine Nutzer-/Editor-/Audio-Inhalte und keine Pfade/URLs; zusätzlich `FLAG_DEBUGGABLE`-geschützt. Vertretbar (Regel-9-Intention = keine *Eingaben*; das Tastenlabel ist eine Layout-Konstante). | Keine; ggf. KDoc-Vermerk „nur Tasten-label/Geometrie, nie Feldinhalt". |
+| Note | `KeyboardView.kt:418` + `LongPressMenu.kt:13-14` (KDoc) | **Outdated comment values:** "Polsterstreifen (4 dp)" and "126·3 + 10·4 = 418" are stale — `KeyboardTheme.POPUP_PAD_DP = 8` ⇒ `padPx = 21 px`, i.e. n=3 ⇒ 126·3 + 21·4 = **462**, not 418. Drawing **and** hit logic both use `p.padPx` (21 px) — consistent; only the comments/test examples (pad=10 → 418) reference the old value. | Correct the comments to "Polsterstreifen (8 dp = 21 px)" and "126·3 + 21·4 = 462" (purely documentary). |
+| Note | `KeyboardView.kt:648-653` (VK-HIT) | **VK-HIT debug line logs `value` = static key label** (e.g. "ä"/"e"), no user/editor/audio content and no paths/URLs; additionally `FLAG_DEBUGGABLE`-protected. Defensible (rule-9 intent = no *inputs*; the key label is a layout constant). | None; optionally a KDoc note "key label/geometry only, never field content". |
 
 ---
 
-## Antworten A–I
+## Answers A–I
 
-- **A) DecodePace/Finale unabhängig — kein P0.** Das Menü ist reines KeyboardView-UI; `DictationController`-Finale ruft `engine.transcribe` ohne jeden Popup-/Pace-Bezug. (F21 belegte das Finale bereits als ungebremst.)
-- **B) Zone vs. Auswahl widerspruchsfrei.** `stillArmed` (Arming, ± `w/2+slop`, oben bis `menuHeight+gap+slop`) ist eine **Obermenge** der `cellWins`-Region (`|offset| > w/2−slop`, `h/2−slop`); die Menü-Zellzeile (`gap … gap+menuHeight` über der Taste) liegt **innerhalb** der Arming-Obergrenze ⇒ jede gewinnbare Zelle ist erreichbar, und kein Zellgewinn außerhalb der Bewaffnung (die Abwärts-Band liegt unter dem Menü ⇒ `popupCellAt` liefert dort ohnehin -1). Kein toter Zustand.
-- **C) Mic nie bewaffnet + kein synthetisches Mic-UP.** Bewaffnung nur bei `down.kind=="text" && alternatesOf(down).isNotEmpty()` (KeyboardView DOWN-Handler) — Mic ist ACTION ⇒ nie bewaffnet. `micHeld`/Haltegeste ist ein getrennter Zweig; der zweite Pointer (`ACTION_POINTER_DOWN`) wird nicht behandelt ⇒ kein Mic-UP. D10-Rest §1 unverändert.
-- **D) Caps-Doppeltipp vs. Langdruck getrennt.** `DOUBLE_TAP_MS=350 < LONG_PRESS_MS=450`; Shift ist ACTION ⇒ bewaffnen nie, Doppeltipp läuft über `handleAction(SHIFT)` (350-ms-Fenster). Langdruck auf einer Buchstabentaste (text+alternates) öffnet nur das Menü, löst keinerlei Shift aus.
-- **E) CANCEL + Außerhalb-loslassen = 0 Zeichen auf allen drei Pfaden.** (1) `ACTION_CANCEL` mit offenem Popup → der `ACTION_UP`-Zweig überspringt (kein Commit); (2) `UP` außerhalb (cell=-1 **und** nicht `isInsideKey`) → `else -> Unit`; (3) Move-ab-Bewaffnung (pressedKey=null) → `key === pressedKey` scheitert → kein Commit. Alle drei belegt.
-- **F) Temporäres Shift nur bei echtem Commit verbraucht.** `commitAlternate` kippt `shiftTemporary` ausschließlich bei einer gewählten Zelle; Abbruch/0-Zeichen lässt `shiftTemporary` unangetastet (Shift wirkt weiter auf die nächste Eingabe). ✓
-- **G) Geometrie-Konsistenz ja, Kommentare stale.** `POPUP_HEIGHT_DP=56→147 px`, `POPUP_CELL_DP=48→126 px`, `POPUP_PAD_DP=8→21 px`; `drawLongPressMenu` und `popupCellAt`/`popupSelectionAt` nutzen dieselben `p.left/p.padPx/p.cellPx` und dieselbe `cellWins`-Schwelle ⇒ Zeichnen == Treffen. Nur die KDoc/Testbeispiele („4 dp", „418") sind veraltet (Note oben).
-- **H) Regel 9 vertretbar.** VK-HIT loggt nur Tasten-`id` + statisches `value`-Label + Geometrie, `FLAG_DEBUGGABLE`-only, nie Feld-/Audio-Inhalt ⇒ keine Eingabe-Inhalte.
-- **I) Tests fangen die drei Rückfälle rot:** (a) Slop-Regel weg ⇒ `cellWins auf der Grundtaste gewinnt nie` (Test, `assertFalse(cellWins(0,0,…))`) rot; (b) `cellWins` „immer true" ⇒ derselbe Test + „innerhalb Slop … gewinnt nicht" rot; (c) `MAX_CELLS→4` ⇒ `cellCount deckelt auf 8` (assertet 8) rot. Deckung vorhanden.
+- **A) DecodePace/finale independent — no P0.** The menu is pure KeyboardView UI; the `DictationController` finale calls `engine.transcribe` without any popup/pace reference. (F21 already proved the finale is unthrottled.)
+- **B) Zone vs. selection free of contradiction.** `stillArmed` (arming, ± `w/2+slop`, top up to `menuHeight+gap+slop`) is a **superset** of the `cellWins` region (`|offset| > w/2−slop`, `h/2−slop`); the menu cell row (`gap … gap+menuHeight` above the key) lies **within** the arming upper bound ⇒ every winnable cell is reachable, and no cell win outside the arming (the downward band lies below the menu ⇒ `popupCellAt` returns -1 there anyway). No dead state.
+- **C) Mic never armed + no synthetic mic UP.** Arming only with `down.kind=="text" && alternatesOf(down).isNotEmpty()` (KeyboardView DOWN handler) — mic is ACTION ⇒ never armed. `micHeld`/hold gesture is a separate branch; the second pointer (`ACTION_POINTER_DOWN`) is not handled ⇒ no mic UP. D10 remainder §1 unchanged.
+- **D) Caps double tap vs. long press separate.** `DOUBLE_TAP_MS=350 < LONG_PRESS_MS=450`; shift is ACTION ⇒ never armed, double tap runs via `handleAction(SHIFT)` (350-ms window). Long press on a letter key (text+alternates) only opens the menu, triggers no shift whatsoever.
+- **E) CANCEL + release outside = 0 characters on all three paths.** (1) `ACTION_CANCEL` with an open popup → the `ACTION_UP` branch skips (no commit); (2) `UP` outside (cell=-1 **and** not `isInsideKey`) → `else -> Unit`; (3) move-away arming (pressedKey=null) → `key === pressedKey` fails → no commit. All three proven.
+- **F) Temporary shift consumed only on a genuine commit.** `commitAlternate` flips `shiftTemporary` exclusively with a chosen cell; abort/0-character leaves `shiftTemporary` untouched (shift still applies to the next input). ✓
+- **G) Geometry consistency yes, comments stale.** `POPUP_HEIGHT_DP=56→147 px`, `POPUP_CELL_DP=48→126 px`, `POPUP_PAD_DP=8→21 px`; `drawLongPressMenu` and `popupCellAt`/`popupSelectionAt` use the same `p.left/p.padPx/p.cellPx` and the same `cellWins` threshold ⇒ drawing == hit testing. Only the KDoc/test examples ("4 dp", "418") are outdated (note above).
+- **H) Rule 9 defensible.** VK-HIT logs only key `id` + static `value` label + geometry, `FLAG_DEBUGGABLE`-only, never field/audio content ⇒ no input content.
+- **I) Tests catch the three regressions red:** (a) slop rule removed ⇒ `cellWins auf der Grundtaste gewinnt nie` (test, `assertFalse(cellWins(0,0,…))`) red; (b) `cellWins` "always true" ⇒ same test + "innerhalb Slop … gewinnt nicht" red; (c) `MAX_CELLS→4` ⇒ `cellCount deckelt auf 8` (asserts 8) red. Coverage exists.
 
 ---
 
-## SUMME
+## TOTAL
 
-**P0 = 0 · P1 = 0 · P2 = 0** (nur 2 Notes: stale KDoc/Test-Kommentarwerte 4dp→8dp/418→462; VK-HIT-Label als verteidigbare Debug-Nutzung).
+**P0 = 0 · P1 = 0 · P2 = 0** (only 2 notes: stale KDoc/test comment values 4dp→8dp/418→462; VK-HIT label as defensible debug use).
 
-**Offen (zum Belegen bräuchte ich):** einen echten `./gradlew test`-Lauf (404/0), die drei Orchestrator-Gerätebefunde (Reihe-0-„e"/„á"/„ê"/0-Zeichen) als eigene Reproduktion, und die exakte oberste-Reihe-Clip-Interaktion (`menuTopPx`-Klemmung bei Reihe 0) auf einem Gerät — per Code plausibel, nicht selbst gemessen.
+**Open (to provide evidence I would need):** a real `./gradlew test` run (404/0), the three orchestrator device findings (row-0 "e"/"á"/"ê"/0-character) as my own reproduction, and the exact top-row clip interaction (`menuTopPx` clamping at row 0) on a device — plausible from code, not measured myself.

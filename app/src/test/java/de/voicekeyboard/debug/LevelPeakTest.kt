@@ -4,13 +4,13 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 
 /**
- * `LevelPeak` ist die einzige Quelle für den Spitzenpegel in der Diagnosezeile.
- * Bewiesen wird: Maximalbildung, Grenzen, Verhalten bei Unsinnswerten, Reset.
+ * `LevelPeak` is the only source of the peak level in the diagnostics line.
+ * Proven: maximum formation, limits, behavior on nonsense values, reset.
  */
 class LevelPeakTest {
 
     @Test
-    fun `haltet den hoechsten Wert fest`() {
+    fun `holds on to the highest value`() {
         val p = LevelPeak()
         p.note(0.10f)
         p.note(0.42f)
@@ -19,20 +19,20 @@ class LevelPeakTest {
     }
 
     @Test
-    fun `leere Sitzung zeigt null statt Zufallswert`() {
+    fun `empty session shows zero instead of a random value`() {
         assertEquals(0, LevelPeak().percent())
     }
 
     @Test
-    fun `Vollaussteuerung wird 100 und nicht mehr`() {
+    fun `full scale becomes 100 and no more`() {
         val p = LevelPeak()
         p.note(1.0f)
-        p.note(3.7f) // außer Reichweite gemessener Werte -> oben begrenzt
+        p.note(3.7f) // out of range of measured values -> clamped at the top
         assertEquals(100, p.percent())
     }
 
     @Test
-    fun `NaN und negative Werte bringen die Anzeige nicht durcheinander`() {
+    fun `NaN and negative values do not confuse the display`() {
         val p = LevelPeak()
         p.note(Float.NaN)
         p.note(-0.5f)
@@ -43,7 +43,7 @@ class LevelPeakTest {
     }
 
     @Test
-    fun `Reset zu Sitzungsbeginn`() {
+    fun `reset at session start`() {
         val p = LevelPeak()
         p.note(0.8f)
         p.reset()
@@ -51,39 +51,39 @@ class LevelPeakTest {
     }
 
     @Test
-    fun `kleiner Pegel bleibt sichtbar und wird nicht null`() {
+    fun `small level stays visible and does not become zero`() {
         val p = LevelPeak()
         p.note(0.004f) // ~ -48 dBFS
-        assertEquals(0, p.percent()) // Rundung nach unten ist ok, solange...
+        assertEquals(0, p.percent()) // rounding down is ok, as long as...
         p.note(0.011f)
-        assertEquals(1, p.percent()) // ...ein realer Sprechpegel sichtbar bleibt
+        assertEquals(1, p.percent()) // ...a real speech level stays visible
     }
 
     @Test
-    fun `dbfs aufloesend wo peak_pct auf 2 runt (Telefonbefund)`() {
+    fun `dbfs resolves where peak_pct floors to 2 (phone finding)`() {
         val p = LevelPeak()
-        assertEquals(null, p.dbfs()) // nichts gemessen -> kein Wert, keine 0
-        p.note(0.02f) // der Telefonbefund: peak_pct 2
+        assertEquals(null, p.dbfs()) // nothing measured -> no value, no 0
+        p.note(0.02f) // the phone finding: peak_pct 2
         assertEquals(2, p.percent())
-        assertEquals(-34.0, p.dbfs()!!, 0.1) // als dBFS sichtbar: -34 dBFS
+        assertEquals(-34.0, p.dbfs()!!, 0.1) // visible as dBFS: -34 dBFS
     }
 
     @Test
-    fun `dbfs waechst mit dem Pegel und ueberschreitet 0 nicht`() {
+    fun `dbfs grows with the level and does not exceed 0`() {
         val p = LevelPeak()
-        p.note(0.6f) // Emulator mit Audio-Bruecke
+        p.note(0.6f) // emulator with audio bridge
         assertEquals(-4.4, p.dbfs()!!, 0.2)
-        p.note(2f) // uebersteuert -> begrenzt
+        p.note(2f) // clipped -> clamped
         assertEquals(0.0, p.dbfs()!!, 0.001)
     }
 
     @Test
-    fun `short zeigt Prozent und dBFS-Stufe in der Diagnosezeile`() {
+    fun `short shows percent and dBFS step in the diagnostics line`() {
         val p = LevelPeak()
-        assertEquals("0", p.short()) // nichts gemessen -> kein dB-Anhängsel
-        p.note(0.02f) // Telefonbefund
+        assertEquals("0", p.short()) // nothing measured -> no dB suffix
+        p.note(0.02f) // phone finding
         assertEquals("2 (-34 dB)", p.short())
-        p.note(0.6f) // Emulator mit Audio-Bruecke
+        p.note(0.6f) // emulator with audio bridge
         assertEquals("60 (-4 dB)", p.short())
     }
 }

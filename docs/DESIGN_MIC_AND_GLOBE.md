@@ -1,249 +1,272 @@
-# D10 – große Mic-Taste unten rechts und verständlicher Globus
+# D10 – large mic key bottom right and an understandable globe
 
-## 0. Entscheidung und Zuständigkeit
+## 0. Decision and responsibility
 
-D10 ergänzt D9; **der zuvor zurückgestellte Mic-Positionsumbau ist jetzt ausdrücklich
-freigegeben**. Alle heutigen Aktionen/Zeichen bleiben erhalten, Status-/Diagnosezeile
-und 🐞 bleiben unverändert oben. Kein ASR-Backend-, VAD-, Sprachmodell- oder
-Commit-Algorithmus-Umbau in diesem Auftrag.
+D10 supplements D9; **the previously postponed mic position rework is now
+explicitly released.** All current actions/characters are preserved; the
+status/diagnostics row and 🐞 remain unchanged at the top. No ASR backend, VAD,
+language model, or commit algorithm rework in this assignment.
 
-Übergebene Evidenz: 306 Unit-Tests grün, bei 650 px alle 38 statt 30 IDs und Skalierung
-0,873. Dies wird als Fortschritt der parallelen S1/S2-Arbeit anerkannt, nicht hier
-neu getestet. Gelesen wurden D9, aktuelle KeyboardHeight/KeyboardModel, Service-
-Verdrahtung und KONZEPTs PTT-/Entkopplungsregeln; keine Builds/adb/Codeänderungen.
+Handed-over evidence: 306 unit tests green, at 650 px all 38 instead of 30 IDs
+and scaling 0.873. This is acknowledged as progress of the parallel S1/S2 work,
+not re-tested here. Read: D9, current KeyboardHeight/KeyboardModel, service
+wiring, and KONZEPT's PTT/decoupling rules; no builds/adb/code changes.
 
-„Yeah.“, ausbleibende englische Ausgabe und häufig ignorierte Eingaben sind reale
-Nutzerberichte, aber **keine durch ein besseres Icon behobenen ASR-Fehler**. RTF 0,80,
-first_hyp_ms 1116 und Peak 2 % beweisen weder sichere Live-Ausgabe noch ausreichenden
-Mikrofonpegel noch eine falsche Spracheinstellung. Ursachen und Qualitätsschranken
-bleiben beim parallelen Analyseauftrag; Layoutsprache steuert die ASR-Sprache nicht.
+"Yeah.", absent English output, and frequently ignored inputs are real user
+reports, but **not ASR errors fixed by a better icon**. RTF 0.80,
+first_hyp_ms 1116, and peak 2 % prove neither safe live output nor sufficient
+microphone level nor a wrong language setting. Causes and quality limits remain
+with the parallel analysis assignment; the layout language does not control the
+ASR language.
 
-## 1. Reflow: Enter rückt vor, Mic bekommt den rechten Rand
+## 1. Reflow: enter moves up, mic gets the right edge
 
-**Verbindlicher Footer:** `?123/ABC · 🌐 · 😊 · Space · ‹ · › · Enter · Mic`.
-Enter räumt **die äußerste rechte Position**, bleibt aber als vorletzte Taste erhalten;
-es wird nicht nach oben verschoben und keine Buchstabentaste verdrängt. Mic wandert
-von vor Enter nach ganz rechts. Space gibt **eine Gewichtseinheit** ab, damit Mic
-von Gewicht 1 auf **2** wächst; Space 5→**4**, Gesamtsumme weiterhin **13**.
+**Binding footer:** `?123/ABC · 🌐 · 😊 · space · ‹ · › · enter · mic`.
+Enter takes **the outermost right position** but remains the second-to-last key;
+it is not moved up and displaces no letter key. Mic moves from before enter to
+far right. Space gives up **one weight unit** so that mic grows from weight 1 to
+**2**; space 5→**4**, total sum still **13**.
 
-| Taste | Gewicht | Anteil | Bei W=1080 px / 411,43 dp |
+| Key | Weight | Share | At W=1080 px / 411.43 dp |
 |---|---:|---:|---:|
-| ?123 bzw. ABC | 1,5 | 11,538 % | 124,6 px / 47,47 dp |
-| 🌐 | 1 | 7,692 % | 83,1 px / 31,65 dp |
-| 😊 | 1 | 7,692 % | 83,1 px / 31,65 dp |
-| Space, lokalisiertes Label | 4 | 30,769 % | 332,3 px / 126,59 dp |
-| ‹ | 1 | 7,692 % | 83,1 px / 31,65 dp |
-| › | 1 | 7,692 % | 83,1 px / 31,65 dp |
-| Enter | 1,5 | 11,538 % | 124,6 px / 47,47 dp |
-| **Mic** | **2** | **15,385 %** | **166,2 px / 63,30 dp** |
+| ?123 or ABC | 1.5 | 11.538 % | 124.6 px / 47.47 dp |
+| 🌐 | 1 | 7.692 % | 83.1 px / 31.65 dp |
+| 😊 | 1 | 7.692 % | 83.1 px / 31.65 dp |
+| Space, localized label | 4 | 30.769 % | 332.3 px / 126.59 dp |
+| ‹ | 1 | 7.692 % | 83.1 px / 31.65 dp |
+| › | 1 | 7.692 % | 83.1 px / 31.65 dp |
+| Enter | 1.5 | 11.538 % | 124.6 px / 47.47 dp |
+| **Mic** | **2** | **15.385 %** | **166.2 px / 63.30 dp** |
 
-Raster DE, vier Reihen: `[?123 11,54%][🌐 7,69%][😊 7,69%][Space 30,77%][‹ 7,69%][› 7,69%][⏎ 11,54%][Mic 15,38%]`
-Raster PT, fünf Reihen: `[?123 11,54%][🌐 7,69%][😊 7,69%][Space 30,77%][‹ 7,69%][› 7,69%][⏎ 11,54%][Mic 15,38%]`
-In symbols/symbolsShift steht an erster Stelle ABC. Die volle PT-Akzentreihe bleibt
-oberhalb erhalten. Prozentzahlen sind Anzeige-Rundungen; gerechnet wird mit Gewichten,
-die letzte rechte Kante ist exakt W. Keine zusätzlichen Footerlücken im D9-Stock-Look.
+Grid DE, four rows: `[?123 11.54%][🌐 7.69%][😊 7.69%][space 30.77%][‹ 7.69%][› 7.69%][⏎ 11.54%][mic 15.38%]`
+Grid PT, five rows: `[?123 11.54%][🌐 7.69%][😊 7.69%][space 30.77%][‹ 7.69%][› 7.69%][⏎ 11.54%][mic 15.38%]`
+In symbols/symbolsShift, ABC is first. The full PT accent row remains above.
+Percentages are display roundings; computation uses weights, the last right
+edge is exactly W. No additional footer gaps in the D9 stock look.
 
-Die Tabelle ist keine neue Breitenmessung am Pixel: **ANNAHME W=1080 px nutzbar** für
-das Rechenbeispiel. Bei anderem W gelten dieselben Anteile; Mic erreicht 48 dp Breite
-ab W=312 dp. Andere kleine Aktionen erreichen 48 dp Breite **nicht**; dies wird wie
-in D9 offen ausgewiesen und nicht durch überlappende Ziele schöngerechnet.
+The table is not a new width measurement on the Pixel: **ASSUMPTION W=1080 px
+usable** for the worked example. For a different W, the same shares apply; mic
+reaches 48 dp width from W=312 dp. Other small actions do **not** reach 48 dp
+width; this is reported openly as in D9 and not prettified with overlapping
+targets.
 
-### Höhen und Trefferfläche – density 420 = 2,625 px/dp
+### Heights and hit area – density 420 = 2.625 px/dp
 
-Der Footer erhält ein eigenes Wunschmaß **56 dp = 147 px**, unter Druck mindestens
-**48 dp = 126 px**. Damit ist die neue Mic-Fläche nicht nur optisch größer, sondern
-real breiter und im geprüften Budget hoch genug. Die oberen Reihen teilen den Rest;
-ein einheitlicher Skalierungsfaktor über alle Reihen ist hierfür nicht ausreichend.
+The footer gets its own desired measure **56 dp = 147 px**, under pressure at
+least **48 dp = 126 px**. The new mic area is thus not only visually larger but
+really wider and tall enough within the checked budget. The upper rows share the
+remainder; a uniform scaling factor across all rows is not sufficient for this.
 
-D9-Root-Ziel 268 dp plus tatsächliche Navigation bleibt. Für die folgenden konkreten
-Zahlen: Status unverändert 48 dp = 126 px, Navigation beispielhaft 8 dp = 21 px,
-Root-Kappe 276 dp auf **725 px gerundet**. K ist ausschließlich der Tastenblock.
-Nominal K=578 px; Footerhöhe = auf ganze Pixel gerundete `147×K/578`, mindestens
-126 px, höchstens 147 px. Oberreihen teilen K−Footer exakt mit verteilten Rundungsresten.
+The D9 root target 268 dp plus actual navigation remains. For the following
+concrete numbers: status unchanged 48 dp = 126 px, navigation by way of example
+8 dp = 21 px, root cap 276 dp rounded to **725 px**. K is exclusively the key
+block. Nominally K=578 px; footer height = `147×K/578` rounded to whole pixels,
+at least 126 px, at most 147 px. Upper rows share K−footer exactly with
+distributed rounding remainders.
 
-| Root-Angebot | Root effektiv | K | Footer/Mic-Höhe | DE: drei obere Reihen | PT: vier obere Reihen |
+| Root offer | Root effective | K | Footer/mic height | DE: three upper rows | PT: four upper rows |
 |---|---:|---:|---:|---:|---:|
-| **650 px = 247,62 dp** | 650 px | 503 px | **128 px = 48,76 dp** | je **125 px = 47,62 dp** | 93/94 px, Mittel **35,71 dp** |
-| **829 px = 315,81 dp** | 725 px | 578 px | **147 px = 56 dp** | 143/144 px, Mittel **54,73 dp** | 107/108 px, Mittel **41,05 dp** |
+| **650 px = 247.62 dp** | 650 px | 503 px | **128 px = 48.76 dp** | **125 px = 47.62 dp** each | 93/94 px, mean **35.71 dp** |
+| **829 px = 315.81 dp** | 725 px | 578 px | **147 px = 56 dp** | 143/144 px, mean **54.73 dp** | 107/108 px, mean **41.05 dp** |
 
-Mic bei W=1080: x ungefähr **914…1080 px**, Breite 166 px.
-Bei 650-px-Root: y **501…629 px**, Trefferfläche rund **63,30×48,76 dp**.
-Bei 829-px-Angebot/725-px-Root: y **557…704 px**, rund **63,30×56 dp**.
-Diese y-Werte sind **Root-lokal**; die Bildschirmposition ist Root-Oberkante plus y.
-Die Navigation beginnt erst bei 629 bzw. 704 px, nicht innerhalb des Mic-Ziels.
-Da K und Footer vom Budget und nicht von DE/PT abhängen, bleibt die Fußreihe bei
-beiden Layouttypen unten verankert; mehr PT-Reihen verkleinern nur den oberen Block.
+Mic at W=1080: x approximately **914…1080 px**, width 166 px.
+At 650-px root: y **501…629 px**, hit area about **63.30×48.76 dp**.
+At 829-px offer/725-px root: y **557…704 px**, about **63.30×56 dp**.
+These y values are **root-local**; the screen position is root top edge plus y.
+Navigation starts only at 629 or 704 px, not inside the mic target.
+Since K and the footer depend on the budget and not on DE/PT, the footer row
+remains anchored at the bottom for both layout types; more PT rows only shrink
+the upper block.
 
-**Wichtige Budgetgrenze:** Sind die gemeldeten 650/829 px bereits ein Child-Angebot
-nach Status/Navigation, dürfen diese Anteile nicht erneut abgezogen werden. Dann ist
-K aus der tatsächlichen S2-Zuordnung zu übernehmen; die Root-Beispielzahlen sind nicht
-blind als Child-Höhe einzubauen. Der berichtete Faktor 0,873 ist ein Fit des damaligen
-Stands, kein für jeden neuen Footer verbindlicher Faktor; das Beispiel liefert K/578≈0,870.
+**Important budget limit:** If the reported 650/829 px are already a child
+offer after status/navigation, these shares must not be deducted again. Then K
+is to be taken from the actual S2 allocation; the root example numbers are not to
+be blindly built in as a child height. The reported factor 0.873 is a fit of
+the state at that time, not a factor binding for every new footer; the example
+yields K/578≈0.870.
 
-**Ehrlicher Preis:** Bei PT/650 px sind obere Tasten nur rund 36 dp hoch. Alle bleiben
-vollständig sichtbar, aber eine allgemeine 48-dp-Zusage wird **nicht** erfüllt. Die
-Mic-Taste erfüllt sie; echte Bedienbarkeit kleinerer Oberreihen ist gesondert abzunehmen.
-Wenn selbst 126 px Footer plus ein sinnvoll lesbarer Rest nicht passen, Fit-Konflikt
-melden statt Reihe streichen/halbe Tasten zeichnen. Keine unbemerkte neue Zeichenseite.
+**Honest price:** For PT/650 px, upper keys are only about 36 dp tall. All
+remain fully visible, but a general 48-dp promise is **not** fulfilled. The mic
+key fulfills it; the real operability of smaller upper rows is to be accepted
+separately. If even 126 px footer plus a sensibly readable remainder do not fit,
+report a fit conflict instead of dropping a row/drawing half keys. No unnoticed
+new character side.
 
-### Daten und PTT
+### Data and PTT
 
-Reflow für alle 15×4 Ebenen als gemeinsame **Darstellungskomposition**: ID, Aktion,
-Label und Alternates beibehalten, Footer umordnen/gewichten. **0 JSON-Änderungen**
-empfohlen. Dieselbe komponierte Quelle liefert Zeichnung, Hit-Test und Accessibility;
-keine nur gemalte große Mic-Fläche mit weiter kleiner Trefferfläche.
+Reflow for all 15×4 layers as a shared **display composition**: keep ID,
+action, label, and alternates; reorder/weight the footer. **0 JSON changes**
+recommended. The same composed source provides drawing, hit test, and
+accessibility; no merely painted large mic area with a still-small hit area.
 
-Die bisherige obere Mic-Aktion wird in diesem Auftrag **nicht still gelöscht**:
-die Nutzerfreigabe nennt Position/Größe der unteren Taste, nicht ausdrücklich den
-Wegfall jeder bisherigen Aktion. Obere Fläche bleibt unauffällig und unverändert;
-beide Einstiege teilen denselben idempotenten PTT-Controller, nie zwei Aufnahmen.
-Es kommt kein dritter Mic hinzu. 🐞 und Diagnosetext bleiben unangetastet.
+The previous upper mic action is **not silently deleted** in this assignment:
+the user's release names the position/size of the lower key, not explicitly the
+removal of every previous action. The upper area remains unobtrusive and
+unchanged; both entries share the same idempotent PTT controller, never two
+recordings. No third mic is added. 🐞 and the diagnostics text remain untouched.
 
-Die untere Taste braucht echte DOWN→Start-, UP→Stop- und CANCEL→sicheres-Abbruch-
-Ereignisse; der heutige normale Action-Key-Releasepfad allein genügt dafür nicht.
-Ausschließlich der Mic-Pointer besitzt die Haltegeste, ein zweiter Pointer auf 🌐
-darf ihn weder ersetzen noch ein synthetisches Mic-UP verursachen. Bei Rotation,
-Editor-/IME-Wechsel Aufnahme sicher beenden, keine Session an den neuen Editor hängen.
+The lower key needs real DOWN→start, UP→stop, and CANCEL→safe-abort events;
+today's normal action-key release path alone does not suffice for that.
+Exclusively the mic pointer owns the hold gesture; a second pointer on 🌐 must
+neither replace it nor cause a synthetic mic UP. On rotation or an
+editor/IME switch, end the recording safely; do not leave a session attached to
+the new editor.
 
-## 2. Mic-Zustände ohne Umbau der Diagnoseleiste
+## 2. Mic states without a diagnostics strip rework
 
-Eigener Feedbackbereich ist **nur die Mic-Zelle**: 26-dp-Mikrofon, kleiner Pegel-/Rand-
-indikator und kurzlebiges Commit-Häkchen. Kein neuer Streifen oberhalb, keine neue
-Statuszeilenlogik/Diagnoseformatänderung. Bestehende Fehlermeldungen bleiben erhalten.
-Icongröße 26 dp entspricht rund 68 px bei density 420; Zustandsbadge 10 dp rund 26 px.
-Alle Zustände verwenden dieselben unveränderten Zell-Rects, keine Layoutanimation.
+The only own feedback area is **the mic cell**: 26-dp microphone, a small
+level/border indicator, and a short-lived commit check mark. No new strip
+above, no new status row logic/diagnostics format change. Existing error
+messages are preserved. The icon size of 26 dp corresponds to about 68 px at
+density 420; the state badge 10 dp about 26 px. All states use the same
+unchanged cell rects; no layout animation.
 
-| Zustand | Hell: Fläche / Glyphe bzw. Marker | Dunkel: Fläche / Glyphe bzw. Marker | Bedeutung und dezenter Mechanismus |
+| State | Light: surface / glyph or marker | Dark: surface / glyph or marker | Meaning and subtle mechanism |
 |---|---|---|---|
-| Bereit | **#FFECEFF1 / #CC37474F** | **#FF263238 / #CCFFFFFF** | Mic 26 dp, 1-dp-Akzentkontur; kein Erfolgssignal allein wegen Bereitschaft |
-| DOWN/STARTING | Normalfläche, Ring **#FF00796B** | Normalfläche, Ring **#FF80CBC4** | Sofort Pressfeedback plus kleiner Ring; erst reale Aufnahme als RECORDING darstellen |
-| Aufnahme läuft | **#FF4DB6AC / #FF263238** | **#FF80CBC4 / #FF263238** | Gefüllter Mic-Indikator, zusätzlicher kleiner Aufnahmepunkt und dezenter 2-dp-Pegelrand; Farbe nicht einziges Unterscheidungsmerkmal |
-| „Pause“ = gehalten, gerade leise | **#FFDDE8E7 / #FF37474F** | **#FF344946 / #CCFFFFFF** | Kontur bleibt als Aufnahme aktiv; Pegel sinkt, kleiner ruhender Punkt statt vermeintlichem Pause-Button; Mikrofon läuft weiter |
-| FINALIZING | Normalfläche, Ring **#FF00796B** | Normalfläche, Ring **#FF80CBC4** | Aufnahmepunkt weg, kleiner Verarbeitungsring; neuer Start gesperrt, keine heimliche Toggle-Aufnahme |
-| Fehler / keine Textausgabe nach abgeschlossenem Lauf | **#FFFCE8E6 / #FFB3261E** | **#FF601410 / #FFFFB4AB** | Kleines ! oder ?, 26-dp-Mic bleibt erkennbar; Zustand nach UP nicht sofort löschen |
-| Gerade erfolgreich eingefügt | bestehender Zustand plus Häkchen **#FF00796B** | bestehender Zustand plus Häkchen **#FF80CBC4** | 10-dp-Häkchen innerhalb der Zelle für **600 ms**, kein Vollflächenblitz und kein Größenwechsel |
+| Ready | **#FFECEFF1 / #CC37474F** | **#FF263238 / #CCFFFFFF** | Mic 26 dp, 1-dp accent outline; no success signal merely because of readiness |
+| DOWN/STARTING | Normal surface, ring **#FF00796B** | Normal surface, ring **#FF80CBC4** | Immediate press feedback plus a small ring; depict a real recording as RECORDING only when it starts |
+| Recording running | **#FF4DB6AC / #FF263238** | **#FF80CBC4 / #FF263238** | Filled mic indicator, an additional small recording dot and a subtle 2-dp level border; color not the sole distinguishing feature |
+| "Pause" = held, currently quiet | **#FFDDE8E7 / #FF37474F** | **#FF344946 / #CCFFFFFF** | Outline remains as recording active; level drops, a small resting dot instead of a supposed pause button; the microphone keeps running |
+| FINALIZING | Normal surface, ring **#FF00796B** | Normal surface, ring **#FF80CBC4** | Recording dot gone, a small processing ring; new start locked, no stealth toggle recording |
+| Error / no text output after a completed run | **#FFFCE8E6 / #FFB3261E** | **#FF601410 / #FFFFB4AB** | A small ! or ?, the 26-dp mic remains recognizable; do not clear the state immediately after UP |
+| Just successfully inserted | existing state plus check mark **#FF00796B** | existing state plus check mark **#FF80CBC4** | 10-dp check mark inside the cell for **600 ms**, no full-surface flash and no size change |
 
-Priorität Fehler > Verarbeitung > Aufnahme/leise > bereit; das Commit-Häkchen ist nur
-zusätzliches Feedback, nicht ein neuer dauerhafter Aufnahmezustand. Es entsteht erst
-nach tatsächlich akzeptiertem Edit im gültigen Editor, nicht bei einer bloßen Hypothese.
-Kein Häkchen für verworfene Revision, verspätetes Resultat oder fehlende InputConnection.
-Ein späterer Fehler überdeckt das Häkchen, nicht umgekehrt.
+Priority error > processing > recording/quiet > ready; the commit check mark is
+only additional feedback, not a new permanent recording state. It appears only
+after an actually accepted edit in the valid editor, not on a mere hypothesis.
+No check mark for a discarded revision, a late result, or a missing
+InputConnection. A later error covers the check mark, not the other way around.
 
-„Pause“ ist **kein neuer schaltbarer PTT-Modus** und keine ASR-VAD-Schranke. Eine leise
-Phase darf Aufnahme/Puffer nicht stoppen oder Sprache verwerfen. Peak 2 % allein
-rechtfertigt keine Diagnose „Stille“; Pegelregeln benötigen den vom Audioauftrag
-geprüften Signalbezug. Fehlt ein frischer Pegel, unbekannten/statischen Pegel zeigen,
-nicht einen erfundenen Ausschlag. Keine dauerhaft blinkende CPU-teure Animation.
+"Pause" is **not a new switchable PTT mode** and no ASR VAD barrier. A quiet
+phase must not stop recording/buffer or discard speech. Peak 2 % alone
+justifies no "silence" diagnosis; level rules need the signal reference checked
+by the audio assignment. If a fresh level is missing, show an unknown/static
+level, not an invented deflection. No permanently blinking CPU-expensive
+animation.
 
-Bleibt das Ergebnis nach dem Finalisieren leer: zusätzlich einmal die kurze Erklärung
-**„Kein Text erkannt. Bitte erneut versuchen.“** anzeigen, z. B. als Toast, ohne die
-Diagnose-/Fehlerzeile zu überschreiben. Kein „Erfolg“-Häkchen für einen leeren Lauf.
-Ein laufender Job ist als Verarbeitung erkennbar; „leere Ausgabe“ und „noch in Arbeit“
-sind verschiedene Zustände. Falschen erkannten Text korrigiert diese UI nicht automatisch.
+If the result remains empty after finalization: additionally show the short
+explanation **"No text recognized. Please try again."** once, e.g. as a toast,
+without overwriting the diagnostics/error row. No "success" check mark for an
+empty run. A running job is recognizable as processing; "empty output" and
+"still working" are different states. This UI does not automatically correct
+wrong recognized text.
 
-## 3. Globus während Diktat: Empfehlung (b)
+## 3. Globe during dictation: recommendation (b)
 
-Globus heißt **Tastaturlayout**, nicht Spracheingabe erzwingen. Den bisherigen
-Sperrgrund nicht mit einer angeblich auf die alte Tastatursprache festgelegten ASR
-begründen: die Erkennung folgt dem Modell. Ein EN-Layout behebt keine ausbleibende
-englische Erkennung; die verlangte Zuverlässigkeitsverbesserung bleibt separat nötig.
+Globe means **keyboard layout**, not forcing voice input. Do not justify the
+previous lock reason with a supposedly ASR fixed to the old keyboard language:
+recognition follows the model. An EN layout does not fix absent English
+recognition; the demanded reliability improvement remains separately necessary.
 
-| Option | Exakter kurzer Meldungstext, Beispiel EN | Bewertung |
+| Option | Exact short message text, example EN | Assessment |
 |---|---|---|
-| **(a) Wie bisher ablehnen** | **„Layoutwechsel erst nach dem Diktat.“** (35 Zeichen) | Technisch konservativ, aber wiederholt genau die vom Nutzer als ignoriert erlebte Aktion; Erkennungsautomatik erklärt es nicht. Nicht empfohlen. |
-| **(b) Für nächste Aufnahme vormerken** | **„Layout EN vorgemerkt; Diktatsprache Auto“** (40 Zeichen) | **Empfohlen:** bewusster Tap wird angenommen, laufende PTT-/Edit-Session bleibt unberührt; keine falsche Zusage einer EN-ASR-Einstellung. |
-| **(c) Stoppen, wechseln, automatisch weiter** | **„Aufnahme wird für Layoutwechsel getrennt.“** (41 Zeichen) | Verworfen: zerlegt Äußerungen, erzeugt Final-/Start-Races und eine überraschende neue Aufnahme ohne neues DOWN; widerspricht der einfachen Halte-/Loslasssemantik. |
+| **(a) Reject as before** | **"Layout change only after the dictation."** (35 characters) | Technically conservative, but repeats exactly the action the user experienced as ignored; the recognition automatism does not explain it. Not recommended. |
+| **(b) Pre-select for the next recording** | **"Layout EN pre-selected; dictation language auto"** (40 characters) | **Recommended:** the deliberate tap is accepted, the running PTT/edit session remains unaffected; no false promise of an EN ASR setting. |
+| **(c) Stop, switch, automatically continue** | **"Recording is being cut for the layout change."** (41 characters) | Rejected: fragments utterances, creates final/start races and a surprising new recording without a new DOWN; contradicts the simple hold/release semantics. |
 
-Die Meldungen sind keine neue Zeile im Diagnoseband: einmaliger kurzer Toast,
-plus **persistente kleine `→EN`-Markierung in der Globus-Zelle** für (b).
-Die Markierung verändert keine Zellenbreite und übermalt keine Nachbartaste;
-Accessibility beschreibt „Nächstes Tastaturlayout Englisch, Erkennung automatisch“.
-Bei engem Platz genügt ein klarer Punktmarker am Globus; der einmalige Text nennt das
-Ziel. Das ist kein ASR-Sprachindikator und kein Beweis, welche Sprache erkannt wurde.
+The messages are not a new row in the diagnostics band: a one-time short toast,
+plus a **persistent small `→EN` marker in the globe cell** for (b).
+The marker changes no cell width and paints over no neighboring key;
+accessibility describes "Next keyboard layout English, recognition automatic".
+In tight space, a clear dot marker on the globe suffices; the one-time text
+names the target. This is not an ASR language indicator and no proof of which
+language was recognized.
 
-### Vormerkungsregeln
+### Pre-selection rules
 
-- IDLE: Globe wechselt sofort wie bisher, ohne zusätzlichen Aufnahmestart.
-- STARTING/RECORDING/STOPPING/FINALIZING: nur Ziel-ID vormerken; Layout/Engine,
-  Audiopuffer, Commitzustand und Sprachautomatik der aktuellen Sitzung bleiben gleich.
-- Weitere Taps zyklieren von der **vorgemerkten** statt wieder von der aktuellen ID;
-  Ziel bleibt auf aktive Sprachen begrenzt. Rückkehr zur aktuellen ID hebt die
-  Vormerkung auf: **„Vormerkung aufgehoben. Erkennung Auto.“** (38 Zeichen).
-- Ein aktives Layout: keine Phantom-Vormerkung, Hinweis **„Nur ein Layout aktiv.“**.
-- Nach Finalisierung kein spontanes Umlayouten unter gerade tippenden Fingern.
-  Beim **nächsten bewussten Mic-DOWN**, vor Beginn des neuen Captures, Ziel anwenden
-  und Vormerkung entfernen. Footer-Mic bleibt durch layoutunabhängiges Budget/Anker
-  am selben Ort; Editor und vorhandener Text bleiben unverändert.
-- Wird während IDLE bewusst direkt ein anderes Layout gewählt, ersetzt diese Wahl
-  die Vormerkung; kein späterer überraschender zweiter Wechsel.
-- Vormerkung nur im Arbeitsspeicher, keine heimliche Änderung von current_language
-  vor tatsächlicher Anwendung. Nach Prozessneustart kein altes unsichtbares Pending;
-  nach einem Zielwechsel in den aktiven Spracheinstellungen ungültiges Pending löschen.
+- IDLE: globe switches immediately as before, without an additional recording
+  start.
+- STARTING/RECORDING/STOPPING/FINALIZING: only pre-select the target ID;
+  layout/engine, audio buffer, commit state, and language automatism of the
+  current session stay the same.
+- Further taps cycle from the **pre-selected** instead of again from the current
+  ID; the target remains limited to active languages. Returning to the current
+  ID cancels the pre-selection: **"Pre-selection canceled. Recognition auto."**
+  (38 characters).
+- One active layout: no phantom pre-selection, hint **"Only one layout
+  active."**.
+- After finalization, no spontaneous re-layout under fingers currently typing.
+  At the **next deliberate mic DOWN**, before the new capture begins, apply the
+  target and remove the pre-selection. The footer mic stays in the same place
+  thanks to a layout-independent budget/anchor; the editor and existing text
+  remain unchanged.
+- If a different layout is deliberately selected directly during IDLE, that
+  choice replaces the pre-selection; no later surprising second switch.
+- Pre-selection only in working memory, no stealth change of current_language
+  before the actual application. After a process restart, no old invisible
+  pending; after a target change in the active language settings, delete an
+  invalid pending.
 
-(b) gibt dem Nutzer unter den drei Optionen am ehesten eine sichtbare, sichere
-Reaktion auf seinen Wechselwunsch. Es erfüllt ausdrücklich **nicht** die mögliche
-Erwartung „Globus macht meine laufende Erkennung jetzt Englisch“. Diese Erwartung
-wäre mit dem vorhandenen Modellvertrag unehrlich; sie wird mit „Diktatsprache Auto“
-erklärt, nicht durch einen verdeckten Encoderneustart simuliert.
+(b) most readily gives the user, among the three options, a visible, safe
+reaction to his wish to switch. It explicitly does **not** fulfill the possible
+expectation "the globe makes my running recognition English now". That
+expectation would be dishonest with the existing model contract; it is explained
+with "dictation language auto", not simulated through a hidden encoder restart.
 
-## 4. Geräteabnahme „sauber und flüssig“ – 12 Pflichtpunkte
+## 4. Device acceptance "clean and smooth" – 12 mandatory points
 
-Nur Messvorschrift für den Orchestrator, hier **keine adb-Ausführung**. Für Logs gilt:
-VK-HIT ist vorhanden; zusätzliche monotone Zeitstempel DOWN/erste Darstellung,
-Capture-Start/Stop und erfolgreicher Edit sind **anzulegende Debug-Messpunkte**, keine
-behaupteten heutigen Logfelder. Ohne sie ist der entsprechende Latenzpunkt nicht bewiesen.
-Logs enthalten IDs/Zeiten/Rects/Zustände, keine Transkripte oder Audiodaten.
+Only a measurement prescription for the orchestrator; **no adb execution**
+here. For logs: VK-HIT exists; additional monotonic timestamps DOWN/first
+display, capture start/stop, and successful edit are **debug measurement points
+to be created**, not claimed current log fields. Without them, the
+corresponding latency point is not proven. Logs contain IDs/times/rects/states,
+no transcripts or audio data.
 
-| # | Messstelle / Beweis | Sollwert |
+| # | Measurement point / evidence | Target value |
 |---|---|---|
-| 1 | Root-/Fit-Log plus Screenshots bei 650/829 px für DE und PT; `adb logcat -d -s VK-HIT` für tatsächliche Treffer | Alle vorherigen IDs derselben Ebene erhalten; 0 halb gezeichnete Tasten; letzte Unterkante ≤ Inhaltsende, Mic außen rechts. Die Zahl 38 gilt für das gemessene Layout, nicht pauschal für jede Sprache. |
-| 2 | Screenshotvergleich erste/zweite/dritte Öffnung, gleicher Editor/gleiches Angebot; `adb exec-out screencap -p > /tmp/d10_second.png` | Keine abgeschnittene Fußreihe; bei gleichem Budget identische Zellkanten innerhalb **1 px**, keine kumulativen Insets. |
-| 3 | Mic-Mittentap mit VK-HIT-Rect; Breite aus `adb shell wm size`, Dichte aus `adb shell wm density` | Mic von der sichtbaren Tastatur mit **1 Haltegeste** erreichbar; im Beispiel rund 166×128 bzw. 166×147 px, jeweils ≥48×48 dp. Treffername mic, nicht enter/space. |
-| 4 | Monotone DOWN→erster Press-/Starting-Frame-Messung, 20 Haltegesten unter laufender ASR | **Jede** sichtbare Reaktion <500 ms; kein Warten auf Encoder/Finalisierung für Pressfeedback. Nicht mit first_hyp_ms verwechseln. |
-| 5 | Capture-/Controller-Zeitstempel für 20 DOWN/UP/CANCEL-Zyklen, darunter UP während Inferenz | Startanforderung genau einmal je DOWN, Stopanforderung sofort auf UP; Mikrofonfreigabe als Messziel ≤500 ms nach UP/CANCEL, andernfalls belegter Fehler, kein stilles Weiterlaufen. |
-| 6 | Hell/Dunkel-Screenshots bereit/gedrückt/recording/leise/finalizing/Fehler; vorhandene Diagnose parallel sichtbar | Richtige Tabelle aus §2, kein RECORDING vor tatsächlichem Capture; Fehler bleibt nach UP mindestens **5 s ohne neue Aktion**, kein falscher „Bereit“-Reset. Status-/Infoleiste weder entfernt noch umgestaltet. |
-| 7 | Erfolgreiches Einfügen im Testfeld plus Edit-Zeitstempel und nachfolgende leere/abgewiesene Läufe | Häkchen nur bei akzeptiertem Edit, Dauer **600±100 ms**; 0 Erfolgshäkchen ohne Edit. Leerer abgeschlossener Lauf erhält erklärende Meldung, verarbeitender Lauf bleibt klar unterscheidbar. |
-| 8 | Während gehaltenem Mic eine lange Sprechpause und anschließend weiter sprechen; Pegel-/State-Log | Kein automatischer Aufnahmeabbruch/Neuaufbau durch Anzeige „leise“; Sprache nach Pause weiterhin erfasst. Pegel reagiert nur auf echte Messwerte, ausbleibender Text wird nicht als erfolgreiche Erkennung ausgegeben. |
-| 9 | Zweiter Pointer tippt Globus während gehaltenem Mic; Vorher-/Nachher-Screenshots und Session-/Layout-ID-Log | Genau eine Session, kein Stop/Neustart, aktuelle Layout-ID unverändert; `→EN`/Marker und exakte (b)-Meldung sichtbar; 0 angeforderte ASR-Sprachänderungen. |
-| 10 | UP→Final fertig→normal tippen→neues Mic-DOWN; weitere Taps bis Wrap testen | Kein Umlayouten während normalem Tippen; Ziel genau einmal vor nächstem Capture übernommen; Pending danach weg; gleiche Mic-Zellkante, Wrap hebt Pending auf. |
-| 11 | Vor/nach normalem Tippen, Shift/Caps, symbols↔symbolsShift und Emoji-Rückkehr Rect-/Screenshotvergleich | Keine Taste wandert ohne bewusst gewählten Layout-/Ebenen-/Windowwechsel; Shift-Einzeltipp/Doppeltipp funktionieren, Emoji-Rückweg vollständig sichtbar, keine verlorene Aktion. |
-| 12 | Screenshots Hell/Dunkel/Pressed/Caps/zweite Öffnung/Emoji plus `adb shell dumpsys package de.voicekeyboard` und dokumentierter APK-Hash | Alles aus **derselben APK** auf dem gemeldeten API-37-Telefon; 15 Layouts positionsgeprüft, DE/EN/RU/PT/CZ ausführlich. Keine Emulatorbilder als Telefonbeweis. Erkennungsqualität separat nach Analyse-Gates, nicht mit bestandener UI-Liste ersetzen. |
+| 1 | Root/fit log plus screenshots at 650/829 px for DE and PT; `adb logcat -d -s VK-HIT` for actual hits | All previous IDs of the same layer preserved; 0 half-drawn keys; last lower edge ≤ content end, mic on the outer right. The number 38 applies to the measured layout, not blanketly to every language. |
+| 2 | Screenshot comparison first/second/third opening, same editor/same offer; `adb exec-out screencap -p > /tmp/d10_second.png` | No cut-off footer row; with the same budget, identical cell edges within **1 px**, no cumulative insets. |
+| 3 | Mic center tap with the VK-HIT rect; width from `adb shell wm size`, density from `adb shell wm density` | Mic reachable from the visible keyboard with **1 hold gesture**; in the example about 166×128 or 166×147 px, each ≥48×48 dp. Hit name mic, not enter/space. |
+| 4 | Monotonic DOWN→first press/starting frame measurement, 20 hold gestures under running ASR | **Every** visible reaction <500 ms; no waiting for encoder/finalization for press feedback. Not to be confused with first_hyp_ms. |
+| 5 | Capture/controller timestamps for 20 DOWN/UP/CANCEL cycles, including UP during inference | Start request exactly once per DOWN, stop request immediately on UP; microphone release as a measurement target ≤500 ms after UP/CANCEL, otherwise a documented error, no silent continued running. |
+| 6 | Light/dark screenshots ready/pressed/recording/quiet/finalizing/error; existing diagnostics visible in parallel | Correct table from §2, no RECORDING before the actual capture; error remains after UP for at least **5 s without a new action**, no false "ready" reset. Status/info strip neither removed nor redesigned. |
+| 7 | Successful insertion in the test field plus edit timestamp and subsequent empty/rejected runs | Check mark only on an accepted edit, duration **600±100 ms**; 0 success check marks without an edit. An empty completed run receives an explanatory message; a processing run remains clearly distinguishable. |
+| 8 | During a held mic, a long speech pause and then continued speech; level/state log | No automatic recording abort/rebuild through the "quiet" display; speech after the pause still captured. Level reacts only to real measurements; absent text is not reported as successful recognition. |
+| 9 | Second pointer taps the globe during a held mic; before/after screenshots and a session/layout ID log | Exactly one session, no stop/restart, current layout ID unchanged; `→EN`/marker and the exact (b) message visible; 0 requested ASR language changes. |
+| 10 | UP→final done→normal typing→new mic DOWN; test further taps up to the wrap | No re-layout during normal typing; target applied exactly once before the next capture; pending gone afterwards; same mic cell edge, wrap cancels pending. |
+| 11 | Rect/screenshot comparison before/after normal typing, shift/caps, symbols↔symbolsShift, and emoji return | No key wanders without a deliberately chosen layout/layer/window change; shift single/double tap work; the emoji return path fully visible, no lost action. |
+| 12 | Screenshots light/dark/pressed/caps/second opening/emoji plus `adb shell dumpsys package de.voicekeyboard` and a documented APK hash | Everything from **the same APK** on the reported API-37 phone; 15 layouts position-checked, DE/EN/RU/PT/CZ in depth. No emulator images as phone evidence. Recognition quality separately per the analysis gates, not replaced by a passed UI list. |
 
-Die Bedienliste ist eine notwendige Freigabegrundlage, **keine** Zusicherung „Deutsch
-und Englisch erkennen jetzt zuverlässig“. Neue Version erst nach dieser Liste **und**
-der separaten ASR-/Audioabnahme; eine schöne Mic-Fläche kaschiert keine ignorierten Sätze.
+The operation list is a necessary release basis, **not** an assurance "German
+and English now recognize reliably". A new version only after this list **and**
+the separate ASR/audio acceptance; a pretty mic area does not paper over ignored
+sentences.
 
-## 5. Einordnung in D9-S1 bis S4 – kein zusätzlicher dritter Build
+## 5. Classification in D9-S1 through S4 – no additional third build
 
-Keine fünfte Feature-Welle: D10 ergänzt die noch nicht ausgelieferte S-Kette.
-Gemeinsames APK-Budget weiterhin **maximal zwei Builds**, nicht zwei weitere Builds.
-Falls Build 1 bereits erstellt ist, alles D10 zusammen mit den Kimi-Befunden bündeln
-und nur den noch verfügbaren Korrekturbau nutzen; ist das Budget verbraucht, transparent
-stoppen/neu planen statt einen heimlichen dritten Build starten.
-Neue Klassen-/Testnamen unten sind Vorschläge, bestehende Methoden werden nicht erfunden.
+No fifth feature wave: D10 supplements the not-yet-delivered S chain. The shared
+APK budget remains **at most two builds**, not two more builds. If build 1 has
+already been created, bundle everything D10 together with the Kimi findings and
+use only the still-available correction build; if the budget is used up, stop
+transparently/replan instead of starting a stealth third build.
+New class/test names below are proposals; existing methods are not invented.
 
-| Phase | Dateien, höchstens vier pro Mikro-Auftrag | D10-Ergänzung / zuerst roter Test |
+| Phase | Files, at most four per micro assignment | D10 addition / first red test |
 |---|---|---|
-| **S1 Geometrievertrag** | `app/src/main/java/de/voicekeyboard/keyboard/KeyboardHeight.kt`; `keyboard/KeyboardModel.kt`; vorhandene `KeyboardHeightTest.kt` und `KeyboardModelTest.kt` unter `app/src/test/java/de/voicekeyboard/keyboard/` | Unterschiedliche Footer-/Oberreihenhöhen und Footer-Reihenfolge als gemeinsame Darstellungsregel; 650/829 px, 4/5 Reihen, alle IDs, Mic-Mindestziel, gleiche Footer-Unterkante testen. Keine globalen Fits aus alter Sitzung. |
-| **S2 Touch/Messintegration** | `app/src/main/java/de/voicekeyboard/ime/ImeRootView.kt`; `keyboard/KeyboardView.kt`; neuer/aus D9 geplanter `app/src/androidTest/java/de/voicekeyboard/keyboard/StockKeyboardFitTest.kt` | Komponierten Footer tatsächlich zeichnen/treffen; DOWN/UP/CANCEL-Vertrag für unteren Mic vorbereiten, unabhängiger Mic-Pointer, keine zweite-Aktion auf Release. Zweitöffnung und Globe-Zweitpointer zuerst testen. Leiste/🐞 nicht umgestalten. |
-| **S3 Stock-Palette/Feedback** | `app/src/main/java/de/voicekeyboard/keyboard/KeyboardTheme.kt` (neu/geplant); `keyboard/KeyboardView.kt`; `keyboard/EmojiPanelView.kt`; geplanter `KeyboardThemeTest.kt` unter dem JVM-Testpfad | §2-Palette/Marker/Häkchen, Zustandspriorität und konstante Rects; vorhandenen D9-Themejob erweitern, kein zusätzlicher isolierter Kosmetikbuild. |
-| **S4 Service-/Pending-Verdrahtung** | `app/src/main/java/de/voicekeyboard/ime/VoiceKeyboardService.kt`; neuer `keyboard/PendingLayout.kt`; `app/src/main/res/values/strings.xml`; neuer `app/src/test/java/de/voicekeyboard/keyboard/MicAndGlobeStateTest.kt` | Vorhandene Controller-Ereignisse an unteren Mic binden; akzeptierte Edits statt Hypothesen als Feedback; Vormerkungsautomat, exakte Texte, 1 Session trotz Globus und nächster Start mit Ziel. Alte Ablehnung ersetzen, keine automatische Aufnahmefortsetzung. |
+| **S1 geometry contract** | `app/src/main/java/de/voicekeyboard/keyboard/KeyboardHeight.kt`; `keyboard/KeyboardModel.kt`; existing `KeyboardHeightTest.kt` and `KeyboardModelTest.kt` under `app/src/test/java/de/voicekeyboard/keyboard/` | Different footer/upper row heights and footer order as a shared display rule; test 650/829 px, 4/5 rows, all IDs, mic minimum target, same footer lower edge. No global fits from an old session. |
+| **S2 touch/measurement integration** | `app/src/main/java/de/voicekeyboard/ime/ImeRootView.kt`; `keyboard/KeyboardView.kt`; new/from D9 planned `app/src/androidTest/java/de/voicekeyboard/keyboard/StockKeyboardFitTest.kt` | Actually draw/hit the composed footer; prepare the DOWN/UP/CANCEL contract for the lower mic, independent mic pointer, no second action on release. Test second opening and the globe second pointer first. Do not redesign the strip/🐞. |
+| **S3 stock palette/feedback** | `app/src/main/java/de/voicekeyboard/keyboard/KeyboardTheme.kt` (new/planned); `keyboard/KeyboardView.kt`; `keyboard/EmojiPanelView.kt`; planned `KeyboardThemeTest.kt` under the JVM test path | §2 palette/markers/check mark, state priority, and constant rects; extend the existing D9 theme job, no additional isolated cosmetics build. |
+| **S4 service/pending wiring** | `app/src/main/java/de/voicekeyboard/ime/VoiceKeyboardService.kt`; new `keyboard/PendingLayout.kt`; `app/src/main/res/values/strings.xml`; new `app/src/test/java/de/voicekeyboard/keyboard/MicAndGlobeStateTest.kt` | Bind existing controller events to the lower mic; accepted edits instead of hypotheses as feedback; pre-selection automatism, exact texts, 1 session despite globe, and the next start with the target. Replace the old rejection, no automatic recording continuation. |
 
-Abgekürzte `keyboard/...`-Produktionspfade stehen unter
-`app/src/main/java/de/voicekeyboard/`; alle Roh-Layoutassets bleiben unverändert.
-Wenn ein notwendiger Test-/Integrationspfad das Vier-Dateien-Limit überschreitet,
-Auftrag teilen **ohne** zusätzlichen APK-Build; nicht still Dateien oder Gerätejobs anhängen.
-Der spätere Kimi-Befund wird vor dem letzten gemeinsamen Build integriert oder als
-expliziter verbleibender Releaseblocker geführt, nicht durch diesen Designauftrag vorweggenommen.
+Abbreviated `keyboard/...` production paths live under
+`app/src/main/java/de/voicekeyboard/`; all raw layout assets remain unchanged.
+If a necessary test/integration path exceeds the four-file limit, split the
+assignment **without** an additional APK build; do not silently attach files or
+device jobs. The later Kimi finding is integrated before the last shared build
+or tracked as an explicit remaining release blocker, not pre-empted by this
+design assignment.
 
-## Abschluss
+## Conclusion
 
-**FERTIG:** Mic ganz rechts/doppelte Breite, Enter davor, Space 5→4; vollständige
-Footer-Zeile und alle Zeichen erhalten; konkrete 650/829-px-Geometrie samt Grenzen;
-Mic-Zustände, Globus (b), 12 Abnahmepunkte und S-Kettenzuordnung entschieden.
-**OFFEN:** Implementierung und Telefonabnahme; ASR-/Audioanalyse zu „Yeah.“, Englisch
-und ignorierten Eingaben; Root-/Child-Budgetzuordnung und reale Nutzbreite bestätigen.
-**ANNAHME:** Rechenbeispiele verwenden 1080 px Nutzbreite, Root-Angebot und 21 px
-Navigation; abweichende reale Insets werden genau einmal berücksichtigt.
-**VERIFIKATION:** Nur Quellen/D9 gelesen und Maß-/Textlängen rechnerisch geprüft;
-kein adb/Build und keine Code-/Assetänderung, einzige neue Datei dieses Dokument.
+**DONE:** Mic far right/double width, enter before it, space 5→4; complete
+footer row and all characters preserved; concrete 650/829-px geometry including
+limits; mic states, globe (b), 12 acceptance points, and S chain allocation
+decided.
+**OPEN:** Implementation and phone acceptance; ASR/audio analysis of "Yeah.",
+English, and ignored inputs; confirm the root/child budget allocation and the
+real usable width.
+**ASSUMPTION:** The worked examples use 1080 px usable width, the root offer,
+and 21 px navigation; deviating real insets are accounted for exactly once.
+**VERIFICATION:** Only sources/D9 read and measure/text lengths arithmetically
+checked; no adb/build and no code/asset changes, the only new file is this
+document.

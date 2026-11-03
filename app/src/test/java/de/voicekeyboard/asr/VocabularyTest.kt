@@ -44,7 +44,7 @@ class VocabularyTest {
     @Test fun specialTokensFiltered() {
         val v = Vocabulary.parse(vocabText())
         for (id in 0..4) assertTrue("id $id should be special", v.isSpecial(id))
-        assertTrue("<|de|> (78)", v.isSpecial(78))       // Muster <...>
+        assertTrue("<|de|> (78)", v.isSpecial(78))       // pattern <...>
         assertTrue("<unk>", v.isSpecial(0))
         assertTrue("<|spltoken0|> (244)", v.isSpecial(244))
         assertTrue("<blk> (8192)", v.isSpecial(8192))

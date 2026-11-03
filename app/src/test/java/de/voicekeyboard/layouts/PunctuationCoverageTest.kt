@@ -12,30 +12,30 @@ import org.robolectric.annotation.Config
 
 /**
  * PunctuationCoverageTest (LAYOUT_REQUIREMENTS §6.3, Rev 3):
- * Die sprachspezifischen Satzzeichen aus §2.2 (Spalte „Satzzeichen (direkt)") müssen
- * je Asset erreichbar sein:
+ * The language-specific punctuation from §2.2 (column „Satzzeichen (direkt)") must
+ * be reachable per asset:
  *
- * - SZ = eigene Taste auf `symbols` ODER `symbolsShift` ODER Alternate (beliebige Ebene).
- *   (Rev 3: „direkt" = eigene Taste auf symbols ODER symbolsShift; der Auftrag von
- *   Stufe 3 definiert SZ als erreichbar — eigene Taste oder Alternate.)
- * - `{…}`-Oder-Varianten in §2.2 sind als Alternativmengen kodiert: mindestens EINE
- *   Variante muss vollständig erreichbar sein.
- * - Fehlermeldung nennt Asset, Zeichen und geforderte Stufe („SZ").
+ * - SZ = an own key on `symbols` OR `symbolsShift` OR an alternate (any layer).
+ *   (Rev 3: „direkt" = an own key on symbols OR symbolsShift; the stage-3 order
+ *   defines SZ as reachable — own key or alternate.)
+ * - `{…}` or-variants in §2.2 are encoded as alternative sets: at least ONE
+ *   variant must be fully reachable.
+ * - the error message names the asset, the character and the required stage („SZ").
  *
- * Negative Tests (Gegenprobe, kein Asset-Rückbau in Dateien — Inline-Mutation):
- * präparierte JSON-Strings müssen den Test ROT machen.
+ * Negative tests (counter-checks, no asset revert in the files — inline mutation):
+ * prepared JSON strings must turn the test RED.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35])
 class PunctuationCoverageTest {
 
     /**
-     * Eine SZ-Anforderung: Liste von Varianten (Mengen von Zeichen).
-     * Erfüllt, wenn mindestens EINE Variante vollständig erreichbar ist.
+     * One SZ requirement: list of variants (sets of characters).
+     * Satisfied when at least ONE variant is fully reachable.
      */
     private data class SzRequirement(val variants: List<Set<String>>)
 
-    /** §2.2 Spalte „Satzzeichen (direkt)" — jede Zeile mit §-Verweis aus LAYOUT_REQUIREMENTS.md. */
+    /** §2.2 column „Satzzeichen (direkt)" — every row with § reference from LAYOUT_REQUIREMENTS.md. */
     private val szMatrix: Map<String, List<SzRequirement>> = mapOf(
         // §2.2: „ “ {oder » «}, –, €, §, °
         "de-de" to listOf(
@@ -143,8 +143,8 @@ class PunctuationCoverageTest {
             SzRequirement(listOf(setOf("§"))),
             SzRequirement(listOf(setOf("€"))),
         ),
-        // §2.2 (Rev 3, Audit-D): « », · (U+00B7, NFC-stabil — U+0387 verboten), ; (U+037E
-        // entfällt, da kanonisch identisch mit ; aus Gruppe 1), €
+        // §2.2 (Rev 3, Audit-D): « », · (U+00B7, NFC-stable — U+0387 forbidden), ; (U+037E
+        // dropped, since canonically identical with ; from group 1), €
         "el-gr" to listOf(
             SzRequirement(listOf(setOf("«"))),
             SzRequirement(listOf(setOf("»"))),
@@ -160,7 +160,7 @@ class PunctuationCoverageTest {
         null
     }
 
-    /** Erfassbar = eigene Text-Taste auf symbols/symbolsShift ODER Alternate auf einer beliebigen Ebene. */
+    /** Reachable = an own text key on symbols/symbolsShift OR an alternate on any layer. */
     private fun checkSzCoverage(assetJson: String, assetId: String) {
         val parsed = LayoutParser.parse(assetJson)
         val ownOnSymbolLayers = parsed.layers
@@ -175,76 +175,76 @@ class PunctuationCoverageTest {
         for (req in szMatrix.getValue(assetId)) {
             val satisfied = req.variants.any { variant -> variant.all { it in reachable } }
             if (!satisfied) {
-                fail("Asset '$assetId': SZ-Zeichen-Anforderung ${req.variants} nicht erfüllt — " +
-                    "keine Variante vollständig erreichbar (weder eigene Taste auf " +
-                    "symbols/symbolsShift noch alternate; geforderte Stufe: SZ, " +
-                    "LAYOUT_REQUIREMENTS §2.2 Satzzeichen-Spalte)")
+                fail("Asset '$assetId': SZ character requirement ${req.variants} not fulfilled — " +
+                    "no variant fully reachable (neither an own key on " +
+                    "symbols/symbolsShift nor an alternate; required stage: SZ, " +
+                    "LAYOUT_REQUIREMENTS §2.2 punctuation column)")
             }
         }
     }
 
     @Test
-    fun `alle vorhandenen Assets decken die Satzzeichen-Matrix aus §2 2 ab`() {
+    fun `all existing assets cover the punctuation matrix from section 2 2`() {
         var checked = 0
         for (assetId in szMatrix.keys.sorted()) {
             val json = asset("$assetId.json") ?: continue
             checkSzCoverage(json, assetId)
             checked++
         }
-        assertTrue("Kein Asset geprüft — szMatrix/assets inkonsistent", checked > 0)
-        println("PunctuationCoverageTest: $checked Assets geprüft")
+        assertTrue("no asset checked — szMatrix/assets inconsistent", checked > 0)
+        println("PunctuationCoverageTest: $checked assets checked")
     }
 
-    // ---------- Gegenproben (Negativtests mit Inline-Mutation, KEINE Asset-Änderung) ----------
+    // ---------- counter-checks (negative tests with inline mutation, NO asset change) ----------
 
     @Test
-    fun `negativ - fehlendes ” in pl-pl SZ-Matrix wird erkannt`() {
-        val json = asset("pl-pl.json") ?: throw AssertionError("pl-pl.json nicht lesbar")
+    fun `negative - a missing double quote high in the pl-pl SZ matrix is detected`() {
+        val json = asset("pl-pl.json") ?: throw AssertionError("pl-pl.json not readable")
         val root = JSONObject(json)
-        // ” (Fix aus dem Audit) auf der symbolsShift-Ebene wieder rückbauen → Test MUSS rot werden.
+        // revert ” (the fix from the audit) on the symbolsShift layer → the test MUST turn red.
         findKeyById(root, "symbolsShift", "question")?.apply {
             put("label", "¿"); put("value", "¿")
-        } ?: throw AssertionError("Taste 'question' nicht gefunden")
-        // T4 (v0.1.35, PLAN_LONGPRESS_SYMBOLS §2): ” ist jetzt ZUSÄTZLICH Alternate an
-        // der dquote-Taste (symbols) — SZ gilt per Definition (Kopf) auch über
-        // Alternates; der Rückbau muss daher BEIDE Vorkommen entfernen, sonst
-        // bliebe ” erreichbar und die Gegenprobe wäre zur Tautologie geworden.
+        } ?: throw AssertionError("key 'question' not found")
+        // T4 (v0.1.35, PLAN_LONGPRESS_SYMBOLS §2): ” is now ADDITIONALLY an alternate on
+        // the dquote key (symbols) — by definition (header) SZ also applies via
+        // alternates; the revert must therefore remove BOTH occurrences, otherwise
+        // ” would stay reachable and the counter-check would have become a tautology.
         findKeyById(root, "symbols", "dquote")?.apply {
             put("alternates", JSONArray(listOf("„", "“", "‘", "’", "‚")))
-        } ?: throw AssertionError("Taste 'dquote' nicht gefunden")
+        } ?: throw AssertionError("key 'dquote' not found")
         var caught = false
         try {
             checkSzCoverage(root.toString(), "pl-pl")
         } catch (e: AssertionError) {
             caught = true
-            assertTrue("Fehlermeldung muss das Zeichen nennen: ${e.message}",
+            assertTrue("the error message must name the character: ${e.message}",
                 e.message?.contains("”") == true)
-            assertTrue("Fehlermeldung muss das Asset nennen: ${e.message}",
+            assertTrue("the error message must name the asset: ${e.message}",
                 e.message?.contains("pl-pl") == true)
         }
-        assertTrue("Rückbau von ” in pl-pl wurde NICHT erkannt (Tautologie-Verdacht)", caught)
+        assertTrue("the revert of ” in pl-pl was NOT detected (tautology suspicion)", caught)
     }
 
     @Test
-    fun `negativ - fehlendes – in de-de SZ-Matrix wird erkannt`() {
-        val json = asset("de-de.json") ?: throw AssertionError("de-de.json nicht lesbar")
+    fun `negative - a missing en dash in the de-de SZ matrix is detected`() {
+        val json = asset("de-de.json") ?: throw AssertionError("de-de.json not readable")
         val root = JSONObject(json)
         findKeyById(root, "symbolsShift", "9")?.apply {
-            put("label", "µ"); put("value", "µ") // Fix rückbauen
-        } ?: throw AssertionError("Taste '9' nicht gefunden")
-        // T4 (v0.1.35): – ist jetzt ZUSÄTZLICH Alternate an der hyphen-Taste (symbols)
-        // — SZ gilt auch über Alternates, der Rückbau entfernt daher BEIDE Vorkommen.
+            put("label", "µ"); put("value", "µ") // revert the fix
+        } ?: throw AssertionError("key '9' not found")
+        // T4 (v0.1.35): – is now ADDITIONALLY an alternate on the hyphen key (symbols)
+        // — SZ also applies via alternates, the revert therefore removes BOTH occurrences.
         findKeyById(root, "symbols", "hyphen")?.apply {
             put("alternates", JSONArray(listOf("—")))
-        } ?: throw AssertionError("Taste 'hyphen' nicht gefunden")
+        } ?: throw AssertionError("key 'hyphen' not found")
         var caught = false
         try {
             checkSzCoverage(root.toString(), "de-de")
         } catch (e: AssertionError) {
             caught = true
-            assertTrue("Fehlermeldung muss – nennen: ${e.message}", e.message?.contains("–") == true)
+            assertTrue("the error message must name –: ${e.message}", e.message?.contains("–") == true)
         }
-        assertTrue("Rückbau von – in de-de wurde NICHT erkannt", caught)
+        assertTrue("the revert of – in de-de was NOT detected", caught)
     }
 
     private fun findKeyById(root: JSONObject, layer: String, keyId: String): JSONObject? {

@@ -14,19 +14,19 @@ import de.voicekeyboard.model.ModelStore
 import de.voicekeyboard.model.ModelVariant
 
 /**
- * A14/T17: Android-Dünnschicht — füllt [DebugSnapshot] und exportiert ihn
- * (Zwischenablage + Teilen-Dialog). Das Format selbst ist rein JVM
- * ([DebugInfoFormatter], dort getestet).
+ * A14/T17: Android thin layer — fills [DebugSnapshot] and exports it
+ * (clipboard + share dialog). The format itself is pure JVM
+ * ([DebugInfoFormatter], tested there).
  *
- * Regel 9 (docs/DEBUG_INFO_FIELDS.md §2):
- *  - Version über PackageManager (BuildConfig ist in diesem Modul aus —
- *    kein buildFeatures-Block in app/build.gradle.kts).
- *  - Modellstatus: Variante-Kurzname + Byte-SUMME, NIE absolute Pfade
- *    (`modelDir().absolutePath` ist verboten — nur Zahlen).
- *  - Fehlercodes: nur der E5-Schlüssel aus `visibleError`, nie Klartext/
- *    message/Stacktrace.
- *  - Der Exporttext wird NICHT geloggt (auch nicht teilweise).
- *  - Kein Netzwerk, kein Ziel-Paketname im Text.
+ * Rule 9 (docs/DEBUG_INFO_FIELDS.md §2):
+ *  - Version via PackageManager (BuildConfig is out in this module —
+ *    no buildFeatures block in app/build.gradle.kts).
+ *  - Model status: variant short name + byte SUM, NEVER absolute paths
+ *    (`modelDir().absolutePath` is forbidden — numbers only).
+ *  - Error codes: only the E5 key from `visibleError`, never plain text/
+ *    message/stacktrace.
+ *  - The export text is NOT logged (not even partially).
+ *  - No network, no target package name in the text.
  */
 class DebugInfoCollector(private val context: Context) {
 
@@ -38,19 +38,19 @@ class DebugInfoCollector(private val context: Context) {
         permissions: AndroidPermissionsRequester,
         audioRoute: String? = null,
         audioSource: String? = null,
-        /** F42 (🐞: had_output/output_chars): Ausgabe-Zähler der IME (nur Zahlen). */
+        /** F42 (🐞: had_output/output_chars): output counters of the IME (numbers only). */
         hadOutput: Boolean? = null,
         outputChars: Int? = null,
-        /** F42 (🐞: fgs_stopped_by): Ursachencode des letzten FGS-Stops (F44). */
+        /** F42 (🐞: fgs_stopped_by): cause code of the last FGS stop (F44). */
         fgsStoppedBy: String? = null,
-        /** F52 (🐞: status_res): Code/Ressourcen-Name des zuletzt gezeigten
-         *  Statuszeilen-Texts — nie der Text selbst (Regel 9). */
+        /** F52 (🐞: status_res): code/resource name of the last shown
+         *  status row text — never the text itself (rule 9). */
         statusRes: String? = null,
-        /** AP7-W1: gate_open_at_stop — Service-Sample DIREKT vor dem Stopp
-         *  (0/1; -1 = kein Stopp); ueberstimmt die grobere Coordinator-Schaetzung
-         *  im Feld gate_at_stop (Nennung bleibt unveraendert). */
+        /** AP7-W1: gate_open_at_stop — service sample DIRECTLY before the stop
+         *  (0/1; -1 = no stop); overrides the coarser coordinator estimate
+         *  in the field gate_at_stop (the name stays unchanged). */
         gateOpenAtStop: Int? = null,
-        /** AP7-W1: abgewiesene Fremd-Resets des Halte-Gates (W1b-Beweis). */
+        /** AP7-W1: rejected foreign resets of the hold gate (W1b evidence). */
         gateForeignResets: Int? = null,
     ): DebugSnapshot {
         val (versionName, versionCode) = try {
@@ -62,11 +62,11 @@ class DebugInfoCollector(private val context: Context) {
                 info.versionCode
             }
         } catch (e: PackageManager.NameNotFoundException) {
-            Log.w(TAG, "package info unavailable") // kein Exporttext im Log
+            Log.w(TAG, "package info unavailable") // no export text in the log
             null to null
         }
         val debugBuild = (context.applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0
-        // Byte-Summe über die aktive Variante — nur Zahlen, keine Dateinamen/Pfade.
+        // Byte sum over the active variant — numbers only, no file names/paths.
         val modelFiles = try {
             modelStore.modelDir(modelVariant).listFiles()
         } catch (e: Exception) {
@@ -101,8 +101,8 @@ class DebugInfoCollector(private val context: Context) {
             audioRoute = audioRoute,
             audioSource = audioSource,
             peakDbfs = coordinator?.levelPeak?.dbfs(),
-            // F13b2: Beweisfelder für den Langtext-Abbruch (C1) — Coordinator ist
-            // bereits Parameter; VoiceKeyboardService bleibt unangetastet.
+            // F13b2: evidence fields for the long-text abort (C1) — the coordinator is
+            // already a parameter; VoiceKeyboardService stays untouched.
             ctlState = coordinator?.ctlState,
             ctlFailed = coordinator?.failedThisSession,
             droppedBlocks = coordinator?.droppedBlocks,
@@ -111,25 +111,25 @@ class DebugInfoCollector(private val context: Context) {
             audioSeconds = coordinator?.audioSeconds,
             lastStartMs = coordinator?.lastStartMs,
             starting = coordinator?.starting,
-            // F17c: Decode-Arbeitslast (C2) — gleiche Coordinator-Durchreiche wie hypGapMs.
+            // F17c: decode workload (C2) — same coordinator pass-through as hypGapMs.
             decodeMsMax = coordinator?.decodeMsMax(),
             decodeMsP95 = coordinator?.decodeMsP95(),
             bufferSeconds = coordinator?.bufferSeconds(),
-            // F21: cost-aware Takt — gleiche Durchreiche, nur Zahlen (Regel 9).
+            // F21: cost-aware pace — same pass-through, numbers only (rule 9).
             decodePaceMs = coordinator?.decodePaceMs(),
             decodeSkips = coordinator?.decodeSkips(),
-            // F28b1: Capture-Stall-Messung (🐞: cap_blocks/cap_stall_ms) — gleiche Durchreiche.
+            // F28b1: capture stall measurement (🐞: cap_blocks/cap_stall_ms) — same pass-through.
             capBlocks = coordinator?.capBlocks(),
             capStallMs = coordinator?.capStallMs(),
-            // F26a: Abort-Grund (C2-Export) — gleiche Durchreiche, kontrollierte Namen.
+            // F26a: abort reason (C2 export) — same pass-through, controlled names.
             abortReason = coordinator?.lastAbortReason,
-            // AP3 (PLAN_C2_FABLE_R2 §4, Export v2 Teil 1): Session-Forensik —
-            // stop_cause (vereinheitlicht), start_src, gate_at_stop,
+            // AP3 (PLAN_C2_FABLE_R2 §4, export v2 part 1): session forensics —
+            // stop_cause (unified), start_src, gate_at_stop,
             // owner_lost_at_s, segment_finalizations, max_pause_ms,
-            // restart_inputs, sel_unexpected. Nur Codes/Zahlen (Regel 9).
+            // restart_inputs, sel_unexpected. Codes/numbers only (rule 9).
             stopCause = coordinator?.stopCause(),
             startSrc = coordinator?.startSrc(),
-            // AP7-W1: Service-Sample (Stop-Moment) hat Vorrang; sonst Coordinator.
+            // AP7-W1: the service sample (stop moment) takes precedence; otherwise the coordinator.
             gateAtStop = gateOpenAtStop?.takeIf { it >= 0 } ?: coordinator?.gateAtStop(),
             ownerLostAtS = coordinator?.ownerLostAtS(),
             segmentFinalizations = coordinator?.segmentFinalizations(),
@@ -137,30 +137,30 @@ class DebugInfoCollector(private val context: Context) {
             restartInputs = coordinator?.restartInputs(),
             selUnexpected = coordinator?.selUnexpected(),
             gateForeignResets = gateForeignResets,
-            // AP7-E1: Re-Baselines nach restartInput (neben restart_inputs).
+            // AP7-E1: re-baselines after restartInput (next to restart_inputs).
             rebases = coordinator?.rebases(),
-            // F26b (C2-Export): Bufferstand der letzten Hypothese (nur Zahlen, Regel 9).
+            // F26b (C2 export): buffer level of the last hypothesis (numbers only, rule 9).
             hypLastBufferSeconds = coordinator?.lastHypothesisBufferSeconds()?.toDouble(),
-            // F28b2: Wer hat die Session beendet + was zeigte die Statuszeile
-            // (reine Codes/ms, Regel 9).
+            // F28b2: who ended the session + what the status row showed
+            // (pure codes/ms, rule 9).
             micRel = coordinator?.micRel(),
             statusShown = coordinator?.statusShown(),
-            // F52: Code/Ressourcen-Name des zuletzt gezeigten Statustexts (Regel 9).
+            // F52: code/resource name of the last shown status text (rule 9).
             statusRes = statusRes,
-            // F31: Sekunden mit lautem Signal (Stille-Erkennung, 🐞: loud_s; nur Zahlen).
+            // F31: seconds with a loud signal (silence detection, 🐞: loud_s; numbers only).
             loudS = coordinator?.loudS(),
-            // F42 (F41-Fehlende-Messpunkte): Ausgabe-/Stille-/FGS-Forensik — nur
-            // Zahlen/Codes (Regel 9); Stille-Messfelder via Coordinator-Durchreiche.
+            // F42 (F41 missing measurement points): output/silence/FGS forensics —
+            // numbers/codes only (rule 9); silence measurement fields via the coordinator pass-through.
             hadOutput = hadOutput,
             outputChars = outputChars,
             firstLoudMs = coordinator?.firstLoudMs(),
             first3sLoudBlocks = coordinator?.first3sLoudBlocks(),
             first3sPeakDbfs = coordinator?.first3sPeakDbfs(),
             fgsStoppedBy = fgsStoppedBy,
-            // A4a (PLAN_V0133 §A4a): Decode-/Schreib-Diagnose (A2b) — NUR Durchreichen
-            // (keine neuen Textquellen): Fensterwerte aus dem A2b-Diagnoseobjekt
-            // (lastDecodeWindow), Session-Zähler über die Coordinator-Durchreiche.
-            // Nur Zahlen/Codes (Regel 9).
+            // A4a (PLAN_V0133 §A4a): decode/write diagnostics (A2b) — ONLY pass-through
+            // (no new text sources): window values from the A2b diagnostics object
+            // (lastDecodeWindow), session counters via the coordinator pass-through.
+            // Numbers/codes only (rule 9).
             lastDecodeMs = coordinator?.lastDecodeWindow()?.decodeMs,
             hypLen = coordinator?.lastDecodeWindow()?.hypLen,
             currentLen = coordinator?.lastDecodeWindow()?.currentLen,
@@ -171,9 +171,9 @@ class DebugInfoCollector(private val context: Context) {
             writeW3d = coordinator?.writeW3dCount(),
             writeDelta = coordinator?.writeDeltaCount(),
             lastWriteAudioS = coordinator?.lastWriteAudioS(),
-            // W-Paket (vc34): Engine-Warming — Durchreiche aus dem Coordinator
-            // (nur Zahlen/Codes, Regel 9): reine load-Dauer, Resident-Flag,
-            // warmer Diktat-Start, Auslöser des letzten load(), Load-Zähler.
+            // W package (vc34): engine warming — pass-through from the coordinator
+            // (numbers/codes only, rule 9): pure load duration, resident flag,
+            // warm dictation start, trigger of the last load(), load counter.
             engineLoadMs = coordinator?.engineLoadMs,
             engineResident = coordinator?.engineResident,
             warmHit = coordinator?.warmHit,
@@ -183,11 +183,11 @@ class DebugInfoCollector(private val context: Context) {
     }
 
     /**
-     * Export: Text IMMER in die Zwischenablage, danach Teilen-Dialog
-     * (ACTION_SEND, text/plain, Chooser). Ohne Handler bleibt die
-     * Zwischenablage der Fallback — kein Stillstand, kein Crash.
-     * Regel 9: der Text wird nicht geloggt; kein Ziel-Paketname gesetzt
-     * (`setPackage` bewusst weggelassen).
+     * Export: text ALWAYS into the clipboard, then share dialog
+     * (ACTION_SEND, text/plain, chooser). Without a handler the
+     * clipboard stays the fallback — no stall, no crash.
+     * Rule 9: the text is not logged; no target package name set
+     * (`setPackage` deliberately omitted).
      */
     fun export(text: String) {
         val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
@@ -201,7 +201,7 @@ class DebugInfoCollector(private val context: Context) {
         try {
             context.startActivity(chooser)
         } catch (e: Exception) {
-            Log.i(TAG, "no share handler; clipboard fallback active") // kein Textinhalt
+            Log.i(TAG, "no share handler; clipboard fallback active") // no text content
         }
     }
 

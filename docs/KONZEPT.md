@@ -1,17 +1,18 @@
-# Konzept: Push-to-Talk-Diktat mit lokalem ASR
+# Concept: push-to-talk dictation with local ASR
 
-**Zweck dieses Dokuments:** Übertragbare Beschreibung einer erprobten Architektur für
-Push-to-Talk-Diktat (Taste halten → sprechen → Text erscheint an der Cursor-Position).
-Die Mechanismen wurden auf einem Linux-Desktop (ThinkPad, CPU-only) implementiert,
-getestet und iterativ debuggt. Dieses Dokument beschreibt **was funktioniert, warum,
-und welche Fallstricke vermieden werden müssen** — damit dasselbe Prinzip auf einer
-anderen Plattform (z. B. Android) umgesetzt werden kann, ohne die Fehler zu wiederholen.
+**Purpose of this document:** transferable description of a proven architecture
+for push-to-talk dictation (hold the key → speak → text appears at the cursor
+position). The mechanisms were implemented on a Linux desktop (ThinkPad,
+CPU-only), tested, and iteratively debugged. This document describes **what
+works, why, and which pitfalls must be avoided** — so that the same principle
+can be implemented on another platform (e.g. Android) without repeating the
+mistakes.
 
-Referenz-Implementierung: `stt_button` (Python 3.12, ~3.300 LOC, 179 Tests).
+Reference implementation: `stt_button` (Python 3.12, ~3,300 LOC, 179 tests).
 
 ---
 
-## 1. Überblick
+## 1. Overview
 
 ```
  ┌──────────────┐    ┌───────────────┐    ┌──────────────────┐    ┌──────────────┐
@@ -22,14 +23,15 @@ Referenz-Implementierung: `stt_button` (Python 3.12, ~3.300 LOC, 179 Tests).
       = Start/Stop       + Thread           wachsenden Puffer       + Backspace-Revision
 ```
 
-**Kernprinzip:** Das System ist ein **Diktier-Werkzeug**, kein Chat-Interface.
-Der Text muss *live* entstehen, korrigierbar sein und darf den Nutzer-Text nicht zerstören.
+**Core principle:** the system is a **dictation tool**, not a chat interface.
+The text must emerge *live*, be correctable, and must not destroy the user's
+text.
 
 ---
 
-## 2. Die sieben Kernmechanismen (alle erprobt)
+## 2. The seven core mechanisms (all proven)
 
-### 2.1 Push-to-Talk als Zustandsmaschine
+### 2.1 Push-to-talk as a state machine
 
 ```
 IDLE ──press──▶ RECORDING ──release──▶ FINALIZING ──▶ IDLE
@@ -37,138 +39,142 @@ IDLE ──press──▶ RECORDING ──release──▶ FINALIZING ──▶ 
                     └── abort() (Fehler/Timeout) ──▶ IDLE
 ```
 
-* **Taste halten = aufnehmen, loslassen = finalisieren.** Kein Toggle, kein Doppelklick.
-* `start_recording()` ist **idempotent** (doppelter Tastendruck startet nicht neu).
-* Ein Lock (`threading.RLock`) serialisiert Zugriffe aus Key-Thread und ASR-Schleife.
+* **Hold the key = record, release = finalize.** No toggle, no double click.
+* `start_recording()` is **idempotent** (a second key press does not restart).
+* A lock (`threading.RLock`) serializes accesses from the key thread and the
+  ASR loop.
 
-> **Android:** `AudioRecord` beim `ACTION_DOWN` starten, beim `ACTION_UP` stoppen.
-> `onKeyDown` kann mehrfach feuern → Idempotenz ist Pflicht.
+> **Android:** start `AudioRecord` on `ACTION_DOWN`, stop on `ACTION_UP`.
+> `onKeyDown` can fire multiple times → idempotency is mandatory.
 
-### 2.2 Trigger-Erkennung getrennt vom Mikrofon
+### 2.2 Trigger detection separated from the microphone
 
-Die Trigger-Taste wird **unabhängig** vom Aufnahmeweg erkannt.
+The trigger key is detected **independently** of the capture path.
 
-* Desktop: physische Taste → `keyd`-Remap → `F24` auf virtuellem Device → direktes
-  Lesen von `/dev/input/event*` (reines Python, keine C-Abhängigkeit).
-* **Autorepeat filtern:** Events mit `value == 2` ignorieren, sonst startet die
-  Aufnahme bei jedem Repeat neu.
-* **Press und Release getrennt behandeln** — die Release-Erkennung ist der
-  kritische Pfad (siehe 2.3).
-* Device **per Name** auflösen, nicht per Pfad (Nummern ändern sich bei Neustart).
+* Desktop: physical key → `keyd` remap → `F24` on a virtual device → direct
+  reading of `/dev/input/event*` (pure Python, no C dependency).
+* **Filter autorepeat:** ignore events with `value == 2`, otherwise the
+  recording restarts on every repeat.
+* **Handle press and release separately** — release detection is the critical
+  path (see 2.3).
+* Resolve the device **by name**, not by path (numbers change on reboot).
 
-> **Android:** Hardware-Taste via `KeyEvent` (z. B. `KEYCODE_HEADSETHOOK` für
-> Headset-Tasten, oder ein `MediaButtonReceiver`). Achtung: Lautstärketasten sind
-> vom System belegt; Headset-/Bluetooth-Tasten sind der zuverlässigere Weg.
+> **Android:** hardware key via `KeyEvent` (e.g. `KEYCODE_HEADSETHOOK` for
+> headset keys, or a `MediaButtonReceiver`). Note: volume keys are reserved by
+> the system; headset/Bluetooth keys are the more reliable route.
 
-### 2.3 Key-Erkennung MUSS in einem eigenen Thread laufen ⚠️
+### 2.3 Key detection MUST run in its own thread ⚠️
 
-**Das ist der wichtigste Architektur-Punkt und war ein realer Bug.**
+**This is the most important architecture point and was a real bug.**
 
-Problem: Die ASR-Inferenz blockiert (CPU-only: 1–3 s pro Transkription). Läuft die
-Key-Erkennung in derselben Schleife, wird das **Loslassen der Taste während der
-Inferenz nicht verarbeitet** → die Aufnahme läuft weiter, obwohl der Nutzer fertig ist.
+Problem: ASR inference blocks (CPU-only: 1–3 s per transcription). If key
+detection runs in the same loop, **releasing the key during inference is not
+processed** → the recording continues even though the user is done.
 
-Lösung (zweistufig):
+Solution (two stages):
 
 ```python
-# 1) Key-Listener in eigenem Thread
+# 1) Key listener in its own thread
 threading.Thread(target=self._listener.run, name="key-listener", daemon=True).start()
 
-# 2) Audio-Capture in NOCH einem Thread, der in eine Queue schreibt
+# 2) Audio capture in YET another thread that writes into a queue
 def _capture_loop(self):
     while self.state == RECORDING:
         chunk = source.read(block=False)
         if chunk:
-            self._audio_queue.put(chunk)   # entkoppelt von der Inferenz
+            self._audio_queue.put(chunk)   # decoupled from the inference
 ```
 
-Der Hauptthread konsumiert nur noch die Queue und transkribiert.
+The main thread now only consumes the queue and transcribes.
 
-**Warum drei Threads?** Key-Thread (nie blockieren) · Capture-Thread (Audio läuft
-weiter, auch wenn die Inferenz rechnet) · Main-Thread (Inferenz + Ausgabe).
+**Why three threads?** Key thread (never block) · capture thread (audio keeps
+flowing even while inference computes) · main thread (inference + output).
 
-> **Android:** `AudioRecord.read()` in einem `HandlerThread`/Coroutine, KeyEvent-Handling
-> im UI-Thread (nur Flags setzen, nie blockieren). Inferenz in `Dispatchers.Default`.
+> **Android:** `AudioRecord.read()` in a `HandlerThread`/coroutine, KeyEvent
+> handling on the UI thread (only set flags, never block). Inference in
+> `Dispatchers.Default`.
 
-### 2.4 Audio-Pipeline: 16 kHz mono, s16le
+### 2.4 Audio pipeline: 16 kHz mono, s16le
 
-* **Format:** 16 kHz, 1 Kanal, 16-bit signed little-endian (`s16le`).
-  Das ist das native Eingabeformat von Whisper/Parakeet — kein Resampling nötig.
-* **Aufnahme als Subprozess/Stream**, Chunks à ~0,2–1 s in einen Ringpuffer.
-* Beim Stoppen **Reihenfolge beachten** (⚠️ realer Bug, siehe 2.8).
+* **Format:** 16 kHz, 1 channel, 16-bit signed little-endian (`s16le`).
+  That is the native input format of Whisper/Parakeet — no resampling needed.
+* **Capture as a subprocess/stream**, chunks of ~0.2–1 s into a ring buffer.
+* On stopping, **mind the order** (⚠️ real bug, see 2.8).
 
-### 2.5 ASR: Modellwahl und Decoding-Parameter
+### 2.5 ASR: model choice and decoding parameters
 
-| Modell | Typ | Parameter | CPU-Latenz (RTF) | Empfehlung |
+| Model | Type | Parameters | CPU latency (RTF) | Recommendation |
 |---|---|---|---|---|
-| **Parakeet TDT 0.6B v3** | Transducer (nicht-autoregressiv) | 0,6 B | **~0,1–0,5** | ✅ **beste Wahl** |
-| faster-whisper large-v3-turbo | seq2seq (autoregressiv) | 0,8 B | ~0,5–1,8 | Fallback |
-| Qwen3-ASR 1.7B | LLM (autoregressiv) | 1,7 B | ~2–3 | nur für Maximalqualität |
+| **Parakeet TDT 0.6B v3** | transducer (non-autoregressive) | 0.6 B | **~0.1–0.5** | ✅ **best choice** |
+| faster-whisper large-v3-turbo | seq2seq (autoregressive) | 0.8 B | ~0.5–1.8 | fallback |
+| Qwen3-ASR 1.7B | LLM (autoregressive) | 1.7 B | ~2–3 | only for maximum quality |
 
-**Warum Parakeet:** Transducer decodieren **greedy und parallel** (kein
-Token-für-Token-Sampling) → auf CPU 5–10× schneller als Whisper bei besserer
-DE/EN-Mischqualität. Erkennt 25 europäische Sprachen automatisch.
+**Why Parakeet:** transducers decode **greedy and in parallel** (no
+token-by-token sampling) → on CPU 5–10× faster than Whisper with better mixed
+DE/EN quality. Recognizes 25 European languages automatically.
 
-**Decoding-Parameter, die sich bewährt haben:**
+**Decoding parameters that proved themselves:**
 
 ```python
 model.transcribe(
     audio,
-    language = None,                      # None = automatische Erkennung ("auto")
+    language = None,                      # None = automatic detection ("auto")
     task = "transcribe",
-    beam_size = 1,                        # greedy: Durchsatz > Qualität marginal
-    temperature = 0.0,                    # deterministisch (wichtig für Streaming!)
-    condition_on_previous_text = False,   # verhindert Wiederholungsschleifen
-    vad_filter = True,                    # Stille filtern (bei Whisper-Engine)
+    beam_size = 1,                        # greedy: throughput > marginal quality
+    temperature = 0.0,                    # deterministic (important for streaming!)
+    condition_on_previous_text = False,   # prevents repetition loops
+    vad_filter = True,                    # filter silence (with the Whisper engine)
     initial_prompt = None,
 )
 ```
 
-**`temperature = 0.0` ist kritisch:** Bei Streaming wird derselbe Puffer mehrfach
-transkribiert. Mit Sampling käme jedes Mal anderer Text → Flackern. Deterministisch
-ist Voraussetzung für die Commit-Logik (2.6).
+**`temperature = 0.0` is critical:** in streaming, the same buffer is
+transcribed repeatedly. With sampling, each pass would yield different text →
+flickering. Determinism is the precondition for the commit logic (2.6).
 
-### 2.6 Streaming: „wachsender Puffer" + LocalAgreement-Commit
+### 2.6 Streaming: "growing buffer" + LocalAgreement commit
 
-**Das Herzstück.** Ohne diesen Mechanismus entstehen entweder Verzögerung oder Flackern.
+**The heart of it.** Without this mechanism you get either delay or
+flickering.
 
 ```
 Audio: [============ wachsender Puffer ============]
                 ↓ alle asr_interval_s (1.0 s Audio)
 Transkription: "So, da bin ich"  →  "So, da bin ich mal"  →  "So, da bin ich mal gespannt"
-                ↓ LocalAgreement: nur stabilen Präfix committen
+                ↓ LocalAgreement: only commit a stable prefix
 Getippt:       "So, da bin ich"  →  " mal"                →  " gespannt"
                 └── committed ──┘   └───── korrigierbar (Partial) ─────┘
 ```
 
-**Algorithmus (LocalAgreement):**
+**Algorithm (LocalAgreement):**
 
-1. Historie der letzten `commit_agreements = 2` Transkriptionen halten.
-2. **Gemeinsamen Präfix** aller Historie-Einträge berechnen.
-3. Nur **bis zur letzten Wortgrenze** committen (das laufende Wort bleibt korrigierbar).
-4. Der committete Text wird **nie mehr zurückgenommen** — das verhindert Flackern.
+1. Keep a history of the last `commit_agreements = 2` transcriptions.
+2. Compute the **common prefix** of all history entries.
+3. Commit only **up to the last word boundary** (the running word stays
+   correctable).
+4. The committed text is **never taken back** — that prevents flickering.
 
 ```python
 common_len = len(history[0])
 for candidate in history[1:]:
     common_len = common_prefix_len(history[0][:common_len], candidate)
 common_str = history[0][:common_len]
-cut = common_str.rfind(" ")          # nur bis zur Wortgrenze
+cut = common_str.rfind(" ")          # only up to the word boundary
 committed = common_str[:cut + 1]
 ```
 
-**Warum 2 Übereinstimmungen?** Ein einzelner Lauf kann eine Halluzination sein
-(besonders bei kurzen Chunks). Erst wenn zwei aufeinanderfolgende Läufe denselben
-Text liefern, gilt er als stabil.
+**Why 2 agreements?** A single run can be a hallucination (especially with
+short chunks). Only when two consecutive runs deliver the same text does it
+count as stable.
 
-**Warum nur bis zur Wortgrenze?** Sonst würde ein halb gesprochenes Wort
-abgeschnitten und eingefroren — genau der Bug, der „Das müsste jetzt **de**"
-statt „Das müsste jetzt **deutlich**" erzeugte.
+**Why only up to the word boundary?** Otherwise a half-spoken word would be
+cut off and frozen — exactly the bug that produced "Das müsste jetzt **de**"
+instead of "Das müsste jetzt **deutlich**".
 
-### 2.7 Die Delta-Ausgabe (DeltaTyper)
+### 2.7 The delta output (DeltaTyper)
 
-Der Transkriptions-Stream liefert wiederholt **den ganzen Text**. Getippt werden darf
-nur die **Differenz**.
+The transcription stream repeatedly delivers **the whole text**. Only the
+**difference** may be typed.
 
 ```python
 old = zuletzt_getippter_text
@@ -187,19 +193,21 @@ if to_remove: backspace(to_remove)
 if to_add:    type_text(to_add)
 ```
 
-**Drei Schutzregeln, die sich als notwendig erwiesen haben:**
+**Three protection rules that proved necessary:**
 
-1. **Committed-Präfix nie anfassen** — verhindert, dass stabiler Text flackert.
-2. **`max_revision_chars` (60):** Müsste mehr als 60 Zeichen zurückgenommen werden,
-   ist meist der Cursor nicht mehr hinter unserem Text (Nutzer hat geklickt) →
-   dann **nur anhängen** statt zu zerstören.
-3. **Finale Transkription ist voll korrigierend** (`force_revision=True`,
-   `committed_len=0`): Beim Loslassen darf das Modell alles korrigieren, denn der
-   Nutzer diktiert fertig und der Cursor steht sicher hinter dem eigenen Text.
+1. **Never touch the committed prefix** — prevents stable text from
+   flickering.
+2. **`max_revision_chars` (60):** if more than 60 characters would have to be
+   taken back, the cursor is usually no longer behind our text (the user
+   clicked) → then **only append** instead of destroying.
+3. **The final transcription is fully corrective** (`force_revision=True`,
+   `committed_len=0`): on release the model may correct everything, because
+   the user has finished dictating and the cursor is safely behind our own
+   text.
 
-### 2.8 Shutdown-Reihenfolge beim Loslassen ⚠️
+### 2.8 Shutdown order on release ⚠️
 
-**Realer Bug, der Audio verschluckte.** Falsche Reihenfolge:
+**Real bug that swallowed audio.** Wrong order:
 
 ```python
 rest = source.stop()        # ❌ neueste Bytes zuerst
@@ -207,124 +215,128 @@ transcriber.feed(rest)
 drain_queue()               # ältere Bytes danach → Zeitachse verdreht!
 ```
 
-**Korrekt:**
+**Correct:**
 
 ```python
 state = FINALIZING          # 1) Capture-Thread beendet sich
-capture_thread.join(1.0)    # 2) warten, dass keine Chunks mehr kommen
+capture_thread.join(1.0)    # 2) wait until no more chunks arrive
 drain_queue()               # 3) ÄLTERE Bytes zuerst
 rest = source.stop()        # 4) NEUESTE Bytes zuletzt
 transcriber.feed(rest)
 ```
 
-Verdrehte Audio-Zeitachse → Halluzinationen und fehlende Satzteile.
+A twisted audio timeline → hallucinations and missing sentence parts.
 
 ---
 
-## 3. Fallstricke (aus realen Bugs gelernt)
+## 3. Pitfalls (learned from real bugs)
 
-### 3.1 `max_new_tokens` muss mit der Audiolänge skalieren ⚠️
+### 3.1 `max_new_tokens` must scale with the audio length ⚠️
 
-Ein **fixes** Token-Limit kappt lange Diktate hart. Gemessen: dasselbe 60-s-Audio
-lieferte mit `max_new_tokens=256` nur **123 Zeichen**, mit 2048 **294 Zeichen**.
+A **fixed** token limit hard-truncates long dictations. Measured: the same
+60-s audio delivered only **123 characters** with `max_new_tokens=256`, and
+**294 characters** with 2048.
 
 ```python
 def token_budget(audio_seconds: float) -> int:
     # Deutsche Sprache ≈ 12 Subword-Tokens/Sekunde (2–4 Tokens/Wort,
     # ~2,5 Wörter/s + Reserve)
     budget = int(audio_seconds * 12) + 64
-    return max(256, min(budget, 4096))    # Mindest- und Höchstgrenze
+    return max(256, min(budget, 4096))    # minimum and maximum bound
 ```
 
-**Extra-Falle:** Wenn ein Slice mit Links-Kontext transkribiert wird, verbrennt der
-Kontext Token-Budget, obwohl er danach verworfen wird → Budget immer auf die
-**Gesamtlänge des übergebenen Audios** berechnen.
+**Extra trap:** if a slice is transcribed with left context, the context burns
+token budget even though it is discarded afterwards → always compute the
+budget on the **total length of the audio handed in**.
 
-### 3.2 Aufnahmedauer-Limit bewusst setzen
+### 3.2 Set the recording duration limit deliberately
 
-Ein Default von 60 s bricht Diktate ab. Für Diktat **300 s** (5 min) ist ein guter
-Kompromiss (RAM: 16 kHz × 2 Byte = 32 kB/s → 300 s ≈ 9,6 MB).
+A default of 60 s aborts dictations. For dictation **300 s** (5 min) is a
+good compromise (RAM: 16 kHz × 2 bytes = 32 kB/s → 300 s ≈ 9.6 MB).
 
-### 3.3 VAD-Guard darf echte Sprache nicht verwerfen ⚠️
+### 3.3 A VAD guard must not discard real speech ⚠️
 
-Silero-VAD liefert für Audio **< 1 s immer `False`**. Ein naiver Guard
-„wenn VAD False → nicht transkribieren" verschluckt dann kurze Diktate komplett.
+Silero-VAD returns `False` for audio **< 1 s, always**. A naive guard "if VAD
+False → do not transcribe" then swallows short dictations completely.
 
-**Regel:** Nur **kurze** Reste (< 2 s) bei VAD-False verwerfen. Lange Reste
-**trotzdem** transkribieren (Datenverlust ist schlimmer als Halluzinationsrisiko),
-aber eine Warnung loggen.
+**Rule:** discard only **short** remainders (< 2 s) on VAD-False. Transcribe
+long remainders **anyway** (data loss is worse than hallucination risk), but
+log a warning.
 
-### 3.4 Parakeet halluziniert bei sehr kurzen Chunks
+### 3.4 Parakeet hallucinates on very short chunks
 
-Gemessen: Ein 1-s-Chunk lieferte `"So it's uh big"` (englisch!) für deutschen Text;
-bei 1,5 s dann korrekt `"So, jetzt bin ich gespannt."`.
+Measured: a 1-s chunk delivered `"So it's uh big"` (English!) for German
+text; at 1.5 s then correctly `"So, jetzt bin ich gespannt."`.
 
-**Konsequenz:** `min_audio_s` (Mindest-Audio vor der ersten Transkription) **≥ 1,0 s**,
-besser 2,5–3,0 s. Und: Der **erste** Commit braucht Agreement (2.6), sonst friert
-eine Halluzination des ersten Chunks ein.
+**Consequence:** `min_audio_s` (minimum audio before the first transcription)
+**≥ 1.0 s**, better 2.5–3.0 s. And: the **first** commit needs agreement
+(2.6), otherwise a hallucination of the first chunk freezes in place.
 
-Laut NVIDIA-Model-Card ist Parakeet *„not recommended for word-for-word/incomplete
-sentences"* — das ist der Grund.
+According to the NVIDIA model card, Parakeet is *"not recommended for
+word-for-word/incomplete sentences"* — that is the reason.
 
-### 3.5 Zwei Fehlerbilder bei der Text-Ausgabe (Tastatur-Emulation) ⚠️
+### 3.5 Two error patterns in text output (keyboard emulation) ⚠️
 
-Beim Tippen per Tastatur-Emulation (uinput) können **Modifier-Zustände** korrumpieren.
-Die beiden Bilder sind **zeichengenau unterscheidbar** — das ist diagnostisch wertvoll:
+When typing via keyboard emulation (uinput), **modifier states** can corrupt.
+The two patterns are **distinguishable character-for-character** — that is
+diagnostically valuable:
 
-| Fehlerbild | Beispiel | Ursache | Erkennungsmerkmal |
+| Error pattern | Example | Cause | Detection feature |
 |---|---|---|---|
-| **Shift hängt** | `SO; DA BIN ICH` | Shift-Latch | Satzzeichen **mittransformiert**: `,`→`;` `,`→`:` |
-| **CapsLock an** | `dAS sKRIPT` | CapsLock invertiert | Satzzeichen **unverändert** |
+| **Shift stuck** | `SO; DA BIN ICH` | shift latch | punctuation **transformed too**: `,`→`;` `,`→`:` |
+| **CapsLock on** | `dAS sKRIPT` | CapsLock inverted | punctuation **unchanged** |
 
-**Diagnose-Rezept:** Den zu erwartenden Text einmal durch die Shift-Ebene bzw. durch
-eine CapsLock-Inversion schicken und mit dem sichtbaren Text vergleichen. Passt es
-zeichengenau, ist es **kein ASR-Fehler**, sondern der Lock-Zustand der Ausgabe-Pipeline.
+**Diagnosis recipe:** send the expected text once through the shift layer or
+through a CapsLock inversion and compare it with the visible text. If it
+matches character-for-character, it is **not an ASR error** but the lock state
+of the output pipeline.
 
-**Härtung:**
-* **Tipp-Timing konfigurierbar** und großzügig: `typedelay`/`typehold` (Desktop: 20/15 ms).
-  Zu klein → unter CPU-Last gehen Key-Events verloren → Modifier hängen.
-* **Lock-Status loggen** (vor/nach jedem Tippvorgang) — sonst ist die Quelle nicht
-  zuordenbar.
-* **Korrektes Tastaturlayout** setzen (Desktop: `DOTOOL_XKB_LAYOUT=de`,
-  `DOTOOL_XKB_VARIANT=nodeadkeys`). Ohne das: `z`↔`y` vertauscht, `?`→`_`.
+**Hardening:**
+* **Typing timing configurable and generous:** `typedelay`/`typehold`
+  (desktop: 20/15 ms). Too small → key events get lost under CPU load →
+  modifiers stick.
+* **Log the lock state** (before/after each typing operation) — otherwise the
+  source cannot be attributed.
+* **Set the correct keyboard layout** (desktop: `DOTOOL_XKB_LAYOUT=de`,
+  `DOTOOL_XKB_VARIANT=nodeadkeys`). Without it: `z`↔`y` swapped, `?`→`_`.
 
-> **Android:** Dieses Fehlerbild existiert dort **nicht** — Text wird über
-> `InputConnection.commitText()` / `AccessibilityService` eingefügt, nicht per
-> Tasten-Emulation. Das ist ein echter Vorteil.
+> **Android:** this error pattern does **not** exist there — text is inserted
+> via `InputConnection.commitText()` / `AccessibilityService`, not via key
+> emulation. That is a real advantage.
 
-### 3.6 Zusammenfassung: Do's & Don'ts
+### 3.6 Summary: do's & don'ts
 
 | ✅ Do | ❌ Don't |
 |---|---|
-| Key-Erkennung in eigenem Thread | Key-Handling in der Inferenz-Schleife |
-| `temperature=0.0` (deterministisch) | Sampling beim Streaming |
-| Token-Budget mit Audiolänge skalieren | Fixes `max_new_tokens=256` |
-| Nur bis zur Wortgrenze committen | Halbe Wörter einfrieren |
-| Committeten Präfix nie anfassen | Stabiles Flackern lassen |
-| VAD nur auf **neue** Segmente | VAD auf Links-Kontext (immer True) |
-| Lange stille Reste trotzdem transkribieren | Lange Reste als „Stille" verwerfen |
-| Shutdown: Queue → dann stop()-Rest | stop()-Rest vor der Queue feeden |
-| Lock-Zustand loggen | Bei Textfehlern den ASR verdächtigen |
+| key detection in its own thread | key handling in the inference loop |
+| `temperature=0.0` (deterministic) | sampling during streaming |
+| scale the token budget with the audio length | fixed `max_new_tokens=256` |
+| commit only up to the word boundary | freeze half words |
+| never touch the committed prefix | let stable text flicker |
+| VAD only on **new** segments | VAD on left context (always True) |
+| transcribe long silent remainders anyway | discard long remainders as "silence" |
+| shutdown: queue → then the stop() remainder | feed the stop() remainder before the queue |
+| log the lock state | suspect the ASR on text errors |
 
 ---
 
-## 4. Konfiguration (Referenzwerte)
+## 4. Configuration (reference values)
 
 ```toml
 # Trigger
-input_device_name = "keyd virtual keyboard"   # Gerät mit der Trigger-Taste
-key_codes         = ["KEY_F24"]               # Linux-Keycode(s)
+input_device_name = "keyd virtual keyboard"   # device with the trigger key
+key_codes         = ["KEY_F24"]               # Linux keycode(s)
 
 # Audio
-audio_source = "auto"        # PipeWire-Quellenname oder "auto"
-sample_rate  = 16000         # 16 kHz mono s16le (natives ASR-Format)
+audio_source = "auto"        # PipeWire source name or "auto"
+sample_rate  = 16000         # 16 kHz mono s16le (native ASR format)
 
 # ASR
 backend      = "parakeet"    # "parakeet" | "whisper" | "qwen"
 model        = "nvidia/parakeet-tdt-0.6b-v3"
 language     = "auto"        # "auto" | "de" | "en"
 compute_type = "int8"        # CPU: int8/float32; GPU: float16
-cpu_threads  = 8             # = physische Kerne (kein Hyperthreading)
+cpu_threads  = 8             # = physical cores (no hyperthreading)
 
 # Streaming
 streaming_mode   = "whole_buffer"  # robuster als "windowed" (siehe 5.)
@@ -340,134 +352,141 @@ xkb_variant      = "nodeadkeys"
 typedelay_ms     = 20
 typehold_ms      = 15
 append_space     = true   # Leerzeichen nach dem Diktat
-max_revision_chars = 60   # Schutzgrenze für Backspace-Revisionen
+max_revision_chars = 60   # guard bound for backspace revisions
 ```
 
 ---
 
-## 5. Was NICHT funktioniert hat (wichtig für die Nachimplementierung!)
+## 5. What did NOT work (important for the re-implementation!)
 
-### 5.1 Fenster-basiertes Streaming (`windowed`)
+### 5.1 Window-based streaming (`windowed`)
 
-Versuch: Gleitende Fenster `[4 s Links-Kontext | 2 s Chunk | 1 s Rechts-Kontext]`,
-nur Tokens aus dem Commit-Horizont übernehmen (angelehnt an NVIDIAs „Buffered
+Attempt: sliding windows `[4 s left context | 2 s chunk | 1 s right context]`,
+adopting only tokens from the commit horizon (modeled on NVIDIA's "Buffered
 Chunked Inference", 10-2-2).
 
-**Ergebnis: zu viele Deadlocks.** Konkrete Probleme:
+**Result: too many deadlocks.** Concrete problems:
 
-1. **Pause-Stall:** Das Fenster war auf `committed_s + 3 s` gedeckelt. Bei einer
-   Sprechpause ≥ 3 s lieferte der VAD dauerhaft „keine Sprache" und `committed_s`
-   rückte nie vor → **alles nach der Pause ging verloren.** (Behoben durch
-   Silence-Skip, aber siehe 2.)
-2. **Kopplung Fenster ↔ Commit:** Das Fenster konnte nicht über `committed_s + n`
-   hinausreichen. Blieb der Commit stehen, blieb das Fenster stehen → das restliche
-   Audio wurde nie gesehen.
-3. **Agreement-Deadlock:** Der Commit-Punkt rückte bei jedem Commit vor, dadurch
-   sammelte der Agreement-Cache nie 2 Treffer → dauerhafter Stillstand.
+1. **Pause stall:** the window was capped at `committed_s + 3 s`. With a
+   speech pause ≥ 3 s the VAD permanently reported "no speech" and
+   `committed_s` never advanced → **everything after the pause was lost.**
+   (Fixed by silence skip, but see 2.)
+2. **Window ↔ commit coupling:** the window could not reach beyond
+   `committed_s + n`. If the commit stalled, the window stalled → the
+   remaining audio was never seen.
+3. **Agreement deadlock:** the commit point advanced with every commit, so
+   the agreement cache never collected 2 hits → permanent standstill.
 
-**Empfehlung:** Für ein Diktat-Werkzeug ist der **einfachere `whole_buffer`-Ansatz**
-(2.6) robuster. Er hat keine Zustandsmaschine, die in einen Deadlock laufen kann.
+**Recommendation:** for a dictation tool the **simpler `whole_buffer`
+approach** (2.6) is more robust. It has no state machine that can run into a
+deadlock.
 
-**Messvergleich** (13,4 s Testaudio mit 4 s Pause, Referenz = Einzeltranskription
-des Gesamtaudios):
+**Measurement comparison** (13.4 s of test audio with a 4-s pause, reference =
+single transcription of the whole audio):
 
-| Modus | Ergebnis |
+| Mode | Result |
 |---|---|
-| Referenz (ganzes Audio) | 256 Zeichen ✅ |
-| `whole_buffer` | **256 Zeichen** ✅ (identisch) |
-| `windowed` | 137–139 Zeichen ❌ (Teile fehlen) |
+| reference (whole audio) | 256 characters ✅ |
+| `whole_buffer` | **256 characters** ✅ (identical) |
+| `windowed` | 137–139 characters ❌ (parts missing) |
 
-**Trade-off:** `whole_buffer` liefert Text in Blöcken (alle ~1,5 s), nicht wortweise.
-Für Diktat ist das akzeptabel; wer echtes Wort-für-Wort will, muss den
-windowed-Ansatz sorgfältig zu Ende bauen (mit den o. g. Deadlock-Fixes).
+**Trade-off:** `whole_buffer` delivers text in blocks (every ~1.5 s), not word
+by word. For dictation that is acceptable; whoever wants true word-for-word
+output must carefully finish the windowed approach (with the deadlock fixes
+above).
 
-### 5.2 Text nachträglich „normalisieren"
+### 5.2 "Normalizing" the text afterwards
 
-Versuch, GROSS geschriebene Wörter per Regex zu korrigieren.
+Attempt to correct UPPERCASE words via regex.
 
-**Verworfen**, weil es das Symptom statt der Ursache bekämpft (siehe 3.5) und
-legitime Großschreibung (Akronyme, Eigennamen) zerstört.
+**Rejected**, because it fights the symptom instead of the cause (see 3.5)
+and destroys legitimate capitalization (acronyms, proper names).
 
 ---
 
-## 6. Übertragung auf Android — konkrete Hinweise
+## 6. Transfer to Android — concrete guidance
 
-### 6.1 Was 1:1 übernommen werden kann
+### 6.1 What can be adopted 1:1
 
-| Mechanismus | Android-Umsetzung |
+| Mechanism | Android implementation |
 |---|---|
-| Zustandsmaschine (2.1) | `enum` + `MutableStateFlow` |
-| LocalAgreement-Commit (2.6) | unverändert (reine Text-Logik) |
-| DeltaTyper-Logik (2.7) | unverändert (reine Text-Logik) |
-| Token-Budget (3.1) | unverändert |
-| VAD-Guard-Regeln (3.3) | unverändert |
-| Modellwahl Parakeet (2.5) | via ONNX Runtime Mobile / TensorFlow Lite / NNAPI |
+| state machine (2.1) | `enum` + `MutableStateFlow` |
+| LocalAgreement commit (2.6) | unchanged (pure text logic) |
+| DeltaTyper logic (2.7) | unchanged (pure text logic) |
+| token budget (3.1) | unchanged |
+| VAD guard rules (3.3) | unchanged |
+| model choice Parakeet (2.5) | via ONNX Runtime Mobile / TensorFlow Lite / NNAPI |
 
-### 6.2 Was ersetzt werden muss
+### 6.2 What must be replaced
 
 | Desktop | Android |
 |---|---|
 | `/dev/input` + keyd | `KeyEvent` / `MediaButtonReceiver` / `AccessibilityService` |
 | `pw-record` (PipeWire) | `AudioRecord` (16 kHz, MONO, PCM_16BIT) |
-| `dotool` (uinput) | `InputConnection.commitText()` oder `AccessibilityService.ACTION_SET_TEXT` |
-| systemd-User-Service | `ForegroundService` (Pflicht für Mikrofon ab Android 14) |
-| Python + transformers | Kotlin/Java + ONNX Runtime (`parakeet-tdt-0.6b-v3` gibt es als ONNX/int8) |
+| `dotool` (uinput) | `InputConnection.commitText()` or `AccessibilityService.ACTION_SET_TEXT` |
+| systemd user service | `ForegroundService` (mandatory for the microphone from Android 14) |
+| Python + transformers | Kotlin/Java + ONNX Runtime (`parakeet-tdt-0.6b-v3` exists as ONNX/int8) |
 
-### 6.3 Android-spezifische Vorteile
+### 6.3 Android-specific advantages
 
-* **Kein Tastatur-Emulations-Problem** → 3.5 entfällt komplett.
-* **Kein Threading-Problem mit Key-Events** → KeyEvents kommen vom System-UI-Thread.
-* **NNAPI/GPU** → deutlich schnellere Inferenz als die CPU-only-Referenz.
+* **No keyboard emulation problem** → 3.5 drops out completely.
+* **No threading problem with key events** → KeyEvents come from the system
+  UI thread.
+* **NNAPI/GPU** → significantly faster inference than the CPU-only reference.
 
-### 6.4 Android-spezifische Fallstricke
+### 6.4 Android-specific pitfalls
 
-1. **Mikrofon-Berechtigung + ForegroundService** (ab Android 14 `FOREGROUND_SERVICE_MICROPHONE`).
-2. **Akku-Optimierung** kann den Service töten → `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`.
-3. **Latenz von `AudioRecord`:** Puffergröße über `getMinBufferSize()` bestimmen,
-   zu klein → Dropouts, zu groß → Latenz.
-4. **Text-Injektion in fremde Apps** ist nur via `AccessibilityService` möglich
-   (Play-Store-Richtlinien beachten!). Für eigene Apps: `InputConnection`.
-5. **Modellgröße:** Parakeet 0.6B int8 ≈ 700 MB – für ein App-Bundle zu groß.
-   Optionen: Download beim ersten Start, oder kleineres Modell (Parakeet 0.6B ist
-   bereits die kleine Variante; Alternativen: `whisper-small` ONNX ≈ 250 MB).
+1. **Microphone permission + ForegroundService** (from Android 14
+   `FOREGROUND_SERVICE_MICROPHONE`).
+2. **Battery optimization** can kill the service →
+   `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`.
+3. **Latency of `AudioRecord`:** determine the buffer size via
+   `getMinBufferSize()`; too small → dropouts, too large → latency.
+4. **Text injection into foreign apps** is possible only via
+   `AccessibilityService` (mind the Play Store policies!). For own apps:
+   `InputConnection`.
+5. **Model size:** Parakeet 0.6B int8 ≈ 700 MB – too large for an app bundle.
+   Options: download on first start, or a smaller model (Parakeet 0.6B is
+   already the small variant; alternatives: `whisper-small` ONNX ≈ 250 MB).
 
 ---
 
-## 7. Teststrategie (was sich bewährt hat)
+## 7. Test strategy (what proved itself)
 
-**Alle Kernmechanismen sind ohne Mikrofon, Modell und Tastatur testbar** — durch
-Dependency Injection von `AudioSource`, `Engine` und `Typer`.
+**All core mechanisms are testable without microphone, model, and keyboard** —
+via dependency injection of `AudioSource`, `Engine`, and `Typer`.
 
-| Test-Ebene | Was | Wie |
+| Test level | What | How |
 |---|---|---|
-| Unit: Commit | LocalAgreement, Wortgrenzen | Fake-Token-Listen mit Zeitstempeln |
-| Unit: DeltaTyper | Revision, Backspace, Schutzgrenzen | Fake-Typer, der Calls aufzeichnet |
-| Unit: Token-Budget | Skalierung mit Audiolänge | reine Funktion |
-| Integration | Pipeline mit Fake-Engine | vordefinierte Transkriptionen pro Pufferlänge |
-| Ende-zu-Ende | echter Pfad | gespeichertes WAV durch die Pipeline |
+| unit: commit | LocalAgreement, word boundaries | fake token lists with timestamps |
+| unit: DeltaTyper | revision, backspace, protection limits | fake typer that records calls |
+| unit: token budget | scaling with audio length | pure function |
+| integration | pipeline with a fake engine | predefined transcriptions per buffer length |
+| end-to-end | real path | a saved WAV through the pipeline |
 
-**Besonders wertvoll:** Ein gespeichertes Test-Audio, das eine **Pause** enthält,
-durch die Pipeline schicken und das Ergebnis mit der **Einzeltranskription des
-Gesamtaudios** vergleichen. Genau dieser Test hat die windowed-Defekte aufgedeckt
-(256 vs. 137 Zeichen).
+**Especially valuable:** send a saved test audio containing a **pause**
+through the pipeline and compare the result with the **single transcription
+of the whole audio**. Exactly this test uncovered the windowed defects (256
+vs. 137 characters).
 
-**Debug-Hilfen, die sich gelohnt haben:**
-* Audio jeder Aufnahme nach `/tmp/stt_last.wav` dumpen → reproduzierbar analysierbar.
-* Jeden Transkriptions-Schritt loggen (`audio_seconds → text, committed_len`).
-* Lock-Zustand (CapsLock) vor/nach jedem Tippen loggen (3.5).
+**Debug aids that paid off:**
+* Dump the audio of every recording to `/tmp/stt_last.wav` → reproducibly
+  analyzable.
+* Log every transcription step (`audio_seconds → text, committed_len`).
+* Log the lock state (CapsLock) before/after each typing operation (3.5).
 
 ---
 
-## 8. Kurz-Checkliste für die Nachimplementierung
+## 8. Short checklist for the re-implementation
 
 ```
-[ ] Push-to-Talk-State-Maschine, idempotent, mit Lock
+[ ] Push-to-talk state machine, idempotent, with lock
 [ ] Key-Erkennung: eigenener Thread, Autorepeat (value==2) filtern
 [ ] Audio-Capture: eigener Thread → Queue → 16 kHz mono s16le
 [ ] ASR: Parakeet TDT (oder Whisper), temperature=0, deterministisch
 [ ] Streaming: wachsender Puffer, Re-Transkription alle ~1 s Audio
 [ ] Commit: LocalAgreement (2×), nur bis Wortgrenze
-[ ] Ausgabe: DeltaTyper mit committed-Präfix-Schutz + max_revision_chars
+[ ] Output: DeltaTyper with committed-prefix guard + max_revision_chars
 [ ] Finale Transkription: voll korrigierend (force_revision)
 [ ] Shutdown: join → Queue drainen → stop()-Rest
 [ ] Guards: min_audio_s ≥ 1 s, Token-Budget skaliert, VAD nur kurze Reste
@@ -478,39 +497,41 @@ Gesamtaudios** vergleichen. Genau dieser Test hat die windowed-Defekte aufgedeck
 
 ---
 
-## 9. Referenz-Messwerte (Intel Lunar Lake, CPU-only, 8 Kerne)
+## 9. Reference measurements (Intel Lunar Lake, CPU-only, 8 cores)
 
-| Modell | 20 s Audio | RTF | Anmerkung |
+| Model | 20 s audio | RTF | Note |
 |---|---|---|---|
-| Parakeet TDT 0.6B (int8/float32) | ~2,5 s | **0,12** | ✅ empfohlen |
-| faster-whisper large-v3-turbo (int8) | ~8,5 s | 0,43 | Fallback |
-| Qwen3-ASR 1.7B | ~23 s | 1,15 | zu langsam für Live |
+| Parakeet TDT 0.6B (int8/float32) | ~2.5 s | **0.12** | ✅ recommended |
+| faster-whisper large-v3-turbo (int8) | ~8.5 s | 0.43 | fallback |
+| Qwen3-ASR 1.7B | ~23 s | 1.15 | too slow for live |
 
-**Modell-Ladezeit:** Parakeet ~2 s (warm halten! Beim Dienststart vorladen, nicht
-beim ersten Tastendruck).
+**Model load time:** Parakeet ~2 s (keep warm! Preload at service start, not
+on the first key press).
 
-**Qualitätsvergleich (deutsches Diktat mit englischen Fachbegriffen):**
+**Quality comparison (German dictation with English technical terms):**
 
-| Modell | Transkript | Bewertung |
+| Model | Transcript | Rating |
 |---|---|---|
-| **Parakeet** | „…ganz schön shocking… die Vibes in dem Raum…" | ✅ engl. Begriffe korrekt |
-| faster-whisper (`language="de"`) | identisch | ✅ (nur mit erzwungener Sprache!) |
-| faster-whisper (`language="auto"`) | komplett englisch übersetzt | ❌ |
-| Granite Speech 4.1 | „…die **Weibchen** im Raum…" | ⚠️ Fehlerkennung |
+| **Parakeet** | "…ganz schön shocking… die Vibes in dem Raum…" | ✅ English terms correct |
+| faster-whisper (`language="de"`) | identical | ✅ (only with forced language!) |
+| faster-whisper (`language="auto"`) | completely translated to English | ❌ |
+| Granite Speech 4.1 | "…die **Weibchen** im Raum…" | ⚠️ misrecognition |
 
-**Wichtig:** Bei Whisper `language` **explizit** setzen, wenn die Sprache bekannt ist —
-die Auto-Erkennung kippt bei gemischtem DE/EN in die falsche Sprache.
+**Important:** with Whisper set `language` **explicitly** when the language is
+known — auto detection tips into the wrong language with mixed DE/EN.
 
 ---
 
-## Dokumentierte Präzisierung F43 (2026-11-01) — Inhalt oben unverändert, hier nur ergänzt
+## Documented refinement F43 (2026-11-01) — content above unchanged, only
+supplemented here
 
-**Auto-Stop nach ~2,5 s Sprechpause** (`TRAILING_SILENCE_MS = 2500`,
-`ime/DictationCoordinator.kt:97/436-439`) ist eine **vom Nutzer ausdrücklich gewünschte
-Präzisierung** des Diktat-Ablaufs (0.1.28/F43): Stille **nach Sprechbeginn** schließt die
-Session regulär über `stop()` ab (Finaler Decode über den Gesamtpuffer, kein Fehlerpfad).
-**c-Gate „Stille ≠ Stall“:** der Auto-Stop greift **nur bei streamender Stille**
-(`capStallMs < TRAILING_SILENCE_MS` — Blöcke laufen weiter, nur leise); eine **tote
-Quelle** (keine Blöcke) bleibt beim `ERR_STALL`-Vertrag (F28b1/F30) und wird vom
-Auto-Stop **nicht** präemptet (belegt: `FakeAudioScenarioTest` Fall c). Kürzere Pausen
-(< 2500 ms) unterbrechen nie.
+**Auto-stop after ~2.5 s of speech pause** (`TRAILING_SILENCE_MS = 2500`,
+`ime/DictationCoordinator.kt:97/436-439`) is a **refinement of the dictation
+flow explicitly requested by the user** (0.1.28/F43): silence **after speech
+onset** closes the session regularly via `stop()` (final decode over the whole
+buffer, no error path). **c-gate "silence ≠ stall":** the auto-stop applies
+**only to streaming silence** (`capStallMs < TRAILING_SILENCE_MS` — blocks
+keep flowing, just quiet); a **dead source** (no blocks) remains under the
+`ERR_STALL` contract (F28b1/F30) and is **not** preempted by the auto-stop
+(evidenced: `FakeAudioScenarioTest` case c). Shorter pauses (< 2500 ms) never
+interrupt.

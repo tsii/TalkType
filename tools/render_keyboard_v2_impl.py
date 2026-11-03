@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""F36/0.1.27: rendert die ECHTE Umsetzung (assets/layouts/*.json + KeyboardTheme) —
-nicht den Entwurf. Doku/Grafik-only, offline. Output: docs/preview/keyboard_v2_impl_*."""
+"""F36/0.1.27: renders the REAL implementation (assets/layouts/*.json + KeyboardTheme) —
+not the draft. Docs/graphics only, offline. Output: docs/preview/keyboard_v2_impl_*."""
 import json, os
 from PIL import Image, ImageDraw, ImageFont
 
@@ -10,7 +10,7 @@ H = KB_TOP + 4 * ROW + 738          # 1440
 H10 = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 44)
 H11 = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 30)
 
-# Theme direkt aus KeyboardTheme.kt:131-155 (V2 §7)
+# theme directly from KeyboardTheme.kt:131-155 (V2 §7)
 T = {
     "hell":   dict(bg=0xFFF2F3F5, key=0xFFFFFFFF, press=0xFFDCE7E6, line=0xFFE0E2E5,
                    text=0xFF1A1C1E, accent=0xFF2E7D74, editor=0xFFF8F9FA, pop=0xFFFFFFFF),
@@ -102,7 +102,7 @@ def frame(theme, rows, endonym, pressed=None, shift=False):
                 d.rounded_rectangle([X0, Y0, X1, Y1], radius=10, outline=c16(Tm["accent"]), width=4)
             kind = ICON_BY_ID.get(k["id"]) or ICON_BY_LABEL.get(label)
             if k["id"] == "space":
-                # SpaceLabelRule: Asset-Label „Leer" überschreibt das Endonym NICHT
+                # SpaceLabelRule: the asset label „Leer" does NOT override the endonym
                 d.text((cx, cy), endonym, font=H10, fill=c16(Tm["text"]), anchor="mm")
             elif k["id"] == "symbols":
                 d.text((cx, cy), "123", font=H11, fill=c16(Tm["text"]), anchor="mm")
@@ -129,8 +129,8 @@ def main():
     frames[0].save("docs/preview/keyboard_v2_impl.gif", save_all=True, append_images=frames[1:],
                    duration=650, loop=0)
     for f in ("keyboard_v2_impl_hell.png", "keyboard_v2_impl_dunkel.png", "keyboard_v2_impl.gif"):
-        print(f, os.path.getsize("docs/preview/" + f), "Bytes")
-    # Sonderfälle (Hell-Grundzustand, nebeneinander 540 px je Karte => 1080 breit)
+        print(f, os.path.getsize("docs/preview/" + f), "bytes")
+    # special cases (light base state, side by side 540 px per card => 1080 wide)
     cards = [load(l) for l in ("fr-fr", "cs-cz", "ru-ru")]
     img = Image.new("RGB", (1080, 900), c16(T["hell"]["bg"]))
     d = ImageDraw.Draw(img)
@@ -175,7 +175,7 @@ def main():
         d.text((14, i * 300 + 4), lid, font=H11, fill=c16(T["hell"]["text"]))
         img.paste(sub, (8, i * 300 + 34))
     img.save("docs/preview/keyboard_v2_impl_sonderfaelle.png")
-    print("keyboard_v2_impl_sonderfaelle.png", os.path.getsize("docs/preview/keyboard_v2_impl_sonderfaelle.png"), "Bytes")
+    print("keyboard_v2_impl_sonderfaelle.png", os.path.getsize("docs/preview/keyboard_v2_impl_sonderfaelle.png"), "bytes")
     print("frames:", len(frames))
 
 

@@ -13,9 +13,9 @@ import java.net.URL
 import java.security.MessageDigest
 
 /**
- * Unit-Tests des Downloader-Transports mit Fake-[opener]-Verbindungen (B-2):
- * 206-Resume, 200-Neustart, 416 mit vollständiger/zu kurzer .part (B-1-
- * Regression), ETag-Wechsel, Hash-Mismatch. Kein Netzwerk.
+ * Unit tests of the downloader transport with fake [opener] connections (B-2):
+ * 206 resume, 200 restart, 416 with a complete/too short .part (B-1
+ * regression), ETag change, hash mismatch. No network.
  */
 class ModelDownloaderTest {
 
@@ -24,7 +24,7 @@ class ModelDownloaderTest {
     private fun sha256Hex(bytes: ByteArray): String =
         MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
 
-    /** Skriptbare Fake-Verbindung: Status, Body, ContentLength, ETag, Range-Check. */
+    /** Scriptable fake connection: status, body, content length, ETag, range check. */
     private class FakeConnection(
         private val script: FakeServer,
     ) : HttpURLConnection(null) {
@@ -39,7 +39,7 @@ class ModelDownloaderTest {
         override fun usingProxy() = false
     }
 
-    /** Simuliert den Server: antwortet abhängig vom Range-Header. */
+    /** Simulates the server: responds depending on the Range header. */
     private class FakeServer(
         val fullBody: ByteArray,
         var status: Int,
@@ -55,12 +55,12 @@ class ModelDownloaderTest {
             val range = conn.seenRange
             return when {
                 status == 416 && range != null -> 416
-                status == 416 && range == null -> 200 // Neustart ohne Range
+                status == 416 && range == null -> 200 // restart without a range
                 else -> status
             }.also { nextStatusWas206 = it == 206 }
         }
 
-        /** Body passend zum gelieferten Status (nur 206 ist ein echter Range-Slice). */
+        /** Body matching the delivered status (only 206 is a real range slice). */
         fun nextBody(conn: FakeConnection): ByteArray {
             val range = conn.seenRange
             return if (range != null && nextStatusWas206) {
@@ -79,7 +79,7 @@ class ModelDownloaderTest {
         val ms = ModelStore(
             root,
             manifest = listOf(
-                ModelFile("model.bin", 12L, "") // Hash wird je Test gesetzt
+                ModelFile("model.bin", 12L, "") // hash is set per test
             ),
         )
         return ms to { _: URL -> FakeConnection(server) }
@@ -87,100 +87,100 @@ class ModelDownloaderTest {
 
     private lateinit var server: FakeServer
 
-    // (a) 206-Resume: .part-Präfix + neuer Teil, Hash über die Gesamtdaten
+    // (a) 206 resume: .part prefix + new piece, hash over the total data
     @Test fun resume206AppendsAndHashMatches() {
         val body = ByteArray(12) { (it * 3 + 1).toByte() }
         server = FakeServer(body, 206)
         val (ms, opener) = store()
         val part = ms.partFile("model.bin")
-        part.writeBytes(body.copyOfRange(0, 6)) // Hälfte schon da
+        part.writeBytes(body.copyOfRange(0, 6)) // half already there
         ms.storeEtag("model.bin", "\"v1\"")
         val file = ModelFile("model.bin", 12L, sha256Hex(body))
         val dl = ModelDownloader(baseUrl = "http://test/", store = ms, opener = opener)
         assertTrue(dl.download(file))
-        assertEquals(12L, part.length()) // Prefix + neuer Teil
+        assertEquals(12L, part.length()) // prefix + new piece
     }
 
-    // (b) 416 mit VOLLSTÄNDIGER .part → Datei bleibt erhalten (B-1-Regression)
+    // (b) 416 with a COMPLETE .part → the file is kept (B-1 regression)
     @Test fun http416WithCompletePartKeepsFile() {
         val body = ByteArray(12) { (it * 5 + 2).toByte() }
         server = FakeServer(body, 416)
         val (ms, opener) = store()
         val part = ms.partFile("model.bin")
-        part.writeBytes(body) // komplett (Range daher 416)
+        part.writeBytes(body) // complete (hence 416 for the range)
         ms.storeEtag("model.bin", "\"v1\"")
         val file = ModelFile("model.bin", 12L, sha256Hex(body))
         val dl = ModelDownloader(baseUrl = "http://test/", store = ms, opener = opener)
         assertTrue("complete .part at 416 must verify, not restart", dl.download(file))
-        assertEquals(12L, part.length()) // NICHT gelöscht, NICHT neu geladen
-        assertEquals(1, server.calls) // genau EIN Verbindungsaufbau
+        assertEquals(12L, part.length()) // NOT deleted, NOT re-downloaded
+        assertEquals(1, server.calls) // exactly ONE connection setup
     }
 
-    // 416 mit zu kurzer .part → verwerfen + GENAU EIN Neustart (kein Endlos-Retry)
+    // 416 with a too short .part → discard + EXACTLY ONE restart (no endless retry)
     @Test fun http416WithShortPartRestartsExactlyOnce() {
         val body = ByteArray(12) { (it * 7 + 3).toByte() }
         server = FakeServer(body, 416)
         val (ms, opener) = store()
         val part = ms.partFile("model.bin")
-        part.writeBytes(body.copyOfRange(0, 5)) // zu kurz
+        part.writeBytes(body.copyOfRange(0, 5)) // too short
         ms.storeEtag("model.bin", "\"v1\"")
         val file = ModelFile("model.bin", 12L, sha256Hex(body))
         val dl = ModelDownloader(baseUrl = "http://test/", store = ms, opener = opener)
         assertTrue(dl.download(file))
         assertEquals(12L, part.length())
-        assertEquals(2, server.calls) // 416 + genau ein 200-Neustart
+        assertEquals(2, server.calls) // 416 + exactly one 200 restart
     }
 
-    // (c) 200 trotz Range → Neustart von 0
+    // (c) 200 despite a range → restart from 0
     @Test fun http200DespiteRangeRestartsFromZero() {
         val body = ByteArray(12) { (it * 11 + 4).toByte() }
         server = FakeServer(body, 200)
         val (ms, opener) = store()
         val part = ms.partFile("model.bin")
-        part.writeBytes(ByteArray(5) { 0x7f }) // alter Müll (falscher Server)
+        part.writeBytes(ByteArray(5) { 0x7f }) // old garbage (wrong server)
         val file = ModelFile("model.bin", 12L, sha256Hex(body))
         val dl = ModelDownloader(baseUrl = "http://test/", store = ms, opener = opener)
         assertTrue(dl.download(file))
-        assertEquals(12L, part.length()) // von 0 neu geschrieben
+        assertEquals(12L, part.length()) // rewritten from 0
     }
 
-    // (d) ETag-Wechsel → .part verwerfen + Neustart
+    // (d) ETag change → discard the .part + restart
     @Test fun etagChangeDiscardsPartAndRestarts() {
         val body = ByteArray(12) { (it * 13 + 5).toByte() }
-        server = FakeServer(body, 206, etag = "\"v2\"") // Server hat neue Version
+        server = FakeServer(body, 206, etag = "\"v2\"") // server has a new version
         val (ms, opener) = store()
         val part = ms.partFile("model.bin")
         part.writeBytes(body.copyOfRange(0, 6))
-        ms.storeEtag("model.bin", "\"v1\"") // alter ETag gespeichert
+        ms.storeEtag("model.bin", "\"v1\"") // old ETag stored
         val file = ModelFile("model.bin", 12L, sha256Hex(body))
         val dl = ModelDownloader(baseUrl = "http://test/", store = ms, opener = opener)
-        // Erster Versuch: ETag-Wechsel erkannt → Delete + Neustart; danach
-        // resumeFrom==0 → Range weg → Status 200-Pfad? Fake liefert 206 …
+        // First attempt: ETag change detected → delete + restart; afterwards
+        // resumeFrom==0 → range gone → status 200 path? The fake delivers 206 …
         assertTrue(dl.download(file))
         assertEquals(12L, part.length())
         assertTrue("part must be rewritten from scratch", server.calls >= 2)
     }
 
-    // (e) Hash-Mismatch → .part gelöscht + ModelError.HashMismatch
+    // (e) hash mismatch → .part deleted + ModelError.HashMismatch
     @Test fun hashMismatchDeletesPartAndThrows() {
         val body = ByteArray(12) { (it * 17 + 6).toByte() }
         server = FakeServer(body, 200, etag = null)
         val (ms, opener) = store()
-        val file = ModelFile("model.bin", 12L, "0".repeat(64)) // falscher Hash
+        val file = ModelFile("model.bin", 12L, "0".repeat(64)) // wrong hash
         val dl = ModelDownloader(baseUrl = "http://test/", store = ms, opener = opener)
         val part = ms.partFile("model.bin")
         val e = try { dl.download(file); null } catch (e: ModelError.HashMismatch) { e }
         assertTrue("expected HashMismatch", e != null)
         assertEquals("model.bin", e!!.fileName)
-        assertFalse(part.exists()) // kaputtes Resume unmöglich machen
+        assertFalse(part.exists()) // make a broken resume impossible
     }
 
 
-    // ---- V12: Retry-Versuchszählung sichtbar (D1-03) ----
+    // ---- V12: retry attempt count made visible (D1-03) ----
 
-    @Test fun `progress meldet attempt und maxAttempts beim retry`() {
-        // Zwei Fehlversuche dann Erfolg: attempt muss bei jedem emittierten
-        // Fortschritt mitlaufen (1-basiert) und maxAttempts = maxRetries+1 sein.
+    @Test fun `progress reports attempt and maxAttempts during a retry`() {
+        // two failed attempts then success: attempt must accompany every emitted
+        // progress (1-based) and maxAttempts = maxRetries+1.
         val (ms, opener) = store()
         val dl = ModelDownloader(
             baseUrl = "http://t/", store = ms, opener = opener, maxRetries = 2, backoffBaseMs = 1,
@@ -191,7 +191,7 @@ class ModelDownloaderTest {
         server = FakeServer(ByteArray(12) { 7 }, 200)
         val ok = dl.download(file) { p -> last = p }
         assertTrue(ok)
-        // Fake liefert Erfolg im ersten Versuch — attempt=1, maxAttempts=3
+        // the fake delivers success on the first attempt — attempt=1, maxAttempts=3
         assertEquals(1, last?.attempt)
         assertEquals(3, last?.maxAttempts)
     }

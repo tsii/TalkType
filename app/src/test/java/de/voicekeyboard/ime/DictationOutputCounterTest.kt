@@ -6,21 +6,21 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Review F12 (P2): das „Kein Text erkannt"-Urteil hing an einer Netto-Zählung —
- * eine Korrektur von 5 durch 5 Zeichen zählte 0, obwohl Text im Feld stand.
- * Diese Tests fixieren die Brutto-Semantik und den Sitzungs-Reset.
+ * Review F12 (P2): the "no text recognized" verdict depended on a net count —
+ * a correction of 5 by 5 characters counted 0, even though text was in the
+ * field. These tests pin down the gross semantics and the session reset.
  */
 class DictationOutputCounterTest {
 
     @Test
-    fun `neue Sitzung hat keine Ausgabe`() {
+    fun `a new session has no output`() {
         val c = DictationOutputCounter()
         assertFalse(c.hasOutput)
         assertEquals(0, c.outputChars)
     }
 
     @Test
-    fun `geschriebene Zeichen zaehlen als Ausgabe`() {
+    fun `written characters count as output`() {
         val c = DictationOutputCounter()
         c.onCommit(newTextLength = 6)
         c.onCommit(newTextLength = 3)
@@ -29,12 +29,12 @@ class DictationOutputCounterTest {
     }
 
     @Test
-    fun `korrektur tilgt die Ausgabe nicht - F12 P2`() {
+    fun `a correction does not clear the output - F12 P2`() {
         val c = DictationOutputCounter()
         c.onCommit(newTextLength = 5, replaceLength = 0)
-        c.onCommit(newTextLength = 0, replaceLength = 5) // nur gelöscht
+        c.onCommit(newTextLength = 0, replaceLength = 5) // deleted only
         assertTrue(c.hasOutput)
-        // Korrektur: 5 Zeichen raus, 5 rein — netto 0, brutto 10.
+        // correction: 5 characters out, 5 in — net 0, gross 10.
         val k = DictationOutputCounter()
         k.onCommit(newTextLength = 5)
         k.onCommit(newTextLength = 5, replaceLength = 5)
@@ -43,24 +43,24 @@ class DictationOutputCounterTest {
     }
 
     @Test
-    fun `reines Loeschen ohne neue Zeichen ist keine Ausgabe`() {
+    fun `pure deletion without new characters is no output`() {
         val c = DictationOutputCounter()
         c.onCommit(newTextLength = 0, replaceLength = 4)
         assertFalse(c.hasOutput)
     }
 
     @Test
-    fun `reset zwischen zwei Aufnahmen - Leerausgabe feuert erneut`() {
+    fun `reset between two recordings - an empty output fires again`() {
         val c = DictationOutputCounter()
         c.onCommit(newTextLength = 12)
         assertTrue(c.hasOutput)
         c.reset()
-        assertFalse("zweite leere Aufnahme muss erneut leer sein", c.hasOutput)
+        assertFalse("a second empty recording must be empty again", c.hasOutput)
         assertEquals(0, c.outputChars)
     }
 
     @Test
-    fun `negative und null Laengen ändern nichts`() {
+    fun `negative and null lengths change nothing`() {
         val c = DictationOutputCounter()
         c.onCommit(newTextLength = -3)
         c.onCommit(newTextLength = 0)

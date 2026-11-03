@@ -1,508 +1,532 @@
-# D12 – Langdruckmenü für Alternativzeichen
+# D12 – Long-press menu for alternate characters
 
-## 0. Entscheidung und gelesene Nähte
+## 0. Decision and read seams
 
-**Entscheid:** Langdruck auf eine Zeichentaste öffnet ein kleines Auswahlmenü;
-Finger zur Alternative schieben, dort loslassen → genau dieses Zeichen einfügen.
-Kurzes Tippen bleibt unverändert. Kein automatisches Großbuchstaben-Preview bei jedem
-DOWN: D11s Verzicht auf das Kurz-Tipp-Popup bleibt, das jetzt ausdrücklich gewünschte
-**Langdruckmenü** ist eine andere Interaktion.
+**Decision:** Long-press on a character key opens a small selection menu;
+slide the finger to an alternate, release there → insert exactly that character.
+Short tapping remains unchanged. No automatic uppercase preview on every
+DOWN: D11's omission of the short-tap popup remains; the now explicitly desired
+**long-press menu** is a different interaction.
 
-Nur dieses neue Dokument; kein Code-/Asseteingriff, Build, Emulator/adb oder Commit.
-Gelesen: `keyboard/KeySurface.kt`, `KeyboardTheme.kt`, `KeyboardView.kt`,
-`layouts/LayoutAsset.kt`, `LayoutParser.kt`, aktuelle Root-Struktur, DE-Assets und
-Alternates-Prüfung in `LayoutCompletenessTest.kt:265ff`.
-Präfixe `keyboard/` und `layouts/` stehen unter `app/src/main/java/de/voicekeyboard/`.
+Only this new document; no code/asset intervention, build, emulator/adb, or commit.
+Read: `keyboard/KeySurface.kt`, `KeyboardTheme.kt`, `KeyboardView.kt`,
+`layouts/LayoutAsset.kt`, `LayoutParser.kt`, current root structure, DE assets and
+the alternates check in `LayoutCompletenessTest.kt:265ff`.
+The prefixes `keyboard/` and `layouts/` live under `app/src/main/java/de/voicekeyboard/`.
 
-- `KeySurface.decide` bleibt **einzige** Naht für Grundtastenflächen und deren
-  Priorität: micRecording > CAPS_FILL > pressed > normal. Nicht duplizieren.
-- Theme bleibt **einzige** Farb-/Maßquelle; Popup-Maße sind dort künftig zusätzliche
-  benannte Designwerte, keine neuen Farben und keine zweite Palette.
-- `LayoutKey.alternates` ist bereits `List<String>`, Parser liest die Liste; die
-  vorhandenen Tests verlangen höchstens **8** Einträge. Kein verschachteltes JSON
-  und keine neue Interpretationssprache im Asset.
-- Die neue reine Logiknaht `LongPressMenu` ist ein **Implementierungsvorschlag**,
-  kein heute vorhandener Android-Handler. Sie liefert Zustand/Geometrie/Auswahl;
-  Android-Ereignisse/Timer bleiben Adapteraufgabe des vorhandenen KeyboardView.
+- `KeySurface.decide` remains the **only** seam for base key surfaces and their
+  priority: micRecording > CAPS_FILL > pressed > normal. Do not duplicate.
+- The theme remains the **only** color/measure source; popup measures will be
+  additional named design values there, no new colors and no second palette.
+- `LayoutKey.alternates` is already `List<String>`, the parser reads the list;
+  the existing tests require at most **8** entries. No nested JSON and no new
+  interpretation language in the asset.
+- The new pure logic seam `LongPressMenu` is an **implementation proposal**,
+  not an Android handler that exists today. It provides state/geometry/selection;
+  Android events/timers remain an adapter task of the existing KeyboardView.
 
-## 1. Popup-Gestalt mit Maßen
+## 1. Popup shape with measures
 
-Bezugsmaß: density 420 = **2,625 px/dp**, Referenz **1080×2400 px**.
-Normalfall **eine Reihe**, maximal **8 Alternativen**, Grundzeichen bleibt auf seiner
-wirklichen Taste und ist **keine zusätzliche neunte Menüzelle**.
+Reference measure: density 420 = **2.625 px/dp**, reference **1080×2400 px**.
+Normal case **one row**, a maximum of **8 alternates**, the base character stays on
+its real key and is **not an additional ninth menu cell**.
 
-| Maß/Token | Verbindlicher Wert | Referenzpixel |
+| Measure/Token | Binding value | Reference pixels |
 |---|---|---|
-| Zellbreite/-höhe | **48×48 dp**, nicht die schmale Grundtastenbreite | **126×126 px** |
-| Innenpadding des Menüs | **4 dp** auf allen Seiten | 10/11 px, Rundungsreste verteilt |
-| Menügröße | `48×n + 8 dp` breit, **56 dp** hoch | n=1: **147×147 px**; n=3: **399×147**; n=7: **903×147**; n=8: **1029×147** |
-| Abstand zur Grundtaste | **8 dp** | **21 px** |
-| Abstand zum Keyboard-Cliprand | **8 dp** | **21 px** links/rechts/oben/unten |
-| Außenradius | **4 dp**, nur Menü-Außenkante | etwa **11 px** |
-| Rahmen / Schatten / Zeiger-Spitze | **keine / 0 dp / keine** | Kein neuer Sprechblasenpfad |
-| Zeichengröße | **24 sp**, normaler Typeface, kein erzwungenes Uppercase | 63 px bei fontScale=1 |
-| Menüfläche | **palette.keyPressed** deckend | Hell **#FFA3ABB0**, Dunkel **#FF676F74** aus vorhandener Komposition |
-| Nicht ausgewähltes Zeichen | **palette.textPrimary** | Hell **#FF37474F**, Dunkel **#CCFFFFFF** |
-| Ausgewählte Zelle / Zeichen | **palette.accent / palette.micRecordingGlyph** | Hell **#FF4DB6AC / #FF37474F**; Dunkel **#FF80CBC4 / #FF263238** |
+| Cell width/height | **48×48 dp**, not the narrow base key width | **126×126 px** |
+| Inner padding of the menu | **4 dp** on all sides | 10/11 px, rounding remainders distributed |
+| Menu size | `48×n + 8 dp` wide, **56 dp** high | n=1: **147×147 px**; n=3: **399×147**; n=7: **903×147**; n=8: **1029×147** |
+| Distance to the base key | **8 dp** | **21 px** |
+| Distance to the keyboard clip edge | **8 dp** | **21 px** left/right/top/bottom |
+| Outer radius | **4 dp**, only the menu's outer edge | about **11 px** |
+| Frame / shadow / pointer tip | **none / 0 dp / none** | No new speech-bubble path |
+| Character size | **24 sp**, normal typeface, no forced uppercase | 63 px at fontScale=1 |
+| Menu surface | **palette.keyPressed** opaque | Light **#FFA3ABB0**, dark **#FF676F74** from the existing composition |
+| Unselected character | **palette.textPrimary** | Light **#FF37474F**, dark **#CCFFFFFF** |
+| Selected cell / character | **palette.accent / palette.micRecordingGlyph** | Light **#FF4DB6AC / #FF37474F**; dark **#FF80CBC4 / #FF263238** |
 
-Keine einzelnen Kachelschatten, keine neue Helligkeits-/Akzentfarbe. Der Name
-`micRecordingGlyph` ist nur der bereits vorhandene Gegenfarbtoken und löst im Menü
-keine Mic-Semantik aus. Zellhighlight bleibt innerhalb der Menü-Außenkante geclippt.
-Die normale gedrückte Ursprungstaste wird weiterhin ausschließlich über KeySurface
-bestimmt; eine ausgewählte Menüalternative ist kein CAPS_FILL-/Recording-Zustand.
-Die zusätzliche Menüzeichnung allein löst kein requestLayout aus; eine erneute
-Messung mit identischem Layout/Rects gilt nicht als Größenwechsel oder Abbruch.
+No individual tile shadows, no new brightness/accent color. The name
+`micRecordingGlyph` is just the existing counter-color token and triggers no mic
+semantics in the menu. The cell highlight stays clipped inside the menu's outer
+edge. The normal pressed origin key continues to be determined exclusively via
+KeySurface; a selected menu alternate is not a CAPS_FILL/recording state. The
+additional menu drawing alone does not trigger a requestLayout; a re-measure with
+an identical layout/rects does not count as a size change or abort.
 
-### Position, erste Reihe und Statusschutz
+### Position, first row and status protection
 
-Eine Zeichenebene **zuletzt im bestehenden KeyboardView zeichnen**, innerhalb seines
-aktuellen Clips; kein Dialog/PopupWindow, kein neues FrameLayout-Messkind, kein
-WRAP_CONTENT-Overlay, keine neue Root-Höhe und kein Editor-/Windowwechsel.
-Der Popupzustand wächst nicht in den S1/T20-Höhenvertrag hinein.
+A character layer is **drawn last within the existing KeyboardView**, within its
+current clip; no dialog/PopupWindow, no new FrameLayout measure child, no
+WRAP_CONTENT overlay, no new root height and no editor/window switch.
+The popup state does not grow into the S1/T20 height contract.
 
-Standard: Menüunterkante = Grundtastenoberkante minus 21 px; horizontal Mittelpunkt
-über Grundtastenmitte, dann innerhalb `[21, W−21]` verschieben. Für n=8 bei W=1080
-sind nur 9 px Verteilungsspielraum übrig: 1029 px Menü + 42 px Außenabstand = 1071 px.
-**48-dp-Zellen können bei acht Alternativen nicht zugleich ein sehr schmales Menü sein.**
+Default: menu bottom edge = base key top edge minus 21 px; horizontally centered
+over the base key center, then shifted within `[21, W−21]`. For n=8 at W=1080,
+only 9 px of distribution leeway remain: 1029 px menu + 42 px outer distance =
+1071 px. **48-dp cells cannot be a very narrow menu with eight alternates at the
+same time.**
 
-Passt es oben nicht vollständig in den Keyboard-Clip, wird es **unter** die Grundtaste
-mit demselben Abstand gesetzt. Insbesondere die erste Reihe darf nicht die Diagnose-
-/Infoleiste überdecken oder außerhalb der IME ins Ziel-App-Fenster malen.
-**Bewusste Ausnahme von „immer darüber“:** Die oberste Reihe öffnet nötigenfalls
-unterhalb; ein garantiert oberhalb liegendes Menü und eine garantiert freie Leiste
-sind dort geometrisch nicht gleichzeitig möglich. Keine versteckte Überdeckung.
+If it does not fit completely into the keyboard clip above, it is placed
+**below** the base key with the same distance. In particular, the first row must
+not cover the diagnostics/info strip or paint outside the IME into the target
+app's window. **Deliberate exception to "always above":** the topmost row opens
+below if necessary; a guaranteed-above menu and a guaranteed-free strip are not
+geometrically possible there at the same time. No hidden covering.
 
-Beispiel aus den übergebenen ungefähren Bildschirmkoordinaten: r0-Mitte 1884 px,
-angenommene Zeilenhöhe 106 px → Grundtaste etwa 1831…1937. Ein 147-px-Menü darüber
-läge bei 1663…1810 und überdeckte die Infoleiste um y≈1765. Deshalb unterhalb:
-**1958…2105 px**. Für den Fußpunkt, Mitte etwa 2225 und beispielhaft 128 px Höhe:
-Grundtaste 2161…2289, Menü darüber **1993…2140 px**.
-Das sind hergeleitete Beispiele, keine neue Messung; echte Rects/Clipgrenzen entscheiden.
+Example from the handed-over approximate screen coordinates: r0 center 1884 px,
+assumed row height 106 px → base key about 1831…1937. A 147-px menu above it
+would lie at 1663…1810 and cover the info strip around y≈1765. Hence below:
+**1958…2105 px**. For the footer, center about 2225 and, by way of example,
+128 px height: base key 2161…2289, menu above **1993…2140 px**.
+These are derived examples, not a new measurement; real rects/clip bounds decide.
 
-Bei schmaleren Fenstern: maximal vier Spalten und zwei Reihen sind als Platzfallback
-zulässig (n=8: **200×104 dp = 525×273 px**), weiterhin 48-dp-Zellen. Nur wählen,
-wenn die komplette Geometrie **oberhalb oder unterhalb**, ohne Überlappung mit der
-Grundtaste, in den Keyboard-Clip passt. Nie über die Diagnoseleiste ausweichen.
-Passt weder Variante: Menü nicht öffnen, Grundtaste bleibt bedienbar, Fit-Konflikt
-für diese Konfiguration melden; keine Alternativen verstecken oder Ziele verkleinern.
-Die 1080-px-Referenz nutzt die einreihige Variante; schmale Fenster sind separat abzunehmen.
+For narrower windows: a maximum of four columns and two rows is permissible as a
+space fallback (n=8: **200×104 dp = 525×273 px**), still 48-dp cells. Only choose
+it if the complete geometry fits **above or below**, without overlap with the base
+key, inside the keyboard clip. Never escape over the diagnostics strip. If
+neither variant fits: do not open the menu, the base key remains operable, report
+the fit conflict for this configuration; do not hide alternates or shrink targets.
+The 1080-px reference uses the one-row variant; narrow windows are to be accepted
+separately.
 
-## 2. Verhalten, Zeiten und Kollisionsregeln
+## 2. Behavior, timings, and collision rules
 
-| Ereignis | Entscheidung / Zahlen |
+| Event | Decision / numbers |
 |---|---|
-| DOWN auf Texttaste mit nichtleeren alternates | KeySurface-Pressfeedback sofort, Ursprungstaste/Layoutgeneration/Pointer merken; **450-ms**-Timer starten, noch kein Zeichen einfügen. |
-| UP vor 450 ms innerhalb Ursprungstaste | Normales Grundzeichen genau einmal über bestehenden Textpfad einfügen; Timer löschen. |
-| Bewegung vor Menüöffnung | Entfernung vom DOWN größer **8 dp / 21 px** beendet den Langdrucktimer für diese Geste; ein späteres Zurückfahren startet ihn nicht neu. Normales Grundzeichen nur bei anschließend gültigem UP auf der Ursprungstaste. Kein Slide-Typing in Nachbartasten. |
-| 450 ms erreicht, Finger weiter gültig gehalten | Menü öffnen, noch keine Alternative automatisch auswählen; Grundzeichen bleibt als Ausgang markiert. Kein vorzeitiges Basis-Commit, das später gelöscht werden müsste. |
-| Nach Öffnen UP auf tatsächlicher Grundtaste | Grundzeichen genau einmal, keine zusätzliche Alternative; Menü schließen. |
-| Nach Öffnen Finger in Menüzelle | Diese Zelle markieren; **4-dp**-Wechselhysterese an inneren Zellgrenzen, damit der Rand nicht flackert. Am UP zählt die tatsächliche Zelle ohne veraltete Hysterese-Auswahl. |
-| UP innerhalb einer Alternative | Genau deren sichtbaren Wert einmal committen; kein Grundzeichen davor/danach; Menü schließen. |
-| UP außerhalb von Grundtaste und Menüzellen | **Abbruch, 0 Zeichen**; auch im 8-dp-Zwischenraum kein „letzten Treffer trotzdem übernehmen“. |
-| ACTION_CANCEL, Pointerverlust, Hide, Editor-/Layout-/Größenwechsel | Timer und Menü sofort verwerfen, **0 Zeichen**, kein spätes Timer-Commit. Bei Capture-/Editorwechsel gelten bestehende Besitzregeln. |
-| Nach Öffnung nach oben/unten wischen | Dient nur zur räumlichen Auswahl: oben beim normalen Menü, unten beim Flip-Fallback; keine neue Aktion/Seite, kein Scrollen. Zur Grundtaste zurück → Grundzeichen; außerhalb loslassen → Abbruch. |
-| Mic DOWN/UP/CANCEL | **Mic zuerst klassifizieren, nie Langdrucktimer.** Vorhandene `onMicHoldStart` / `onMicHoldEnd(cancelled)` unverändert nutzen; 450 ms auf Mic öffnet nichts und darf PTT weder verzögern noch stoppen. |
-| Backspace halten | Kein Alternativenmenü, bestehendes/separat vorgesehenes Repeat-Verhalten und dessen Rate unverändert. Dieser Auftrag führt keinen neuen Backspace-Timer ein. |
-| Shift/Caps | Actions sind nicht popupfähig; **DOUBLE_TAP_MS=350** unverändert. Text-Langdruck verwendet 450 ms, zählt nicht als Shift-Tap und ändert Caps nicht. |
-| Zweiter Pointer bei offenem Menü | Kein zweites Menü/Zeichen und kein PTT-Start aus einem versehentlichen Überstreichen; nur Ursprungspointer entscheidet. Bereits aktive Mic-Haltegeste wird nie vom Popup verdrängt. |
-| Texttaste ohne Alternativen / Space / Globe / Info / Enter / Deadkey | Bisheriger Pfad; keine generische „lange halten = Menü“-Regel für Action-/Deadkeys erfinden. Info-/Globe- und PTT-Semantik bleibt getrennt. |
+| DOWN on a text key with non-empty alternates | KeySurface press feedback immediately, remember origin key/layout generation/pointer; start a **450-ms** timer, do not insert a character yet. |
+| UP before 450 ms within the origin key | Insert the normal base character exactly once via the existing text path; delete the timer. |
+| Movement before the menu opens | Distance from DOWN greater than **8 dp / 21 px** ends the long-press timer for this gesture; a later return does not restart it. Normal base character only on a subsequently valid UP on the origin key. No slide typing into neighboring keys. |
+| 450 ms reached, finger still validly held | Open the menu, do not automatically select an alternate yet; the base character remains marked as the starting point. No premature base commit that would have to be deleted later. |
+| After opening, UP on the actual base key | Base character exactly once, no additional alternate; close the menu. |
+| After opening, finger in a menu cell | Mark that cell; **4-dp** switching hysteresis at inner cell boundaries so the edge does not flicker. At UP, the actual cell counts without a stale hysteresis selection. |
+| UP within an alternate | Commit exactly that visible value once; no base character before/after; close the menu. |
+| UP outside the base key and menu cells | **Abort, 0 characters**; also in the 8-dp gap, no "nevertheless take the last hit". |
+| ACTION_CANCEL, pointer loss, hide, editor/layout/size change | Discard the timer and menu immediately, **0 characters**, no late timer commit. The existing ownership rules apply for capture/editor switches. |
+| Swipe up/down after opening | Serves only for spatial selection: up in the normal menu, down in the flip fallback; no new action/page, no scrolling. Back to the base key → base character; release outside → abort. |
+| Mic DOWN/UP/CANCEL | **Classify the mic first, never a long-press timer.** Use the existing `onMicHoldStart` / `onMicHoldEnd(cancelled)` unchanged; 450 ms on the mic opens nothing and must neither delay nor stop PTT. |
+| Hold backspace | No alternates menu; the existing/separately planned repeat behavior and its rate remain unchanged. This assignment introduces no new backspace timer. |
+| Shift/Caps | Actions are not popup-capable; **DOUBLE_TAP_MS=350** unchanged. Text long-press uses 450 ms, does not count as a shift tap, and does not change caps. |
+| Second pointer with the menu open | No second menu/character and no PTT start from an accidental stroke across; only the origin pointer decides. An already active mic hold gesture is never displaced by the popup. |
+| Text key without alternates / space / globe / info / enter / dead key | Previous path; do not invent a generic "hold long = menu" rule for action/dead keys. Info/globe and PTT semantics remain separate. |
 
-Der Ursprungspointer bleibt bis UP/CANCEL im Keyboard-Touchpfad; Auswahlgesten werden
-nicht als neuer DOWN auf darunterliegenden Tasten interpretiert und beim Schließen
-nicht an Info, Mic oder Enter weitergereicht. Beim aktiven Mic wird kein neuer
-Text-Langdruck begonnen; Diktat/Ownership nicht durch diese Zusatzgeste unterlaufen.
+The origin pointer remains in the keyboard touch path until UP/CANCEL; selection
+gestures are not interpreted as a new DOWN on keys underneath and are not passed
+to info, mic, or enter when closing. No new text long-press begins while the mic
+is active; dictation/ownership is not undermined by this extra gesture.
 
-Commit ausschließlich über **listener.onTextInput → bestehende InputConnection-
-commitText(text,1)**-Kette, nicht über einen Popup-eigenen Editor-Schreibweg.
-Die aktuell dargestellte Ebene bestimmt die Alternate-Liste; Shift/Caps nicht durch
-pauschales uppercase() ersetzen (TR, DE, EL). Temporäres Shift wird nach erfolgreichem
-Grund-/Alternative-Commit einmal verbraucht, nicht beim Timer oder abgebrochenen Menü.
-Keine Normalisierung/Korrektur vorhandenen Nutzertexts, kein VAD-/ASR-Eingriff.
+Commit exclusively via the **listener.onTextInput → existing InputConnection
+commitText(text,1)** chain, not via a popup-specific editor write path.
+The currently displayed layer determines the alternates list; do not replace
+shift/caps with a blanket uppercase() (TR, DE, EL). A temporary shift is consumed
+once after a successful base/alternate commit, not on the timer or an aborted
+menu. No normalization/correction of existing user text, no VAD/ASR intervention.
 
-## §2b Obergrenze der View (Reihe 1 der Tastatur)
+## §2b Upper bound of the view (row 1 of the keyboard)
 
-**D12-K, entschieden:** Dieser Nachtrag hat für die oberste Reihe Vorrang vor dem
-Flip-Fallback aus §1 und dem entsprechenden bisherigen Test in §6. „Reihe 1“ meint
-hier die erste sichtbare Tastenreihe, also Modellindex **0**, nicht Modellindex 1.
-Übergebener Gerätebefund: View **1080×576 px**, Ursprungstaste top=0;
-Auswahl in der nächsten Reihe funktioniert, in der obersten Reihe bisher keine
-Zelle. Das ist keine neue Messung dieses Dokumentauftrags.
+**D12-K, decided:** For the topmost row, this addendum takes precedence over the
+flip fallback from §1 and the corresponding previous test in §6. "Row 1" here
+means the first visible key row, i.e. model index **0**, not model index 1.
+Handed-over device finding: view **1080×576 px**, origin key top=0;
+selection works in the next row, in the topmost row previously no
+cell. That is not a new measurement of this document assignment.
 
-### §2b.1 Auswahl muss richtungsunabhängig sein
+### §2b.1 Selection must be direction-independent
 
-**Entscheid:** Nicht `keyTop` ist das Auswahl-Tor, sondern das **gesamte echte
-Grundtasten-Rechteck mit nach außen erweiterter 8-dp-Zitterzone**. Innerhalb dieser
-Schutzzone gewinnt **nie** eine Popupzelle; UP dort liefert das Grundzeichen genau
-einmal. Erst außerhalb kann die tatsächlich unter dem Finger liegende Menüzelle
-gewinnen – nach links, rechts, oben **oder** unten. Außerhalb ohne Menüzelle bleibt
-es beim Abbruch ohne Zeichen; eine alte Auswahl darf nicht nachlaufen.
+**Decision:** The selection gate is not `keyTop`, but the **entire real base key
+rectangle extended outward with an 8-dp jitter zone**. Within this protection
+zone, a popup cell **never** wins; UP there yields the base character exactly
+once. Only outside can the menu cell actually under the finger win — to the left,
+right, top, **or** bottom. Outside without a menu cell, it remains an abort
+without a character; a stale selection must not trail behind.
 
-Die Zone wird je Seite nach **außen**, nicht nach innen erweitert; ihr Rand gehört
-noch zum Schutzbereich. Keine verkleinerte Innenzone als vermeintliche Zittertoleranz.
-Der gelesene F22-M-Ansatz mit abgezogenem slop wäre deshalb nicht dieser Entscheid:
-er würde Alternativen bereits innerhalb der ursprünglichen Taste gewinnen lassen.
-Die vor dem Öffnen geltende Bewaffnungslogik ist davon getrennt.
+The zone is extended **outward** on each side, not inward; its edge still belongs
+to the protection area. Not a shrunken inner zone as a supposed jitter tolerance.
+The read F22-M approach with a subtracted slop would therefore not be this
+decision: it would let alternates win already inside the original key.
+The arming logic applicable before opening is separate from this.
 
-**Begründung:** Bei top=0 verlangt das bisherige Aufwärts-Tor eine negative
-View-Koordinate. Die sechs sichtbaren Zellen werden damit trotz Bewegung nie zur
-Auswahl freigegeben. Der Rechteckabstand ermöglicht dagegen die reale seitliche
-Auswahl und erhält „halten, ohne wegzuschieben → Grundzeichen“.
+**Rationale:** With top=0, the previous upward gate demands a negative view
+coordinate. The six visible cells are thus never released for selection despite
+movement. The rectangle distance, by contrast, enables the real lateral
+selection and preserves "hold, without sliding away → base character".
 
-### §2b.2 Platzierung jetzt (a), Fensterlösung (b) nur bedingt später
+### §2b.2 Placement now (a), window solution (b) only conditionally later
 
-**Jetzt verbindlich (a):** Passt die übliche Position über der Grundtaste nicht,
-Menü an die **View-Oberkante 0** klemmen, innerhalb derselben View zeichnen und die
-oberste Reihe vorübergehend überdecken. Kein zusätzlicher Höhenbedarf, keine neue
-Fensterebene, keine Überdeckung der außerhalb liegenden Info-/Diagnoseleiste.
-Die Grundtasten-Geometrie darunter bleibt unverändert; es gibt keine UP-Weitergabe.
+**Now binding (a):** If the usual position above the base key does not fit,
+clamp the menu to the **view top edge 0**, draw within the same view, and
+temporarily cover the topmost row. No additional height requirement, no new
+window layer, no covering of the info/diagnostics strip lying outside. The base
+key geometry underneath remains unchanged; there is no UP forwarding.
 
-**Ehrliche Konsequenz:** Die direkt über der Grundtaste liegende Zelle kann durch
-Grundtaste plus Zitterzone gesperrt sein; ausgewählt wird über die **seitlich
-außerhalb** liegenden Zellbereiche. Diese Freigabe ist richtungsunabhängig, aber
-kein Versprechen, dass jede sichtbare Zelle bei jeder Überlappung erreichbar ist.
-Ist eine Zelle vollständig vom Schutzbereich überlagert, ist sie **nicht bedienbar**;
-das muss der Erreichbarkeitstest offen melden. Nicht die Schutzzone verkleinern,
-um den Test scheinbar grün zu bekommen. Insbesondere auch Ein-Alternativen-Menüs
-in der obersten Reihe prüfen: ohne seitlich erreichbaren Bereich ist das Feature
-für diese Taste noch nicht abgenommen.
+**Honest consequence:** The cell directly above the base key can be blocked by
+the base key plus jitter zone; selection happens via the cell areas lying
+**laterally outside**. This release is direction-independent, but not a promise
+that every visible cell is reachable in every overlap. If a cell is fully
+overlaid by the protection area, it is **not operable**; the reachability test
+must report that openly. Do not shrink the protection zone to make the test
+apparently green. In particular, also check single-alternate menus in the
+topmost row: without a laterally reachable area, the feature is not yet accepted
+for that key.
 
-**Später ausdrücklich zulässige Ausnahme (b):** Ein echtes More-Keys-Popupfenster
-oberhalb der Tastatur kann diese Überlappungsgrenze lösen; es ist nicht grundsätzlich
-verboten. Es wird aber **erst nach fertigen Ziffern-Hints L1** und einem eigenen
-Fokus-/Window-/Höhen-Abnahmeschritt umgesetzt: gleicher Ziel-Editor, kein Neustart
-der Eingabe, vollständige Auswahl-/Abbruchgeste, kein unbeabsichtigtes PTT und kein
-verlorenes UP. AOSPs separates More-Keys-Fenster rechtfertigt diese Ausnahme, nicht
-eine ungeprüfte zweite Fensterverwaltung im aktuellen Korrekturschritt.
+**Later explicitly permissible exception (b):** A real more-keys popup window
+above the keyboard can solve this overlap limit; it is not fundamentally
+forbidden. But it is implemented **only after the digit hints L1 are complete**
+and a separate focus/window/height acceptance step: same target editor, no
+restart of input, complete selection/abort gestures, no unintentional PTT and no
+lost UP. AOSP's separate more-keys window justifies this exception, not an
+unchecked second window management in the current correction step.
 
-### §2b.3 Alternativenzahl und horizontale View-Grenzen
+### §2b.3 Number of alternates and horizontal view limits
 
-**Datenobergrenze bleibt acht pro Taste, nicht acht pro Zeile geteilt durch elf.**
-Das Menü nutzt die ganze Viewbreite, nicht nur die etwa 1080/11≈98 px breite
-Ursprungstaste. Das korrekte äußere Zielmaß ohne innere Zelllücken beträgt
-48·n+8 dp: bei n=8 **392 dp = 1029 px**, also kleiner als 1080 px; mit zweimal
-8-dp-Seitenabstand insgesamt **1071 px**, ebenfalls passend.
+**The data cap remains eight per key, not eight per row divided by eleven.**
+The menu uses the full view width, not just the origin key of about 1080/11≈98 px.
+The correct outer target measure without inner cell gaps is 48·n+8 dp: for n=8
+**392 dp = 1029 px**, i.e. smaller than 1080 px; with twice an 8-dp side margin
+a total of **1071 px**, also fitting.
 
-**Abweichung im gelesenen F22-Stand:** Die Breitenfunktion zählt zusätzlich ein
-4-dp-Polster zwischen den Zellen. Acht Zellen benötigen damit **420 dp** statt
-392 dp; mit derzeit abgerundetem 10-px-Polster sind es **1098 px**, also zu breit.
-Das darf nicht als „acht passen schon“ freigegeben werden. Mit dieser vorhandenen
-Innenlückenrechnung passen auf der Referenz **höchstens sieben sichtbare Zellen**;
-ohne Innenlücken nach dem ursprünglichen Außenmaß höchstens acht.
+**Deviation in the read F22 state:** The width function additionally counts a
+4-dp padding between the cells. Eight cells thus need **420 dp** instead of
+392 dp; with the currently rounded 10-px padding that is **1098 px**, i.e. too
+wide. That must not be released as "eight fit after all". With this existing
+inner-gap calculation, at most **seven visible cells** fit on the reference;
+without inner gaps per the original outer measure, at most eight.
 
-Links/rechts an die verfügbare Viewfläche klemmen; passt die Menübreite trotzdem
-nicht, sichtbare Zellenkapazität aus **tatsächlichen** Zell-/Polstermaßen reduzieren,
-nicht Zellen abschneiden, zusammendrücken oder außerhalb malen. Das Einpassen
-beseitigt allerdings keine Überlappung mit dem Grundtasten-Schutzbereich aus §2b.1.
-Mehr Alternativen als Kapazität werden nach §3 bewusst auf der zweiten Ebene
-untergebracht; **keine stille Kürzung der Liste**. Bis zur Umverteilung gilt die
-betroffene Taste nicht als vollständig bedienbar abgenommen. Menübreite und
-Picker müssen dieselben tatsächlichen Polster/Intervalle verwenden.
+Clamp left/right to the available view area; if the menu width still does not
+fit, reduce the visible cell capacity from the **actual** cell/padding measures
+— do not cut cells short, squeeze them together, or paint outside. The fitting
+does not, however, remove the overlap with the base key protection area from
+§2b.1. More alternates than capacity are deliberately placed on the second level
+per §3; **no silent truncation of the list**. Until the redistribution, the
+affected key does not count as fully operably accepted. Menu width and picker
+must use the same actual paddings/intervals.
 
-### §2b.4 Vorhandene Tokens und gezielte Abnahme
+### §2b.4 Existing tokens and targeted acceptance
 
-Beleg: **KeyboardTheme, Zeilen 84–96**, lesend geprüft:
+Evidence: **KeyboardTheme, lines 84–96**, checked by reading:
 - `POPUP_CELL_DP = 48f`, `POPUP_HEIGHT_DP = 56f`, `POPUP_PAD_DP = 4f`.
 - `POPUP_GAP_DP = 8f`, `POPUP_RADIUS_DP = 4f`, `LONG_PRESS_MS = 450L`.
-- `POPUP_MOVE_CANCEL_DP = 8f` steht dort ebenfalls als bestehendes Bewegungsmaß;
-  für die Zitterzone keine neue abweichende Zahl einführen.
+- `POPUP_MOVE_CANCEL_DP = 8f` is also there as an existing movement measure;
+  do not introduce a new divergent number for the jitter zone.
 
-Keine neuen Maße, Farben, Inhalte oder Exportdaten. Testen: UP auf Grundtaste und
-Zitterzone jeweils genau ein Grundzeichen; Finger jenseits jeder der vier Seiten
-plus echte Zelle → genau eine Auswahl; Rand der Zone → keine Zellenauswahl;
-CANCEL → keine Eingabe. Bei top=0 mindestens die seitliche Auswahl beweisen und
-jede vollständig gesperrte Zelle ausdrücklich zählen. Der frühere Test
-`topRowFlipsBelow` ist für diesen Nachtrag durch **topRowClampsToZero** zu ersetzen.
-576-px-Viewhöhe und L1-Hints dürfen dadurch nicht anwachsen oder verschwinden.
+No new measures, colors, contents, or export data. Test: UP on the base key and
+the jitter zone each yield exactly one base character; finger beyond any of the
+four sides plus a real cell → exactly one selection; edge of the zone → no cell
+selection; CANCEL → no input. With top=0, prove at least the lateral selection
+and explicitly count every fully blocked cell. The earlier test
+`topRowFlipsBelow` is to be replaced for this addendum by **topRowClampsToZero**.
+The 576-px view height and the L1 hints must not grow or disappear because of it.
 
-## 3. Alternativenbudget und DE-Inhalt
+## 3. Alternates budget and DE content
 
-**Maximal acht Alternativen, keine stille Kappung.** Das entspricht dem bestehenden
-Testvertrag und auf der Referenzbreite acht echten 48-dp-Zellen. Die Grundtaste
-belegt keine Menüzelle; der direkte Ausgang bleibt ihre reale Fläche.
+**At most eight alternates, no silent capping.** That corresponds to the
+existing test contract and, on the reference width, to eight real 48-dp cells.
+The base key occupies no menu cell; the direct starting point remains its real
+area.
 
-Für DE bekommen die ersten zehn Tasten der QWERTZ-Reihe diese Zusatzzeichen:
+For DE, the first ten keys of the QWERTZ row get these additional characters:
 **q→1, w→2, e→3, r→4, t→5, z→6, u→7, i→8, o→9, p→0**.
-Nicht versehentlich y statt z zuordnen. Diese Ziffern gelten in base/shift gleich.
-Neue Komfort-Aliase **a→ä, o→ö, u→ü, s→ß** und ihre sprachrichtigen Shiftformen
-kommen hinzu. **R8-Entscheidung (2026-10-30):** der Satz „die vorhandenen direkten
-ä/ö/ü/ß-Tasten bleiben erhalten“ ist **aufgehoben** — de-de bekommt **keine** eigenen
-Tasten für ä/ö/ü/ß; der Umlaut/das ß ist die **erste Alternative** von a/o/u/s
-(Zielbild mit Tastenliste: `docs/DESIGN_DEDE_ZIELBILD.md` §1; Requirements-Ausnahme:
-`docs/LAYOUT_REQUIREMENTS.md` §2.2 de-de-Notiz). Kein Komfort-Doppelpfad, sondern die
-belegte Pro-Sprache-Ausnahme (AOSP `rowkeys_qwertz1.xml`/`rowkeys_qwertz3.xml` führen
-ebenfalls keine Umlaut-/ß-Direkttasten). Der Grundsatz „eigene Taste plus Alternate“
-bleibt für die anderen 14 Sprachen unberührt.
+Do not accidentally assign to y instead of z. These digits apply equally in
+base/shift. New convenience aliases **a→ä, o→ö, u→ü, s→ß** and their
+linguistically correct shift forms are added. **R8 decision (2026-10-30):** the
+sentence "the existing direct ä/ö/ü/ß keys remain" is **repealed** — de-de gets
+**no** own keys for ä/ö/ü/ß; the umlaut/ß is the **first alternate** of
+a/o/u/s (target design with key list: `docs/DESIGN_DEDE_ZIELBILD.md` §1;
+requirements exception: `docs/LAYOUT_REQUIREMENTS.md` §2.2 de-de note). Not a
+convenience double path, but the evidenced per-language exception (AOSP
+`rowkeys_qwertz1.xml`/`rowkeys_qwertz3.xml` likewise carry no umlaut/ß direct
+keys). The principle "own key plus alternate" remains untouched for the other 14
+languages.
 
-Reihenfolge: Ziffer, falls vorhanden, dann der gewünschte Umlaut/ß-Komfortalias,
-danach bisherige Alternativen in bisheriger Reihenfolge, ohne doppelte Einträge.
-Beispiel e: **[3, é, è, ê, ë, ę, €]**, also **7**, nicht 9 Alternativen.
-Die übergebene Liste hat sechs Einträge; das zusätzliche Zeichen „3“ ist **ein**
-Eintrag, nicht drei. Ein tatsächlich neun Einträge langes Asset bleibt ein eigener Stressfall.
+Order: the digit if present, then the desired umlaut/ß convenience alias, then
+previous alternates in their previous order, without duplicate entries.
+Example e: **[3, é, è, ê, ë, ę, €]**, i.e. **7**, not 9 alternates.
+The handed-over list has six entries; the additional character "3" is **one**
+entry, not three. An asset that is really nine entries long remains its own
+stress case.
 
-Bei wirklich neun oder mehr: seltene bereits auf symbols/symbolsShift direkt erreichbare
-Zeichen zuerst aus dem Komfortmenü dorthin verweisen (etwa €), **nicht** aus dem Layout
-löschen. Sonst muss der Autor die zusätzliche seltene Alternative als eindeutige Taste
-auf der zweiten Symbolebene unterbringen und die Pflichtzeichen-/Spiegelregeln prüfen.
-Kein „nur erste 8 anzeigen“, kein verstecktes zweites Langdruckmenü, kein automatisches
-Paging während gehaltenem Finger. Lässt sich die Umverteilung nicht regelkonform
-belegen, wird das betreffende Asset nicht freigegeben statt Daten still abzuschneiden.
+If there really are nine or more: first refer rare characters already directly
+reachable on symbols/symbolsShift to there from the convenience menu (e.g. €),
+**not** delete them from the layout. Otherwise the author must place the
+additional rare alternate as a unique key on the second symbol level and check
+the mandatory-character/mirroring rules. No "show only the first 8", no hidden
+second long-press menu, no automatic paging while the finger is held. If the
+redistribution cannot be evidenced rule-conformly, the affected asset is not
+released instead of silently cutting data.
 
-Parser und Assets bleiben das Datenformat: fehlende/ungültige Listen dürfen nicht
-die normale Tastatur blockieren. Runtime soll den Konflikt eindeutig behandeln;
-Tests/Importvalidierung weisen `>8` aus, sie dürfen den Fehler nicht nur im Renderer verstecken.
-D12 ändert diese Dateien nicht; der spätere Assetauftrag ergänzt DE-Ziffern/Aliase und
-beide Ebenen gezielt, keine globalen Texteingriff-/Sprachregeln für alle 15 erfinden.
+Parser and assets remain the data format: missing/invalid lists must not block
+the normal keyboard. The runtime should handle the conflict unambiguously;
+tests/import validation flag `>8`; they must not merely hide the error in the
+renderer. D12 does not change these files; the later asset assignment adds
+DE digits/aliases and both levels in a targeted way — do not invent global text
+intervention/language rules for all 15.
 
-## 4. Fußzeile VOR/NACH – Punkt ersetzt beide Cursorpfeile
+## 4. Footer BEFORE/AFTER — period replaces both cursor arrows
 
-Die Entfernung **beider** Cursoraktionen ist hier durch „‹ › weg, Punkt dafür“
-explizit autorisiert; sonst bleibt der Tastenbestand erhalten. D10s separate
-Entscheidung **Mic ganz rechts** bleibt gültig. Enter steht deshalb vor Mic,
-auch wenn die übergebene Istzeile noch Mic vor Enter zeigt.
+The removal of **both** cursor actions is explicitly authorized here by "‹ ›
+gone, period instead"; otherwise the key inventory remains. D10's separate
+decision **mic all the way right** remains valid. Enter therefore stands before
+mic, even if the handed-over actual row still shows mic before enter.
 
-**VOR, Summe 13:**
-`[?123 11,54%][🌐 7,69%][😊 7,69%][Space 38,46%][‹ 7,69%][› 7,69%][Mic 7,69%][⏎ 11,54%]`
+**BEFORE, sum 13:**
+`[?123 11.54%][🌐 7.69%][😊 7.69%][space 38.46%][‹ 7.69%][› 7.69%][mic 7.69%][⏎ 11.54%]`
 
-**NACH, Summe 13:**
-`[?123 11,54%][🌐 7,69%][😊 7,69%][Space 30,77%][. 15,38%][⏎ 11,54%][Mic 15,38%]`
+**AFTER, sum 13:**
+`[?123 11.54%][🌐 7.69%][😊 7.69%][space 30.77%][. 15.38%][⏎ 11.54%][mic 15.38%]`
 
-Gewichte nachher: **1,5 / 1 / 1 / 4 / 2 / 1,5 / 2**.
-Die bisherigen beiden Pfeilplätze finanzieren den **2,0 breiten Punkt**; die bereits
-in D10 entschiedene Space-Verkleinerung 5→4 finanziert Mic 1→2. Keine zusätzliche Reihe.
-Bei 1080 px: Punkt und Mic je rund **166 px / 63,30 dp** breit; Punkt etwa
-x=623…789 px, Enter 789…914, Mic 914…1080. Randpixel gemeinsam verteilen.
+Weights afterwards: **1.5 / 1 / 1 / 4 / 2 / 1.5 / 2**.
+The previous two arrow slots finance the **2.0-wide period**; the space
+reduction 5→4 already decided in D10 finances mic 1→2. No additional row.
+At 1080 px: period and mic each about **166 px / 63.30 dp** wide; period about
+x=623…789 px, enter 789…914, mic 914…1080. Distribute edge pixels jointly.
 
-Punkt ist **kind text, value/label "."**, kurz = Punkt, lang = **[, ! ?]**;
-kein neues Action-Kommando „dot-popup“. Drei Alternativen ergeben **399×147 px**.
-Punkt/Mic teilen D10s Footerhöhe: 650-px-Rootbeispiel **128 px / 48,76 dp**,
-829-px-Angebot mit Root-Kappe **147 px / 56 dp**; Ziel ≥48 dp hier erfüllt.
-Wenn der aktuelle integrierte Footer in PT noch auf 44 dp skaliert wird, ist dieses
-Ziel **noch nicht erreicht**: D10-Höhenvertrag zuerst integrieren, nicht nur das Icon vergrößern.
+Period is **kind text, value/label "."**, short = period, long = **[, ! ?]**;
+no new action command "dot-popup". Three alternates yield **399×147 px**.
+Period/mic share D10's footer height: 650-px root example **128 px / 48.76 dp**,
+829-px offer with root cap **147 px / 56 dp**; target ≥48 dp is satisfied here.
+If the current integrated footer in PT still scales down to 44 dp, this target
+is **not yet met**: integrate the D10 height contract first, not just enlarge
+the icon.
 
-Bei symbols existiert bereits eine Punkt-Taste: **dieselbe ID/Zeichenfunktion in die
-Fußzeile verlagern**, kein zweiter Punkt in derselben Ebene. Bei Ebenen ohne Punkt
-gezielt ergänzen; Paare base/shift und symbols/symbolsShift müssen ihre Zeilensummen
-behalten. Der spätere Asset-/Kompositionsauftrag prüft alle 15×4 Ebenen; keine leere
-Geistertaste am alten Punkt-Ort und keine verlorenen Pflichtsymbole.
-Die Popup-Aliase , ! ? sind beabsichtigte Komfort-Doppelpfade zu den direkten Symboltasten.
+On symbols a period key already exists: **move that same ID/character function
+into the footer**, no second period in the same layer. Add it in a targeted way
+to layers without a period; the pairs base/shift and symbols/symbolsShift must
+keep their row sums. The later asset/composition assignment checks all 15×4
+layers; no ghost key at the old period position and no lost mandatory symbols.
+The popup aliases , ! ? are intended convenience double paths to the direct
+symbol keys.
 
-**Teilenschaste / Entscheidung #8:** 🐞/Info bleibt oben in ihrer **48×48-dp**-Fläche,
-kein Ersatz im Footer und keine Verkleinerung auf Iconmaß. Ein Popup darf die Leiste
-weder zeichnend überdecken noch ihre Ereignisse beim UP auslösen. Diese Trennung ist
-wichtiger als die unmögliche Zusage „erste Reihe immer nach oben“.
+**Splitting key / decision #8:** 🐞/info stays at the top in its **48×48-dp**
+area, no replacement in the footer and no shrinking to icon size. A popup may
+neither cover the strip while drawing nor trigger its events at UP. This
+separation is more important than the impossible promise "first row always up".
 
-## 5. Messplan – ausschließlich für den Orchestrator
+## 5. Measurement plan — exclusively for the orchestrator
 
-Keine Emulatorbedienung in diesem Dokumentauftrag. Referenzdaten r0≈1884, r1≈1990,
-Shiftreihe≈2100, Footer≈2225 und Info≈1765 sind Anker, **keine** universellen Tap-
-Koordinaten; reale KeyRects/Root-Position und 650/829-px-Budget beim jeweiligen Bild mitführen.
+No emulator operation in this document assignment. Reference data r0≈1884,
+r1≈1990, shift row≈2100, footer≈2225, and info≈1765 are anchors, **not**
+universal tap coordinates; carry the real key rects/root position and the
+650/829-px budget along with each image.
 
-### Screenshotfolge aus derselben APK
+### Screenshot sequence from the same APK
 
-1. Hell/Dunkel normales q und gehaltenes q bei **100 ms**: nur Pressfläche, kein Menü.
-2. Dieselben Zustände bei **500 ms**: Menü mit „1“, Grundzeichen noch nicht im Feld.
-3. e-Menü nach Assetergänzung: sieben Einträge, **903×147 px**, vollständig im Clip;
-   nahe linkem Rand mindestens **21 px** Abstand, keine Überdeckung der Infoleiste.
-4. a/Umlaut- sowie Punkt-Menü, Finger auf einer Alternative: genau eine Akzentzelle;
-   für Punkt **399×147 px**, Bild vor UP und danach geschlossen mit einem Testzeichen.
-5. MENU→UP Grundtaste, UP außerhalb und ACTION_CANCEL: genau Grundzeichen bzw.
-   unverändertes leeres Testfeld; nie doppelte Eingabe oder ein nachlaufendes Menü.
-6. Oberste/rechte/unterste Ursprungstaste, beide Höhen, DE/PT, zweite Öffnung, Caps:
-   Popup geclippt/gefaltet wie beschrieben, alle normalen Tasten nach Schließen erhalten.
-7. Mic **900 ms** halten: kein Menü, Aufnahmezustand unverändert; Shift-Doppeltipp
-   innerhalb **350 ms** bleibt Caps, kein Alternative-Handler und keine zweite Session.
+1. Light/dark normal q and held q at **100 ms**: only the press surface, no menu.
+2. The same states at **500 ms**: menu with "1", base character not yet in the
+   field.
+3. e menu after the asset addition: seven entries, **903×147 px**, fully inside
+   the clip; at least **21 px** distance near the left edge, no covering of the
+   info strip.
+4. a/umlaut and period menus, finger on an alternate: exactly one accent cell;
+   for period **399×147 px**, image before UP and afterwards closed with one
+   test character.
+5. MENU→UP base key, UP outside, and ACTION_CANCEL: exactly the base character
+   or the unchanged empty test field; never a double input or a menu trailing
+   behind.
+6. Topmost/right/bottommost origin key, both heights, DE/PT, second opening,
+   caps: popup clipped/folded as described, all normal keys preserved after
+   closing.
+7. Hold mic for **900 ms**: no menu, recording state unchanged; shift double
+   tap within **350 ms** remains caps, no alternate handler and no second
+   session.
 
-Nur kontrollierte Testfelder verwenden; keine Nutzerinhalte sammeln/exportieren.
-Für Haltebilder kann der Orchestrator sein bestehendes Touch-/Instrumentierungsfixture
-verwenden, während des Haltens `adb exec-out screencap -p` erfassen und mit
-`adb logcat -d -s VK-HIT` Grundtasten-Rects zuordnen. Popup-Rect/-Index dürfen als
-zusätzliche Debug-Metadaten geloggt werden, **nicht der eingegebene Inhalt**.
-Ein bloß nach UP aufgenommenenes Bild beweist das kurzzeitig geöffnete Menü nicht.
+Use only controlled test fields; do not collect/export user content. For hold
+images, the orchestrator may use its existing touch/instrumentation fixture,
+capture `adb exec-out screencap -p` during the hold, and map base key rects with
+`adb logcat -d -s VK-HIT`. Popup rect/index may be logged as additional debug
+metadata, **not the entered content**. A mere image taken after UP does not
+prove the briefly opened menu.
 
-### Pixelbeweis statt grober Delta-Schwelle
+### Pixel proof instead of a rough delta threshold
 
-Aus **KeyboardTheme.compose mit ganzzahliger Division** folgen exakt:
-- Hell normal RGB **(236,239,241)**, gedrückt **(163,171,176)** = #FFA3ABB0;
-  Kanaländerungen **(73,68,65)**, Maximum **73**.
-- Dunkel normal **(38,50,56)**, gedrückt **(103,111,116)** = #FF676F74;
-  Kanaländerungen **(65,61,60)**, Maximum **65**.
+From **KeyboardTheme.compose with integer division** it follows exactly:
+- Light normal RGB **(236,239,241)**, pressed **(163,171,176)** = #FFA3ABB0;
+  channel changes **(73,68,65)**, maximum **73**.
+- Dark normal **(38,50,56)**, pressed **(103,111,116)** = #FF676F74;
+  channel changes **(65,61,60)**, maximum **65**.
 
-Das sind **maximale RGB-Kanaländerungen, keine Luma-/Helligkeitsmetriken**.
-Im PNG je einen **10×10-px-Innenpatch** ohne Glyphe/Kante/Antialiasing vergleichen:
-pro Kanal Sollwert ±**2**; nicht nur „irgendein Delta >50“. KeySurface bestimmt
-Ausnahmen Caps/Recording, die deshalb nicht mit dem Normal-Presswert verglichen werden.
+These are **maximum RGB channel changes, not luma/brightness metrics**. In the
+PNG, compare one **10×10-px inner patch** each without glyph/edge/antialiasing:
+per channel target value ±**2**; not just "any delta >50". KeySurface determines
+the caps/recording exceptions, which are therefore not compared against the
+normal press value.
 
-Für das Popup: Außen-Rect aus der Geometrie, deckende Menüfläche in diesen Theme-
-Werten, mindestens ein lesbares Alternate-Glyphbild plus 48-dp-Auswahlzelle im gehaltenen
-Screenshot. Größen/Positionstoleranz **±1 px**, Radius-Rand nicht als Farbpatch verwenden.
-Nach UP: Popup-Rect wieder normale Tastatur; Diagnosetext/Info-Rect unverändert.
-Mehr veränderte Pixel allein beweisen **kein** Menü – Glyphen, korrektes Rect und
-selektierte Zelle sind gemeinsam erforderlich.
+For the popup: outer rect from the geometry, an opaque menu surface in these
+theme values, at least one readable alternate glyph image plus a 48-dp selection
+cell in the held screenshot. Size/position tolerance **±1 px**; do not use the
+radius edge as a color patch. After UP: the popup rect is a normal keyboard
+again; diagnostics text/info rect unchanged. More changed pixels alone prove
+**no** menu — glyphs, correct rect, and a selected cell are jointly required.
 
-## 6. Reine JVM-Naht – Testliste mit konkreten Ergebnissen
+## 6. Pure JVM seam — test list with concrete results
 
-`LongPressMenu`/Geometriefunktionen sind neu vorzuschlagende reine Funktionen;
-Eingaben Zahlen, Listen, IDs, Zeitwerte, Zustandswerte – **keine Android-Typen**.
-Für zwei Reihen muss `pick` x **und y** berücksichtigen; offsetX allein reicht nicht.
-Zellintervalle sind links/oben geschlossen, rechts/unten offen. Außerhalb → keine Auswahl.
+`LongPressMenu`/geometry functions are pure functions to be newly proposed;
+inputs are numbers, lists, IDs, time values, state values — **no Android
+types**. For two rows, `pick` must consider x **and** y; offsetX alone does not
+suffice. Cell intervals are closed left/top, open right/bottom. Outside → no
+selection.
 
-| Testname | Erwartung |
+| Test name | Expectation |
 |---|---|
-| `doesNotOpenAt449ms` | Zeit 449 ms → Menü geschlossen, 0 Commitereignisse |
-| `opensAt450ms` | 450 ms, gültiger Text-Key/Pointer → offen, noch 0 Commits |
-| `emptyAlternatesStayNormal` | Leere Liste → kein Menü, normales UP unverändert |
-| `movementCancelsArming` | Entfernung >8 dp vor Timer → Timer endgültig abgebrochen |
-| `sameGestureDoesNotRearm` | Bewegung weg/zurück und 900 ms warten → kein späteres Popup |
-| `geometry3AtDensity420` | 3 Alternativen → **399×147 px**, Zellen je **126×126 px** |
-| `geometry8Fits1080` | 8 Alternativen → **1029×147**, mit 21-px-Rand innerhalb 1080 |
-| `leftEdgeIsClamped` | Gewünschtes Menü-left <21 → left=21, nicht negative Position |
-| `topRowFlipsBelow` | Beispiel key-top=1831, bottom=1937, sicherer top>1663 → below-top=1958 |
-| `doesNotOverlapSourceOrToolbar` | Kein Kandidat vollständig passend → fit=false, kein geclipptes Menü |
-| `pickThirdCell` | Menü-Innenkoordinate x=120 dp, y=24 dp bei 48-dp-Zellen → Index **2** |
-| `rightEdgeIsOutside` | 3 Zellen, Innen-x=144 dp → **keine** Auswahl, nicht Index 2 |
-| `twoRowPickUsesY` | 4 Spalten, zweite Reihe, dritte Zelle → Index **6** |
-| `paddingIsNotACharacter` | UP im 4-dp-Padding → kein Alternate, 0 Commit |
-| `upOnBaseAfterOpen` | UP im separaten Ursprungstasten-Rect → genau **1 Basis-Commit** |
-| `upOnAlternateOnly` | UP auf Index 2 → genau Listeneintrag 2, **kein zusätzlicher Basis-Commit** |
-| `outsideAndCancelNeverCommit` | UP außerhalb bzw. CANCEL → geschlossen, Timer gelöscht, **0** Commit |
-| `lateTimerHasNoEffect` | Timer einer alten Layout-/Editorgeneration → geschlossen, **0** Commit |
-| `micNeverArmsMenu` | Mic DOWN plus 900 ms → **1 HoldStart, 0 Menüevents**; UP genau 1 HoldEnd |
-| `shiftDoubleTapUntouched` | Shift-Taps im bestehenden 350-ms-Vertrag → Caps wie bisher, **0 Menüevents** |
-| `oneShotShiftConsumedOnlyOnCommit` | Abbruch erhält Shift; Alternate-Commit verbraucht es einmal |
-| `sevenIsNotNine` | [é,è,ê,ë,ę,€] plus 3 ohne Duplikate → **7** Einträge |
-| `nineAlternatesAreNotTruncated` | 9 Einträge → eindeutiger Validierungs-/Freigabefehler, nicht still erste 8 |
-| `footerReflowKeepsRequiredKeys` | Gewichtssumme **13**, Punkt/Mic Gewicht **2**, Enter vor Mic, Cursor-left/right bewusst entfernt; keine andere Aktion verloren |
-| `surfacePriorityUnchanged` | Existing KeySurface-Regressionsfälle: Mic vor Caps vor Press vor Normal; Pressfarben weiterhin **73/65** Kanalmaximum |
+| `doesNotOpenAt449ms` | Time 449 ms → menu closed, 0 commit events |
+| `opensAt450ms` | 450 ms, valid text key/pointer → open, still 0 commits |
+| `emptyAlternatesStayNormal` | Empty list → no menu, normal UP unchanged |
+| `movementCancelsArming` | Distance >8 dp before the timer → timer definitively aborted |
+| `sameGestureDoesNotRearm` | Move away/back and wait 900 ms → no late popup |
+| `geometry3AtDensity420` | 3 alternates → **399×147 px**, cells **126×126 px** each |
+| `geometry8Fits1080` | 8 alternates → **1029×147**, with a 21-px margin inside 1080 |
+| `leftEdgeIsClamped` | Desired menu left <21 → left=21, not a negative position |
+| `topRowFlipsBelow` | Example key top=1831, bottom=1937, safe top>1663 → below-top=1958 |
+| `doesNotOverlapSourceOrToolbar` | No candidate fully fitting → fit=false, no clipped menu |
+| `pickThirdCell` | Menu inner coordinate x=120 dp, y=24 dp at 48-dp cells → index **2** |
+| `rightEdgeIsOutside` | 3 cells, inner x=144 dp → **no** selection, not index 2 |
+| `twoRowPickUsesY` | 4 columns, second row, third cell → index **6** |
+| `paddingIsNotACharacter` | UP in the 4-dp padding → no alternate, 0 commits |
+| `upOnBaseAfterOpen` | UP in the separate origin key rect → exactly **1 base commit** |
+| `upOnAlternateOnly` | UP on index 2 → exactly list entry 2, **no additional base commit** |
+| `outsideAndCancelNeverCommit` | UP outside or CANCEL → closed, timer deleted, **0** commits |
+| `lateTimerHasNoEffect` | Timer of an old layout/editor generation → closed, **0** commits |
+| `micNeverArmsMenu` | Mic DOWN plus 900 ms → **1 HoldStart, 0 menu events**; UP exactly 1 HoldEnd |
+| `shiftDoubleTapUntouched` | Shift taps within the existing 350-ms contract → caps as before, **0 menu events** |
+| `oneShotShiftConsumedOnlyOnCommit` | Abort preserves shift; alternate commit consumes it once |
+| `sevenIsNotNine` | [é,è,ê,ë,ę,€] plus 3 without duplicates → **7** entries |
+| `nineAlternatesAreNotTruncated` | 9 entries → unambiguous validation/release error, not silently the first 8 |
+| `footerReflowKeepsRequiredKeys` | Weight sum **13**, period/mic weight **2**, enter before mic, cursor-left/right deliberately removed; no other action lost |
+| `surfacePriorityUnchanged` | Existing KeySurface regression cases: mic before caps before press before normal; press colors continue **73/65** channel maximum |
 
-Der spätere Android-Adapter muss Timerabbruch, echten Pointerbesitz, Textpfad und
-Clipping zusätzlich instrumentiert belegen. TalkBack-Langdruckauswahl wird nicht
-allein durch JVM-Picks als geprüft ausgegeben; Accessibility bleibt eigener Gerätepunkt.
+The later Android adapter must additionally instrument and prove timer abort,
+real pointer ownership, the text path, and clipping. TalkBack long-press
+selection is not to be reported as checked by JVM picks alone; accessibility
+remains its own device item.
 
-## §7 Hint-Beschriftung (keyHintLabel)
+## §7 Hint labeling (keyHintLabel)
 
-**D12-H – Entscheidung:** `LayoutKey.hint` wird als kleine Zusatzlegende gezeichnet,
-nicht als weiterer Tastentext oder eigener Trefferbereich. Null/leer/blank bedeutet
-keine Zeichnung; das vorhandene tolerante Einlesen und der Text-/Popup-Commitpfad
-werden durch diesen Auftrag nicht geändert. Keine Ableitung aus dem ersten Alternate:
-Quelle ist ausschließlich das explizite Hint-Feld der gerade sichtbaren Taste.
+**D12-H — decision:** `LayoutKey.hint` is drawn as a small extra legend, not as
+additional key text or its own hit area. Null/empty/blank means no drawing; the
+existing tolerant reading and the text/popup commit path are not changed by this
+assignment. No derivation from the first alternate: the source is exclusively the
+explicit hint field of the currently visible key.
 
-### §7.1 Schriftgröße und Token
+### §7.1 Font size and token
 
-Vorhandener Hauptlabel-Token: **KeyboardTheme.SP_LETTER_SP = 24 sp**.
-Gewünschter **neuer, noch nicht vorhandener** Theme-Token: **SP_KEY_HINT_SP = 12 sp**,
-abgeleitet als **0,5 × SP_LETTER_SP**, nicht als verstreute zweite Schriftkonstante
-im Renderer. Der Wert entspricht dem vorhandenen **SP_SECONDARY_SP = 12 sp**,
-der neue Name trennt aber die Hint-Rolle von Status-/Space-Beschriftung.
+Existing main label token: **KeyboardTheme.SP_LETTER_SP = 24 sp**.
+Desired **new, not yet existing** theme token: **SP_KEY_HINT_SP = 12 sp**,
+derived as **0.5 × SP_LETTER_SP**, not as a scattered second font constant in
+the renderer. The value matches the existing **SP_SECONDARY_SP = 12 sp**, but the
+new name separates the hint role from status/space labeling.
 
-Bei fontScale=1 sind das nominal **12 dp bzw. 31,5 px** bei density 420. Text bleibt
-sp, nicht fest in Geräte-Pixeln. Wird das tatsächliche Hauptlabel durch den Fit
-verkleinert, folgt der Hint im selben Verhältnis: **Hint-Paintgröße = 0,5 × tatsächliche
-Hauptlabel-Paintgröße**; er wird nicht größer als der aus dem Theme abgeleitete Sollwert.
-Nicht weiter bis zur Unlesbarkeit schrumpfen, um eine Kollision zu verstecken:
-bei Platzmangel gilt die Priorität aus §7.5.
+At fontScale=1, that is nominally **12 dp or 31.5 px** at density 420. Text
+stays sp, not fixed in device pixels. If the actual main label is shrunk by the
+fit, the hint follows in the same ratio: **hint paint size = 0.5 × actual main
+label paint size**; it does not become larger than the target value derived
+from the theme. Do not shrink further to illegibility to hide a collision: if
+space is scarce, the priority from §7.5 applies.
 
-### §7.2 Position und AOSP-Beleg
+### §7.2 Position and AOSP evidence
 
-**Rechts oben, Text am rechten oberen Anker zentriert**, nicht linksbündig und nicht
-über der Mitte der ganzen Taste. Seitlicher Innenabstand ist der vorhandene
-**POPUP_PAD_DP = 4 dp**; die rechte sichtbare Glyphenkante bleibt entsprechend innen.
-Bei der 98-px-Taste und 18 px gemessener Hint-Inkbreite liegt die Textmitte bei
-**98 − 10,5 − 9 = 78,5 px** relativ zur linken Tastenkante.
+**Top right, text centered on the top-right anchor**, not left-aligned and not
+over the center of the whole key. The lateral inner distance is the existing
+**POPUP_PAD_DP = 4 dp**; the right visible glyph edge stays accordingly inside.
+For the 98-px key and 18 px measured hint ink width, the text center lies at
+**98 − 10.5 − 9 = 78.5 px** relative to the left key edge.
 
-Vertikale Vorgabe: nominal **2 dp** Abstand zwischen Tastenoberkante und sichtbarer
-Glyphenoberkante, abgeleitet aus **POPUP_PAD_DP / 2**, kein neues Abstands-Token.
-Für die tatsächliche Reihenhöhe h und den vorhandenen Sollwert aus
-**KeyboardTheme.rowHeightDp(rows)** gilt der Abstand
+Vertical specification: nominally **2 dp** distance between the key top edge and
+the visible glyph top edge, derived from **POPUP_PAD_DP / 2**, no new distance
+token. For the actual row height h and the existing target value from
+**KeyboardTheme.rowHeightDp(rows)**, the distance is
 **(POPUP_PAD_DP / 2) × min(1, h / rowHeightDp(rows))** in dp.
-Bei einer Sollhöhe 55 dp sind das 2 dp, bei 44 statt 55 dp etwa 1,6 dp; eine höhere
-Taste vergrößert den Abstand nicht über 2 dp. Baseline erst aus den tatsächlichen
-Font-/Inkmetriken bestimmen, nicht „Baseline = Oberkante + 2 dp“ setzen.
-Bei schmalerer Taste folgen Anker und gemessene Inkbreite ihrer echten rechten Kante;
-kein fixer Bildschirm-x-Wert, keine Veränderung der Touchfläche oder Reihenhöhe.
+For a target height of 55 dp that is 2 dp; for 44 instead of 55 dp about
+1.6 dp; a taller key does not enlarge the distance beyond 2 dp. Determine the
+baseline only from the actual font/ink metrics, do not set "baseline = top edge
++ 2 dp". For a narrower key, anchor and measured ink width follow its real right
+edge; no fixed screen x value, no change to the touch area or row height.
 
-**Beleg lesend geprüft, AOSP android16-release:** `rowkeys_qwertz1.xml:24–71` führt
-keyHintLabel 1…0 für q,w,e,r,t,z,u,i,o,p getrennt von additionalMoreKeys.
-Der Telefon-Hint-Zweig in AOSPs `KeyboardView.java:473–480` platziert die Hint-Legende
-rechts oben und zeichnet sie mit CENTER-Ausrichtung, unter Einbezug der gemessenen
-Ziffer-/Textbreite. Das belegt die Anmutung, **nicht** unsere konkreten 4-/2-dp-Werte:
-diese sind die hier entschiedene Ableitung aus vorhandenen Theme-Maßen.
-AOSP hat für andere Hint-Arten eigene Zweige; unser Kurz-Ziffernhint ist kein Telefon-
-Mehrbuchstabenlabel rechts neben der Hauptglyphe.
+**Evidence checked by reading, AOSP android16-release:** `rowkeys_qwertz1.xml:24–71`
+carries keyHintLabel 1…0 for q,w,e,r,t,z,u,i,o,p, separate from
+additionalMoreKeys. The phone hint branch in AOSP's `KeyboardView.java:473–480`
+places the hint legend top right and draws it with CENTER alignment, including
+the measured digit/text width. That evidences the look, **not** our concrete
+4-/2-dp values: those are the derivation from existing theme measures decided
+here. AOSP has its own branches for other hint kinds; our short digit hint is
+not a phone multi-letter label next to the main glyph.
 
-### §7.3 Farbe und Dunkelmodus
+### §7.3 Color and dark mode
 
-**Vorhandenes Feld palette.textSecondary**, keine erfundenen keyText-/keyLabel-Felder:
-Hell **#B337474F**, Dunkel **#B3FFFFFF**. Die gewählte Palette erledigt den
-Hell-/Dunkelunterschied; kein eigener Dark-Sonderpfad und kein neuer Farbtoken.
-Der Hint ist eine Zusatzlegende, deshalb weder **palette.accent** noch
-**palette.keyToggledGlyph**. Auch bei Caps bleibt die Ziffer eine Ziffer.
+**Existing field palette.textSecondary**, no invented keyText/keyLabel fields:
+light **#B337474F**, dark **#B3FFFFFF**. The chosen palette handles the
+light/dark difference; no special dark path and no new color token. The hint is
+an extra legend, hence neither **palette.accent** nor
+**palette.keyToggledGlyph**. Even in caps, the digit stays a digit.
 
-Grundtastenfläche weiterhin ausschließlich aus **KeySurface**; Hint-Paint verändert
-keinen Flächen-/Presszustand und trägt das Overlay nicht nochmals auf.
-Beim dunklen Press-Hintergrund **#FF676F74** bleibt die vorhandene sekundäre Textfarbe;
-**#FF80CBC4** ist der Auswahl-/Akzenttoken, nicht die generelle Hint-Farbe.
-Das Popup selbst zeichnet seine Alternativen wie bisher; dort keine zweite Hint-Legende.
-Lesbarkeit auf normaler und gedrückter Fläche ist separat am Gerät zu prüfen,
-nicht allein durch gleiche RGB-Token oder als bereits geprüfte Accessibility auszugeben.
+The base key surface continues to come exclusively from **KeySurface**; the hint
+paint changes no surface/press state and does not apply the overlay again. On
+the dark press background **#FF676F74**, the existing secondary text color
+remains; **#FF80CBC4** is the selection/accent token, not the general hint
+color. The popup itself draws its alternates as before; no second hint legend
+there. Legibility on normal and pressed surfaces is to be checked separately on
+the device, not merely asserted through identical RGB tokens or reported as
+already-checked accessibility.
 
-### §7.4 Ebenen
+### §7.4 Layers
 
-**base und shift zeigen denselben expliziten Ziffernhint**, einschließlich Caps:
-q/Q→1 … p/P→0; kein Großschreiben/Transformieren von hint und kein Umschalten der
-Ziffer in das Shift-Sonderzeichen. Beide Ebenen bekommen die passenden Hint-Daten,
-kein Render-Fallback aus dem Layout einer anderen Ebene.
+**base and shift show the same explicit digit hint**, including caps:
+q/Q→1 … p/P→0; no uppercasing/transforming of hint and no switching of the digit
+to the shift special character. Both layers get the matching hint data, no
+render fallback from another layer's layout.
 
-**symbols und symbolsShift zeichnen in diesem F23-Umfang keine solchen Hints**:
-dort sind die Ziffern bereits direkt sichtbare Zeichentasten, ein geerbtes 1…0 wäre
-redundant oder falsch. Gleiches gilt für Action-Tasten, Space, Mic und die Popupzellen.
-Der AOSP-QWERTZ-Beleg trennt Buchstaben-Hints und eigentliche Zeichen; er beweist
-kein universelles Verbot anderer Symbol-Hints – diese Begrenzung ist unsere bewusst
-kleine Umsetzungsentscheidung, nicht eine behauptete AOSP-Regel für alle Layouts.
+**symbols and symbolsShift draw no such hints in this F23 scope:** there the
+digits are already directly visible character keys; an inherited 1…0 would be
+redundant or wrong. The same applies to action keys, space, mic, and the popup
+cells. The AOSP QWERTZ layout separates letter hints from actual characters; it
+does not prove a universal prohibition of other symbol hints — this limitation
+is our deliberately small implementation decision, not a claimed AOSP rule for
+all layouts.
 
-### §7.5 Kollision und Priorität
+### §7.5 Collision and priority
 
-**Hauptlabel samt eigentlichen Akzenten/Umlautpunkten > notwendiger Deadkey-Marker
-> Hint.** Ein Akzentpunkt als Teil der Hauptglyphe darf niemals für einen Hint
-verschwinden. Ein vorhandener separater Deadkey-/Modusmarker behält ebenfalls Vorrang.
+**Main label including its own accents/umlaut dots > necessary dead-key marker
+> hint.** An umlaut dot as part of the main glyph must never disappear for a
+hint. An existing separate dead-key/mode marker likewise keeps precedence.
 
-Mit den gemessenen Ink-Rechtecken prüfen, nicht mit Stringlänge oder allein den
-98 px Zellbreite. Der Hint muss innerhalb der Taste bleiben und darf das Hauptlabel
-oder den Marker einschließlich eines Abstands **POPUP_PAD_DP / 2 = nominal 2 dp**
-nicht schneiden. Dieser Abstand folgt bei kleinerer Höhe derselben relativen
-Ableitung wie oben. Reicht es nicht: **nur den Hint dieser Taste ausblenden**,
-keine Hauptglyphe verschieben/verkleinern, keinen Punkt übermalen und keine neue
-Reihe einführen. Alternative und Langdruck funktionieren trotzdem unverändert.
-Damit wird insbesondere für stark geschrumpfte PT-Reihen keine Sichtbarkeit vorgetäuscht.
+Check with the measured ink rectangles, not with string length or the 98 px cell
+width alone. The hint must stay inside the key and must not cut the main label
+or the marker, including a distance of **POPUP_PAD_DP / 2 = nominally 2 dp**.
+For a smaller height, this distance follows the same relative derivation as
+above. If that does not suffice: **hide only that key's hint**, do not
+shift/shrink the main glyph, paint over no dot, and introduce no new row.
+Alternates and long-press continue to work unchanged. In particular, for
+strongly shrunken PT rows, this fakes no visibility.
 
-### §7.6 Kleinste Test-/Zeichnungsnaht
+### §7.6 Smallest test/drawing seam
 
-Keine neue Stateful- oder Farbarchitektur. Eine kleine reine Platzierungsfunktion
-im Zeichnungsadapter genügt: Eingaben sind Key-Rect, Zeilen-Sollhöhe, tatsächliche
-Textgröße und vom Adapter gemessene Ink-/Marker-Rechtecke; Ausgabe Hint-Rect bzw.
-„nicht zeichnen“. Sie benötigt weder Android-Typen noch einen neuen Editorpfad.
+No new stateful or color architecture. A small pure placement function in the
+drawing adapter suffices: inputs are the key rect, the row target height, the
+actual text size, and the ink/marker rectangles measured by the adapter; output
+is the hint rect or "do not draw". It needs neither Android types nor a new
+editor path.
 
-| Minimaler Test | Erwartung |
+| Minimal test | Expectation |
 |---|---|
-| `hintUsesHalfMainLabel` | 24 sp Hauptlabel → **12 sp Hint**; effektive 20 sp → **10 sp**, kein Festhalten an 12 |
-| `hintTracksKeyGeometry` | 98 px Breite/18 px Hint-Ink, density 420 → Anker **78,5 px**; 55-dp-Sollhöhe → oberer Abstand **2 dp**, bei h=44 dp **1,6 dp** |
-| `hintIsLayerExplicit` | Gleiche gesetzte Ziffer in base/shift/Caps unverändert; null/blank und symbols/symbolsShift → **keine Hint-Zeichnung** |
-| `mainAndDeadkeyWinCollision` | Hint schneidet geschütztes Ink-/Marker-Rect → **Hint unsichtbar**, Hauptlabel/Marker/Alternates unverändert |
-| `hintKeepsExistingPaletteAndSurface` | Hell/Dunkel textSecondary wie §7.3; KeySurface-Ergebnis vor/nach Hintplanung identisch |
+| `hintUsesHalfMainLabel` | 24 sp main label → **12 sp hint**; effective 20 sp → **10 sp**, no clinging to 12 |
+| `hintTracksKeyGeometry` | 98 px width/18 px hint ink, density 420 → anchor **78.5 px**; 55-dp target height → top distance **2 dp**, at h=44 dp **1.6 dp** |
+| `hintIsLayerExplicit` | Same set digit in base/shift/caps unchanged; null/blank and symbols/symbolsShift → **no hint drawing** |
+| `mainAndDeadkeyWinCollision` | Hint cuts a protected ink/marker rect → **hint invisible**, main label/marker/alternates unchanged |
+| `hintKeepsExistingPaletteAndSurface` | Light/dark textSecondary as in §7.3; KeySurface result identical before/after hint planning |
 
-Reale Fontmetriken/Rasterisierung bleiben Gerätebeweis: je ein Normal-/Pressed-
-Screenshot in Hell/Dunkel sowie base/shift/Caps der obersten DE-Reihe aus derselben
-APK; 1…0 auf den passenden zehn Tasten, keine Kollision bei 650-/829-px-Fit und
-zweiter Öffnung. Auf der elften Taste nicht automatisch eine weitere Ziffer erfinden.
-Kein uiautomator-Ersatz für Glyphenbilder, keine Nutzertexte oder neuen Exportfelder.
-Dieser Auftrag ergänzt nur §7; keine Zeichnung, keine Modell-/Parseränderung und kein Build.
+Real font metrics/rasterization remain device evidence: one normal/pressed
+screenshot each in light/dark as well as base/shift/caps of the topmost DE row
+from the same APK; 1…0 on the matching ten keys, no collision at the 650-/829-px
+fit and second opening. Do not automatically invent another digit on the
+eleventh key. No uiautomator substitute for glyph images, no user texts, and no
+new export fields. This assignment only adds §7; no drawing, no model/parser
+change, and no build.
 
-## Abschluss
+## Conclusion
 
-**ENTSCHIEDEN:** 450-ms-Menü, maximal 8 Alternativen, 48-dp-Zellen/56-dp-Höhe im
-Referenzfall, Palette/KeySurface unverändert wiederverwenden, kein neuer Fenster-/Höhenmechanismus.
-**BEWUSSTE AUSNAHMEN:** Top-Reihe darf unterhalb öffnen; Cursorpfeile entfallen nach
-Nutzerauftrag; Umlaut-/Ziffern-/Satzzeichenaliase sind dokumentierte Komfort-Doppelpfade.
-**OFFEN:** Spätere Umsetzung/Assetergänzung, echte gehaltene Screenshots, schmale Fenster
-und TalkBack-Abnahme. Parser-/Testgrenze >8 nicht heimlich aufweichen.
-**VERIFIKATION:** Nur Quellen gelesen und dieses Dokument geschrieben; keine App-/Asset-
-Änderung, kein Build, keine Emulator-/adb-Aktion und kein Export von Nutzerinhalten.
+**DECIDED:** 450-ms menu, at most 8 alternates, 48-dp cells/56-dp height in the
+reference case, reuse palette/KeySurface unchanged, no new window/height
+mechanism. **DELIBERATE EXCEPTIONS:** the top row may open below; cursor arrows
+are dropped by user order; umlaut/digit/punctuation aliases are documented
+convenience double paths. **OPEN:** later implementation/asset addition, real
+held screenshots, narrow windows, and TalkBack acceptance. Do not secretly
+loosen the parser/test limit of >8.
+**VERIFICATION:** Only sources read and this document written; no app/asset
+changes, no build, no emulator/adb action, and no export of user content.

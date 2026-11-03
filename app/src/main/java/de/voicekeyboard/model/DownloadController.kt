@@ -4,18 +4,18 @@ import java.util.concurrent.Executor
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
- * Orchestriert den Gesamtdownload (M5b-1): [ModelStore] + Downloader,
- * abbruchsicher und UI-frei (nur JDK/Kotlin).
+ * Orchestrates the overall download (M5b-1): [ModelStore] + downloader,
+ * abort-safe and UI-free (JDK/Kotlin only).
  *
- * Ablauf pro Datei (feste Reihenfolge, kleinste zuerst — ein früher Abbruch
- * verwirft möglichst wenig Arbeit: vocab → nemo128 → decoder_joint → encoder):
+ * Sequence per file (fixed order, smallest first — an early abort
+ * discards as little work as possible: vocab → nemo128 → decoder_joint → encoder):
  * `markDownloading → download → movePartToStaging`;
- * nach allen Dateien: `markVerifying → activate`.
+ * after all files: `markVerifying → activate`.
  *
- * - [ModelError.Cancelled] → CANCELLED, `.part` bleibt (Resume möglich).
- * - Anderer [ModelError] → FAILED, Rest-`.part` bleibt für Resume
- *   (Hash-Mismatch-Delete macht der Downloader selbst).
- * - Keine Logs von Inhalten; Tag "VK-DL" nur mit Dateinamen.
+ * - [ModelError.Cancelled] → CANCELLED, `.part` stays (resume possible).
+ * - Other [ModelError] → FAILED, remaining `.part` stays for resuming
+ *   (the hash-mismatch delete is done by the downloader itself).
+ * - No logs of contents; tag "VK-DL" only with file names.
  */
 class DownloadController(
     private val store: ModelStore,
@@ -24,26 +24,26 @@ class DownloadController(
     private val executor: Executor,
 ) {
 
-    /** Schmaler Download-Port: Produktion = ModelDownloader::download; Tests = Fakes. */
+    /** Narrow download port: production = ModelDownloader::download; tests = fakes. */
     fun interface DownloadOp {
-        /** Wirft [ModelError] (inkl. Cancelled); true = vollständig + hash-korrekt. */
+        /** Throws [ModelError] (incl. Cancelled); true = complete + hash-correct. */
         fun download(file: ModelFile, listener: DownloadProgressListener?): Boolean
 
-        /** Abbruchwunsch (Best-Effort, wirft in download() ModelError.Cancelled). */
+        /** Abort request (best effort, throws ModelError.Cancelled in download()). */
         fun cancel() {}
     }
 
-    /** UI-Zustandsmodell (kein Pollen: Änderungen via [listener]). */
+    /** UI state model (no polling: changes via [listener]). */
     sealed class State {
         data object Idle : State()
         data class Downloading(
-            val currentIndex: Int,      // 0-basiert, in fester Reihenfolge
+            val currentIndex: Int,      // 0-based, in fixed order
             val totalFiles: Int,
             val currentFileName: String,
-            val fraction: Float,        // Fortschritt über alle Bytes [0,1]
-            /** V12 (D1-03): 1-basierter Retry-Versuch; 0/1 = normaler erster Lauf. */
+            val fraction: Float,        // progress over all bytes [0,1]
+            /** V12 (D1-03): 1-based retry attempt; 0/1 = normal first run. */
             val attempt: Int = 0,
-            /** V12: Gesamtversuche dieser Datei (0 = nicht emittiert). */
+            /** V12: total attempts for this file (0 = not emitted). */
             val maxAttempts: Int = 0,
         ) : State()
 
@@ -53,7 +53,7 @@ class DownloadController(
         data object Cancelled : State()
     }
 
-    /** Feste Reihenfolge: kleinste Datei zuerst. */
+    /** Fixed order: smallest file first. */
     private val order: List<ModelFile> = manifest.sortedBy { it.sizeBytes }
     private val sizeByName: Map<String, Long> = manifest.associate { it.storeName to it.sizeBytes }
     private val totalBytes: Long = order.sumOf { it.sizeBytes }
@@ -61,24 +61,24 @@ class DownloadController(
     @Volatile var state: State = State.Idle
         private set
 
-    /** Wird bei jeder Zustandsänderung aufgerufen (Aufrufer thread-fest). */
+    /** Called on every state change (caller-provided, thread-safe). */
     @Volatile var listener: ((State) -> Unit)? = null
 
     private val running = AtomicBoolean(false)
 
     @Volatile private var currentOp: DownloadOp? = null
 
-    /** Startet; No-Op während DOWNLOADING/VERIFYING/READY, Resume nach FAILED/CANCELLED. */
+    /** Starts; no-op during DOWNLOADING/VERIFYING/READY, resumes after FAILED/CANCELLED. */
     fun start() {
         when (state) {
             is State.Downloading, is State.Verifying, is State.Ready -> return
             else -> {}
         }
-        if (!running.compareAndSet(false, true)) return // Doppel-start = ein Lauf
+        if (!running.compareAndSet(false, true)) return // double start = one run
         executor.execute(::run)
     }
 
-    /** Abbruch: der aktuelle download() wirft ModelError.Cancelled (Best-Effort). */
+    /** Abort: the current download() throws ModelError.Cancelled (best effort). */
     fun cancel() {
         currentOp?.cancel()
     }
@@ -147,7 +147,7 @@ class DownloadController(
         if (totalBytes <= 0) 0f else (bytes.toDouble() / totalBytes).toFloat().coerceIn(0f, 1f)
 
     companion object {
-        /** Produktion: echten ModelDownloader an den Port binden. */
+        /** Production: bind the real ModelDownloader to the port. */
         fun opOf(downloader: ModelDownloader): DownloadOp = object : DownloadOp {
             override fun download(file: ModelFile, listener: DownloadProgressListener?): Boolean =
                 downloader.download(file, listener)

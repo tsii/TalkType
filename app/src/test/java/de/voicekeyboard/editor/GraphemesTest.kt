@@ -7,7 +7,7 @@ import org.junit.Test
 
 class GraphemesTest {
 
-    // ä als a + U+0308 (Kombinationszeichen, NFD)
+    // ä as a + U+0308 (combining mark, NFD)
 
     @Test fun decomposedAccentIsOneGrapheme() {
         val s = "a\u0308"
@@ -17,7 +17,7 @@ class GraphemesTest {
         assertTrue(Graphemes.isBoundary(s, 2))
     }
 
-    // Surrogatpaare (Emoji)
+    // surrogate pairs (emoji)
 
     @Test fun surrogatePairIsOneGrapheme() {
         val s = "\uD83D\uDE00" // 😀
@@ -27,20 +27,20 @@ class GraphemesTest {
         assertTrue(Graphemes.isBoundary(s, 2))
     }
 
-    // Emoji-ZWJ-Sequenz (Familie)
+    // emoji ZWJ sequence (family)
 
     @Test fun zwjSequenceIsOneGrapheme() {
         val s = "\uD83D\uDC68\u200D\uD83D\uDC69\u200D\uD83D\uDC66" // 👨ZWJ👩ZWJ👦
         assertEquals(1, Graphemes.count(s))
-        // innerhalb der Sequenz gibt es keine einzige Grenze
+        // there is not a single boundary inside the sequence
         for (i in 1 until s.length) {
-            assertFalse("Index $i darf keine Grenze sein", Graphemes.isBoundary(s, i))
+            assertFalse("index $i must not be a boundary", Graphemes.isBoundary(s, i))
         }
         assertTrue(Graphemes.isBoundary(s, s.length))
         assertEquals(0, Graphemes.lastGraphemeBoundary(s))
     }
 
-    // Devanagari-artige Kombination: Basis + Mc-Zeichen (U+093F)
+    // Devanagari-like combination: base + Mc character (U+093F)
 
     @Test fun devanagariCombiningMarkJoinsBase() {
         val s = "\u0915\u093F" // क + ि
@@ -54,7 +54,7 @@ class GraphemesTest {
         assertTrue(Graphemes.isBoundary(s, 2))
     }
 
-    // Variation Selector (❤ + U+FE0F)
+    // variation selector (❤ + U+FE0F)
 
     @Test fun variationSelectorJoinsBase() {
         val s = "❤\uFE0F"
@@ -74,7 +74,7 @@ class GraphemesTest {
     @Test fun mixedEmojiAndText() {
         val s = "a\uD83D\uDE00b" // a 😀 b
         assertEquals(3, Graphemes.count(s))
-        assertEquals(3, Graphemes.lastGraphemeBoundary(s)) // Start von „b“
+        assertEquals(3, Graphemes.lastGraphemeBoundary(s)) // start of "b"
     }
 
     @Test fun crLfIsOneGrapheme() {
@@ -83,7 +83,7 @@ class GraphemesTest {
     }
 
     @Test fun hangulJamoComposes() {
-        val s = "\u1100\u1161\u11A8" // L + V + T → 하나 Cluster
+        val s = "\u1100\u1161\u11A8" // L + V + T → one cluster
         assertEquals(1, Graphemes.count(s))
     }
 }

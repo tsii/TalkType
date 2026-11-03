@@ -4,41 +4,41 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 
 /**
- * AP3 (docs/PLAN_C2_FABLE_R2.md §4, Export v2 Teil 1): Prioritäten der
- * vereinheitlichten Stopp-Ursache [stopCauseOf] — reine Funktion, JVM-testbar,
- * nur Codes (Regel 9). Die Priorität ist im KDoc der Funktion verankert und
- * hier als Vertrag festgenagelt.
+ * AP3 (docs/PLAN_C2_FABLE_R2.md §4, export v2 part 1): priorities of the
+ * unified stop cause [stopCauseOf] — pure function, JVM-testable, codes only
+ * (rule 9). The priority is anchored in the function's KDoc and nailed down
+ * here as a contract.
  */
 class StopCauseTest {
 
-    // 1. Nutzer-Stopp: Loslassen nach Halten — physisches Ereignis (micRel)
-    //    schlägt "final" ( reguläres Gesamtfinal ohne anderes Ereignis).
+    // 1. user stop: release after holding — physical event (micRel)
+    //    beats "final" (regular overall final without another event).
     @Test
-    fun `Halte-Ende ist holdup nicht final`() {
+    fun `hold end is holdup not final`() {
         assertEquals(
             "holdup",
             stopCauseOf(explicitCause = "-", micRel = "holdup:5400", lastAbortReason = "final", startSrc = "hold"),
         )
     }
 
-    // 2. Toggle-Schalter: micRel "up" bei Toggle-Start ⇒ "toggle".
+    // 2. toggle switch: micRel "up" on a toggle start ⇒ "toggle".
     @Test
-    fun `Mikro-Schalter-Stopp ist toggle`() {
+    fun `micro switch stop is toggle`() {
         assertEquals(
             "toggle",
             stopCauseOf(explicitCause = "-", micRel = "up:1200", lastAbortReason = "final", startSrc = "toggle"),
         )
-        // … bei Hold-Start bleibt "up" (Statusleisten-UP).
+        // … on a hold start "up" remains (status bar UP).
         assertEquals(
             "up",
             stopCauseOf(explicitCause = "-", micRel = "up:1200", lastAbortReason = "final", startSrc = "hold"),
         )
     }
 
-    // 3. FEINE Abbruchdetails schlagen generische und physische Quellen:
-    //    editor_change / michold_cancel haben Vorrang vor micRel und final.
+    // 3. FINE abort details beat generic and physical sources:
+    //    editor_change / michold_cancel take precedence over micRel and final.
     @Test
-    fun `Editorwechsel und Hold-Cancel sind feine Details mit Vorrang`() {
+    fun `editor change and hold cancel are fine details with precedence`() {
         assertEquals(
             "editor_change",
             stopCauseOf(explicitCause = "-", micRel = "editor:3200", lastAbortReason = "editor_change", startSrc = "hold"),
@@ -49,10 +49,10 @@ class StopCauseTest {
         )
     }
 
-    // 4. Audio-Quellen-Enden mit EIGENEM Code: maxDuration/systemStop statt
-    //    generischem audio_error:<code>.
+    // 4. audio source ends with their OWN code: maxDuration/systemStop
+    //    instead of the generic audio_error:<code>.
     @Test
-    fun `maxDuration und systemStop haben eigene Codes`() {
+    fun `maxDuration and systemStop have their own codes`() {
         assertEquals(
             "maxDuration",
             stopCauseOf(explicitCause = "-", micRel = "", lastAbortReason = "audio_error:maxDuration", startSrc = "hold"),
@@ -61,30 +61,30 @@ class StopCauseTest {
             "systemStop",
             stopCauseOf(explicitCause = "-", micRel = "", lastAbortReason = "audio_error:systemStop", startSrc = "toggle"),
         )
-        // andere Audio-Fehler bleiben audio_error:<code>
+        // other audio errors remain audio_error:<code>
         assertEquals(
             "audio_error:silence",
             stopCauseOf(explicitCause = "-", micRel = "", lastAbortReason = "audio_error:silence", startSrc = "toggle"),
         )
     }
 
-    // 5. W1b-SYMPTOMFALL (Fable §0.1): Auto-Stop während des Haltens —
-    //    explicit "autostop" schlägt ALLES (auch micRel holdup mit ms ≫ audio_s);
-    //    die Signatur im Export: stop_cause=autostop + start_src=hold +
-    //    gate_at_stop=1 (Gate mitten im Halten verloren/offen) + mic_rel
-    //    holdup:<ms≫audio_s>. gate_at_stop ist ein SEPARATES Feld — hier der
-    //    Pure-Teil der Signatur.
+    // 5. W1b SYMPTOM CASE (Fable §0.1): auto-stop during a hold —
+    //    explicit "autostop" beats EVERYTHING (even micRel holdup with ms ≫ audio_s);
+    //    the signature in the export: stop_cause=autostop + start_src=hold +
+    //    gate_at_stop=1 (gate lost/open in the middle of holding) + mic_rel
+    //    holdup:<ms≫audio_s>. gate_at_stop is a SEPARATE field — here the
+    //    pure part of the signature.
     @Test
-    fun `W1b - autostop schlaegt micRel holdup trotz Halten`() {
+    fun `W1b - autostop beats micRel holdup despite holding`() {
         assertEquals(
             "autostop",
             stopCauseOf(explicitCause = "autostop", micRel = "holdup:540000", lastAbortReason = "final", startSrc = "hold"),
         )
     }
 
-    // 6. Hidden (IME-Fenster weg) und weitere Abbruchgründe (abort:<r>).
+    // 6. hidden (IME window gone) and further abort reasons (abort:<r>).
     @Test
-    fun `hidden und abort-Sonstige`() {
+    fun `hidden and abort others`() {
         assertEquals(
             "hidden",
             stopCauseOf(explicitCause = "-", micRel = "hidden:9100", lastAbortReason = "final", startSrc = "toggle"),
@@ -95,9 +95,9 @@ class StopCauseTest {
         )
     }
 
-    // 7. Defaults: reguläres Final ohne Ereignis ⇒ final; kein Stopp ⇒ idle_noop.
+    // 7. defaults: regular final without an event ⇒ final; no stop ⇒ idle_noop.
     @Test
-    fun `final und idle_noop Defaults`() {
+    fun `final and idle_noop defaults`() {
         assertEquals(
             "final",
             stopCauseOf(explicitCause = "-", micRel = "", lastAbortReason = "final", startSrc = "toggle"),

@@ -1,97 +1,102 @@
-# Runtime-Wechsel für NPU-Zugang (<device>, Tensor G5, GrapheneOS)
+# Runtime switch for NPU access (<device>, Tensor G5, GrapheneOS)
 
-**Stand:** 2026-10-28 · **Rolle:** Analyse (keine Code-/Build-Änderung)
-**Aufbau auf:** `docs/GPU_ACCELERATION_ANALYSIS.md` (G1)
-**Legende:** **[BELEGT]** = offizielle Doku/Quelle · **[ANNAHME]** = nicht verifiziert ·
-**[NICHT PRÜFBAR]** = im Container/Gerät nicht messbar.
-**Kurzfassung:** Ein Runtime-Wechsel bringt auf diesem Gerät **keinen** NPU-Zugang.
-Es gibt keinen öffentlichen Weg von einer Dritt-App zum Tensor-G5-NPU — weder über
-NNAPI noch über LiteRT, ExecuTorch, MediaPipe oder ONNX Runtime.
+**Status:** 2026-10-28 · **Role:** analysis (no code/build changes)
+**Builds on:** `docs/GPU_ACCELERATION_ANALYSIS.md` (G1)
+**Legend:** **[EVIDENCED]** = official documentation/source ·
+**[ASSUMPTION]** = not verified ·
+**[NOT CHECKABLE]** = not measurable in the container/on the device.
+**Short version:** a runtime switch brings **no** NPU access on this device.
+There is no public path from a third-party app to the Tensor G5 NPU — not
+via NNAPI and not via LiteRT, ExecuTorch, MediaPipe, or ONNX Runtime.
 
 ---
 
-## 1. NPU-Zugänglichkeit auf Pixel: die Historie und der Ist-Stand
+## 1. NPU accessibility on Pixel: the history and the current state
 
-| Generation | NPU über NNAPI erreichbar? | Beleg |
+| Generation | NPU reachable via NNAPI? | Evidence |
 |---|---|---|
-| Pixel 6 / 6 Pro (Tensor G1) | **ja** — Edge TPU als NNAPI-Device gemappt | [BELEGT] developer.android.com/ndk/guides/neuralnetworks (Geräteliste), Google-Blog „Pixel 6 ML" |
-| Pixel 7 / 7 Pro (Tensor G2) | ja (NNAPI) | [BELEGT] dieselbe Liste |
-| Pixel 8 / 8 Pro (Tensor G3) | **nein** — Google hat den NNAPI-TPU-Treiber nicht mehr ausgeliefert; NPU nur noch über Googles internen LiteRT/AICore-Stack | [BELEGT, mit Vorbehalt] Google-Issue-Tracker/Android-Doku „NNAPI supported devices"; [ANNAHME] exakte Grenze G3 vs. G4 |
-| Pixel 9 (Tensor G4) | nein | [ANNAHME] Fortschreibung |
-| **<device> (Tensor G5)** | **nein** — kein öffentlicher NNAPI-Treiber für die NPU; NNAPI selbst ist seit **Android 15 deprecated** | [BELEGT] developer.android.com/about/versions/15/behavior-changes-15 (NNAPI deprecated); [NICHT PRÜFBAR] ob GrapheneOS einen Vendor-Treiber mitbringt (tut es nicht, es ist AOSP + Treiberblobs ohne Google-KI-Stack) |
+| Pixel 6 / 6 Pro (Tensor G1) | **yes** — Edge TPU mapped as an NNAPI device | [EVIDENCED] developer.android.com/ndk/guides/neuralnetworks (device list), Google blog "Pixel 6 ML" |
+| Pixel 7 / 7 Pro (Tensor G2) | yes (NNAPI) | [EVIDENCED] the same list |
+| Pixel 8 / 8 Pro (Tensor G3) | **no** — Google no longer shipped the NNAPI TPU driver; the NPU is only reachable via Google's internal LiteRT/AICore stack | [EVIDENCED, with reservation] Google issue tracker/Android docs "NNAPI supported devices"; [ASSUMPTION] the exact boundary G3 vs. G4 |
+| Pixel 9 (Tensor G4) | no | [ASSUMPTION] extrapolation |
+| **<device> (Tensor G5)** | **no** — no public NNAPI driver for the NPU; NNAPI itself has been **deprecated since Android 15** | [EVIDENCED] developer.android.com/about/versions/15/behavior-changes-15 (NNAPI deprecated); [NOT CHECKABLE] whether GrapheneOS ships a vendor driver (it does not, it is AOSP + driver blobs without the Google AI stack) |
 
-**Fazit 1:** Es gibt für dieses Gerät **keinen** Drittanbieter-NNAPI-Treiber, der auf
-die NPU mappt. Die NPU ist über Googles privaten Stack (AICore/Gemini-Nano-Pfad)
-angebunden; ohne GMS ist dieser Stack nicht vorhanden.
+**Conclusion 1:** there is **no** third-party NNAPI driver for this device that
+maps to the NPU. The NPU is attached via Google's private stack
+(AICore/Gemini-Nano path); without GMS this stack is absent.
 
-## 2. Kandidaten-Runtimes — Unterstützungsmatrix
+## 2. Candidate runtimes — support matrix
 
-| Runtime | NPU auf Tensor G5? | GPU? | Braucht GMS? | Modellkonvertierung? | Offline? |
+| Runtime | NPU on Tensor G5? | GPU? | Needs GMS? | Model conversion? | Offline? |
 |---|---|---|---|---|---|
-| **ONNX Runtime 1.31 (heute)** | nein (NNAPI ohne TPU-Treiber; QNN = Snapdragon) | nein (Vulkan-EP nicht im Android-AAR, s. G1) | nein | keine | **ja** |
-| **LiteRT (TFLite) + NPU-Delegate** | **nein** — der NPU-Delegate ist herstellerspezifisch (Qualcomm QNN, MediaTek NeuroPilot); Tensor ist **nicht** gelistet [BELEGT] ai.google.dev/edge/litert/next/npu_delegate | GPU-Delegate: OpenCL/GLES, aber schwache Op-Abdeckung für Transducer/LSTM [ANNAHME] | nein | **ja, vollständig** (ONNX→LiteRT) | ja |
-| **ExecuTorch** | nein — Delegates: Qualcomm, MediaTek, Arm Ethos-U, XNNPACK, Vulkan (preview); kein Tensor-NPU-Backend [BELEGT] docs.pytorch.org/executorch | Vulkan-Backend: preview, kein int8 [BELEGT] | nein | **ja, vollständig** (PyTorch→ET) | ja |
-| **MediaPipe / ML Kit** | nein — nur eigene/vorgegebene Modelle (Gesture/Text/LLM), kein freies ASR-Modell [BELEGT] ai.google.dev/edge/mediapipe | — | ML Kit teils Play-Dienste | nicht möglich | teilweise |
-| **AICore / Gemini Nano** | ja, aber **nur Gemini Nano** und **nur mit GMS** | — | **ja** | nicht anwendbar (fremdes Modell) | nein |
-| **sherpa-onnx** | nein (nutzt ONNX Runtime → gleiche EP-Lage) | nein | nein | keine (nutzt ONNX direkt) | ja |
+| **ONNX Runtime 1.31 (today)** | no (NNAPI without a TPU driver; QNN = Snapdragon) | no (Vulkan EP not in the Android AAR, see G1) | no | none | **yes** |
+| **LiteRT (TFLite) + NPU delegate** | **no** — the NPU delegate is vendor-specific (Qualcomm QNN, MediaTek NeuroPilot); Tensor is **not** listed [EVIDENCED] ai.google.dev/edge/litert/next/npu_delegate | GPU delegate: OpenCL/GLES, but weak op coverage for transducer/LSTM [ASSUMPTION] | no | **yes, complete** (ONNX→LiteRT) | yes |
+| **ExecuTorch** | no — delegates: Qualcomm, MediaTek, Arm Ethos-U, XNNPACK, Vulkan (preview); no Tensor-NPU backend [EVIDENCED] docs.pytorch.org/executorch | Vulkan backend: preview, no int8 [EVIDENCED] | no | **yes, complete** (PyTorch→ET) | yes |
+| **MediaPipe / ML Kit** | no — only own/preset models (gesture/text/LLM), no free ASR model [EVIDENCED] ai.google.dev/edge/mediapipe | — | ML Kit partly Play services | not possible | partially |
+| **AICore / Gemini Nano** | yes, but **only Gemini Nano** and **only with GMS** | — | **yes** | not applicable (a foreign model) | no |
+| **sherpa-onnx** | no (uses ONNX Runtime → the same EP situation) | no | no | none (uses ONNX directly) | yes |
 
-**Fazit 2:** Der einzige Kandidat, der die NPU dieses Geräts erreicht, ist
-**AICore/Gemini Nano** — und der ist (a) GMS-gebunden, also auf GrapheneOS
-ausgeschlossen, und (b) kein Runtime-Wechsel für *unser* Modell, sondern ein fremdes
-Modell mit fremder Qualität.
+**Conclusion 2:** the only candidate that reaches this device's NPU is
+**AICore/Gemini Nano** — and it is (a) GMS-bound, thus ruled out on
+GrapheneOS, and (b) not a runtime switch for *our* model but a foreign model
+with foreign quality.
 
-## 3. Konvertierungsaufwand für Parakeet TDT 0.6B v3
+## 3. Conversion effort for Parakeet TDT 0.6B v3
 
-Selbst wenn es einen NPU-Delegate gäbe, wäre der Weg teuer:
+Even if an NPU delegate existed, the path would be expensive:
 
-| Graph-Teil | Risiko bei ONNX→LiteRT/ExecuTorch |
+| Graph part | Risk with ONNX→LiteRT/ExecuTorch |
 |---|---|
-| **Log-Mel-Frontend** (`nemo128.onnx`) | eigene STFT-/Mel-Ops; in LiteRT nicht 1:1 vorhanden → müsste als Vorverarbeitung in Kotlin/C++ nachgebaut werden (Genauigkeitsverlust → Golden-Texte brechen) [ANNAHME] |
-| **Conformer-Encoder** (Conv1d/Depthwise, Multi-Head-Attention, LayerNorm) | Conv1d/Attention sind in LiteRT vorhanden, aber die **int8-Aktivierungsquantisierung** braucht Kalibrierung; ORT-`MatMulInteger`/`DynamicQuantizeLinear` hat kein TFLite-Äquivalent → **Neu-Quantisierung** [ANNAHME] |
-| **TDT-Decoder (LSTM-State-Paar) + Joint** | TFLite hat nur `UnidirectionalSequenceLSTM`; zustandsbehaftete zweilagige PredNet-States sind nicht abbildbar → Decoder müsste auf CPU bleiben [ANNAHME] |
-| **Schlimmster Fall** | Teil-Graph auf NPU, Decoder + Fallback-Ops auf CPU → **gemischte Ausführung** mit Copy-/Sync-Overhead pro Hypothese; Ergebnis kann **langsamer** sein als heute, und die Golden-Tests (`ASR_CONTRACT.md` §4.1) sind neu zu erzeugen |
+| **Log-Mel frontend** (`nemo128.onnx`) | own STFT/Mel ops; not present 1:1 in LiteRT → would have to be rebuilt as preprocessing in Kotlin/C++ (accuracy loss → golden texts break) [ASSUMPTION] |
+| **Conformer encoder** (Conv1d/depthwise, multi-head attention, LayerNorm) | Conv1d/attention are present in LiteRT, but the **int8 activation quantization** needs calibration; ORT `MatMulInteger`/`DynamicQuantizeLinear` has no TFLite equivalent → **re-quantization** [ASSUMPTION] |
+| **TDT decoder (LSTM state pair) + joint** | TFLite only has `UnidirectionalSequenceLSTM`; the stateful two-layer PredNet states cannot be mapped → the decoder would have to stay on the CPU [ASSUMPTION] |
+| **Worst case** | partial graph on the NPU, decoder + fallback ops on the CPU → **mixed execution** with copy/sync overhead per hypothesis; the result can be **slower** than today, and the golden tests (`ASR_CONTRACT.md` §4.1) would have to be regenerated |
 
-## 4. Erwarteter Speedup (Schätzung, keine Messung)
+## 4. Expected speedup (estimate, not a measurement)
 
-| Variante | Throughput (10 s Clip) | Latenz je Hypothese (0,3–1 s Takt) | Kaltstart |
+| Variant | Throughput (10-s clip) | Latency per hypothesis (0.3–1 s cadence) | Cold start |
 |---|---|---|---|
-| **(a) CPU/XNNPACK (Status quo)** | Referenz (RTF ≈ 0,1–0,4 auf ARM, geschätzt) | Referenz | ~1–2 s Modell-Laden (671 MB von Flash) |
-| **(b) Runtime-Wechsel + NPU** | **0×** auf diesem Gerät (kein Zugang, §1/§2) | — | — |
-| **(c) Runtime-Wechsel + GPU** (LiteRT-GPU/ExecuTorch-Vulkan) | **0,8–1,3×** — Gewichte (600 MB int8) müssen pro Pass durch dasselbe LPDDR5X; GPU teilt die Bandbreite [ANNAHME, begründet in G1 §4] | **0,9–1,2×**, aber **+Konvertierungs-/Sync-Overhead** bei Teil-Graph-Ausführung | **schlechter**: Graph-Kompilierung/Shader-Start 1–5 s zusätzlich, Gewichts-Upload |
+| **(a) CPU/XNNPACK (status quo)** | reference (RTF ≈ 0.1–0.4 on ARM, estimated) | reference | ~1–2 s model loading (671 MB from flash) |
+| **(b) runtime switch + NPU** | **0×** on this device (no access, §1/§2) | — | — |
+| **(c) runtime switch + GPU** (LiteRT GPU/ExecuTorch Vulkan) | **0.8–1.3×** — the weights (600 MB int8) have to pass through the same LPDDR5X per pass; the GPU shares the bandwidth [ASSUMPTION, reasoned in G1 §4] | **0.9–1.2×**, but **+conversion/sync overhead** with partial-graph execution | **worse**: graph compilation/shader start 1–5 s additionally, weight upload |
 
-**Wann der Wechsel langsamer wäre (ausdrücklich):** (i) sobald Teile des Graphen auf
-CPU zurückfallen (Sync pro Hypothese), (ii) bei kurzen Clips (2–5 s), weil Kaltstart und
-Kernel-Init dominieren, (iii) wenn für den Delegate auf **fp16** umquantisiert werden
-muss (1,2 GB statt 671 MB ⇒ doppelte Bandbreite), (iv) bei jedem App-Start (Modell-Laden).
+**When the switch would be slower (explicitly):** (i) as soon as parts of the
+graph fall back to the CPU (sync per hypothesis), (ii) on short clips (2–5 s),
+because cold start and kernel init dominate, (iii) if the delegate requires
+re-quantizing to **fp16** (1.2 GB instead of 671 MB ⇒ double the bandwidth),
+(iv) on every app start (model loading).
 
-## 5. Was billiger mehr bringt (ohne NPU)
+## 5. What delivers more, more cheaply (without an NPU)
 
-| Hebel | Größenordnung | Aufwand | Bewertung |
+| Lever | Order of magnitude | Effort | Assessment |
 |---|---|---|---|
-| **Hypothesen-Intervall / Chunk-Größe** (statt 1 s → 1,5–2 s; Encoder nicht über den ganzen Puffer pro Takt) | **−30…−50 % CPU-Zeit und Akku**, Erstwort-Latenz +0,5 s | 1 Konstante + 1 Test | **größter Effekt bei unserer Last** — die Last ist „viele volle Pässe", nicht „langsame Matrix-Multiplikation" |
-| **Thread-/Quota-Setting** (`intra_op` 4 vs. 8, `inter_op=1`) | −10…−25 % Wall-Clock | 1 Zeile, messbar in 10 min | sofort machen (A0/A1 in G1 §6) |
-| **fp16-Modell statt int8** | Gewichte 671 → ~335 MB ⇒ **halbe Bandbreite**; auf arm64 mit FP16-SIMD plausibel **1,2–1,6×** schneller, **aber** Genauigkeit neu prüfen (Golden-Texte!) | Konvertierung + neue Goldens | mittel; nur wenn Messung Bandbreite als Engpass zeigt |
-| **Kleineres Modell** (z. B. Parakeet-CTC-0.1B / FastConformer-small) | 3–6× schneller, aber **andere Texte** ⇒ Golden-/Qualitäts-Neuaufbau, evtl. Deutsch-Schwäche | hoch | nicht für v0.1; Option für v0.2 |
+| **Hypothesis interval / chunk size** (instead of 1 s → 1.5–2 s; no encoder over the whole buffer per tick) | **−30…−50 % CPU time and battery**, first-word latency +0.5 s | 1 constant + 1 test | **the biggest effect at our load** — the load is "many full passes", not "slow matrix multiplication" |
+| **Thread/quota setting** (`intra_op` 4 vs. 8, `inter_op=1`) | −10…−25 % wall clock | 1 line, measurable in 10 min | do immediately (A0/A1 in G1 §6) |
+| **fp16 model instead of int8** | weights 671 → ~335 MB ⇒ **half the bandwidth**; on arm64 with FP16 SIMD plausibly **1.2–1.6×** faster, **but** accuracy must be re-checked (golden texts!) | conversion + new goldens | medium; only if a measurement shows bandwidth as the bottleneck |
+| **Smaller model** (e.g. Parakeet-CTC-0.1B / FastConformer-small) | 3–6× faster, but **different texts** ⇒ golden/quality rebuild, possibly a German weakness | high | not for v0.1; an option for v0.2 |
 
-## 6. Entscheidungsvorschlag
+## 6. Decision recommendation
 
-- **(a) v0.1.x:** **kein** Runtime-Wechsel. Stattdessen: `intra_op`-Messung (A0/A1) und
-  Hypothesen-Intervall prüfen — beides kostenlos und wirkt direkt auf Akku/Latenz.
-- **(b) v0.2:** Runtime-Wechsel nur als **Mess-Experiment** und nur, wenn ein öffentlicher
-  Tensor-NPU-Weg existiert (heute: nein). Realistischer Kandidat bleibt **fp16-ONNX**
-  (gleiche Runtime, halbe Bandbreite) — kein Runtime-Wechsel nötig.
-- **(c) Messversuch auf dem Nutzergerät:** zuerst die **vier Zahlen** aus G1 §6 erheben:
-  (1) RTF pro 10 s Sprache, (2) Erstwort-Latenz, (3) RAM-Peak, (4) 3-min-Dauerlauf
-  (RTF-Drift/Temperatur). Erst wenn RTF > 0,6 und die CPU-Hebel ausgeschöpft sind, ist
-  ein Runtime-Experiment überhaupt zu rechtfertigen.
+- **(a) v0.1.x:** **no** runtime switch. Instead: measure `intra_op` (A0/A1)
+  and check the hypothesis interval — both free and directly affecting
+  battery/latency.
+- **(b) v0.2:** a runtime switch only as a **measurement experiment** and only
+  if a public Tensor-NPU path exists (today: no). The realistic candidate
+  remains **fp16 ONNX** (same runtime, half the bandwidth) — no runtime
+  switch needed.
+- **(c) measurement attempt on the user's device:** first collect the **four
+  numbers** from G1 §6: (1) RTF per 10 s of speech, (2) first-word latency,
+  (3) RAM peak, (4) a 3-min continuous run (RTF drift/temperature). Only when
+  RTF > 0.6 and the CPU levers are exhausted is a runtime experiment
+  justified at all.
 
-## ANNAHME-Zeilen
+## ASSUMPTION lines
 
-- `ANNAHME: Pixel 8 (Tensor G3) ist die Grenze, ab der NNAPI die TPU nicht mehr sieht —`
-  `warum: Google hat den NNAPI-TPU-Treiber nicht weiter ausgeliefert; exakte Generation`
-  `nicht im Container verifizierbar. Für die Entscheidung unerheblich, weil <device> in jedem`
-  `Fall betroffen ist.`
-- `ANNAHME: LiteRT-NPU-Delegate listet Tensor nicht — warum: Doku nennt nur Qualcomm/`
-  `MediaTek; ein Google-interner Tensor-Delegate ist nicht öffentlich.`
-- `ANNAHME: Speedup-Spannen in §4 sind Analogieschlüsse aus G1 (memory-bound), keine`
-  `Messung auf Tensor G5.`
+- `ANNAHME: Pixel 8 (Tensor G3) is the boundary from which NNAPI no longer`
+  `sees the TPU — why: Google stopped shipping the NNAPI TPU driver; the exact`
+  `generation cannot be verified in the container. Irrelevant for the decision,`
+  `because the <device> is affected in any case.`
+- `ANNAHME: the LiteRT NPU delegate does not list Tensor — why: the docs name`
+  `only Qualcomm/MediaTek; a Google-internal Tensor delegate is not public.`
+- `ANNAHME: the speedup ranges in §4 are analogies from G1 (memory-bound), not a`
+  `measurement on Tensor G5.`

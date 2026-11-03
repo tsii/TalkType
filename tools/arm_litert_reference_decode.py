@@ -1,23 +1,23 @@
 #!/usr/bin/env python
-"""R2: Referenz-Dekoder Variante B (Arm parakeet-tdt litert) — korrigiert nach /tmp/ptdt.cpp.
+"""R2: reference decoder, variant B (Arm parakeet-tdt litert) — corrected per /tmp/ptdt.cpp.
 
-Fall A bestaetigt: log_mel ist unter ai-edge-litert LEBENDIG (std 1.38 bei
-Sinus) — die tflite_runtime-Messung "konstant -16,636" war ein Artefakt des
-Invoke-Interfaces. Der Arm-Vorpass (compute_global_feature_normalization,
-ptdt.cpp:342) laeuft daher wie in der Referenz: Welford ueber log_mel der
-NEUTRAL-Laeufe (mean=0/inv_std=1) aller Fenster, dann
+Case A confirmed: log_mel is ALIVE under ai-edge-litert (std 1.38 for a
+sine) — the tflite_runtime measurement "constant -16,636" was an artifact of
+the invoke interface. The Arm pre-pass (compute_global_feature_normalization,
+ptdt.cpp:342) therefore runs as in the reference: Welford over the log_mel of
+the NEUTRAL runs (mean=0/inv_std=1) of all windows, then
 feature_mean=mean, feature_inv_std=1/(sqrt(var)+eps), var=m2/max(1,n-1).
 
-Weitere Referenz-Semantik (ptdt.cpp):
-- prepare_featurizer_inputs (:400): previous_sample = audio[start-1] (nicht 0)
+Further reference semantics (ptdt.cpp):
+- prepare_featurizer_inputs (:400): previous_sample = audio[start-1] (not 0)
 - compute_features (:458): input_length = 9 + valid_feature_frames
-- (:470): pre_encode_feature_cache aus den letzten 9 gueltigen Frames
+- (:470): pre_encode_feature_cache from the last 9 valid frames
 - decode_next_text_piece (:490): token=argmax(logits[:8193]),
   duration=argmax(logits[8193:8198]); blank⇒frame+=max(1,duration);
-  Token⇒ausgeben+decoder_step; duration>0⇒frame+=duration sonst
-  symbols<10⇒Frame bleiben.
-- Encoder-Caches (Ausgang 2/3/4) werden als Eingang 2/3/4 weitergeschleift
-  (Python-Signature-Runner verwaltet States NICHT automatisch — C++ schon).
+  token⇒emit+decoder_step; duration>0⇒frame+=duration otherwise
+  symbols<10⇒stay on the frame.
+- Encoder caches (outputs 2/3/4) are looped through as inputs 2/3/4
+  (the Python signature runner does NOT manage states automatically — C++ does).
 """
 import struct
 import sys
@@ -98,9 +98,9 @@ def main():
     audio, sr = read_float32_wav(AUDIO)
     audio = np.clip(audio, -1.0, 1.0)
     total = len(audio)
-    print(f"Audio {total} Samples = {total/sr:.2f}s", file=sys.stderr)
+    print(f"audio {total} samples = {total/sr:.2f}s", file=sys.stderr)
 
-    # ---- Vorpass (ptdt.cpp:342): Welford ueber log_mel der NEUTRAL-Laeufe ----
+    # ---- pre-pass (ptdt.cpp:342): Welford over the log_mel of the NEUTRAL runs ----
     mean = np.zeros((1, 1, FEAT_DIM), np.float32)
     inv_std = np.ones((1, 1, FEAT_DIM), np.float32)
     wmean = np.zeros(FEAT_DIM)
@@ -126,9 +126,9 @@ def main():
         var = m2 / max(1, n_frames - 1)
         mean[0, 0] = wmean
         inv_std[0, 0] = 1.0 / (np.sqrt(var) + EPS)
-    print(f"Vorpass: {n_frames} Frames, mean={wmean[:3].round(3)}, inv_std={inv_std[0,0,:3].round(3)}", file=sys.stderr)
+    print(f"pre-pass: {n_frames} frames, mean={wmean[:3].round(3)}, inv_std={inv_std[0,0,:3].round(3)}", file=sys.stderr)
 
-    # ---- Streaming-Dekodierung (ptdt.cpp:490 decode_next_text_piece) ----
+    # ---- streaming decode (ptdt.cpp:490 decode_next_text_piece) ----
     cache_ch = np.zeros((1, 24, 190, 1024), np.float32)
     cache_time = np.zeros((1, 24, 1024, 4), np.float32)
     cache_len = np.zeros((1,), np.int64)
@@ -144,7 +144,7 @@ def main():
         n = min(WINDOW_SAMPLES, total - off)
         prev_sample = audio[off - 1] if off > 0 else 0.0
         feats, _, valid = run_featurizer(f, audio, off, n, mean, inv_std, pre_cache, prev_sample)
-        # input_length = 9 + gueltige Frames (ptdt.cpp:465)
+        # input_length = 9 + valid frames (ptdt.cpp:465)
         input_length = np.array([CACHE_FRAMES + valid], np.int64)
         enc_out = enc(args_0=feats.astype(np.float32), args_1=input_length,
                       args_2=cache_ch, args_3=cache_time, args_4=cache_len)
@@ -154,7 +154,7 @@ def main():
         cache_time = enc_out["output_3"].copy()
         cache_len = enc_out["output_4"].copy()
 
-        # pre_encode_feature_cache aus den letzten 9 gueltigen Frames (ptdt.cpp:470)
+        # pre_encode_feature_cache from the last 9 valid frames (ptdt.cpp:470)
         to_copy = min(CACHE_FRAMES, valid)
         pre_cache = np.zeros((1, CACHE_FRAMES, FEAT_DIM), np.float32)
         if to_copy > 0:
@@ -169,7 +169,7 @@ def main():
             lg = jnt(args_0=frame, args_1=joint_hidden.astype(np.float32))["output_0"]
             flat = lg[0, 0]
             token = int(np.argmax(flat[:VOCAB_SIZE]))
-            duration = int(np.argmax(flat[VOCAB_SIZE:]))  # 5 Zusatzspalten (ptdt.cpp:538)
+            duration = int(np.argmax(flat[VOCAB_SIZE:]))  # 5 extra columns (ptdt.cpp:538)
             if token == BLANK:
                 fi += max(1, duration)
                 syms = 0
@@ -191,9 +191,9 @@ def main():
     wall = time.time() - t0
     text = "".join(vocab[i] for i in tokens)
     text = text.replace("▁", " ").replace("<pad>", "").replace("<unk>", "")
-    print("Token-IDs:", tokens[:30], "..." if len(tokens) > 30 else "")
-    print(f"Text (erste 140 Zeichen): {text[:140]!r}")
-    print(f"Wanduhr {wall:.2f}s / Audio {total/sr:.2f}s → RTF={wall/(total/sr):.3f}")
+    print("token IDs:", tokens[:30], "..." if len(tokens) > 30 else "")
+    print(f"text (first 140 characters): {text[:140]!r}")
+    print(f"wall clock {wall:.2f}s / audio {total/sr:.2f}s → RTF={wall/(total/sr):.3f}")
 
 
 if __name__ == "__main__":

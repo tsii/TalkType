@@ -6,13 +6,13 @@ import android.media.AudioDeviceInfo
 import android.media.AudioManager
 
 /**
- * Auswahl der Audio-Eingangsroute (DESIGN §3 „Routing ist Bestandteil der Aufnahme"):
+ * Selection of the audio input route (DESIGN §3 „Routing ist Bestandteil der Aufnahme"):
  *
- * - Kabel-/USB-Headset vor Bluetooth-Kommunikationsmikrofon vor eingebautes Mikro.
- * - Bluetooth-A2DP ist KEIN Mikrofoneingang (nur Typ BLUETOOTH_SCO zählt).
- * - `setPreferredDevice` ist eine Präferenz, keine Garantie — die tatsächlich
- *   aktive Route wird als [Route] an die UI gemeldet, einbstellige Abweichung
- *   (Routenverlust) geht über den Fehlerkanal, nicht still umgeschaltet.
+ * - Wired/USB headset before Bluetooth communication microphone before built-in mic.
+ * - Bluetooth A2DP is NOT a microphone input (only type BLUETOOTH_SCO counts).
+ * - `setPreferredDevice` is a preference, not a guarantee — the actually
+ *   active route is reported to the UI as [Route]; a deviation
+ *   (route loss) goes via the error channel, not a silent switch.
  */
 enum class Route(internal val uiLabel: String) {
     WIRED_HEADSET("Headset"),
@@ -20,7 +20,7 @@ enum class Route(internal val uiLabel: String) {
     BUILTIN_MIC("Mikrofon"),
 }
 
-/** Framework-freies Gerätebild für die reine Auswahlregel (JVM-testbar). */
+/** Framework-free device picture for the pure selection rule (JVM-testable). */
 data class InputDeviceFacts(
     val id: Int,
     val kind: Kind,
@@ -29,9 +29,9 @@ data class InputDeviceFacts(
 }
 
 /**
- * Reine Auswahlregel: bevorzugtes Eingabegerät aus den verfügbaren Geräten.
- * Reihenfolge fix: WIRED > BLUETOOTH_SCO > BUILTIN > keins (null = Default).
- * Niemals OTHER (z. B. A2DP, FM, Remote-Submix) als Mikrofon wählen.
+ * Pure selection rule: preferred input device from the available devices.
+ * Fixed order: WIRED > BLUETOOTH_SCO > BUILTIN > none (null = default).
+ * Never choose OTHER (e.g. A2DP, FM, remote submix) as a microphone.
  */
 object RoutingPolicy {
     fun preferredInput(devices: List<InputDeviceFacts>): InputDeviceFacts? =
@@ -44,7 +44,7 @@ object RoutingPolicy {
             }
         }?.takeIf { it.kind != InputDeviceFacts.Kind.OTHER }
 
-    /** Route, die die UI für das gewählte Gerät anzeigen soll. */
+    /** Route that the UI should show for the chosen device. */
     fun routeFor(preferred: InputDeviceFacts?): Route = when (preferred?.kind) {
         InputDeviceFacts.Kind.WIRED -> Route.WIRED_HEADSET
         InputDeviceFacts.Kind.BLUETOOTH_SCO -> Route.BLUETOOTH_SCO
@@ -53,9 +53,9 @@ object RoutingPolicy {
 }
 
 /**
- * Android-Adapter: beobachtet Eingabegeräte ([AudioDeviceCallback]), bildet sie
- * auf [InputDeviceFacts] ab und setzt die Präferenz auf dem [AudioRecord].
- * Die Entscheidungslogik steckt komplett in [RoutingPolicy] (ohne Android).
+ * Android adapter: observes input devices ([AudioDeviceCallback]), maps them
+ * onto [InputDeviceFacts] and sets the preference on the [AudioRecord].
+ * The decision logic lives entirely in [RoutingPolicy] (no Android).
  */
 class AudioRouter(private val context: Context) {
 
@@ -67,7 +67,7 @@ class AudioRouter(private val context: Context) {
 
     private var callback: AudioDeviceCallback? = null
 
-    /** Aktuell gemeldete Route (für die UI), initial aus dem Gerätezustand abgeleitet. */
+    /** Currently reported route (for the UI), initially derived from the device state. */
     var currentRoute: Route = Route.BUILTIN_MIC
         private set
 
@@ -75,8 +75,8 @@ class AudioRouter(private val context: Context) {
         audioManager.getDevices(AudioManager.GET_DEVICES_INPUTS).map { it.toFacts() }
 
     /**
-     * Registriert den Geräte-Callback und leitet die Anfangsroute ab.
-     * [onRouteChanged] feuert bei jedem relevanten Eingabegerätwechsel.
+     * Registers the device callback and derives the initial route.
+     * [onRouteChanged] fires on every relevant input device change.
      */
     fun startObserving() {
         if (callback != null) return
@@ -94,7 +94,7 @@ class AudioRouter(private val context: Context) {
         callback = null
     }
 
-    /** Neuberechnung: Route nur ändern, wenn das bevorzugte Gerät wechselt. */
+    /** Recompute: change the route only if the preferred device changes. */
     private fun refresh() {
         val route = RoutingPolicy.routeFor(RoutingPolicy.preferredInput(facts()))
         if (route != currentRoute) {
@@ -104,14 +104,14 @@ class AudioRouter(private val context: Context) {
     }
 
     /**
-     * Setzt die Gerätepräferenz für einen Recorder (KEINE Garantie, nur Präferenz —
-     * die bestätigte Route läuft über [currentRoute]/[routeListener]).
-     * Rückgabe: das tatsächlich bevorzugte Gerät (null = Systemdefault).
+     * Sets the device preference for a recorder (NO guarantee, only a preference —
+     * the confirmed route runs via [currentRoute]/[routeListener]).
+     * Return: the actually preferred device (null = system default).
      */
     fun applyPreferredDevice(record: android.media.AudioRecord): InputDeviceFacts? {
         val preferred = RoutingPolicy.preferredInput(facts())
         val device = preferred?.let { findAudioDevice(it.id) }
-        record.setPreferredDevice(device) // null nimmt die Präferenz zurück
+        record.setPreferredDevice(device) // null takes back the preference
         return preferred
     }
 
@@ -119,7 +119,7 @@ class AudioRouter(private val context: Context) {
         audioManager.getDevices(AudioManager.GET_DEVICES_INPUTS).firstOrNull { it.id == id }
 
     companion object {
-        /** Mapping Android → framework-frei (reine Abbildung, keine Logik). */
+        /** Mapping Android → framework-free (pure mapping, no logic). */
         fun AudioDeviceInfo.toFacts(): InputDeviceFacts = InputDeviceFacts(
             id = id,
             kind = when (type) {
@@ -130,7 +130,7 @@ class AudioRouter(private val context: Context) {
                 -> InputDeviceFacts.Kind.WIRED
                 AudioDeviceInfo.TYPE_BLUETOOTH_SCO -> InputDeviceFacts.Kind.BLUETOOTH_SCO
                 AudioDeviceInfo.TYPE_BUILTIN_MIC -> InputDeviceFacts.Kind.BUILTIN
-                else -> InputDeviceFacts.Kind.OTHER // A2DP, FM, Remote-Submix … nie Mikrofon
+                else -> InputDeviceFacts.Kind.OTHER // A2DP, FM, remote submix … never a microphone
             },
         )
     }

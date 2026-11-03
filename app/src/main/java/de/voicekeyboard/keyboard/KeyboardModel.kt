@@ -7,15 +7,15 @@ import de.voicekeyboard.layouts.LayoutLayer
 import kotlin.math.abs
 
 /**
- * Misst eine Layout-Ebene in Pixel: relative Breiten → px, inklusive Lücken.
- * Reine JVM-Logik (kein Android-Typen) und damit unit-testbar.
+ * Measures a layout layer in pixels: relative widths → px, including gaps.
+ * Pure JVM logic (no Android types) and therefore unit-testable.
  *
- * T20/S1: Die Reihenhöhe folgt dem übergebenen Höhen-Fit ([fit], von
- * KeyboardView bei JEDEM onMeasure neu bestimmt und als Parameter
- * durchgereicht — T21: kein globaler Zustand): bei begrenztem Angebot werden
- * ALLE Reihen SKALIERT — kein Row-Drop, keine halb gezeichnete Taste.
- * Ein Fit mit abweichender Reihenzahl (z. B. nach Ebenenwechsel, bevor die
- * nächste Messung läuft) wird defensiv ignoriert.
+ * T20/S1: The row height follows the passed height fit ([fit], determined
+ * by KeyboardView anew on EVERY onMeasure and passed through as a parameter —
+ * T21: no global state): with a limited offer ALL rows are SCALED —
+ * no row drop, no half-drawn key.
+ * A fit with a differing row count (e. g. after a layer switch, before the
+ * next measurement runs) is defensively ignored.
  */
 class KeyboardModel(
     layer: LayoutLayer,
@@ -25,10 +25,10 @@ class KeyboardModel(
     val keyGapPx: Float,
     private val horizontalPaddingPx: Float = 0f,
     /**
-     * S1/S2-Höhen-Fit; null = feste Maße. T21: BEWUSST null als Default — kein
-     * globales `KeyboardHeight.lastFit` mehr: der Fit wird als Parameter von
-     * KeyboardView.rebuildModel durchgereicht, damit niemals ein Fit aus einer
-     * früheren Öffnung/Sitzung weiterwirkt.
+     * S1/S2 height fit; null = fixed dimensions. T21: DELIBERATELY null as default — no
+     * global `KeyboardHeight.lastFit` anymore: the fit is passed through as a parameter from
+     * KeyboardView.rebuildModel, so that a fit from an earlier opening/session
+     * never carries over.
      */
     fit: KeyboardHeight.HeightFit? = null,
 ) {
@@ -49,17 +49,17 @@ class KeyboardModel(
     val keys: List<MeasuredKey>
     val heightPx: Float
 
-    /** Effektive (ggf. skalierte) Reihenhöhe — S1; fest bei fit == null. */
+    /** Effective (scaled if applicable) row height — S1; fixed when fit == null. */
     val effectiveRowHeightPx: Float
 
-    /** Effektive (ggf. skalierte) Reihenlücke (Treffer-Toleranz, wie bisher). */
+    /** Effective (scaled if applicable) row gap (hit tolerance, as before). */
     val effectiveRowGapPx: Float
 
     init {
         require(totalWidthPx > 0) { "totalWidthPx muss > 0 sein" }
         require(keyHeightPx > 0) { "keyHeightPx muss > 0 sein" }
-        // S1: Fit nur anwenden, wenn er zu DIESER Ebene passt (gleiche Reihenzahl)
-        // und die Reihenhöhe verkleinert (Skala ≤ 1) — niemals vergrößern.
+        // S1: apply the fit only if it matches THIS layer (same row count)
+        // and shrinks the row height (scale ≤ 1) — never enlarge.
         val applied = fit?.takeIf { it.rows == layer.rows.size && it.rowPx > 0 }
         effectiveRowHeightPx = ((applied?.rowPx?.toFloat()) ?: keyHeightPx).coerceAtMost(keyHeightPx)
         effectiveRowGapPx = (applied?.rowGapPx?.toFloat()) ?: rowGapPx
@@ -96,9 +96,9 @@ class KeyboardModel(
     }
 
     /**
-     * Treffererkennung: Punkt liegt in einer Taste ODER in der Lücke zwischen
-     * Tasten — dann gewinnt die nächstgelegene Taste (Mittenabstand).
-     * Gibt null zurück, wenn der Punkt komplett außerhalb liegt.
+     * Hit detection: the point lies on a key OR in the gap between
+     * keys — then the nearest key wins (center distance).
+     * Returns null if the point lies completely outside.
      */
     fun keyAt(x: Float, y: Float): MeasuredKey? {
         if (y < -gapTolerance() || y > heightPx + gapTolerance()) return null
@@ -116,7 +116,7 @@ class KeyboardModel(
             }
         }
         if (best != null) return best
-        // Randbereiche: links/rechts außerhalb → nichts (kein Phantom-Tasten)
+        // Edge areas: left/right outside → nothing (no phantom keys)
         return null
     }
 
@@ -124,22 +124,22 @@ class KeyboardModel(
 }
 
 /**
- * D10 §1 (docs/DESIGN_MIC_AND_GLOBE.md, Kapitel 1 „Reflow: Enter rückt vor, Mic
- * bekommt den rechten Rand“): gemeinsame DARSTELLUNGSKOMPOSITION des Footers
- * für alle 15×4 Ebenen — ID, Aktion, Label und Alternates bleiben unverändert,
- * 0 JSON-Änderungen:
+ * D10 §1 (docs/DESIGN_MIC_AND_GLOBE.md, chapter 1 "Reflow: Enter moves forward, Mic
+ * gets the right edge"): shared PRESENTATION COMPOSITION of the footer for all
+ * 15×4 layers — ID, action, label and alternates stay unchanged,
+ * 0 JSON changes:
  *
- *  - Reihenfolge: `?123/ABC · 🌐 · 😊 · Space · ‹ · › · Enter · Mic` — Mic wandert
- *    ans äußerst rechte Ende (hinter Enter); keine Buchstabentaste verdrängt.
- *  - Gewichte: Mic 1 → **2**, Space gibt genau eine Einheit ab (5 → 4),
- *    Gesamtsumme bleibt 13; die letzte rechte Kante ist exakt W.
- *  - Zeichnung, Hit-Test UND Accessibility lesen dieselbe komponierte Quelle
- *    (KeyboardModel) — keine nur gemalte große Mic-Fläche.
- *  - Reihen ohne Mic+Enter (Buchstabenreihen) bleiben unberührt.
+ *  - Order: `?123/ABC · 🌐 · 😊 · Space · ‹ · › · Enter · Mic` — Mic moves
+ *    to the far right end (behind Enter); no letter key is displaced.
+ *  - Weights: Mic 1 → **2**, Space gives up exactly one unit (5 → 4),
+ *    the total sum stays 13; the last right edge is exactly W.
+ *  - Drawing, hit test AND accessibility read the same composed source
+ *    (KeyboardModel) — no merely painted large Mic area.
+ *  - Rows without Mic+Enter (letter rows) remain untouched.
  */
 internal object D10_FOOTER {
 
-    /** Reflow alle Reihen einer Ebene (nur dieMic+Enter-Zeile wird angefasst). */
+    /** Reflow all rows of a layer (only theMic+Enter row is touched). */
     fun compose(rows: List<List<LayoutKey>>): List<List<LayoutKey>> = rows.map { row -> composeRow(row) }
 
     private fun composeRow(row: List<LayoutKey>): List<LayoutKey> {
@@ -149,10 +149,10 @@ internal object D10_FOOTER {
         val mic = row.firstOrNull { isAction(it, KeyActions.MIC) } ?: return row
         val enter = row.firstOrNull { isAction(it, KeyActions.ENTER) } ?: return row
 
-        // Mic ans äußerst rechte Ende, Enter rückt auf die vorletzte Position.
+        // Mic to the far right end, Enter moves to the second-to-last position.
         var out = row.filterNot { it === mic || it === enter } + enter + mic
 
-        // Space gibt genau eine Einheit ab (5 → 4), Mic erhält sie (1 → 2).
+        // Space gives up exactly one unit (5 → 4), Mic receives it (1 → 2).
         val space = out.firstOrNull { isAction(it, KeyActions.SPACE) && it.width > 1.0 } ?: return row
         out = out.map { key ->
             when {

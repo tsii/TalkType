@@ -5,12 +5,12 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** Reine JVM-Tests für [DownloadPolicy] (E2/E3-Regeln). */
+/** Pure JVM tests for [DownloadPolicy] (E2/E3 rules). */
 class DownloadPolicyTest {
 
     private val plenty = DownloadPolicy.MIN_FREE_BYTES + 1
 
-    // (a) Netzwerk-Schalter aus → kein Start, auch bei genug Platz
+    // (a) network switch off → no start, even with enough space
     @Test fun networkDisabledBlocksStart() {
         assertEquals(
             DownloadPolicy.Decision.NetworkDisabled,
@@ -18,14 +18,14 @@ class DownloadPolicyTest {
         )
     }
 
-    // (b) freier Speicher < 2,5 GB → InsufficientSpace mit konkreter Zahl
+    // (b) free storage < 2.5 GB → InsufficientSpace with a concrete number
     @Test fun insufficientSpaceBlocksStart() {
         val d = DownloadPolicy.decide(true, freeBytes = 800_000_000L, status = ModelStatus.ABSENT)
         assertTrue(d is DownloadPolicy.Decision.InsufficientSpace)
         assertEquals(800_000_000L, (d as DownloadPolicy.Decision.InsufficientSpace).freeBytes)
     }
 
-    // Normalfall: Schalter an, Platz da, Modell fehlt → Start
+    // normal case: switch on, space available, model missing → start
     @Test fun absentWithSpaceAndNetworkStarts() {
         assertEquals(
             DownloadPolicy.Decision.Start,
@@ -33,7 +33,7 @@ class DownloadPolicyTest {
         )
     }
 
-    // (c) bereits READY → kein Start (auch nicht bei Schalter aus)
+    // (c) already READY → no start (not even with the switch off)
     @Test fun readyNeverStarts() {
         assertEquals(
             DownloadPolicy.Decision.AlreadyReady,
@@ -45,69 +45,69 @@ class DownloadPolicyTest {
         )
     }
 
-    // (d) bei READY soll die UI den Netz-Schalter ausstellen
+    // (d) when READY the UI should turn the network switch off
     @Test fun readyTurnsNetworkOff() {
         assertTrue(DownloadPolicy.shouldTurnNetworkOff(ModelStatus.READY))
         assertFalse(DownloadPolicy.shouldTurnNetworkOff(ModelStatus.ABSENT))
         assertFalse(DownloadPolicy.shouldTurnNetworkOff(ModelStatus.DOWNLOADING))
     }
 
-    // (e) Fehlerklassen → kurze Nutzertext-Schlüssel
+    // (e) error classes → short user-text keys
     @Test fun errorClassesMapToUserKeys() {
         assertEquals("netz", DownloadPolicy.userMessageKey(ModelError.Network("timeout")))
         assertEquals("hash", DownloadPolicy.userMessageKey(ModelError.HashMismatch("f", "a", "b")))
         assertEquals("platz", DownloadPolicy.userMessageKey(ModelError.Storage("voll")))
         assertEquals("abgebrochen", DownloadPolicy.userMessageKey(ModelError.Cancelled("f")))
         assertEquals("netz", DownloadPolicy.userMessageKey(ModelError.Http(503, "x")))
-        // D1-Echttaxonomie: 4xx ist kein "Netzwerkfehler"
+        // D1 real taxonomy: 4xx is not a "network error"
         assertEquals("server", DownloadPolicy.userMessageKey(ModelError.Http(403, "für encoder-model.int8.onnx")))
         assertEquals("server", DownloadPolicy.userMessageKey(ModelError.Http(404, "für x")))
         assertEquals("warte", DownloadPolicy.userMessageKey(ModelError.Http(429, "für x")))
         assertEquals("warte", DownloadPolicy.userMessageKey(ModelError.Http(408, "für x")))
         assertEquals("hash", DownloadPolicy.userMessageKey(ModelError.HashMismatch("f", "a", "b")))
-        // D1-02: 416 ist ein Fortsetzungsproblem, keine Server-Ablehnung
+        // D1-02: 416 is a resume problem, not a server rejection
         assertEquals("fortsetzung", DownloadPolicy.userMessageKey(ModelError.Http(416, "Range nicht erfüllbar")))
     }
 
-    @Test fun `D1 detailForUser nie urls query oder token`() {
-        // HTTP 403: Code + Dateiname, aber KEIN Query-String
+    @Test fun `D1 detailForUser never urls query or token`() {
+        // HTTP 403: code + file name, but NO query string
         val e403 = ModelError.Http(403, "für encoder-model.int8.onnx")
         val d = e403.detailForUser()
-        assertTrue("HTTP-Code vorhanden", d.contains("403"))
-        assertTrue("Dateiname vorhanden", d.contains("encoder-model.int8.onnx"))
-        assertFalse("keine URL", d.contains("http"))
-        // Gegenprobe: selbst wenn der Detail-Text eine Signatur-URL enthaelt,
-        // darf sie NIE in detailForUser() auftauchen (Regel 9)
+        assertTrue("HTTP code present", d.contains("403"))
+        assertTrue("file name present", d.contains("encoder-model.int8.onnx"))
+        assertFalse("no URL", d.contains("http"))
+        // counter-check: even if the detail text contains a signature URL,
+        // it must NEVER appear in detailForUser() (rule 9)
         val poisoned = ModelError.Http(403,
             "für x?Signature=abc123&Expires=999&xip=1.2.3.4 https://us.aws.cdn.hf.co/xet-bridge-us/secret")
         val d2 = poisoned.detailForUser()
-        assertFalse("Signature= darf nie vorkommen: $d2", d2.contains("Signature="))
-        assertFalse("Expires= darf nie vorkommen", d2.contains("Expires="))
-        assertFalse("xip= darf nie vorkommen", d2.contains("xip="))
-        assertFalse("https:// darf nie vorkommen", d2.contains("https://"))
-        // Network-Fehler: Detail wird geschrubbt
+        assertFalse("Signature= must never occur: $d2", d2.contains("Signature="))
+        assertFalse("Expires= must never occur", d2.contains("Expires="))
+        assertFalse("xip= must never occur", d2.contains("xip="))
+        assertFalse("https:// must never occur", d2.contains("https://"))
+        // network error: the detail is scrubbed
         val netPoisoned = ModelError.Network("read timeout https://evil.example/path?Signature=zzz")
         val d3 = netPoisoned.detailForUser()
         assertFalse(d3.contains("Signature="))
         assertFalse(d3.contains("https://"))
-        // D1-01: Allowlist — vergiftete Eingabe mit URL, files/-Pfad und Bearer-Token
+        // D1-01: allowlist — poisoned input with a URL, a files/ path and a bearer token
         val poisonedAll = ModelError.Network(
             "files/models/versions/v1/encoder-model.int8.onnx https://host/x?Signature=ABC Bearer abc123")
         val d4 = poisonedAll.detailForUser()
-        assertFalse("kein http", d4.contains("http"))
-        assertFalse("keine Signature", d4.contains("Signature"))
-        assertFalse("kein files/", d4.contains("files/"))
-        assertFalse("kein Bearer", d4.contains("Bearer"))
-        assertFalse("kein /", d4.contains("/"))
-        assertTrue("Dateiname bleibt", d4.contains("encoder-model.int8.onnx"))
-        // Legitimer Fall bleibt sichtbar
+        assertFalse("no http", d4.contains("http"))
+        assertFalse("no Signature", d4.contains("Signature"))
+        assertFalse("no files/", d4.contains("files/"))
+        assertFalse("no Bearer", d4.contains("Bearer"))
+        assertFalse("no /", d4.contains("/"))
+        assertTrue("file name stays", d4.contains("encoder-model.int8.onnx"))
+        // the legitimate case stays visible
         val ok = ModelError.Http(403, "für encoder-model.int8.onnx")
         val d5 = ok.detailForUser()
         assertTrue(d5.contains("HTTP 403"))
         assertTrue(d5.contains("encoder-model.int8.onnx"))
     }
 
-    // Resume nach CANCELLED/FAILED: PARTIAL-ähnliche Zustände erlauben Start
+    // resume after CANCELLED/FAILED: PARTIAL-like states allow a start
     @Test fun partialStateAllowsRestart() {
         assertEquals(
             DownloadPolicy.Decision.Start,
@@ -119,7 +119,7 @@ class DownloadPolicyTest {
         )
     }
 
-    // zweiter Start (READY) ist No-Op — AlreadyReady dominiert vor Platz/Schalter
+    // a second start (READY) is a no-op — AlreadyReady dominates over space/switch
     @Test fun alreadyReadyDominatesOtherRules() {
         assertEquals(
             DownloadPolicy.Decision.AlreadyReady,

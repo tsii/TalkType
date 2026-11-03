@@ -1,139 +1,142 @@
-# C2-Export-Auswertung — 🐞 aus 0.1.15 (debug), Nutzer-Telefon api 37, Diktat ~20 s, brach ab
+# C2 export analysis — 🐞 from 0.1.15 (debug), user's phone api 37, dictation ~20 s, aborted
 
-**Methode:** nur lesen; jede Behauptung unten mit Datei:Zeile belegt (HEAD-Worktree,
-2026-10-30/31). REGEL 9: nur Zahlen, Tasten, Codes, Pfade — keine Inhalte.
+**Method:** read only; every claim below backed with file:line (HEAD worktree,
+2026-10-30/31). RULE 9: only numbers, keys, codes, paths — no content.
 
-## 0. Ist-Zahlen (Export, 30 Zeilen = Kopf + 29 KEYS)
+## 0. Actual numbers (export, 30 lines = header + 29 KEYS)
 
 rtf 0.15 · first_hyp_ms 2320 · decode_ms_max/p95 **583** · buffer_s **11.9** = audio_s
 **11.9** · ctl_state **IDLE** · ctl_failed **0** · dropped **0** · hyp_count **6** ·
 hyp_gap_ms **7323** · decode_pace_ms 2000 · decode_skips 1 · start_ms 55 · starting 0 ·
 peak_pct 13 · peak_dbfs −17.6 · permissions record=yes **notif=no**.
 
-## 1) Quadratische C2-Ursache: in DIESEM Export **nicht belegt**
+## 1) Quadratic C2 cause: not evidenced in THIS export
 
-`window()` dekodiert pro Lauf den ganzen Puffer (`dictation/DictationController.kt:416`
-`PcmWindow(pcm.copyOf(totalSamples), sampleRateHz)`). Aber die Zahlen widersprechen einem
-Daueranstieg bis zum Abbruch:
+`window()` decodes the whole buffer on each run (`dictation/DictationController.kt:416`
+`PcmWindow(pcm.copyOf(totalSamples), sampleRateHz)`). But the numbers contradict a
+continuous rise up to the abort:
 
-- Letzter (11,9-s-)Decode dauerte **583 ms** ⇒ effektives Verarbeitungsverhältnis am Ende
-  ≈ **49 ms pro Audio-Second** (0.15 kumuliert mit `processingMs/audioMs`,
+- The last (11.9-s) decode took **583 ms** ⇒ effective processing ratio at the end
+  ≈ **49 ms per audio second** (0.15 cumulative with `processingMs/audioMs`,
   `debug/DebugInfoCollector.kt:61-64`).
-- Linear fortgesetzt erreicht der Decode die 1-s-Marke erst bei ≈ **20 s Audio** —
-  **nach** dem Abbruchzeitpunkt (11,9 s). Ein quadratisches Neudekodieren wäre hier also
-  noch unter der sichtbaren Schwelle gewesen.
-- Konsistenz: 6 Hypothesen bei 2-s-Takt (chunk 2000, pace 2000, min 2,0 s Partial-Guard
-  `DictationController.kt:243ff`) = Hypothesen bei ≈ 2/4/6/8/10/12 s — exakt 6.
-  **Das Finale fehlte** (sonst hyp_count 7).
+- Continued linearly, the decode reaches the 1-s mark only at ≈ **20 s of audio** —
+  **after** the abort point (11.9 s). Quadratic re-decoding would therefore still
+  have been below the visible threshold here.
+- Consistency: 6 hypotheses at a 2-s cadence (chunk 2000, pace 2000, 2.0-s partial
+  guard `DictationController.kt:243ff`) = hypotheses at ≈ 2/4/6/8/10/12 s —
+  exactly 6. **The final was missing** (otherwise hyp_count 7).
 
-**Fazit 1:** Die 583 ms belegen, dass die C2-Ursache (quadratische Fensterarbeit) auf
-diesem Gerät langsam wächst, aber **nicht** die Abbruchursache dieses Laufs ist.
-Entweder war der Abbruch zu früh (11,9 s) für die sichtbare Wurzel, oder der Abbruch
-liegt woanders — die Exit-Analyse (Punkt 2) zeigt: woanders.
+**Conclusion 1:** The 583 ms prove that the C2 cause (quadratic window work) grows
+slowly on this device, but is **not** the cause of this run's abort. Either the abort
+came too early (11.9 s) for the visible root, or the abort lies elsewhere — the exit
+analysis (point 2) shows: elsewhere.
 
-## 2) Alle Exit-Pfade einer laufenden Session, bewertet gegen „11,9 s + IDLE + failed 0 + dropped 0 + hyp 6"
+## 2) All exit paths of a running session, evaluated against "11.9 s + IDLE + failed 0 + dropped 0 + hyp 6"
 
-Entscheidende Code-Tatsache: **`pcm`/`totalSamples`/Decode-Stats werden NUR im nächsten
-`start()` geleert** (`DictationController.kt:217-237`), nie in `stop()`/`abort()`/`fail()`.
-`buffer_s` ist der **letzte gemessene Decode-Stand** (`DictationController.kt:130,161,
-183-191`) — nicht „unverarbeiteter Rest". Das ist die Basis für die Unterscheidung:
+Decisive code fact: **`pcm`/`totalSamples`/decode stats are cleared ONLY on the next
+`start()`** (`DictationController.kt:217-237`), never in `stop()`/`abort()`/`fail()`.
+`buffer_s` is the **last measured decode state** (`DictationController.kt:130,161,
+183-191`) — not "unprocessed remainder". That is the basis for the distinction:
 
-| # | Exit-Pfad (Datei:Zeile) | Erwartetes Export-Muster | Passt? |
+| # | Exit path (file:line) | Expected export pattern | Fits? |
 |---|---|---|---|
-| E1 | Mic-up (UP) → `stopDictationIfRunning()` → `controller.stop()` mit **Finale** (`ime/VoiceKeyboardService.kt:504,511,566`; `DictationController.kt:316-358`) | IDLE, **hyp_count 7** (Finale zählt via `noteHypothesis`), ggf. ctl_failed | **AUSGESCHLOSSEN** — hyp 6 |
-| E2 | `fail()`-Pfade (ASR_ERROR, EDITOR_SYNC_TIMEOUT …) `DictationController.kt:405-410` | **ctl_failed 1** | **AUSGESCHLOSSEN** — failed 0 |
-| E3 | **Mic-Halte-CANCEL** (ACTION_CANCEL) → `MicHoldAction.ABORT` → `abortDictation()` (`VoiceKeyboardService.kt:291,467,687-725`; `ime/MicToggle.kt:43-50`) | IDLE, failed 0, dropped 0, Puffer/Stats intakt, **kein `last_error`** | **Kandidat 1 — passt vollständig** |
-| E4 | **Editor-/App-Wechsel** → `onStartInput` → `onEditorChanged()` → `abort()` (`VoiceKeyboardService.kt:307-318`; `DictationController.kt:376-384`) | wie E3 | **Kandidat 2 — passt vollständig** |
-| E5 | **AudioRecord-Systemstopp** (`audio/AudioRecordSource.kt:129-132` `ERR_SYSTEM_STOP`/`ERR_INVALID_OP`) → `errorListener` → `coordinator.abort()` (`ime/DictationCoordinator.kt:146-149`) | wie E3, **aber `last_error` = „audioSource:systemStop…“** | **Kandidat 3 — nur wenn `last_error` gefüllt** |
-| E6 | IME verschwindet (Back/Tab/Window) → `onFinishInputView`/`onWindowHidden` → `stopDictationIfRunning()` (`VoiceKeyboardService.kt:327-340`) | wie E1 (Finale) → hyp 7 | **AUSGESCHLOSSEN** (außer OOM im Finale, s. E9) |
-| E7 | `onDestroy`/`shutdown` (Prozess-/IME-Tod) → `coordinator.abort()+shutdown()` (`VoiceKeyboardService.kt:344-353`; `DictationCoordinator.kt:445-477`) | IDLE, Puffer intakt — **aber danach `coordinator = null`**: der Collector würde alle `coordinator?`-Felder leer zeigen (`DebugInfoCollector.kt:83-108`) | **AUSGESCHLOSSEN** — im Export sind alle Felder live gefüllt ⇒ Prozess war beim Export am Leben |
-| E8 | maxDuration 300 s (`AudioRecordSource.kt:38,108-110`) | bei 11,9 s unerreichbar; + `last_error` | **AUSGESCHLOSSEN** (bestätigt den „Geklärt"-Eintrag in HANDOFF) |
-| E9 | OOM im Decode (feedAudio/Finale) → `abort()` + Rethrow, Worker-Catch → `last_error = „oom:…“`, `NoFinal` (`DictationController.kt:271-276,336-339`; `DictationCoordinator.kt:296-312,384`) | IDLE, failed 0, Puffer intakt, **`last_error` = oom** | **sehr unwahrscheinlich** (decode 583 ms, Modell 670 MB, p95=max=583 → kein Druck) — bleibt nur per `last_error` zu prüfen |
-| E10 | Start-Watchdog „abandoned“ (Frist 15 s, `VoiceKeyboardService.kt:455-464`) | würde aborten, aber `starting`/`start_ms` (55) zeigen sauberen Start | **AUSGESCHLOSSEN** |
-| E11 | FGS ohne POST_NOTIFICATIONS (`notif=no`) | s. Punkt 4 | **kein Abbruchkandidat** |
-| E12 | Sprachwechsel während Diktat (F25) | nur Vormerkung, kein Abort (`VoiceKeyboardService.kt:1022ff`) | **AUSGESCHLOSSEN** |
-| E13 | C-2b „Controller IDLE + aktiv → abort“ (`DictationCoordinator.kt:352-357`) | setzt voraus, dass vorher `fail()` lief → failed 1 | **AUSGESCHLOSSEN** (folgekonsequent zu E2) |
+| E1 | Mic-up (UP) → `stopDictationIfRunning()` → `controller.stop()` with **final** (`ime/VoiceKeyboardService.kt:504,511,566`; `DictationController.kt:316-358`) | IDLE, **hyp_count 7** (final counts via `noteHypothesis`), possibly ctl_failed | **RULED OUT** — hyp 6 |
+| E2 | `fail()` paths (ASR_ERROR, EDITOR_SYNC_TIMEOUT …) `DictationController.kt:405-410` | **ctl_failed 1** | **RULED OUT** — failed 0 |
+| E3 | **Mic hold CANCEL** (ACTION_CANCEL) → `MicHoldAction.ABORT` → `abortDictation()` (`VoiceKeyboardService.kt:291,467,687-725`; `ime/MicToggle.kt:43-50`) | IDLE, failed 0, dropped 0, buffer/stats intact, **no `last_error`** | **Candidate 1 — fits completely** |
+| E4 | **Editor/app switch** → `onStartInput` → `onEditorChanged()` → `abort()` (`VoiceKeyboardService.kt:307-318`; `DictationController.kt:376-384`) | like E3 | **Candidate 2 — fits completely** |
+| E5 | **AudioRecord system stop** (`audio/AudioRecordSource.kt:129-132` `ERR_SYSTEM_STOP`/`ERR_INVALID_OP`) → `errorListener` → `coordinator.abort()` (`ime/DictationCoordinator.kt:146-149`) | like E3, **but `last_error` = "audioSource:systemStop…"** | **Candidate 3 — only if `last_error` is populated** |
+| E6 | IME disappears (back/tab/window) → `onFinishInputView`/`onWindowHidden` → `stopDictationIfRunning()` (`VoiceKeyboardService.kt:327-340`) | like E1 (final) → hyp 7 | **RULED OUT** (except OOM in the final, see E9) |
+| E7 | `onDestroy`/`shutdown` (process/IME death) → `coordinator.abort()+shutdown()` (`VoiceKeyboardService.kt:344-353`; `DictationCoordinator.kt:445-477`) | IDLE, buffer intact — **but afterwards `coordinator = null`**: the collector would show all `coordinator?` fields empty (`DebugInfoCollector.kt:83-108`) | **RULED OUT** — in the export all fields are live-populated ⇒ the process was alive at export time |
+| E8 | maxDuration 300 s (`AudioRecordSource.kt:38,108-110`) | unreachable at 11.9 s; + `last_error` | **RULED OUT** (confirms the "clarified" entry in HANDOFF) |
+| E9 | OOM in decode (feedAudio/final) → `abort()` + rethrow, worker catch → `last_error = "oom:…"`, `NoFinal` (`DictationController.kt:271-276,336-339`; `DictationCoordinator.kt:296-312,384`) | IDLE, failed 0, buffer intact, **`last_error` = oom** | **very unlikely** (decode 583 ms, model 670 MB, p95=max=583 → no pressure) — can only be checked via `last_error` |
+| E10 | Start watchdog "abandoned" (deadline 15 s, `VoiceKeyboardService.kt:455-464`) | would abort, but `starting`/`start_ms` (55) show a clean start | **RULED OUT** |
+| E11 | FGS without POST_NOTIFICATIONS (`notif=no`) | see point 4 | **not an abort candidate** |
+| E12 | Language switch during dictation (F25) | only a pending note, no abort (`VoiceKeyboardService.kt:1022ff`) | **RULED OUT** |
+| E13 | C-2b "controller IDLE + active → abort" (`DictationCoordinator.kt:352-357`) | presupposes that `fail()` ran before → failed 1 | **RULED OUT** (consistent with E2) |
 
-**Ergebnis:** Der Export signiert einen **Abort ohne Finale und ohne Fehlerflagge**.
-Übrig bleiben genau drei nicht unterscheidbare Pfade: **E3 (Mic-CANCEL)**, **E4 (Editor-
-Wechsel)**, **E5 (Audio-Systemstopp)** — und E5 lässt sich mit dem **bereits existierenden**
-Feld `last_error` (`DebugInfoFormatter.kt:111`) sofort trennen: war im Export `last_error`
-`-` (der Auszug zitiert das Feld nicht), sind E3/E4 übrig. **Hinweis für den Nutzer:** die
-„gut gelaufenen mittleren Diktate" waren normale Mic-up-Läufe (E1); der Bruch lief über
-einen CANCEL-/Wechsel-Ereignis-Typ, nicht über einen ASR-Fehler.
+**Result:** The export signs an **abort without final and without an error flag**.
+Exactly three indistinguishable paths remain: **E3 (mic CANCEL)**, **E4 (editor
+switch)**, **E5 (audio system stop)** — and E5 can be separated immediately with the
+**already existing** field `last_error` (`DebugInfoFormatter.kt:111`): if `last_error`
+was `-` in the export (the excerpt does not quote the field), E3/E4 remain.
+**Note for the user:** the "mid-dictations that went well" were ordinary mic-up runs
+(E1); the breakage ran over a CANCEL/switch event type, not over an ASR error.
 
 ## 3) `hyp_gap_ms 7323`
 
-`hyp_gap_ms` = Zeit seit der letzten **erzeugten** Hypothese (`DictationController.kt:
-117,193-195,412-414`). Mit 2-s-Takt lag die 6. Hypothese bei ≈ 11,9 s; 7,3 s Vorlauf
-vor dem Export ⇒ **Export ≈ 0,5–1 s nach Abbruch**, letzter Text ≈ bei **4,6–5 s**
-(± Export-Verzögerung, Formel: `t_last = 11,9 + 7,3 − t_export_vor_abbruch`). Das passt
-zur Nutzerwahrnehmung „Text kam ab ~12 s nicht mehr" (Session endete ~12 s; die letzten
-Partial-Änderungen waren aber schon ~5 s alt — ab ~5 s kamen zwar Decode-Ergebnisse,
-vermutlich aber ohne Editor-Änderung durch Commit-Policy/Delta-Typer: `hyp_count` zählt
-erzeugte Hypothesen, keine garantiert geändeten Editor-Inhalte).
+`hyp_gap_ms` = time since the last **produced** hypothesis (`DictationController.kt:
+117,193-195,412-414`). With a 2-s cadence, the 6th hypothesis was at ≈ 11.9 s; 7.3 s
+of lead time before the export ⇒ **export ≈ 0.5–1 s after the abort**, last text at
+≈ **4.6–5 s** (± export delay, formula: `t_last = 11.9 + 7.3 − t_export_before_abort`).
+That matches the user perception "text stopped coming from ~12 s" (session ended at
+~12 s; but the last partial changes were already ~5 s old — from ~5 s, decode results
+did arrive, but presumably without editor changes due to commit policy/delta typer:
+`hyp_count` counts produced hypotheses, not guaranteed changed editor content).
 
 ## 4) `permissions notif=no` (Android 13+)
 
-Projektabwicklung ist **bewusst** so: `POST_NOTIFICATIONS` ist nur **optional** —
-`ime/DictationPermissions.kt:16-27` (REQUIRED = nur `RECORD_AUDIO`; Optionale berechtigen
-nicht) mit Live-Fehler-Notiz „FGS läuft laut CaptureForegroundService auch ohne sie".
-`capture/CaptureForegroundService.kt:24` bestätigt: „Ohne `POST_NOTIFICATIONS` läuft der
-Service trotzdem (Notification unsichtbar)". Manifest deklariert die Berechtigung
-(`AndroidManifest.xml:19`). Folge: **kosmetisch** (keine sichtbare Aufnahme-Indikation;
-die System-Mic-Indikation des OS bleibt). **Kein Abbruchkandidat** — und E7 zeigt
-zusätzlich, dass kein FGS-/Prozess-Tod stattgefunden hat.
+The project handling is deliberately like this: `POST_NOTIFICATIONS` is only
+**optional** — `ime/DictationPermissions.kt:16-27` (REQUIRED = only `RECORD_AUDIO`;
+optionals do not grant permission) with the live error note "FGS runs per
+CaptureForegroundService even without it". `capture/CaptureForegroundService.kt:24`
+confirms: "Without `POST_NOTIFICATIONS`, the service still runs (notification
+invisible)". The manifest declares the permission (`AndroidManifest.xml:19`).
+Consequence: **cosmetic** (no visible recording indication; the OS's system mic
+indicator remains). **Not an abort candidate** — and E7 additionally shows that no
+FGS/process death took place.
 
-## 5) Vorschlag: 2 neue 🐞-Felder (schnellste Eingrenzung)
+## 5) Proposal: 2 new 🐞 fields (fastest narrowing)
 
-1. **`abort_reason`** (String, default `-`) — **wo:** `ime/DictationCoordinator.kt`,
-   `abort()` (Z. 445) bekommt ein `reason`-Parameter, gesetzt an den 4 Aufrufern:
-   `abortDictation()` (`VoiceKeyboardService.kt:691`, Ursprung: Mic-CANCEL →
+1. **`abort_reason`** (String, default `-`) — **where:** `ime/DictationCoordinator.kt`,
+   `abort()` (line 445) gets a `reason` parameter, set at the 4 callers:
+   `abortDictation()` (`VoiceKeyboardService.kt:691`, origin: mic CANCEL →
    `reason = "michold_cancel"`) / `onEditorChanged()` (`DictationController.kt:376`,
    → `editor_change`) / `errorListener` (`DictationCoordinator.kt:146`, →
-   `audio_error:<code>`) / `shutdown()` (`DictationCoordinator.kt:470`, → `ime_destroy`).
-   Zusätzlich in `stop()` (`DictationCoordinator.kt:362-390`) den `StopOutcome`-Zweig
-   mitschreiben (`final` / `no_final:<code>` / `idle_noop`). Durchreiche
-   `debug/DebugInfoCollector.kt` (neben Z. 94) + 1 Zeile in `DebugInfoFormatter.KEYS`
-   (30. Feld, Katalog `docs/DEBUG_INFO_FIELDS.md`). **Mit diesem einen Feld ist der
-   nächste Bruch in einem Export eindeutig.**
-2. **`hyp_last_buffer_s`** (Double) — **wo:** `DictationController.applyPartial`/
-   `noteHypothesis` (Z. 300-315, 412-414) speichert den `lastDecodeBufferSeconds`-Wert
-   der **letzten akzeptierten** Hypothese; Collector wie `buffer_s` durchreichen.
-   Trennt „Text stoppte bei 4,6 s" von „Session starb bei 4,6 s" und zeigt, ob die
-   späten Hypothesen noch Editor-Änderungen ausgelöst haben (Commit-Policy-Verhalten).
+   `audio_error:<code>`) / `shutdown()` (`DictationCoordinator.kt:470`, →
+   `ime_destroy`). Additionally, write the `StopOutcome` branch in `stop()`
+   (`DictationCoordinator.kt:362-390`) as well (`final` / `no_final:<code>` /
+   `idle_noop`). Pass through `debug/DebugInfoCollector.kt` (next to line 94) +
+   1 line in `DebugInfoFormatter.KEYS` (30th field, catalog `docs/DEBUG_INFO_FIELDS.md`).
+   **With this one field, the next breakage is unambiguous in an export.**
+2. **`hyp_last_buffer_s`** (Double) — **where:** `DictationController.applyPartial`/
+   `noteHypothesis` (lines 300-315, 412-414) stores the `lastDecodeBufferSeconds`
+   value of the **last accepted** hypothesis; collector passes it through like
+   `buffer_s`. Separates "text stopped at 4.6 s" from "session died at 4.6 s" and
+   shows whether the late hypotheses still triggered editor changes (commit policy
+   behavior).
 
-(`last_error` braucht **kein** neues Feld — existiert bereits, `DebugInfoFormatter.kt:111`;
-es genügt, es in der nächsten 🐞-Auswertung auszulesen.)
+(`last_error` needs **no** new field — already exists, `DebugInfoFormatter.kt:111`;
+it suffices to read it in the next 🐞 analysis.)
 
-## 6) Empfehlung Gegenmassnahme-Stufe
+## 6) Recommended countermeasure level
 
-**(a) nur Nachinstrumentierung** — 1–2 🐞-Läufe mit `abort_reason` +
-`hyp_last_buffer_s` (je ≈ 1 Coder-Auftrag ≤ 4 Dateien: Coordinator, Controller,
-Collector, Formatter/Katalog). **Begründung:** Die drei verbliebenen Kandidaten (E3/E4/E5)
-sind UI-/Audio-Lebenszyklus-Ereignisse mit **bereits kontrollierten** Abort-Pfaden (kein
-stilles Sterben, kein wachsender Kanal) — der eigentliche „Bug" ist, dass der Abbruch
-**unsichtbar** war (Statuszeile hat ihn nur als stillen IDLE-Wechsel gezeigt). Erst wenn
-`abort_reason` in 2 Läufen denselben Kandidaten benennt, ist ein Fix belegbar.
+**(a) only re-instrumentation** — 1–2 🐞 runs with `abort_reason` +
+`hyp_last_buffer_s` (each ≈ 1 coder assignment ≤ 4 files: coordinator, controller,
+collector, formatter/catalog). **Rationale:** the three remaining candidates
+(E3/E4/E5) are UI/audio lifecycle events with **already controlled** abort paths
+(no silent death, no growing channel) — the actual "bug" is that the abort was
+**invisible** (the status row only showed it as a silent IDLE change). Only when
+`abort_reason` names the same candidate in 2 runs is a fix provable.
 
-**(b) konkreter Fix-Kandidat: jetzt noch nicht** — eine Datei:Zeile wäre reine Spekulation
-(E3 → CANCEL-Toleranz bei Haltegeste? E4 → Editorwechsel-Verhalten? E5 →
-Audio-Source-Hardening?) und würde auf das falsche Ziel hauen.
+**(b) concrete fix candidate: not yet** — any file:line would be pure speculation
+(E3 → CANCEL tolerance on the hold gesture? E4 → editor-switch behavior? E5 →
+audio-source hardening?) and would shoot at the wrong target.
 
-**(c) windowed-Streaming bleibt nicht nötig** — Begründung mit den Zahlen dieses Exports:
-Decode 583 ms bei 11,9 s Puffer (≈ 49 ms pro Audio-Second); 1-s-Schwelle bei ≈ 20 s Audio;
-`rtf 0.15`, p95 = max (keine Ausreißer); F21-Takt hielt (1 Skip). Die quadratische
-Ursache ist real, aber auf api-37-Hardware erst bei deutlich längeren Sessions relevant —
-solange der Abbruch aus Punkt 2 stammt, wäre `KONZEPT` §5.1 ein Umbau gegen ein
-unerreichtes Problem (und bleibt gesperrt, bis (a) den C2-Anteil in längeren Läufen
-belegt: dann wäre der Auslöser `decode_ms_max > 1000` + steigendes `buffer_s`).
+**(c) windowed streaming remains unnecessary** — rationale with this export's
+numbers: decode 583 ms at an 11.9-s buffer (≈ 49 ms per audio second); 1-s threshold
+at ≈ 20 s of audio; `rtf 0.15`, p95 = max (no outliers); F21 cadence held (1 skip).
+The quadratic cause is real, but on api-37 hardware only relevant for significantly
+longer sessions — as long as the abort originates from point 2, `KONZEPT` §5.1
+would be a rebuild against an unreached problem (and stays blocked until (a)
+proves the C2 share in longer runs: the trigger would then be
+`decode_ms_max > 1000` + rising `buffer_s`).
 
 ---
-**Quellen:** `dictation/DictationController.kt` (start 217, feedAudio 243, stop 316,
+**Sources:** `dictation/DictationController.kt` (start 217, feedAudio 243, stop 316,
 abort 367, onEditorChanged 376, fail 405, window 416), `ime/DictationCoordinator.kt`
-(errorListener 146, start 152, Consumer-Catch 296-357, stop 362, lastStopOutcome 404,
+(errorListener 146, start 152, consumer catch 296-357, stop 362, lastStopOutcome 404,
 abort 445, shutdown 470), `ime/VoiceKeyboardService.kt` (onStartInput 307,
-onFinishInputView 327, onDestroy 344, Watchdog 455, onMicUp 504,
+onFinishInputView 327, onDestroy 344, watchdog 455, onMicUp 504,
 stopDictationIfRunning 566, abortDictation 687, onMicHoldEnd 708, LANGUAGE 979),
 `ime/MicToggle.kt` (29-50), `audio/AudioRecordSource.kt` (38, 108, 129),
 `ime/DictationPermissions.kt` (16-27), `capture/CaptureForegroundService.kt` (24, 67),

@@ -1,107 +1,121 @@
-# E11 – SPACE-Beschriftung und Accessibility für v0.1.x
+# E11 – SPACE labeling and accessibility for v0.1.x
 
-**Status:** Entscheidungsreif, keine Implementierung. Einzige neue Datei ist dieses Dokument.
-Keine Code-/Assetänderung, kein Gradle, kein adb; parallele Arbeiten an KeyboardView/LayoutRepository bleiben unberührt.
-Grundlage: übergebene Asset-/Gerätemessungen und die begrenzte persönliche Sideload-Freigabe aus `FINAL_REVIEW_M8.md`.
+**Status:** ready for decision, no implementation. The only new file is this
+document. No code/asset changes, no Gradle, no adb; parallel work on
+KeyboardView/LayoutRepository remains unaffected.
+**Basis:** the handed-over asset/device measurements and the limited personal
+sideload approval from `FINAL_REVIEW_M8.md`.
 
-## A – Verbindliche SPACE-Werte in kanonischer Reihenfolge
+## A – Binding SPACE values in canonical order
 
-**Wort-Label aus dem Layout gewinnt.** Die acht vorgegebenen Übersetzungen bleiben erhalten; die übrigen sieben werden wie folgt festgelegt.
+**The word label from the layout wins.** The eight given translations stay;
+the remaining seven are fixed as follows.
 
-| Layout-ID | Kanonisches Wort-Label | Begründung – jeweils ein Satz |
+| Layout ID | Canonical word label | Reason – one sentence each |
 |---|---|---|
-| de-de | **Leer** | Vorgegeben und gegenüber „Leertaste“ ausreichend kurz. |
-| en-us | **Space** | Übliche kurze englische Beschriftung statt des falschen deutschen Labels. |
-| fr-fr | **Espace** | Bereits korrektes vorgegebenes Asset-Label bleibt erhalten. |
-| es-es | **Espacio** | Bereits korrektes vorgegebenes Asset-Label bleibt erhalten. |
-| it-it | **Spazio** | Bereits korrektes vorgegebenes Asset-Label bleibt erhalten. |
-| pt-pt | **Espaço** | Bereits korrektes vorgegebenes Asset-Label einschließlich ç bleibt erhalten. |
-| nl-nl | **Spatie** | Bereits korrektes vorgegebenes Asset-Label bleibt erhalten. |
-| pl-pl | **Spacja** | Kurze polnische Bezeichnung für das Leerzeichen ohne das längere Tastaturwort. |
-| tr-tr | **Boşluk** | Kurze türkische Bezeichnung mit korrektem ş statt eines deutschen Fremdlabels. |
-| ru-ru | **Пробел** | Übliche kompakte russische Bezeichnung, die kürzer als eine Beschreibung der ganzen Taste ist. |
-| cs-cz | **Mezera** | Kurze tschechische Bezeichnung des Leerzeichens statt „Leer“. |
-| sv-se | **Mellanslag** | Übliche schwedische Bezeichnung ohne eine frei erfundene Wortabkürzung. |
-| da-dk | **Mellemrum** | Das ausdrücklich vorgegebene korrekte dänische Asset-Label wird nicht umbenannt. |
-| fi-fi | **Väli** | Bewusst kurze finnische Beschriftung statt des längeren „Välilyönti“. |
-| el-gr | **Διάστημα** | Das vorgegebene griechische Wort einschließlich Akzent bleibt erhalten. |
+| de-de | **Leer** | Given and sufficiently short compared to "Leertaste". |
+| en-us | **Space** | The usual short English label instead of the incorrect German label. |
+| fr-fr | **Espace** | The already correct given asset label stays. |
+| es-es | **Espacio** | The already correct given asset label stays. |
+| it-it | **Spazio** | The already correct given asset label stays. |
+| pt-pt | **Espaço** | The already correct given asset label including ç stays. |
+| nl-nl | **Spatie** | The already correct given asset label stays. |
+| pl-pl | **Spacja** | The short Polish name for the space character without the longer keyboard word. |
+| tr-tr | **Boşluk** | The short Turkish name with the correct ş instead of a German foreign label. |
+| ru-ru | **Пробел** | The usual compact Russian name, shorter than a description of the whole key. |
+| cs-cz | **Mezera** | The short Czech name for the space character instead of "Leer". |
+| sv-se | **Mellanslag** | The usual Swedish name without an invented word abbreviation. |
+| da-dk | **Mellemrum** | The explicitly given correct Danish asset label is not renamed. |
+| fi-fi | **Väli** | Deliberately short Finnish label instead of the longer "Välilyönti". |
+| el-gr | **Διάστημα** | The given Greek word including the accent stays. |
 
-### Platzregel – auch für eine tatsächlich nur eine Gewichtseinheit breite Taste
+### Space rule – also for a key actually only one weight unit wide
 
-**Ein Wort darf nicht still abgeschnitten, mit Ellipse versehen oder vom Coder frei abgekürzt werden.**
-Als einzige freigegebene Kompaktbeschriftung gilt für **alle 15 Sprachen `␣`** (U+2423).
-Bei einer nur eine Gewichtseinheit breiten SPACE-Taste ist diese Kompaktform verbindlich;
-bei breiteren Tasten gilt das kanonische Wort, sofern es vollständig lesbar hineinpasst,
-sonst ebenfalls `␣`. Kein beliebiges Schrumpfen der Schrift bis zur Unlesbarkeit.
-Insbesondere gilt RU **Пробел**, nicht eine erfundene Kürzung; bei Platznot **␣**.
+**A word must not be silently truncated, given an ellipsis, or freely
+abbreviated by the coder.** The only approved compact label, for **all 15
+languages, is `␣`** (U+2423). On a SPACE key only one weight unit wide this
+compact form is binding; on wider keys the canonical word applies provided
+it fits fully legibly, otherwise likewise `␣`. No arbitrary shrinking of the
+type down to illegibility. In particular, RU is **Пробел**, not an invented
+shortening; under space pressure `␣`.
 
-Das trennt Übersetzung von Platzdarstellung: Die Wortwerte bleiben im Asset erhalten,
-die Kompaktform ersetzt ausschließlich die sichtbare Beschriftung, niemals den
-SPACE-Aktionswert oder den eingefügten Text. Es werden keine neuen Layoutbreiten verlangt.
+This separates translation from space representation: the word values stay
+in the asset, the compact form replaces exclusively the visible label, never
+the SPACE action value or the inserted text. No new layout widths are
+demanded.
 
-**ANNAHME:** „1-weitig“ meint wirklich nur eine normale Tasten-Gewichtseinheit, nicht
-die heute breitere Leertaste. Die acht fest vorgegebenen Wörter, insbesondere
-„Mellemrum“ und „Διάστημα“, können ohne konkrete Font-/Breitenmessung nicht seriös als
-alle auf einer solchen schmalen Taste passend zugesichert werden; die verbindliche
-Kompaktform löst diesen Zielkonflikt, statt korrekte Übersetzungen heimlich zu verstümmeln.
-Die Glyphendarstellung von `␣` ist vor Verwendung zu belegen.
+**ASSUMPTION:** "1-wide" really means only a normal key weight unit, not
+today's wider space bar. The eight fixed words, especially "Mellemrum" and
+"Διάστημα", cannot be credibly promised to fit on such a narrow key without
+a concrete font/width measurement; the binding compact form resolves this
+conflict of goals instead of secretly mutilating correct translations. The
+glyph rendering of `␣` must be evidenced before use.
 
-## B – symbols und symbolsShift: Wort-Label, nicht blank
+## B – symbols and symbolsShift: word label, not blank
 
-**Alle vier Ebenen derselben Sprache erhalten dasselbe kanonische Wort-Label aus A;
-`" "` und leere Labels sind keine beabsichtigte Gestaltung.** Die Platzregel aus A
-gilt auf jeder Ebene identisch; bei gleicher Breite ergibt sich dieselbe Beschriftung.
+**All four layers of the same language receive the same canonical word label
+from A; `" "` and empty labels are not intended design.** The space rule from
+A applies identically on every layer; at the same width the same label
+results.
 
-Begründung: SPACE behält beim Ebenenwechsel seine Bedeutung, und ein beschriftetes
-Aktionsziel ist besser auffindbar als eine namenlose Fläche. Gegen „Die Leer-Taste
-muss überall gleich heißen“ gilt: **gleiche Aktion und Konsistenz innerhalb einer
-Sprache ja, deutsches „Leer“ über alle Sprachen nein**; außerdem hat bei echten
-Breitenunterschieden vollständige Lesbarkeit Vorrang vor wortwörtlicher Gleichheit.
-Ein absichtlich blankes Symbol-Label wird ausdrücklich verworfen.
+Reasoning: SPACE keeps its meaning when the layer switches, and a labeled
+action target is easier to find than a nameless surface. Against "the space
+key must be called the same everywhere": **the same action and consistency
+within a language yes, German "Leer" across all languages no**; moreover,
+with real width differences full legibility takes precedence over literal
+uniformity. A deliberately blank symbol label is explicitly rejected.
 
-Der gerade umgesetzte Fallback `R.string.key_space_label = "Space"` bleibt ein
-**defensiver Notbehelf für defekte/leere Labels**, keine Übersetzungspolitik und kein
-Ersatz für die Assetkorrektur. In den bereinigten 15 Assets darf er regulär in keiner
-Ebene mehr benötigt werden; die SPACE-Ausgabe bleibt genau ein Leerzeichen.
+The just-implemented fallback `R.string.key_space_label = "Space"` remains a
+**defensive stopgap for broken/empty labels**, not a translation policy and
+not a substitute for the asset correction. In the cleaned-up 15 assets it
+must no longer be needed on any layer in normal operation; the SPACE output
+stays exactly one space character.
 
-## C – Accessibility in v1: **c3, bewusst zurückstellen in R8**
+## C – Accessibility in v1: **c3, deliberately deferred to R8**
 
-Für die persönlich erprobte v0.1.x bleibt die Übersetzung der fünf Accessibility-Namen
-bewusst in **R8 offen**; weder die deutschen Hardcodes noch ein pauschaler englischer
-Ersatz sind eine barrierefreie Abnahme. Ein 15-Sprachen-Satz wird erst zusammen mit
-geklärter Ansagesprache und realer TalkBack-Prüfung beauftragt, statt jetzt 75
-ungeprüfte Übersetzungen als erledigte Accessibility auszugeben.
+For the personally tested v0.1.x the translation of the five accessibility
+names stays deliberately **open in R8**; neither the German hardcodes nor a
+blanket English replacement are an accessible acceptance. A 15-language set
+is only commissioned together with a clarified announcement language and a
+real TalkBack check, instead of issuing 75 unchecked translations now as
+completed accessibility.
 
-**Folge:** Jetzt keine neuen `values-*/strings.xml` für diese fünf Namen und keine
-neue englische Universalbezeichnung. Sichtbares SPACE-Wort und Screenreader-Name
-sind getrennte Probleme; insbesondere bedeutet `␣` nicht, dass ein Screenreader nur
-das Symbol vorlesen soll. „Löschen“, „Eingabetaste“, „Leertaste“, „Umschalt“ und
-„Feststell shift“ bleiben bekannte deutsche Ansagen und ein ehrlicher i18n-/A11y-Mangel.
-Dies blockiert nicht die bereits begrenzte persönliche Sideload-Erprobung, wohl aber
-einen Claim „in allen 15 Sprachen barrierefrei geprüft“.
+**Consequence:** no new `values-*/strings.xml` for these five names now and
+no new English universal label. The visible SPACE word and the screen
+reader name are separate problems; in particular `␣` does not mean that a
+screen reader should announce only the symbol. "Löschen", "Eingabetaste",
+"Leertaste", "Umschalt", and "Feststell shift" remain known German
+announcements and an honest i18n/a11y deficiency. This does not block the
+already limited personal sideload testing, but it does block a claim
+"accessibility checked in all 15 languages".
 
-## D – Messmethode und exakt erwartete Beweise
+## D – Measurement method and exactly expected evidence
 
-Keine neue Geräteprüfung in diesem Auftrag; folgende Beweise gelten für den späteren
-Coder-/Orchestrator-Nachweis. **uiautomator ist kein Nachweis der IME-Beschriftungen**,
-weil die betreffenden IME-Inhalte darin nicht sichtbar sind.
+No new device check in this task; the following evidence applies to the
+later coder/orchestrator verification. **uiautomator is not evidence of the
+IME labels**, because the IME content in question is not visible in it.
 
-| Prüfung | Erwarteter Sichtbarkeits-/Funktionsbeweis |
+| Check | Expected visibility/function evidence |
 |---|---|
-| Kanonische Werte | Screenshot der SPACE-Taste je aktiviertem Layout in base, mit eindeutig zugeordneter Layout-ID; jedes Wort entspricht A, insbesondere EN Space, PL Spacja, TR Boşluk, RU Пробел, CS Mezera, SV Mellanslag und FI Väli. |
-| Längste/andere Schriften | DA Mellemrum, EL Διάστημα und RU Пробел auf Screenshots vollständig innerhalb ihrer Taste, ohne Übermalen der Nachbartaste oder abgeschnittene Buchstaben. |
-| Ebenenregel | Screenshots von base, symbols und symbolsShift für DA und FI zeigen jeweils dasselbe Wort bei gleicher Breite, kein blankes Label und keinen stillen Wechsel zum englischen Space-Fallback. |
-| Echte 1-weitige Taste / Platznot | Sofern eine solche Konfiguration geprüft wird: Screenshot zeigt ausschließlich das vollständig lesbare `␣` innerhalb der Taste; ein lesbarer Glyph fehlt nicht und wird nicht durch ein Kästchen ersetzt. |
-| Funktion unverändert | SPACE tippen: Screenshot des Felds zeigt bei kontrollierter Einfügestelle `a b` statt `ab`; ergänzendes `VK-HIT`-Log ordnet den Tap der SPACE-Aktion zu, nicht dem Emoji-/Sprachwechsel. |
-| Accessibility | Kein Titelbeweis wird für diesen c3-Umfang gefordert; ein späterer `VK-HIT`-Logwert kann die konfigurierte Ansage belegen, ersetzt aber keine echte TalkBack-Hör-/Bedienprüfung. |
+| Canonical values | Screenshot of the SPACE key for each activated layout in base, with a clearly assigned layout ID; each word matches A, in particular EN Space, PL Spacja, TR Boşluk, RU Пробел, CS Mezera, SV Mellanslag, and FI Väli. |
+| Longest/other scripts | DA Mellemrum, EL Διάστημα, and RU Пробел on screenshots fully inside their key, without painting over the neighbor key or cut-off letters. |
+| Layer rule | Screenshots of base, symbols, and symbolsShift for DA and FI each show the same word at the same width, no blank label and no silent switch to the English Space fallback. |
+| Real 1-wide key / space pressure | If such a configuration is checked: the screenshot shows only the fully legible `␣` inside the key; a legible glyph is not missing and is not replaced by a box. |
+| Function unchanged | Tap SPACE: a screenshot of the field shows `a b` instead of `ab` at a controlled insertion point; an accompanying `VK-HIT` log assigns the tap to the SPACE action, not to the emoji/language switch. |
+| Accessibility | No title evidence is demanded for this c3 scope; a later `VK-HIT` log value can prove the configured announcement, but does not replace a real TalkBack listening/operation check. |
 
-Die Labelbeweise sind nicht mit einem Gerätebeweis über das Textfeld allein erledigt:
-Ein eingefügtes Leerzeichen beweist die Aktion, nicht die sichtbar korrekte Sprache.
-Umgekehrt beweist ein Screenshot mit „Пробел“ nicht die tatsächlich konfigurierte Ansage.
+The label evidence is not settled by a device check of the text field alone:
+an inserted space proves the action, not the visibly correct language.
+Conversely, a screenshot showing "Пробел" does not prove the actually
+configured announcement.
 
-## Abschluss
+## Conclusion
 
-**FERTIG:** 15 Wortwerte, einzige erlaubte Kompaktform, einheitliche Ebenenregel und c3-Umfang festgelegt.
-**OFFEN:** Umsetzung/Assetbereinigung durch den Coder, Sichtbarkeitsbeweise und Accessibility-Restpunkt R8.
-**ANNAHME:** In der Übergabe sind unter „sieben falsche Assets“ sechs IDs aufgezählt; fi-fi ist die siebte noch festzulegende Sprache und durch A ausdrücklich abgedeckt.
-**FREIGABE_NOETIG:** Keine für diese reine Dokumententscheidung; keine Geräte-/Buildarbeit angefordert oder ausgeführt.
+**DONE:** 15 word values, the only allowed compact form, the uniform layer
+rule, and the c3 scope fixed.
+**OPEN:** implementation/asset cleanup by the coder, visibility evidence, and
+the accessibility remainder R8.
+**ASSUMPTION:** in the handover "seven incorrect assets" lists six IDs; fi-fi
+is the seventh language still to be fixed and is explicitly covered by A.
+**APPROVAL_NEEDED:** none for this pure documentation decision; no
+device/build work requested or performed.

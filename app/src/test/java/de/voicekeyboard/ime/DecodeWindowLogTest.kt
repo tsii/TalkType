@@ -6,15 +6,15 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * A4b (PLAN_V0133 §A4b) — kompakte `event=window`-VK-ASR-Zeile:
- *  1. Reine Formatierungsfunktion erzeugt GENAU EINE Zeile mit `event=window`
- *     und exakt allen 17 Metriken (audio_s..buffer_s, Plan-Reihenfolge).
- *  2. Regel 9: keine Text-/Audiofelder, keine Pfade/URLs/Paketnamen, nur
- *     geschlossene Write-Codes; kein Debug-Guard (reine Funktion ohne Android —
- *     die JVM-Testbarkeit selbst ist der Beweis, Release-wirksam via main-source).
+ * A4b (PLAN_V0133 §A4b) — compact `event=window` VK-ASR line:
+ *  1. The pure formatting function produces EXACTLY ONE line with `event=window`
+ *     and exactly all 17 metrics (audio_s..buffer_s, plan order).
+ *  2. Rule 9: no text/audio fields, no paths/URLs/package names, only closed
+ *     write codes; no debug guard (pure function without Android — the JVM
+ *     testability itself is the proof, effective in release via the main source).
  *
- * `out` kommt synchron vom bestehenden DictationOutputCounter (Parameter der
- * Funktion; Verdrahtung im Service).
+ * `out` comes synchronously from the existing DictationOutputCounter (function
+ * parameter; wiring in the service).
  */
 class DecodeWindowLogTest {
 
@@ -37,11 +37,11 @@ class DecodeWindowLogTest {
         bufferS = 11.96,
     )
 
-    // A4b-Rote-Test 1: genau EINE Zeile, event=window, exakt alle 17 Metriken
-    // in Plan-Reihenfolge mit exakten Formaten (1 Dezimale für Sekunden).
-    @Test fun `A4b Fensterzeile enthaelt event=window und exakt 17 Metriken`() {
+    // A4b red test 1: exactly ONE line, event=window, exactly all 17 metrics
+    // in plan order with exact formats (1 decimal for seconds).
+    @Test fun `A4b window line contains event=window and exactly 17 metrics`() {
         val line = decodeWindowLine(full, out = 42)
-        assertFalse("genau eine Zeile, kein Umbruch", line.contains('\n'))
+        assertFalse("exactly one line, no line break", line.contains('\n'))
         assertEquals(
             "event=window audio_s=12.3 out=42 decode_ms=427 pace_ms=4000 skips=3 " +
                 "hyp_len=55 current_len=55 committed_len=48 write=delta " +
@@ -49,17 +49,17 @@ class DecodeWindowLogTest {
                 "hyp_gap_ms=1100 decode_ms_max=900 decode_ms_p95=850 buffer_s=12.0",
             line,
         )
-        // Eigentumsfall: 1 Dezimale statt -1
+        // ownership case: 1 decimal instead of -1
         val owned = decodeWindowLine(full.copy(ownerLostAtS = 8.56), out = 0)
         assertTrue("owner_lost_at_s 1 Dezimale", owned.contains("owner_lost_at_s=8.6"))
     }
 
-    // A4b-Rote-Test 2: Regel 9 — nur Zahlen/geschlossene Codes; keine Text-/
-    // Audio-/Pfad-/Paketfelder; fremder Write-Code kollabiert defensiv auf '-'.
-    @Test fun `A4b Regel9 - nur Zahlen und geschlossene Codes, keine Pfade Inhalte`() {
+    // A4b red test 2: rule 9 — numbers/closed codes only; no text/audio/path/
+    // package fields; a foreign write code collapses defensively to '-'.
+    @Test fun `A4b rule 9 - only numbers and closed codes, no paths or content`() {
         val line = decodeWindowLine(full, out = 42)
         val parts = line.split(' ')
-        assertEquals("event=window + 17 Metriken, nichts darueber/darunter", 18, parts.size)
+        assertEquals("event=window + 17 metrics, nothing above/below", 18, parts.size)
         assertEquals("event=window", parts.first())
         assertEquals(
             listOf("audio_s", "out", "decode_ms", "pace_ms", "skips", "hyp_len",
@@ -73,18 +73,18 @@ class DecodeWindowLogTest {
             if (p.startsWith("write=")) {
                 assertTrue("geschlossener Write-Code: $v", v in setOf("same", "w1", "w3d", "delta", "-"))
             } else {
-                assertTrue("nur Zahlen, nie Inhalte (Regel 9): $p", Regex("^-?[0-9]+(\\.[0-9])?$").matches(v))
+                assertTrue("numbers only, never content (rule 9): $p", Regex("^-?[0-9]+(\\.[0-9])?$").matches(v))
             }
         }
-        assertFalse("kein Doppelpunkt", line.contains(":"))
-        assertFalse("kein Pfad-Slash", line.contains("/"))
-        assertFalse("keine URL", line.contains("http"))
-        assertFalse("kein @", line.contains("@"))
-        assertFalse("kein Paketname", line.contains("de.voicekeyboard"))
-        // Defensiv-Sperre: ein korrupter Write-Code (Doppelpunkt/Leerzeichen)
-        // kollabiert auf '-', die Zeile bleibt geschlossen und einzeilig:
+        assertFalse("no colon", line.contains(":"))
+        assertFalse("no path slash", line.contains("/"))
+        assertFalse("no URL", line.contains("http"))
+        assertFalse("no @", line.contains("@"))
+        assertFalse("no package name", line.contains("de.voicekeyboard"))
+        // defensive barrier: a corrupt write code (colon/space)
+        // collapses to '-', the line stays closed and single-line:
         val dirty = decodeWindowLine(full.copy(write = "bo:ese x"), out = 0)
         assertEquals("write=-", dirty.split(' ').first { it.startsWith("write=") })
-        assertFalse("auch nach Korruption einzeilig", dirty.contains('\n'))
+        assertFalse("single line even after corruption", dirty.contains('\n'))
     }
 }

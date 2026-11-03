@@ -1,41 +1,41 @@
-# Review F17b/F17c — Decode-Messbarkeit (decode_ms_max/p95, buffer_s)
+# Review F17b/F17c — Decode measurability (decode_ms_max/p95, buffer_s)
 
-**Reviewer:** DeepSeek V4 Pro 0813 · **Datum:** 2026-10-30
-**Umfang:** `DictationController` (Decode-Ring), `DebugInfoFormatter`/`Collector` (+3 Felder), `DictationCoordinator`-Durchreiche, `DebugInfoCollectorTest`. Kein Build/Emulator.
+**Reviewer:** DeepSeek V4 Pro 0813 · **Date:** 2026-10-30
+**Scope:** `DictationController` (decode ring), `DebugInfoFormatter`/`Collector` (+3 fields), `DictationCoordinator` pass-through, `DebugInfoCollectorTest`. No build/emulator.
 
 ---
 
-## Befundtabelle
+## Findings table
 
-| Sev | Datei:Zeile | Befund | Minimaländerung |
+| Sev | File:Line | Finding | Minimal change |
 |---|---|---|---|
-| **P2** | `DictationController.kt:115-119` (`decodeTimesMs`/`decodeSeq`/`decodeSamples`) + `lastDecodeBufferSeconds` | **Data-Race (Diagnose): Worker schreibt, Main liest ohne `@Volatile`/Fence.** `decodeTimesMs[i]=ms; decodeSeq+=1; decodeSamples+=1` läuft im Worker (transcribe→noteDecode), `decodeMsMax()`/`decodeMsP95()`/`bufferSeconds()` lesen auf dem 🐞-Main-Thread. Folgen sind **nicht** negativ/gerissen (`coerceAtLeast(0)`, arm64-64-Bit-Long = atomar), aber **stale** — ein 🐞-Read kann trotz erfolgter Decodes `0`/„nie dekodiert" zeigen (fehlende Sichtbarkeit des Counts). | `@Volatile` auf `decodeSamples` (und `lastDecodeBufferSeconds`); die Schreibreihenfolge „Array-Slot zuerst, Count zuletzt" beibehalten — die Volatile-Write/Read auf den Count erzeugt den Happens-before für die Array-Inhalte. |
-| **P2** | `docs/DEBUG_INFO_FIELDS.md` (Katalog) | **Feldkatalog-Drift:** die drei neuen Schlüssel fehlen in der Doku (KEYS ist inzwischen 27). B-`grep decode_ms_max/decode_ms_p95/buffer_s` → leer. | Folgende drei Zeilen in den Katalog nachtragen: `decode_ms_max  — größte Decode-Laufzeit eines transcribe-Aufrufs in ms (0 = nie dekodiert)` · `decode_ms_p95 — p95 der letzten ≤64 Decode-Läufe in ms` · `buffer_s — Pufferlänge (Sekunden) beim letzten Dekodierlauf (korreliert mit decode_ms)` . |
-| Note | `DictationController.kt:132-139` (`decodeMsP95`) | **„p95" ist die p95 der letzten ≤64 Ring-Samples, nicht der Sitzung.** Benennung leicht irreführend; als Diagnose-Stichprobe ok (KDoc nennt „deterministische Stichprobe"). Kein Fehler. | KDoc/Feldname ggf. „decode_ms_p95_last64" oder Vermerk „Stichprobe" — rein dokumentarisch. |
+| **P2** | `DictationController.kt:115-119` (`decodeTimesMs`/`decodeSeq`/`decodeSamples`) + `lastDecodeBufferSeconds` | **Data race (diagnostics): worker writes, Main reads without `@Volatile`/fence.** `decodeTimesMs[i]=ms; decodeSeq+=1; decodeSamples+=1` runs in the worker (transcribe→noteDecode), `decodeMsMax()`/`decodeMsP95()`/`bufferSeconds()` read on the 🐞 Main thread. Consequences are **not** negative/torn (`coerceAtLeast(0)`, arm64 64-bit long = atomic), but **stale** — a 🐞 read can show `0`/"never decoded" despite decodes having occurred (missing visibility of the count). | `@Volatile` on `decodeSamples` (and `lastDecodeBufferSeconds`); keep the write order "array slot first, count last" — the volatile write/read on the count creates the happens-before for the array contents. |
+| **P2** | `docs/DEBUG_INFO_FIELDS.md` (catalog) | **Field catalog drift:** the three new keys are missing from the docs (KEYS is now 27). B-`grep decode_ms_max/decode_ms_p95/buffer_s` → empty. | Add the following three lines to the catalog: `decode_ms_max  — largest decode runtime of a transcribe call in ms (0 = never decoded)` · `decode_ms_p95 — p95 of the last ≤64 decode runs in ms` · `buffer_s — buffer length (seconds) at the last decode run (correlates with decode_ms)`. |
+| Note | `DictationController.kt:132-139` (`decodeMsP95`) | **"p95" is the p95 of the last ≤64 ring samples, not of the session.** Naming slightly misleading; fine as a diagnostics sample (KDoc says "deterministic sample"). No defect. | Optionally rename KDoc/field to "decode_ms_p95_last64" or add a note "sample" — purely documentary. |
 
 ---
 
-## Antworten A–G
+## Answers A–G
 
-- **A) Messung korrekt.** `ms = ((clock()−start)/1e6).coerceAtLeast(0)`: 0-ms-Lauf → 0, `nanoTime`-Wrap → 0 (nie negativ), leere Historie → max==p95==0, ein Lauf → max==p95 (idx = `(1*95+99)/100−1 = 0`). Ring 64: `decodeSamples` deckelt bei 64, ältere Werte werden korrekt überschrieben, und `decodeMsMax/P95` iterieren genau die 64 gültigen Slots.
-- **B) Harmloser, aber echter Race (P2 s. o.):** keine negativen/gerissenen Werte (Clamp + 64-Bit), aber **stale** `0`-Anzeige möglich. Minimalfix = `@Volatile decodeSamples` + „Array-vor-Count"-Schreibordnung.
-- **C) `bufferSeconds()` = Puffer des **letzten** Dekodierlaufs** (`lastDecodeBufferSeconds = audioSeconds` in `noteDecode`, also inkl. des Finals mit vollem Puffer). Konsistent mit dem Export-Anspruch („beim letzten Dekodierlauf", nicht aktuelle Aufnahmedauer). ✓
-- **D) Kein Verhaltens-/Allokations-/Blockier-Effekt:** `noteDecode` = 1 Array-Write (0 Allokation pro Decode); `decodeMsP95` allokiert `copyOf(≤64)` nur beim 🐞-Read. `window()` bleibt unverändert (`PcmWindow(pcm.copyOf(totalSamples), …)`, Z.407). ✓
-- **E) Feldzahl-Drift:** im **Formatter** korrekt (KEYS 24→27, Ausgabe 28 Zeilen = 1 Header + 27 Felder, `check(lines.size == KEYS.size + 1)` Z.137 aktiv). **Doku-Drift** in `docs/DEBUG_INFO_FIELDS.md` = P2 (s. o.).
-- **F) Testqualität — gut, echte Kette.** `DebugInfoCollectorTest` (Z.95-145) baut echten `DictationCoordinator` (+ `QueueSource` + Fake-Engine mit `calls`), wartet ≤3 s, `stop()`, wartet auf IDLE, assertet `engine.calls >= 1` **und** `bufferSeconds > 0.0` (echter Final-Decode, kann nicht mit Puffer 0 bestehen) und `assertNotNull(snapshot.decodeMsMax/P95/bufferSeconds)` (Z.135-137) — ein Löschen der Collector-Zeilen 101-103 macht genau diese Asserts **rot**. Zusätzlich Regex-Asserts auf die Exportzeilen (Z.143-145).
-- **G) Regel 9 sauber:** nur Zahlen (`decode_ms_max/p95` ms, `buffer_s` s) — keine Inhalte/Pfade/Personenbezug.
-
----
-
-## SUMME
-
-**P0 = 0 · P1 = 0 · P2 = 2** (Worker/Main-Sichtbarkeit ohne `@Volatile`; fehlende drei Keys in `docs/DEBUG_INFO_FIELDS.md`) · 1 Note (p95-Benennung).
-
-**Offen (zum Belegen bräuchte ich):** einen echten Lauf (`./gradlew test`) für die 376/0-Behauptung und den Testgrün-Beweis; einen 32-Bit-Emulator für die Torn-Long-Frage (theoretisch, arm64 irrelevant); den `QueueSource`-Volltext, um „liefert wirklich ≥1 Block" zu bestätigen (per grep nur Start/Stop/Deadline gesehen).
+- **A) Measurement correct.** `ms = ((clock()−start)/1e6).coerceAtLeast(0)`: 0-ms run → 0, `nanoTime` wrap → 0 (never negative), empty history → max==p95==0, one run → max==p95 (idx = `(1*95+99)/100−1 = 0`). Ring 64: `decodeSamples` caps at 64, older values are correctly overwritten, and `decodeMsMax/P95` iterate exactly the 64 valid slots.
+- **B) Harmless but real race (P2 above):** no negative/torn values (clamp + 64-bit), but **stale** `0` display possible. Minimal fix = `@Volatile decodeSamples` + "array-before-count" write order.
+- **C) `bufferSeconds()` = buffer of the **last** decode run** (`lastDecodeBufferSeconds = audioSeconds` in `noteDecode`, i.e. including the finale with the full buffer). Consistent with the export claim ("at the last decode run", not current recording duration). ✓
+- **D) No behavior/allocation/blocking effect:** `noteDecode` = 1 array write (0 allocations per decode); `decodeMsP95` allocates `copyOf(≤64)` only on the 🐞 read. `window()` remains unchanged (`PcmWindow(pcm.copyOf(totalSamples), …`, line 407). ✓
+- **E) Field-count drift:** correct in the **formatter** (KEYS 24→27, output 28 lines = 1 header + 27 fields, `check(lines.size == KEYS.size + 1)` line 137 active). **Docs drift** in `docs/DEBUG_INFO_FIELDS.md` = P2 (above).
+- **F) Test quality — good, genuine chain.** `DebugInfoCollectorTest` (lines 95-145) builds a real `DictationCoordinator` (+ `QueueSource` + fake engine with `calls`), waits ≤3 s, `stop()`, waits for IDLE, asserts `engine.calls >= 1` **and** `bufferSeconds > 0.0` (a genuine final decode, cannot pass with buffer 0) and `assertNotNull(snapshot.decodeMsMax/P95/bufferSeconds)` (lines 135-137) — deleting collector lines 101-103 turns exactly these asserts **red**. Additionally regex asserts on the export lines (lines 143-145).
+- **G) Rule 9 clean:** only numbers (`decode_ms_max/p95` ms, `buffer_s` s) — no content/paths/personal data.
 
 ---
 
-## Nachtrag F19 (p95-Index explicit + AsrThreadConfig-Gegenprobe)
+## TOTAL
 
-- **p95-Index nachgerechnet** (`DictationController.kt:136` `idx = (size*95 + 99)/100 - 1`): n=1 → 0 ✓ (max==p95); n=2 → 1 (der größere Wert) ✓; n=64 → 60 (= ceil(0,95·64)−1 = 61. Index, ~95. Perzentil) ✓. Tiny: das `+99`-Vorziehen ist `ceil(0,95·n)`; bei n=64 ergibt 60 (0-basiert), korrekt.
-- **G) AsrThreadConfig UNVERÄNDERT** (`AsrThreadConfig.kt:83-90`): `intra = if (safeCores <= 8) minOf(4, safeCores) else minOf(MAX_THREADS, safeCores)`, clamp 2..6, RAM-Dekkel `≤2 GB → 2`, `deviceRamMb` unverändert, `DEFAULT=intra=4`. Der kassierte Sollwert `forDevice(cores=6)→intra=6` ist **nicht** enthalten — keine Verhaltensänderung, Bestandsregel `min(4, cores)` intakt.
+**P0 = 0 · P1 = 0 · P2 = 2** (worker/Main visibility without `@Volatile`; three missing keys in `docs/DEBUG_INFO_FIELDS.md`) · 1 note (p95 naming).
+
+**Open (to provide evidence I would need):** a real run (`./gradlew test`) for the 376/0 claim and the green-test proof; a 32-bit emulator for the torn-long question (theoretical, irrelevant on arm64); the full `QueueSource` text to confirm "really delivers ≥1 block" (grep showed only start/stop/deadline).
+
+---
+
+## Addendum F19 (explicit p95 index + AsrThreadConfig cross-check)
+
+- **p95 index recalculated** (`DictationController.kt:136` `idx = (size*95 + 99)/100 - 1`): n=1 → 0 ✓ (max==p95); n=2 → 1 (the larger value) ✓; n=64 → 60 (= ceil(0.95·64)−1 = 61st index, ~95th percentile) ✓. Tiny: the pulled-forward `+99` is `ceil(0.95·n)`; for n=64 this gives 60 (0-based), correct.
+- **G) AsrThreadConfig UNCHANGED** (`AsrThreadConfig.kt:83-90`): `intra = if (safeCores <= 8) minOf(4, safeCores) else minOf(MAX_THREADS, safeCores)`, clamp 2..6, RAM cap `≤2 GB → 2`, `deviceRamMb` unchanged, `DEFAULT=intra=4`. The asserted target value `forDevice(cores=6)→intra=6` is **not** present — no behavior change, existing rule `min(4, cores)` intact.

@@ -1,425 +1,535 @@
-# PLAN V0130 — Sofort-Release v0.1.30 + Infra-Woche
+# PLAN V0130 — immediate release v0.1.30 + infrastructure week
 
-**Planer-Stand:** 2026-11-01 · **Autor:** Planer (read-only; kein Code geändert, kein git)
-**Grundlage:** `docs/DEBUGGER_FABLE_BERATUNG_2026-11-01.md` (Debugging-Bericht, 340 Zeilen) — **jede Kernaussage
-vor Aufnahme in diesen Plan an den zitierten Code-Stellen verifiziert** (Belege in §0).
-**Basis:** v0.1.29 / versionCode 30 · Tests Debug **483/0**, Release **452/0** (935/0).
-**Ziel:** neue Version mit Downloadlink **so bald wie möglich** (Nutzer-Vorgabe), ohne die C2-Symptome
-ungelöst auszuliefern.
+**Planner status:** 2026-11-01 · **Author:** planner (read-only; no code
+changed, no git)
+**Basis:** `docs/DEBUGGER_FABLE_BERATUNG_2026-11-01.md` (debugging report,
+340 lines) — **every core statement was verified at the cited code locations
+before being taken into this plan** (evidence in §0).
+**Base:** v0.1.29 / versionCode 30 · tests debug **483/0**, release **452/0**
+(935/0).
+**Goal:** a new version with a download link **as soon as possible** (user
+directive), without shipping the C2 symptoms unsolved.
 
 ---
 
-## 0. Verifizierte Faktenbasis (Belege, alle im Worktree nachgelesen)
+## 0. Verified fact base (evidence, all re-read in the worktree)
 
-| # | Fakt | Beleg (Datei:Zeile) |
+| # | Fact | Evidence (file:line) |
 |---|---|---|
-| V1 | **F43 existiert genau wie beschrieben:** `TRAILING_SILENCE_MS = 2500`; Auto-Stop **nur** bei streamender Stille (`capStallMs < 2500`), Feuer über reguläres `stop()` (Finale, kein ERR_*). | `ime/DictationCoordinator.kt:97/436–453` |
-| V2 | **Es gibt KEINEN hypothesen-getriggerten Stop-Pfad:** `stop()` wird im Coordinator nur aus der F43-Watchdog-Bedingung gerufen; Hypotheseninhalt fließt nirgends in eine Stop-Entscheidung. | `ime/DictationCoordinator.kt:359–454` (captureLoop vollständig gelesen) |
-| V3 | **Controller-Uhr:** `DictationController` **hat bereits** einen injizierbaren `clock`-Parameter (Default `System.nanoTime()`), der Coordinator reicht ihn **nicht durch** → `lastDecodeMs`/DecodePace laufen auf Echtzeit, Watchdogs auf `nowMs`. **Fable-Impuls korrigiert** (s. §5, Abweichung 1): kein neues API nötig, nur Durchreichen. | `dictation/DictationController.kt:80,137,179–193` · `ime/DictationCoordinator.kt:172` |
-| V4 | **Start-Race Symptom 1 ist im Code belegt:** `onMicDown` guard `if (startingUp) return` nur bis zur 15-s-Frist; danach läuft die erste Coroutine weiter (kein Cancel von `engine.load()`), ein zweiter DOWN startet eine zweite Coroutine und **setzt `startAbandoned = false` zurück** → die erste (alte) Session kann als „gültig" weiterlaufen (Zombie), der zweite `start()` scheitert an `active.compareAndSet`, **und der zweite Lauf überschreibt `lastStartMs` im `finally`** (Export-`start_ms` kann Kollisionswert sein). | `ime/VoiceKeyboardService.kt:139,407–411,447–455,493–510` · `ime/DictationCoordinator.kt:208–215,296–297` |
-| V5 | **UP im STARTING-Fenster ist stilles Flag** (`cancelStartRequested = true`, kein UI-Feedback; Nachreichung als KEEP_RUNNING ist gewolltes P0-Befund2(a)-Design). | `ime/VoiceKeyboardService.kt:572–583` |
-| V6 | **Zwei Start-Gesten existieren:** Statusleiste = Halten (DOWN startet / UP stoppt, `VoiceKeyboardService.kt:321–327`), Fußleisten-Mikro = **Toggle** (Tap startet/stopt, `micToggleAction`, `:1155–1161`). F43 feuert heute **modusunabhängig** bei jeder Pause ≥ 2,5 s — auch während der Finger unten ist. | `ime/VoiceKeyboardService.kt` wie zitiert |
-| V7 | **Symptom 2:** jeder Statuszeilen-Pfad läuft über `getString(...)`/`mapVisibleError` (Fallback „Audio-Start fehlgeschlagen" ist **übersetzt** — der Rohcode-Verdacht trifft auf die vier Kandidaten K1–K4 zu). Hartkodierte Nicht-Ressourcen-Strings (K2) belegt: `"Verarbeite…"`, `"Bereit"`, `"Diktat… ("` (`updateStatus`), `"Diagnose kopiert — Teilen-Dialog geöffnet"` (`:637`), FGS-Titel `"Diktat läuft"` (`capture/CaptureForegroundService.kt:102`). `mapErrorTextRes` existiert bereits als reine Funktion (`:156`). | `ime/VoiceKeyboardService.kt:969–1001,1040–1112,637` · `capture/CaptureForegroundService.kt:102` |
-| V8 | **Export hat kein `status_res`** und keinen Session-Ringpuffer; `mic_rel`, `status_shown`, `fgs_stopped_by` existieren; Collector nimmt Service-Parameter (Muster für neue Felder vorhanden). | `debug/DebugInfoFormatter.kt:110–160,217–218` · `debug/DebugInfoCollector.kt:42–54,121–122` |
-| V9 | **F46 (⇧ = Aufwärts-Pfeil) ist code-fertig** (Stroked-Pfad Schaft+Kopf+Sockelleiste, Gleiche-Höhe-Gate zu ⌫/⏎) — nur visueller Abgleich im Bau nötig. | `keyboard/KeyboardView.kt:693–740` |
-| V10 | **Infra liegt bereit:** Robolectric 4.17 in `testImplementation`; `kotlinx-coroutines-test` 1.10.2 **im Gradle-Cache** (offline nutzbar); JVM-Auto-Stop-Testgerüst mit virtueller Uhr existiert (`DictationAutoStopTest` mit `VClock` + gescripteter Fake-Quelle). | `app/build.gradle.kts:134` · `~/.gradle/caches` · `ime/DictationAutoStopTest.kt` |
-| V11 | **Sicherheitsnetz bei Wegfall des Auto-Stops im Hold-Modus:** `MAX_DURATION_MS = 300_000` (300 s) beendet jede Session kontrolliert; F31-Silent- und F28b1-Stall-Watchdogs bleiben unberührt. | `audio/AudioRecordSource.kt:38,108` |
-| V12 | **windowed-Streaming ist GESPERRT** (KONZEPT §5.1: dokumentierte Defekte, Freigabe beim Nutzer); F43 ist als „vom Nutzer ausdrücklich gewünschte Präzisierung" dokumentiert — globales Anheben der Schwelle kippt den gewünschten „Pause = Ende"-Flow. | `docs/KONZEPT.md` §5.1, §506–514 |
+| V1 | **F43 exists exactly as described:** `TRAILING_SILENCE_MS = 2500`; auto-stop **only** on streaming silence (`capStallMs < 2500`), firing via the regular `stop()` (finale, no ERR_*). | `ime/DictationCoordinator.kt:97/436–453` |
+| V2 | **There is NO hypothesis-triggered stop path:** in the coordinator `stop()` is called only from the F43 watchdog condition; hypothesis content flows into no stop decision anywhere. | `ime/DictationCoordinator.kt:359–454` (captureLoop read completely) |
+| V3 | **Controller clock:** `DictationController` **already has** an injectable `clock` parameter (default `System.nanoTime()`), the coordinator does **not** pass it through → `lastDecodeMs`/DecodePace run on real time, watchdogs on `nowMs`. **Fable impulse corrected** (see §5, deviation 1): no new API needed, only pass-through. | `dictation/DictationController.kt:80,137,179–193` · `ime/DictationCoordinator.kt:172` |
+| V4 | **Start race symptom 1 is evidenced in the code:** `onMicDown` guard `if (startingUp) return` only until the 15-s deadline; after that the first coroutine keeps running (no cancel of `engine.load()`), a second DOWN starts a second coroutine and **resets `startAbandoned = false`** → the first (old) session can keep running as "valid" (zombie), the second `start()` fails at `active.compareAndSet`, **and the second run overwrites `lastStartMs` in `finally`** (the export's `start_ms` can be a collision value). | `ime/VoiceKeyboardService.kt:139,407–411,447–455,493–510` · `ime/DictationCoordinator.kt:208–215,296–297` |
+| V5 | **UP in the STARTING window is a silent flag** (`cancelStartRequested = true`, no UI feedback; making it up later as KEEP_RUNNING is the intended P0 finding 2(a) design). | `ime/VoiceKeyboardService.kt:572–583` |
+| V6 | **Two start gestures exist:** status bar = hold (DOWN starts / UP stops, `VoiceKeyboardService.kt:321–327`), footer mic = **toggle** (tap starts/stops, `micToggleAction`, `:1155–1161`). Today F43 fires **mode-independently** on every pause ≥ 2.5 s — even while the finger is down. | `ime/VoiceKeyboardService.kt` as cited |
+| V7 | **Symptom 2:** every status row path runs through `getString(...)`/`mapVisibleError` (the fallback "Audio-Start fehlgeschlagen" is **translated** — the raw-code suspicion applies to the four candidates K1–K4). Hardcoded non-resource strings (K2) evidenced: `"Verarbeite…"`, `"Bereit"`, `"Diktat… ("` (`updateStatus`), `"Diagnose kopiert — Teilen-Dialog geöffnet"` (`:637`), FGS title `"Diktat läuft"` (`capture/CaptureForegroundService.kt:102`). `mapErrorTextRes` already exists as a pure function (`:156`). | `ime/VoiceKeyboardService.kt:969–1001,1040–1112,637` · `capture/CaptureForegroundService.kt:102` |
+| V8 | **The export has no `status_res`** and no session ring buffer; `mic_rel`, `status_shown`, `fgs_stopped_by` exist; the collector takes service parameters (a pattern for new fields exists). | `debug/DebugInfoFormatter.kt:110–160,217–218` · `debug/DebugInfoCollector.kt:42–54,121–122` |
+| V9 | **F46 (⇧ = up arrow) is code-ready** (stroked path shaft+head+base bar, equal-height gate with ⌫/⏎) — only a visual check in the build needed. | `keyboard/KeyboardView.kt:693–740` |
+| V10 | **Infrastructure is ready:** Robolectric 4.17 in `testImplementation`; `kotlinx-coroutines-test` 1.10.2 **in the Gradle cache** (usable offline); a JVM auto-stop test scaffold with a virtual clock exists (`DictationAutoStopTest` with `VClock` + scripted fake source). | `app/build.gradle.kts:134` · `~/.gradle/caches` · `ime/DictationAutoStopTest.kt` |
+| V11 | **Safety net if the auto-stop is dropped in hold mode:** `MAX_DURATION_MS = 300_000` (300 s) ends every session in a controlled way; the F31 silent and F28b1 stall watchdogs remain untouched. | `audio/AudioRecordSource.kt:38,108` |
+| V12 | **Windowed streaming is BLOCKED** (KONZEPT §5.1: documented defects, release up to the user); F43 is documented as "a refinement explicitly requested by the user" — globally raising the threshold would tip over the desired "pause = end" flow. | `docs/KONZEPT.md` §5.1, §506–514 |
 
-**Nicht belegt / OPTION (nicht in Schnitt A):** H3b (Pegel knapp an Schwelle), H3c/H3d/H3e,
-K1 als tatsächliche Ursache (Diagnosesuffix ist debug-only und beabsichtigt — ob der Nutzer *ihn* sah,
-klärt `status_res`), K4 (System-Toast — nur per Rückfrage ausschließbar), Kaltstart > 15 s am Gerät
-(plausibel, aber `start_ms` kalt liegt noch nicht vor). **Export #3 des Nutzers** (0.1.29-diag, F42-Felder)
-liegt noch nicht vor — alle F43-/Symptom-1-Zuordnungen bleiben Hypothesen mit hohem Rang, bis er gelesen ist.
-
----
-
-## 1. Schnitt A — Release v0.1.30 (heute baubar)
-
-**Umfang:** 3 Coder-Aufträge (A1 ∥ A2, A3 nach A2-Merge), 1 Review je Auftrag (DeepSeek V4 Pro),
-1 Bau + Emulator-Smoke + Auslieferung. **F46 braucht keinen Coder-Auftrag** (V9) — nur visueller
-Abgleich im Bau.
-
-### A1 — F43-Hold-Gate + F49 Minimal-Repro (JVM)
-
-- **ID:** A1 / Feature-Nummern F49 (Gate) + F49a (Repro-Test) — im Folgenden „F49" genannt,
-  da F47/F48 an A2/A3 vergeben sind (Nummern-Konflikt zu Fables Bezeichnern bewusst: s. Zeile „Alias").
-  *Alias zu Fable: Symptom-3-Hardening + §2.1-Repro Schritt 3.*
-- **Ziel:** Der F43-Auto-Stop wird **modusabhängig**: Er bleibt unverändert aktiv für Toggle-Sessions
-  („Pause = Ende", 2,5 s — V12), wird aber **unterdrückt, solange die Aufnahme per Halte-Geste läuft
-  und der Finger noch unten ist** (die Hold-Geste signalisiert „ich bin noch nicht fertig"; Fable §6.1).
-  Damit kippt der Toggle-Flow nicht (V12), und Satzpausen beim Halten-Diktieren beenden die Session nicht mehr.
-- **Mechanismus (verbindlich, um den §6-Hold-Vertrag erweitert):** Neuer Coordinator-Parameter
-  `holdGestureActive: () -> Boolean = { false }`. **Zwei** Stille-basierte Enden werden gepflegt:
-  1. **F43-Auto-Stop** (Bedingung in `captureLoop` um `!holdGestureActive()` erweitert) —
-     Toggle-„Pause = Ende“ (2,5 s) bleibt (V12).
-  2. **F31/ERR_SILENT** (3-s-Startfenster) ebenfalls gepflt — sonst verletzt der Hold-Vertrag
-     (§6.1) den Fall „Finger unten, Nutzer überlegt > 3 s vor Sprechbeginn“. ERR_STALL (tote
-     Quelle) bleibt als Systemereignis **unberührt** (FakeAudioScenarioTest Fall e testet den
-     Default-Pfad — Tests laufen ohne Gate, Default `false`, bleiben grün; Fall c Stille≠Stall-Vertrag
-     V1 unberührt).
-  Default `false` ⇒ **alle existierenden Tests bleiben ohne Änderung grün**.
-- **Dateien (exakt, 4):**
-  1. `app/src/main/java/de/voicekeyboard/ime/DictationCoordinator.kt` (~15 Zeilen: Param + Gate + Kommentar)
-  2. `app/src/test/java/de/voicekeyboard/ime/DictationAutoStopTest.kt` (Erweiterung)
-  3. `app/src/test/java/de/voicekeyboard/ime/DictationHoldGateTest.kt` (neu, Minimal-Repro F49a)
-  4. — (Reserve; nur falls `FakeAudioScenarioTest` angefasst werden muss — Ziel: nicht)
-- **Minimal-Repro-Test (F49a, erlaubter Release-Anteil):** JVM, `VClock` + gescriptete Fake-Quelle nach
-  Muster `DictationAutoStopTest`: Korpus „Sprache—2,0 s Pause—Sprache—3,0 s Pause—Sprache" ×
-  {Gate=false, Gate=true}. Assertions: Gate=false → Auto-Stop an der 3-s-Pause (Orakel), Finale läuft
-  (`StopOutcome`-Äquivalent: Session endet über regulären Stop, `lastError == null`); Gate=true →
-  **kein** Auto-Stop, Session läuft bis Quellen-Ende; **Hold + durchgehende Stille > 3 s → kein
-  ERR_SILENT, Session lebt** (Vertragsfall §6.1); in allen Läufen: Besitz nie verloren,
-  `capStallMs`-Vertrag unberührt. **Keine Emulator-/Langlauf-Teile** — die bleiben INFRA (Schnitt B).
-- **Acceptance:** Debug-Tests ≥ **490/0** (483 + mind. 7 neue); existierende Auto-Stop-/Stall-Tests
-  unverändert grün; genau **1** Gradle-Lauf (`ANDROID_HOME=/opt/android-sdk ./gradlew --offline testDebug`).
-- **Risiko:** gering — additiver Parameter, Default-Verhalten identisch. *Rollback:* Param entfernen
-  (ein Commit-Revert, keine Datenmigration).
-- **Review-Bedarf:** ja (DeepSeek, P0/P1 müssen 0 sein) — Fokus: Gate-Race (kann das Lambda während
-  des Feuerns wechseln? Antwort: irrelevant, Einweg-Entscheidung pro Block), Kommentar-Vollständigkeit.
-
-### A2 — Service: Start-Serialisierung (F48) + UP-Feedback + Gate-Verdrahtung + String-Audit (K2)
-
-- **ID:** A2 / Feature-Nummern **F50** (Start-Serialisierung = Fable-Symptom-1-Fix),
-  **F50a** (UP-Feedback im STARTING-Fenster), F49-Verdrahtung, **F51** (K2-String-Audit).
-  *Alias zu Fable: §2.2 Fix („20-Zeilen-Patch") + §2.3 K2.*
-- **Ziel (F50):** Invariante „zu jedem Zeitpunkt läuft höchstens eine Start-Coroutine; eine abgelaufene
-  wird abgebrochen oder ihr Ergebnis verworfen" (Fable §3.4) — behebt die verifizierte Race V4:
-  kein Zombie-Mikro nach Fristablauf, kein Doppelstart, `lastStartMs` wird vom **ersten** Start einer
-  Session geschrieben (Fable §5.3-Kleinigkeit vorgezogen, 3 Zeilen).
-- **Mechanismus (verbindlich):**
-  1. `startJob: Job?` im Service merken; der Frist-Timer (15 s) **cancelt** den Start-Job statt nur Flags
-     zu setzen; in der Start-Coroutine nach `engine.load()`/vor `coordinator.start()` ein
-     Aktivitäts-Check (Cooperative-Cancel), damit ein abgelaufener Kaltstart kein Zombie-Diktat erzeugt.
-  2. `onMicDown`: `startAbandoned = false` **entfällt** (nur der Frist-Owner setzt es); zweiter DOWN nach
-     Fristablauf: altes `startJob.cancel()` + `coordinator?.abort("start_superseded")` + `stopFgs(...)`,
-     dann frischer Start.
-  3. `lastStartMs`: nur schreiben, wenn der vorherige Wert 0 war (Reset in `start()` bereits vorhanden —
-     dort wird je Aufnahme genullt; Kollisionslauf darf nicht überschreiben).
-  4. **F49-Verdrahtung:** `holdGestureDown`-Flag (Setzen im Statusleisten-DOWN-Handler `:321`,
-     Clear in UP/CANCEL/`onDictationStopped`); `buildCoordinator()` übergibt
-     `holdGestureActive = { holdGestureDown }` (nur Halte-Gesten setzen das Flag; Toggle-Taps
-     durchlaufen DOWN/UP paarweise, Flag bleibt false).
-  5. **F50a (UP-Feedback):** bei UP während `startingUp` → `postEvent(StatusEvent.Hint(getString(
-     R.string.dictation_start_pending_stop)))` — Hint läuft laut StatusRouting in den transienten Kanal,
-     überschreibt die „Starte…"-Zeile mit „Loslassen vorgemerkt…". Behebt den Verwirrungseindruck
-     „UP ignoriert" (C2-Symptom 1) ohne das KEEP_RUNNING-Design (P0-Befund2(a)) zu ändern.
-  6. **F51 (K2-String-Audit, belegt V7):** `"Verarbeite…"`, `"Bereit"`, `"Diagnose kopiert — Teilen-Dialog
-     geöffnet"`, FGS-Titel `"Diktat läuft"` → `strings.xml`-Ressourcen (`getString`). Nur `values/`
-     vorhanden (ein Locale) — kein Übersetzungsaufwand. K1 (Diagnosesuffix) **bleibt** (debug-only,
-     beabsichtigt; Klarheit kommt via `status_res`); K3/K4 sind OPTION (§0) und gehen nicht in diesen Auftrag.
-- **Dateien (exakt, 4):**
-  1. `app/src/main/java/de/voicekeyboard/ime/VoiceKeyboardService.kt` (~90 Zeilen netto)
-  2. `app/src/main/java/de/voicekeyboard/capture/CaptureForegroundService.kt` (~3 Zeilen)
-  3. `app/src/main/res/values/strings.xml` (+4 Strings)
-  4. `app/src/test/java/de/voicekeyboard/ime/StartGateTest.kt` (neu — reine Entscheidungslogik
-     „Frist abgelaufen? / supersede? / Flag-Übergänge" als extrahierte Funktion `micStartGate(...)` im
-     Muster `micToggleAction`/`micStartFinishedAction`, JVM-testbar ohne Robolectric; Robolectric-Race-
-     Beweis folgt in Schnitt B)
-- **Acceptance:** Debug-Tests ≥ **492/0** (mind. +3: StartGate-Szenarien Frist-abgelaufen/supersede/
-  UP-während-Start); `StatusRoutingTest`, `MicToggleTest`, `StatusBarTextTest` unverändert grün;
-  ≤2 Gradle-Läufe (`testDebug`, ggf. Nachlauf).
-- **Risiko:** mittel — Serialisierung berührt den Kaltstart-Pfad (Symptom-1-Kern). Mitigation:
-  Invariante als reine Funktion + Test; Review mit Fokus auf Cancel-/Abort-Reihenfolge und
-  FGS-Doppelstop. *Rollback:* Auftrag isoliert revertierbar (kein Schema-/Format-Einfluss).
-- **Review-Bedarf:** **hoch** (Pflicht-Review, DeepSeek, P0/P1=0 vor Bau) — das ist der heikelste
-  Auftrag des Releases.
-
-### A3 — Export: `status_res`-Feld (F47)
-
-- **ID:** A3 / Feature-Nummer **F52**. *Alias zu Fable: §5.1 `status_res` + §2.3 „errorTextRes pure".*
-- **Ziel:** Der nächste 🐞-Export sagt selbst, welcher Statuszeilen-Text stand (Symptom 2 endgültig
-  klärbar): `status_res` = Code des zuletzt gezeigten Statustexts — `starting` / `recording` /
-  `finalizing` / `idle` / `hint:<res-name>` / `error:<res-name>` / `diag` (Diktatzeile mit
-  Debug-Suffix) / `raw` (darf nie auftreten — Assertion im Test). Regel 9 bleibt gewahrt: nur
-  Ressourcen-**namen**, nie Inhalte (Fable §5 Prinzip).
-- **Mechanismus (verbindlich):** `StatusBarText.SelectResult` um `kind: StatusKind` (Enum) erweitern
-  (reine Funktion, JVM-testbar — `mapErrorTextRes`-Muster V7); der Service speichert nach jedem
-  `updateStatus` den `kind` (2–3 Zeilen, Naht in `VoiceKeyboardService.kt`) und reicht ihn an
-  `DebugInfoCollector.collect(statusRes = …)` durch; Formatter hängt `status_res` an
-  (Feldliste + Zeile, Muster `status_shown`).
-- **Dateien (exakt, 3 + Naht):**
-  1. `app/src/main/java/de/voicekeyboard/ime/StatusBarText.kt` (~20 Zeilen)
-  2. `app/src/main/java/de/voicekeyboard/debug/DebugInfoCollector.kt` (+1 Parameter, ~5 Zeilen)
-  3. `app/src/main/java/de/voicekeyboard/debug/DebugInfoFormatter.kt` (Feldliste + Zeile, ~8 Zeilen)
-  4. Naht (2–3 Zeilen): `app/src/main/java/de/voicekeyboard/ime/VoiceKeyboardService.kt` — **deshalb
-     startet A3 erst nach A2-Merge** (gleiche Datei, disjunkte Stellen).
-  - Tests: `StatusBarTextTest.kt` (+Kind-Assertions), `DebugInfoFormatterTest.kt` (+Feld).
-- **Acceptance:** Debug-Tests ≥ **495/0** (mind. +3); Export Kopf+43=44 Zeilen (Debug-Format-Test
-  aktualisiert); ≤2 Gradle-Läufe.
-- **Risiko:** gering — additiv, Format-getestet. *Rollback:* Feld streichen (Formatter-Test zurück).
-- **Review-Bedarf:** ja (Standard, DeepSeek) — Fokus: kein Textinhalt im Feld (Regel 9).
-
-### F46 — ⇧-Aufwärts-Pfeil: kein Auftrag, nur Bau-Abgleich
-
-Code-fertig (V9). Im Emulator-Smoke des Baus **Screenshot hell/dunkel** ziehen und gegen
-`docs/DESIGN_TASTATUR_V2.md` §8 abgleichen (Gleiche-Höhe-Gate zu ⌫/⏎, Stroked-Stil). Abweichung →
-Mini-Nachauftrag nur an `KeyboardView.kt`.
-
-### Review, Bau, Auslieferung (Orchestrator)
-
-1. **Review je Auftrag** durch DeepSeek V4 Pro (Rollen laut HANDOFF); P0/P1=0 ist Bau-Voraussetzung.
-2. **Merge-Reihenfolge:** A1 ∥ A2 → A3. Vor dem Bau: Voll-Lauf `testDebug` + `testRelease`.
-3. **Bau:** `app/build.gradle.kts`: `versionCode = 31`, `versionName = "0.1.30"`;
-   `ANDROID_HOME=/opt/android-sdk ./gradlew --offline assembleDebug assembleRelease`.
-   Soll: Debug ≈ 495–501/0, Release ≈ 452/0 (+ ggf. gemeinsame Tests).
-4. **Emulator-Smoke** (exklusiv, **<device>**, niemals 5558 = fremdes Projekt, nie parallel zum Bau;
-   `tools/emulator_audio_up.sh`, F41-Vorbedingung: PulseAudio-Sink sichtbar):
-   Start, Kurz-Diktat (Toggle: Auto-Stop bei Pause ✓), Halte-Diktat mit 3-s-Satzpause (**kein** Abbruch ✓),
-   **Halte-Diktat 180–240 s mit 2× 3-s-Satzpausen → KEIN Abbruch, Text wächst über die Pausen hinaus
-   (`output_chars`), Final nach UP, Export `fgs_stopped_by=up`, `mic_rel=holdup`** (§6.4; bewusst
-   unter 300 s bleiben — v0.1.30-Obergrenze),
-   UP während Kaltstart (Hinweis „vorgemerkt“ ✓), F46-Screenshot, 🐞-Export mit `status_res`.
-5. **Auslieferung:** dist-Rotation, Downloadlink nach dem in HANDOFF dokumentierten Muster
-   (`<download-server>/api/file?path=Voice-Keyboard/dist/<name>&download=1`); `docs/SESSION_LOG.md`,
-   `HANDOFF.md`, `docs/PROJECT_STATE.md` aktualisieren. **Kein Push** ohne Nutzer-Freigabe (Regel 10).
-
-**Schnitt-A-Testbilanz (Erwartung):** Debug 483 → **~496–502/0**, Release 452/0 (+0–2) — 3 Aufträge,
-je ≤4 Dateien, je ≤2 Gradle-Läufe, A1/A2 parallelisierbar.
-
-**Vertragshinweis (E1, bindend):** Schnitt A erfüllt den Hold-Produktvertrag (§6.1) bis auf die
-Obergrenze (v0.1.30 bleibt bei 300 s — vertraglich erlaubt, UX-Schwäche; Anhebung §6.2 in v0.1.31).
-Alle **Stille-basierten** Enden (F43 + F31/ERR_SILENT) sind für Hold-Sessions gepfpt.
+**Not evidenced / OPTION (not in slice A):** H3b (level right at the
+threshold), H3c/H3d/H3e, K1 as the actual cause (the diagnostics suffix is
+debug-only and intended — whether the user saw *it* is clarified by
+`status_res`), K4 (system toast — excludable only by asking), cold start >
+15 s on the device (plausible, but `start_ms` cold is not yet available).
+**The user's export #3** (0.1.29-diag, F42 fields) is not yet available — all
+F43/symptom-1 assignments remain high-ranked hypotheses until it is read.
 
 ---
 
-## 2. Nutzer-Entscheidungen (vor Bau bzw. vor Schnitt B)
+## 1. Slice A — release v0.1.30 (buildable today)
 
-| # | Entscheidung | Option A | Option B | Empfehlung |
+**Scope:** 3 coder tasks (A1 ∥ A2, A3 after the A2 merge), 1 review per task
+(DeepSeek V4 Pro), 1 build + emulator smoke + delivery. **F46 needs no coder
+task** (V9) — only a visual check in the build.
+
+### A1 — F43 hold gate + F49 minimal repro (JVM)
+
+- **ID:** A1 / feature numbers F49 (gate) + F49a (repro test) — called "F49"
+  below, since F47/F48 are assigned to A2/A3 (number conflict with Fable's
+  identifiers deliberate: see the "Alias" line).
+  *Alias to Fable: symptom-3 hardening + §2.1 repro step 3.*
+- **Goal:** the F43 auto-stop becomes **mode-dependent**: it stays
+  unchanged-active for toggle sessions ("pause = end", 2.5 s — V12), but is
+  **suppressed as long as the recording runs via the hold gesture and the
+  finger is still down** (the hold gesture signals "I'm not done yet"; Fable
+  §6.1). With that the toggle flow does not tip over (V12), and sentence
+  pauses during hold dictation no longer end the session.
+- **Mechanism (binding, extending the §6 hold contract):** new coordinator
+  parameter `holdGestureActive: () -> Boolean = { false }`. **Two**
+  silence-based ends are exempted:
+  1. **F43 auto-stop** (condition in `captureLoop` extended with
+     `!holdGestureActive()`) — the toggle "pause = end" (2.5 s) stays (V12).
+  2. **F31/ERR_SILENT** (3-s start window) is also exempted — otherwise the
+     hold contract (§6.1) violates the case "finger down, user thinks > 3 s
+     before starting to speak". ERR_STALL (dead source) stays **untouched**
+     as a system event (FakeAudioScenarioTest case e tests the default path
+     — tests run without the gate, default `false`, stay green; case c
+     silence≠stall contract V1 untouched).
+  Default `false` ⇒ **all existing tests stay green without changes**.
+- **Files (exactly, 4):**
+  1. `app/src/main/java/de/voicekeyboard/ime/DictationCoordinator.kt`
+     (~15 lines: param + gate + comment)
+  2. `app/src/test/java/de/voicekeyboard/ime/DictationAutoStopTest.kt`
+     (extension)
+  3. `app/src/test/java/de/voicekeyboard/ime/DictationHoldGateTest.kt`
+     (new, minimal repro F49a)
+  4. — (reserve; only if `FakeAudioScenarioTest` must be touched — goal: it
+     must not be)
+- **Minimal repro test (F49a, permitted release share):** JVM, `VClock` +
+  scripted fake source following the `DictationAutoStopTest` pattern: corpus
+  "speech—2.0 s pause—speech—3.0 s pause—speech" × {gate=false, gate=true}.
+  Assertions: gate=false → auto-stop at the 3-s pause (oracle), the finale
+  runs (the `StopOutcome` equivalent: the session ends via the regular stop,
+  `lastError == null`); gate=true → **no** auto-stop, the session runs to the
+  source end; **hold + continuous silence > 3 s → no ERR_SILENT, the session
+  lives** (contract case §6.1); in all runs: ownership never lost,
+  `capStallMs` contract untouched. **No emulator/long-run parts** — those
+  stay INFRA (slice B).
+- **Acceptance:** debug tests ≥ **490/0** (483 + at least 7 new); existing
+  auto-stop/stall tests unchanged green; exactly **1** Gradle run
+  (`ANDROID_HOME=/opt/android-sdk ./gradlew --offline testDebug`).
+- **Risk:** low — additive parameter, default behavior identical. *Rollback:*
+  remove the param (a single commit revert, no data migration).
+- **Review need:** yes (DeepSeek, P0/P1 must be 0) — focus: gate race (can
+  the lambda switch while firing? answer: irrelevant, a one-way decision per
+  block), comment completeness.
+
+### A2 — service: start serialization (F48) + UP feedback + gate wiring +
+string audit (K2)
+
+- **ID:** A2 / feature numbers **F50** (start serialization = Fable
+  symptom-1 fix), **F50a** (UP feedback in the STARTING window), F49 wiring,
+  **F51** (K2 string audit).
+  *Alias to Fable: §2.2 fix ("20-line patch") + §2.3 K2.*
+- **Goal (F50):** invariant "at any time at most one start coroutine runs; an
+  expired one is cancelled or its result discarded" (Fable §3.4) — fixes the
+  verified race V4: no zombie mic after deadline expiry, no double start,
+  `lastStartMs` is written by the **first** start of a session (Fable §5.3
+  minor item pulled forward, 3 lines).
+- **Mechanism (binding):**
+  1. Keep a `startJob: Job?` in the service; the deadline timer (15 s)
+     **cancels** the start job instead of only setting flags; in the start
+     coroutine after `engine.load()`/before `coordinator.start()` an
+     activity check (cooperative cancel), so an expired cold start does not
+     produce a zombie dictation.
+  2. `onMicDown`: `startAbandoned = false` **is dropped** (only the deadline
+     owner sets it); a second DOWN after deadline expiry: old
+     `startJob.cancel()` + `coordinator?.abort("start_superseded")` +
+     `stopFgs(...)`, then a fresh start.
+  3. `lastStartMs`: write only if the previous value was 0 (the reset in
+     `start()` already exists — it is zeroed per recording there; a collision
+     run must not overwrite).
+  4. **F49 wiring:** a `holdGestureDown` flag (set in the status bar DOWN
+     handler `:321`, cleared in UP/CANCEL/`onDictationStopped`);
+     `buildCoordinator()` passes `holdGestureActive = { holdGestureDown }`
+     (only hold gestures set the flag; toggle taps pass through DOWN/UP in
+     pairs, the flag stays false).
+  5. **F50a (UP feedback):** on UP during `startingUp` →
+     `postEvent(StatusEvent.Hint(getString(
+     R.string.dictation_start_pending_stop)))` — the hint runs into the
+     transient channel per StatusRouting, overwriting the "Starte…" line
+     with "Loslassen vorgemerkt…". Fixes the confusion impression "UP
+     ignored" (C2 symptom 1) without changing the KEEP_RUNNING design (P0
+     finding 2(a)).
+  6. **F51 (K2 string audit, evidenced V7):** `"Verarbeite…"`, `"Bereit"`,
+     `"Diagnose kopiert — Teilen-Dialog geöffnet"`, FGS title `"Diktat
+     läuft"` → `strings.xml` resources (`getString`). Only `values/` present
+     (one locale) — no translation effort. K1 (diagnostics suffix) **stays**
+     (debug-only, intended; clarity comes via `status_res`); K3/K4 are
+     OPTION (§0) and do not go into this task.
+- **Files (exactly, 4):**
+  1. `app/src/main/java/de/voicekeyboard/ime/VoiceKeyboardService.kt`
+     (~90 lines net)
+  2. `app/src/main/java/de/voicekeyboard/capture/CaptureForegroundService.kt`
+     (~3 lines)
+  3. `app/src/main/res/values/strings.xml` (+4 strings)
+  4. `app/src/test/java/de/voicekeyboard/ime/StartGateTest.kt` (new — pure
+     decision logic "deadline expired? / supersede? / flag transitions" as
+     an extracted function `micStartGate(...)` in the pattern
+     `micToggleAction`/`micStartFinishedAction`, JVM-testable without
+     Robolectric; the Robolectric race proof follows in slice B)
+- **Acceptance:** debug tests ≥ **492/0** (at least +3: StartGate scenarios
+  deadline-expired/supersede/UP-during-start); `StatusRoutingTest`,
+  `MicToggleTest`, `StatusBarTextTest` unchanged green; ≤2 Gradle runs
+  (`testDebug`, possibly a follow-up).
+- **Risk:** medium — serialization touches the cold-start path (symptom-1
+  core). Mitigation: the invariant as a pure function + test; review with a
+  focus on cancel/abort order and FGS double stop. *Rollback:* the task is
+  isolately revertible (no schema/format impact).
+- **Review need:** **high** (mandatory review, DeepSeek, P0/P1=0 before the
+  build) — this is the most delicate task of the release.
+
+### A3 — export: `status_res` field (F47)
+
+- **ID:** A3 / feature number **F52**. *Alias to Fable: §5.1 `status_res` +
+  §2.3 "errorTextRes pure".*
+- **Goal:** the next 🐞 export itself says which status row text was showing
+  (symptom 2 finally clarifiable): `status_res` = code of the last status
+  text shown — `starting` / `recording` / `finalizing` / `idle` /
+  `hint:<res-name>` / `error:<res-name>` / `diag` (dictation line with debug
+  suffix) / `raw` (must never occur — assertion in the test). Rule 9 stays
+  intact: resource **names** only, never contents (Fable §5 principle).
+- **Mechanism (binding):** extend `StatusBarText.SelectResult` with
+  `kind: StatusKind` (enum) (pure function, JVM-testable —
+  `mapErrorTextRes` pattern V7); the service stores the `kind` after every
+  `updateStatus` (2–3 lines, seam in `VoiceKeyboardService.kt`) and passes
+  it through to `DebugInfoCollector.collect(statusRes = …)`; the formatter
+  appends `status_res` (field list + line, pattern `status_shown`).
+- **Files (exactly, 3 + seam):**
+  1. `app/src/main/java/de/voicekeyboard/ime/StatusBarText.kt` (~20 lines)
+  2. `app/src/main/java/de/voicekeyboard/debug/DebugInfoCollector.kt`
+     (+1 parameter, ~5 lines)
+  3. `app/src/main/java/de/voicekeyboard/debug/DebugInfoFormatter.kt`
+     (field list + line, ~8 lines)
+  4. Seam (2–3 lines):
+     `app/src/main/java/de/voicekeyboard/ime/VoiceKeyboardService.kt` —
+     **that is why A3 starts only after the A2 merge** (same file,
+     disjoint places).
+  - Tests: `StatusBarTextTest.kt` (+kind assertions),
+    `DebugInfoFormatterTest.kt` (+field).
+- **Acceptance:** debug tests ≥ **495/0** (at least +3); export header+43=44
+  lines (debug format test updated); ≤2 Gradle runs.
+- **Risk:** low — additive, format-tested. *Rollback:* drop the field
+  (formatter test back).
+- **Review need:** yes (standard, DeepSeek) — focus: no text content in the
+  field (rule 9).
+
+### F46 — ⇧ up arrow: no task, only a build check
+
+Code-ready (V9). In the build's emulator smoke take a **light/dark
+screenshot** and check it against `docs/DESIGN_TASTATUR_V2.md` §8
+(equal-height gate with ⌫/⏎, stroked style). Deviation → a mini follow-up
+task on `KeyboardView.kt` only.
+
+### Review, build, delivery (orchestrator)
+
+1. **Review per task** by DeepSeek V4 Pro (roles per HANDOFF); P0/P1=0 is a
+   build precondition.
+2. **Merge order:** A1 ∥ A2 → A3. Before the build: a full run of `testDebug`
+   + `testRelease`.
+3. **Build:** `app/build.gradle.kts`: `versionCode = 31`, `versionName =
+   "0.1.30"`;
+   `ANDROID_HOME=/opt/android-sdk ./gradlew --offline assembleDebug
+   assembleRelease`. Target: debug ≈ 495–501/0, release ≈ 452/0 (+ possibly
+   shared tests).
+4. **Emulator smoke** (exclusive, **<device>**, never 5558 = a foreign
+   project, never parallel to the build; `tools/emulator_audio_up.sh`, F41
+   precondition: the PulseAudio sink visible):
+   start, short dictation (toggle: auto-stop on pause ✓), hold dictation
+   with a 3-s sentence pause (**no abort ✓**), **hold dictation 180–240 s
+   with 2× 3-s sentence pauses → NO abort, text grows beyond the pauses
+   (`output_chars`), finale after UP, export `fgs_stopped_by=up`,
+   `mic_rel=holdup`** (§6.4; deliberately staying below 300 s — the v0.1.30
+   upper limit),
+   UP during cold start (hint "vorgemerkt" ✓), F46 screenshot, 🐞 export with
+   `status_res`.
+5. **Delivery:** dist rotation, download link following the pattern
+   documented in HANDOFF
+   (`<download-server>/api/file?path=Voice-Keyboard/dist/<name>&download=1`);
+   update `docs/SESSION_LOG.md`, `HANDOFF.md`, `docs/PROJECT_STATE.md`.
+   **No push** without user approval (rule 10).
+
+**Slice A test balance (expectation):** debug 483 → **~496–502/0**, release
+452/0 (+0–2) — 3 tasks, each ≤4 files, each ≤2 Gradle runs, A1/A2
+parallelizable.
+
+**Contract note (E1, binding):** slice A fulfills the hold product contract
+(§6.1) except the upper limit (v0.1.30 stays at 300 s — contractually
+allowed, a UX weakness; raising it §6.2 in v0.1.31). All **silence-based**
+ends (F43 + F31/ERR_SILENT) are exempted for hold sessions.
+
+---
+
+## 2. User decisions (before the build resp. before slice B)
+
+| # | Decision | Option A | Option B | Recommendation |
 |---|---|---|---|---|
-| **E1** | **F43-Semantik** — **BINDEND ENTSCHEIDEN (Nutzer, 2026-11-01):** Produktvertrag „kontinuierliches Diktat“ (§6.1) | Umsetzung als Hold-Gate (A1/A2): Toggle behält „Pause = Ende“ (2,5 s); Hold endet nur durch Loslassen/Abbruch/Systemereignis/Obergrenze (§6). | (abgelehnt) Schwelle global auf 4–6 s — kippte den Toggle-Flow. | **Entschieden wie A** — kein Veto-Fenster mehr; Feintuning der Toggle-Schwelle (2,5 → 4–6 s) bleibt Datennachfrage aus I3/I5, kein Release-Blocker. |
-| **E2** | **windowed-Streaming-Freigabe** (KONZEPT §5.1) | Gesperrt lassen bis Kostenkurve (I3) + 6 Langläufe (I5) O(N²)-These quantifizieren. | Sofort freigeben und umbauen. | **A** — Fable §6.2 ist zuzustimmen: vor Messung ist jede Diskussion Spekulation; die dokumentierten Defekte (§5.1) sind gravierend. |
-| **E3** | **Preload-/Warmup-Strategie** (Symptom „erst Anlauf 3 liefert Text", Symptom-1-Kaltstart) | Kein Preload in 0.1.30; Experiment als Debug-Flag in der Infra-Woche (I4) + `dumpsys meminfo`-Kosten (~860 MB nativ) quantifizieren; `engine_loads`/Ringpuffer machen Anlauf 1–3 sichtbar. | Produkt-Preload sofort in 0.1.30. | **A** — B sprengt Sofort-Release (Aufwand + Speicher-/OOM-Risiko ohne Messbasis). |
+| **E1** | **F43 semantics — BINDINGLY DECIDED (user, 2026-11-01):** product contract "continuous dictation" (§6.1) | implementation as a hold gate (A1/A2): toggle keeps "pause = end" (2.5 s); hold ends only by releasing/abort/system event/upper limit (§6). | (rejected) raise the threshold globally to 4–6 s — it would tip over the toggle flow. | **Decided as A** — no more veto window; fine-tuning of the toggle threshold (2.5 → 4–6 s) remains a data request from I3/I5, not a release blocker. |
+| **E2** | **windowed streaming release** (KONZEPT §5.1) | keep blocked until the cost curve (I3) + 6 long runs (I5) quantify the O(N²) thesis. | release immediately and rework. | **A** — Fable §6.2 is right: before measurement every discussion is speculation; the documented defects (§5.1) are serious. |
+| **E3** | **preload/warm-up strategy** (symptom "only attempt 3 delivers text", symptom-1 cold start) | no preload in 0.1.30; experiment as a debug flag in the infrastructure week (I4) + quantify the `dumpsys meminfo` cost (~860 MB native); `engine_loads`/ring buffer make attempts 1–3 visible. | product preload immediately in 0.1.30. | **A** — B blows up the immediate release (effort + memory/OOM risk with no measurement basis). |
 
 ---
 
-## 3. Schnitt B — Infra-Woche (nach Release v0.1.30, priorisiert)
+## 3. Slice B — infrastructure week (after release v0.1.30, prioritized)
 
-Reihenfolge grob nach Fable §7, angepasst um die Korrekturen aus §5. Alles Parallelisierbare markiert;
-Emulator-Läufe exklusiv und nie parallel zum Bau.
+Order roughly per Fable §7, adjusted for the corrections from §5. Everything
+parallelizable is marked; emulator runs are exclusive and never parallel to
+the build.
 
-| Prio | ID | Arbeit | Dateien/Orte | Aufwand | Abhängigkeit |
+| Prio | ID | Work | Files/places | Effort | Dependency |
 |---|---|---|---|---|---|
-| 1 | I1 | **F37-breit** (Fable §1.2, **korrigiert** s. Abweichung 1): a) `controllerClock` an `DictationController` durchreichen (Param existiert bereits, V3 — Einheit ns beachten: `nowMs()*1_000_000`); b) `captureLoop` über injizierbarem `threadFactory`/synchronisierbar; c) Service: `ioDispatcher`/`mainDispatcher`/`elapsedClock`/`START_DEADLINE_MS`/`FGS_READY_TIMEOUT_MS` als `internal var` mit heutigen Defaults; d) Engine-Fake mit latenzgesteuertem `load()`/`transcribe()` auf derselben virtuellen Uhr (Muster F35). | `DictationCoordinator.kt`, `DictationController.kt`(betroffen nur indirekt), `VoiceKeyboardService.kt`, `FakeWavAudioSource.kt`, Test-Fakes | 0,5–1 Tag | nach Release; blockiert I2/I4 |
-| 2 | I2 | **Export v2** (Fable §5.1/§5.2): `start_outcome`, `start_phase_ms`, `start_attempts`, `up_during_start`, `stop_cause`, `autostop_gap_ms`, `max_pause_ms`, `pause_gt1s/2s`, `loud_ratio`, `rms_p50/p90_dbfs`, `owner_lost_at_s`, `final_ms`, `final_chars_delta`, `engine_loads`, `coord_gen` + **Session-Ringpuffer (letzte 5)** + Reihenfolge (Session-Daten an den Anfang). | `DebugInfoFormatter.kt`, `DebugInfoCollector.kt`, `DictationCoordinator.kt`, `VoiceKeyboardService.kt` + Tests | 0,5–1 Tag | ∥ I1 möglich (Kontrakt zuerst festlegen) |
-| 3 | I3 | **S0-Werkzeuge:** piper-tts in `.venv-asr` + Stimme `de_DE-thorsten-medium`; `tools/make_korpus.py` (Satzliste × Pausenraster 1,5–4,0 s × Pegel −17/−30/−38 dBFS × 60/120/180 s, Sidecar-JSON-Orakel); `tools/watchdog_twin.py` (F31/F43-Orakel auf Block-RMS); `tools/engine_cost_curve.py` (decode_ms/RSS vs. Pufferlänge, nutzt `reference_decode.py`). | `tools/`, `testdata/korpus/` (gitignore prüfen) | 1 Tag | keine — **sofort parallel zum Release möglich** |
-| 4 | I4 | **Robolectric S2** (Abhängigkeit da, V10): Start-Race-Tests (formaler Beweis/Nachweis des F50-Fixes: Fake-Coordinator-Fabrik, Start-Latenz 3/7/16/25 s virtuell, DOWN/UP/CANCEL-Sequenzen, DOWN/UP-Fuzzer 200 Sequenzen), **Fehlerpfad-Enumerator** (alle ~18 Codes → Ergebnis ∈ strings.xml), K1-Absicherung via `status_res`. | `app/src/test/…` neu + `VoiceKeyboardService.kt` (Dispatcher-Injektion aus I1) | 1–1,5 Tage | **nach I1** |
-| 5 | I5 | **S3-Langläufe:** `tools/emu_korpus_run.sh` (Vorbedingungs-Asserts: `pactl`-Sink, `first3s_peak_dbfs > −30`), Debug-Export als Datei `files/debug_export.txt` + `adb exec-out run-as … cat`, `tools/export_to_csv.py`; **6 Langläufe** (3 Pausenraster × 2 Pegel × 120 s) + **fresh-install-Kalt/warm-Matrix** (`pm clear`, `drop_caches`, Fable §3.1/§6.7) + RSS pro Lauf. | `tools/`, `reports/korpus_runs.csv` | 0,5 Tag Skripte + 1 Abend Läufe | nach I3 (Korpus) + I2 (Felder); Emulator exklusiv |
-| 6 | I6 | **Fallback-Texte trennen** (Fable §6.8, P2 aus §2.3): `mapVisibleError` — „Audio / Erkennung / System gestoppt" statt Sammelfallback „Audio-Start fehlgeschlagen" (Diagnosefresser belegt in V7). | `VoiceKeyboardService.kt`, `strings.xml` + Tests | 0,25 Tag | nach I4 (Enumerator deckt Regression) |
-| 7 | I7 | **ONNX Runtime JVM** (`onnxruntime-1.31.1.jar` nach `tools/hostlibs/`, separates Test-SourceSet — Build-Mutex beachten) + `tools/audit_ui_strings.sh` (Hardcoded-Text-Regressionsschutz, ersetzt offline-unmöglichen Lint). | `tools/`, Gradle-Testsetup | 0,5 + 0,1 Tage | ∥ jederzeit; Netz für Paket einmalig nötig |
+| 1 | I1 | **F37 broad** (Fable §1.2, **corrected** see deviation 1): a) pass `controllerClock` through to `DictationController` (the param already exists, V3 — mind the unit ns: `nowMs()*1_000_000`); b) `captureLoop` over an injectable `threadFactory`/synchronizable; c) service: `ioDispatcher`/`mainDispatcher`/`elapsedClock`/`START_DEADLINE_MS`/`FGS_READY_TIMEOUT_MS` as `internal var` with today's defaults; d) engine fake with latency-controlled `load()`/`transcribe()` on the same virtual clock (pattern F35). | `DictationCoordinator.kt`, `DictationController.kt` (only indirectly affected), `VoiceKeyboardService.kt`, `FakeWavAudioSource.kt`, test fakes | 0.5–1 day | after the release; blocks I2/I4 |
+| 2 | I2 | **Export v2** (Fable §5.1/§5.2): `start_outcome`, `start_phase_ms`, `start_attempts`, `up_during_start`, `stop_cause`, `autostop_gap_ms`, `max_pause_ms`, `pause_gt1s/2s`, `loud_ratio`, `rms_p50/p90_dbfs`, `owner_lost_at_s`, `final_ms`, `final_chars_delta`, `engine_loads`, `coord_gen` + **session ring buffer (last 5)** + order (session data at the top). | `DebugInfoFormatter.kt`, `DebugInfoCollector.kt`, `DictationCoordinator.kt`, `VoiceKeyboardService.kt` + tests | 0.5–1 day | ∥ possible with I1 (define the contract first) |
+| 3 | I3 | **S0 tools:** piper-tts in `.venv-asr` + voice `de_DE-thorsten-medium`; `tools/make_korpus.py` (sentence list × pause grid 1.5–4.0 s × level −17/−30/−38 dBFS × 60/120/180 s, sidecar JSON oracle); `tools/watchdog_twin.py` (F31/F43 oracle on block RMS); `tools/engine_cost_curve.py` (decode_ms/RSS vs. buffer length, uses `reference_decode.py`). | `tools/`, `testdata/korpus/` (check gitignore) | 1 day | none — **immediately possible in parallel with the release** |
+| 4 | I4 | **Robolectric S2** (dependency present, V10): start race tests (formal proof/verification of the F50 fix: fake coordinator factory, start latency 3/7/16/25 s virtual, DOWN/UP/CANCEL sequences, DOWN/UP fuzzer 200 sequences), **error path enumerator** (all ~18 codes → result ∈ strings.xml), K1 safeguard via `status_res`. | `app/src/test/…` new + `VoiceKeyboardService.kt` (dispatcher injection from I1) | 1–1.5 days | **after I1** |
+| 5 | I5 | **S3 long runs:** `tools/emu_korpus_run.sh` (precondition asserts: `pactl` sink, `first3s_peak_dbfs > −30`), debug export as a file `files/debug_export.txt` + `adb exec-out run-as … cat`, `tools/export_to_csv.py`; **6 long runs** (3 pause grids × 2 levels × 120 s) + **fresh-install cold/warm matrix** (`pm clear`, `drop_caches`, Fable §3.1/§6.7) + RSS per run. | `tools/`, `reports/korpus_runs.csv` | 0.5 day scripts + 1 evening of runs | after I3 (corpus) + I2 (fields); emulator exclusive |
+| 6 | I6 | **separate the fallback texts** (Fable §6.8, P2 from §2.3): `mapVisibleError` — "Audio / Erkennung / System gestoppt" instead of the collective fallback "Audio-Start fehlgeschlagen" (a diagnosis eater evidenced in V7). | `VoiceKeyboardService.kt`, `strings.xml` + tests | 0.25 day | after I4 (the enumerator covers regression) |
+| 7 | I7 | **ONNX Runtime JVM** (`onnxruntime-1.31.1.jar` to `tools/hostlibs/`, a separate test source set — mind the build mutex) + `tools/audit_ui_strings.sh` (hardcoded text regression protection, replaces the offline-impossible lint). | `tools/`, Gradle test setup | 0.5 + 0.1 days | ∥ anytime; network needed once for the package |
 
-**Explizit NICHT in Schnitt B (Fable folgend):** Paparazzi, edge-tts, Perfetto/Systrace (§4 „Nicht
-empfohlen"). windowed-Streaming weiterhin gesperrt bis E2 (Nutzer) auf Basis von I3+I5.
+**Explicitly NOT in slice B (following Fable):** Paparazzi, edge-tts,
+Perfetto/Systrace (§4 "not recommended"). Windowed streaming stays blocked
+until E2 (user) on the basis of I3+I5.
 
 ---
 
-## 4. Reihenfolge & Abhängigkeiten (Schnitt A)
+## 4. Order & dependencies (slice A)
 
-| Schritt | Arbeit | hängt ab von | parallel zu | Fertig-Kriterium |
+| Step | Work | depends on | parallel to | done criterion |
 |---|---|---|---|---|
-| 0 | Nutzer-Veto-Fenster E1 (F43-Semantik) | — | — | kein Widerspruch bis A1-Beginn ⇒ Empfehlung gilt |
-| 1 | **A1** F49 Hold-Gate + Repro-Tests | 0 | **A2** | `testDebug` ≥489/0, Review P0/P1=0 |
-| 2 | **A2** F50 Serialisierung + F50a Feedback + F49-Wiring + F51 Strings | 0 | **A1** | `testDebug` ≥492/0, Review P0/P1=0 |
-| 3 | **A3** F52 `status_res` | A2 (2-Zeilen-Naht im Service) | — | `testDebug` ≥495/0, Review ok |
-| 4 | Merge + Vollprüfung | A1, A2, A3 | — | Debug+Release komplett grün |
-| 5 | Bau v0.1.30 (vc 31) | 4 | — | APKs in `dist/`, F46-Screenshot ok |
-| 6 | Emulator-Smoke (5560, exklusiv) | 5 | kein Bau | Smoke-Checkliste §1 „Bau" erfüllt |
-| 7 | Auslieferung + Downloadlink + Doku | 6 | — | Link an Nutzer; SESSION_LOG/HANDOFF aktualisiert |
+| 0 | user veto window E1 (F43 semantics) | — | — | no objection until A1 start ⇒ the recommendation applies |
+| 1 | **A1** F49 hold gate + repro tests | 0 | **A2** | `testDebug` ≥489/0, review P0/P1=0 |
+| 2 | **A2** F50 serialization + F50a feedback + F49 wiring + F51 strings | 0 | **A1** | `testDebug` ≥492/0, review P0/P1=0 |
+| 3 | **A3** F52 `status_res` | A2 (2-line seam in the service) | — | `testDebug` ≥495/0, review ok |
+| 4 | merge + full check | A1, A2, A3 | — | debug+release completely green |
+| 5 | build v0.1.30 (vc 31) | 4 | — | APKs in `dist/`, F46 screenshot ok |
+| 6 | emulator smoke (5560, exclusive) | 5 | no build | smoke checklist §1 "build" fulfilled |
+| 7 | delivery + download link + docs | 6 | — | link to the user; SESSION_LOG/HANDOFF updated |
 
-*Schnitt B startet nach Schritt 7; I3 (Korpus-Werkzeuge) darf ausdrücklich schon parallel zu
-Schnitt A laufen (kein App-Code, kein Gradle, kein Emulator).*
-
----
-
-## 5. Abweichungen und Korrekturen gegenüber Fable (Kenntnis des Lesers halber)
-
-1. **F37 ist kleiner als behauptet:** Fable (§1.2) schreibt, der Controller „bekommt keine clock".
-   Tatsächlich **besitzt** `DictationController` bereits einen injizierbaren `clock`-Parameter
-   (Default `System.nanoTime()`) — es fehlt nur das Durchreichen im Coordinator (V3). Aufwand des
-   Kernpunkts: ~1 Zeile + Tests statt „neues API". Die übrigen F37-Teile (threadFactory,
-   Service-Dispatcher) bleiben unverändert.
-2. **F43 wird nicht als offene Messfrage behandelt, sondern als Modus-Gate geliefert:** Fable
-   (§2.1/§6.1) verlagert die „Produktentscheidung Schwelle" hinter die S0/S3-Messungen. Wegen der
-   Release-Vorgabe entscheide ich begründet **vor** den Messungen: Hold-Gate (A1/A2), Toggle bleibt
-   bei 2,5 s — das ist die einzige Lösung, die Symptom 3 adressiert, **ohne** den dokumentierten
-   Nutzer-Wunsch „Pause = Ende" (V12) zu kippen. Messungen (I3/I5) bleiben als Validierung, und
-   E1 hält die Schwellen-Frage als Nutzer-Entscheidung offen.
-3. **Symptom-1-Fix (F50) ohne vorherigen Robolectric-Beweis:** Fable (§2.2) will die Race erst in S2
-   „beweisen, dann patchen". Die Race ist durch Code-Lektüre vollständig belegt (V4), und der Nutzer
-   will den Release heute. Wir patchen in 0.1.30 (mit pure-Funktion-Test) und liefern den formalen
-   Race-Beweis (Robolectric-Fuzzer) in I4 nach — Restrisiko dokumentiert, Review-Anforderung an A2
-   entsprechend erhöht.
-4. **Zusatz über Fable hinaus:** UP-Feedback „Loslassen vorgemerkt" (F50a). Fable hält das stille
-   UP-Flag für „kein Bug" (§2.2 Punkt 2) — zutreffend für die Mechanik, aber der C2-Befund
-   „UP ignoriert“ zeigt, dass die Stille Nutzer verwirrt; ein transienter Hint behebt das ohne
-   Design-Änderung an P0-Befund2(a).
-5. **E1 geht über Fables Option „A“ hinaus (§6):** Fable sah nur die Schwellen-/Semantik-Frage
-   und wollte sie hinter Messungen verschieben; der Nutzer hat sie als **Produktvertrag** entschieden
-   (§6.1). Der Plan hebt sie in §6 in ein Technik-Paket mit eigener Obergrenzen- und Langzeit-
-   Strategie — inklusive der Konsequenz, dass auch **F31/ERR_SILENT** für Hold gepfpt werden muss
-   (A1-Erweiterung), was weder Fable noch der ursprüngliche A1-Entwurf vorsah.
-
-**Als OPTION gekennzeichnet (nicht belegt, nicht in Schnitt A):** H3b/H3c/H3d/H3e (§0), K1 als
-Ursache, K4, Kaltstart > 15 s am Gerät, „3-Anläufe"-Kausalitäten (Page-Cache/Arena sind plausible
-Modelle, aber die Matrix I5 fehlt noch). Nichts davon wird als Fakt in einen Auftrag geschrieben.
+*Slice B starts after step 7; I3 (corpus tools) may explicitly run in
+parallel with slice A already (no app code, no Gradle, no emulator).*
 
 ---
 
-## 6. Kontinuierliches Diktat (Hold) — Technik-Paket (E1 bindend)
+## 5. Deviations and corrections vs. Fable (for the reader's knowledge)
 
-E1 ist nicht länger eine Option, sondern ein **Produktvertrag des Nutzers** (2026-11-01):
-„Solange der Mikrofon-Knopf gehalten wird, spricht der Nutzer durchgehend und bekommt durchgehend
-Transkription — **kein Abbruch**.“ Dieser Abschnitt definiert den Vertrag technisch, die Restlücke
-in v0.1.30 (Obergrenze) und die Technik-Stufe v0.1.31. **Schnitt A bleibt wie geplant** — einzig
-A1 wurde um eine Bedingung erweitert (§6.1, F31-Gate), A2/A3 unverändert.
+1. **F37 is smaller than claimed:** Fable (§1.2) says the controller "gets no
+   clock". In fact `DictationController` **already owns** an injectable
+   `clock` parameter (default `System.nanoTime()`) — only the pass-through
+   in the coordinator is missing (V3). Effort for the core item: ~1 line +
+   tests instead of "a new API". The remaining F37 parts (threadFactory,
+   service dispatchers) stay unchanged.
+2. **F43 is not treated as an open measurement question but delivered as a
+   mode gate:** Fable (§2.1/§6.1) postpones the "threshold product decision"
+   behind the S0/S3 measurements. Because of the release directive I decide
+   with justification **before** the measurements: hold gate (A1/A2),
+   toggle stays at 2.5 s — that is the only solution that addresses symptom
+   3 **without** tipping over the documented user wish "pause = end" (V12).
+   The measurements (I3/I5) remain as validation, and E1 keeps the threshold
+   question open as a user decision.
+3. **Symptom-1 fix (F50) without a prior Robolectric proof:** Fable (§2.2)
+   wants to first "prove, then patch" the race in S2. The race is fully
+   evidenced by code reading (V4), and the user wants the release today. We
+   patch in 0.1.30 (with a pure-function test) and deliver the formal race
+   proof (Robolectric fuzzer) afterwards in I4 — residual risk documented,
+   the review requirement for A2 raised accordingly.
+4. **Addition beyond Fable:** UP feedback "Loslassen vorgemerkt" (F50a).
+   Fable considers the silent UP flag "not a bug" (§2.2 point 2) — correct
+   for the mechanics, but the C2 finding "UP ignored" shows that the silence
+   confuses the user; a transient hint fixes that without a design change to
+   P0 finding 2(a).
+5. **E1 goes beyond Fable's option "A" (§6):** Fable saw only the
+   threshold/semantics question and wanted to postpone it behind
+   measurements; the user has decided it as a **product contract** (§6.1).
+   The plan lifts it in §6 into a technology package with its own upper-limit
+   and long-term strategy — including the consequence that **F31/ERR_SILENT**
+   too must be exempted for hold (A1 extension), which neither Fable nor the
+   original A1 draft foresaw.
 
-### 6.1 Produktvertrag (Acceptance-Kriterium)
+**Marked as OPTION (not evidenced, not in slice A):** H3b/H3c/H3d/H3e (§0),
+K1 as a cause, K4, cold start > 15 s on the device, "3 attempts"
+causalities (page cache/arena are plausible models, but the I5 matrix is
+still missing). None of this is written into a task as a fact.
 
-> **Eine Hold-Session (Halte-Geste auf der Statusleiste, Finger unten) endet ausschließlich über:
-> 1. **Loslassen (UP)** → reguläres Finale, Export `stop_cause=up` / `fgs_stopped_by=up`;
-> 2. **expliziten Abbruch** (CANCEL-Geste `michold_cancel`, Nutzeraktion im Menü);
-> 3. **Systemereignis** (Editor-/App-Wechsel `onStartInput`/`onWindowHidden`, FGS-System-Stopp,
-> Rechteverlust, **tote Quelle ERR_STALL** — Stille ≠ Stall-Vertrag V1 bleibt);
-> 4. **eine definierte Obergrenze** (§6.2).
+---
+
+## 6. Continuous dictation (hold) — technology package (E1 binding)
+
+E1 is no longer an option but a **product contract of the user** (2026-11-01):
+"As long as the microphone button is held, the user speaks continuously and
+gets continuous transcription — **no abort**." This section defines the
+contract technically, the remaining gap in v0.1.30 (upper limit) and the
+technology stage v0.1.31. **Slice A stays as planned** — only A1 was extended
+by one condition (§6.1, F31 gate), A2/A3 unchanged.
+
+### 6.1 Product contract (acceptance criterion)
+
+> **A hold session (hold gesture on the status bar, finger down) ends
+> exclusively via:
+> 1. **release (UP)** → regular finale, export `stop_cause=up` /
+>    `fgs_stopped_by=up`;
+> 2. **explicit abort** (CANCEL gesture `michold_cancel`, a user action in a
+>    menu);
+> 3. **system event** (editor/app switch `onStartInput`/`onWindowHidden`, FGS
+>    system stop, loss of rights, **dead source ERR_STALL** — the silence ≠
+>    stall contract V1 remains);
+> 4. **a defined upper limit** (§6.2).
 >
-> Sie endet **NICHT** durch Stille (F43 **und** F31/ERR_SILENT für Hold gepfpt — A1-Erweiterung),
-> **nicht** durch Hypotheseninhalt (dafür existiert kein Codepfad, V2) und **nicht** durch
-> Decode-Latenz/Speicher allein (kein Zeit-Abbruchpfad; OOM-Ausschluss ist Ziel der Technik-Stufe).
+> It does **NOT** end through silence (F43 **and** F31/ERR_SILENT exempted
+> for hold — A1 extension), **not** through hypothesis content (no code path
+> exists for that, V2), and **not** through decode latency/memory alone (no
+> time-based abort path; excluding OOM is the goal of the technology stage).
 
-**Vertragserfüllung v0.1.30:** Punkte „Stille“ und „Hypothesen“ erfüllt A1/A2. Die Obergrenze
-bleibt in v0.1.30 bei 300 s (V11) — vertraglich gedeckt (Punkt 4), aber die UX-Schwäche des
-„5-Minuten-Abschusses mitten im Diktat“ bleibt; Behebung §6.2 in v0.1.31. **Vertrag damit
-halbbis voll erfüllt ab v0.1.31.**
+**Contract fulfillment v0.1.30:** the "silence" and "hypotheses" items are
+fulfilled by A1/A2. The upper limit stays at 300 s in v0.1.30 (V11) — covered
+contractually (item 4), but the UX weakness of the "5-minute shoot-down in
+the middle of a dictation" remains; fix §6.2 in v0.1.31. **The contract is
+thereby half to fully fulfilled from v0.1.31.**
 
-**Bekanntes Restrisiko (dokumentiert):** Hold + gebrochenes Mikro (nur Rauschen) + gepfltes ERR_SILENT
-= stille 15-min-Session ohne Text. Abfangbar: „Kein Text erkannt“-Toast bei UP mit 0 Zeichen existiert
-(`VoiceKeyboardService.kt:732`-Umgebung), `first3s_peak_dbfs`-Export zeigt den Defekt rückwirkend.
-Akzeptiert, da E1 den Nutzerwillen priorisiert.
+**Known residual risk (documented):** hold + broken microphone (only noise)
++ exempted ERR_SILENT = a silent 15-min session with no text. Catchable: a
+"Kein Text erkannt" toast on UP with 0 characters exists (around
+`VoiceKeyboardService.kt:732`), and the `first3s_peak_dbfs` export shows the
+defect in retrospect. Accepted, since E1 prioritizes the user's will.
 
-### 6.2 Obergrenze: MAX_DURATION_MS für Hold-Sessions
+### 6.2 Upper limit: MAX_DURATION_MS for hold sessions
 
-Heute tötet `MAX_DURATION_MS = 300_000` (V11, `AudioRecordSource.kt:38`) **jede** Session nach 5 min —
-mitten im Diktat, über denselben Abbruchkanal wie ein Fehler. Für den E1-Vertrag ist das die
-einzige verbleibende harte Grenze.
+Today `MAX_DURATION_MS = 300_000` (V11, `AudioRecordSource.kt:38`) kills
+**every** session after 5 min — in the middle of a dictation, via the same
+abort channel as an error. For the E1 contract this is the only remaining
+hard limit.
 
 | | Option A | Option B |
 |---|---|---|
-| Inhalt | Halt auf **900 000 ms (15 min)** + **transienter Warn-Hinweis ab 13 min** („Obergrenze in 2 min — rechtzeitig loslassen“) | Für Hold **gar keine** Obergrenze, dafür **strengere Watchdogs** (RSS-Schwelle mit sanftem kontrolliertem Ende statt OOM; ERR_STALL bleibt) |
-| Pro | Nutzt die existierende `maxDurationMs`-Infrastruktur (bereits Konstruktor-Parameter, `AudioRecordSource.kt:27`); Nutzer behält Kontrolle; deckt realen Diktierbedarf; nach Technik-Stufe revisable | Vertrag „unbegrenzt“ wörtlich |
-| Contra | Grenze bleibt eine Grenze | RSS-Schwelle ist **unmessen** (I3/I5 fehlen noch), falsche Schwelle = Abbruch genau dann, wenn der Vertrag ihn verbietet; OOM auf GrapheneOS nimmt die App gleich mit | 
+| Content | raise to **900,000 ms (15 min)** + **transient warning hint from 13 min** ("upper limit in 2 min — release in time") | **no** upper limit at all for hold, instead **stricter watchdogs** (RSS threshold with a gentle controlled end instead of OOM; ERR_STALL stays) |
+| Pro | uses the existing `maxDurationMs` infrastructure (already a constructor parameter, `AudioRecordSource.kt:27`); the user keeps control; covers a real dictation need; revisable after the technology stage | takes the contract "unlimited" literally |
+| Contra | a limit stays a limit | an RSS threshold is **unmeasured** (I3/I5 are still missing), a wrong threshold = an abort exactly when the contract forbids it; on GrapheneOS an OOM takes the app down with it |
 
-**Empfehlung: Option A** — B ohne Messbasis ist der einzige Weg, den Vertrag *schlechter* zu
-verletzen (Abbruch ohne Nutzereinwirkung). A ist ein ~30-Zeilen-Micro-Change und geht als **B2 in
-die Technik-Stufe v0.1.31** (nicht mehr in 0.1.30 — Schnitt A bleibt eingefroren; die 300-s-Grenze
-ist vertraglich Punkt 4 und im Smoke §6.4 bewusst unterlaufen wir sie mit 180–240 s).
+**Recommendation: option A** — B without a measurement basis is the only way
+to violate the contract *worse* (an abort without user involvement). A is a
+~30-line micro change and goes as **B2 into the technology stage v0.1.31**
+(no longer in 0.1.30 — slice A stays frozen; the 300-s limit is
+contractually item 4, and in the smoke §6.4 we deliberately stay under it
+with 180–240 s).
 
-**Welche Tests sich ändern (Option A):**
-- **Keine bestehenden brechen:** keine Test-Datei behauptet `MAX_DURATION_MS = 300_000`
-  (verifiziert — Konstante taucht in keinem Test auf; `FakeAudioScenarioTest` Fall e testet
-  ERR_SILENT auf dem Default-Pfad, unberührt).
-- Neu: `holdWarnDue(sessionMs): Boolean` als reine Funktion + Test (13-min-Schwelle, Hysterese-frei);
-  Service-Timer analog `startDeadlineJob` (Coroutine) → `postEvent(StatusEvent.Hint(...))` —
-  Routing transient (V7-Naht, `StatusRoutingTest` deckt Regression).
-- Verdrahtung: Service reicht beim Start der Halte-Geste `maxDurationMs = 900_000` an die Quelle
-  (Parameter existiert bereits); Toggle-Sessions können dieselbe Grenze bekommen (praktisch
-  irrelevant: F43 stoppt Toggle ohnehin an der ersten 2,5-s-Pause).
+**Which tests change (option A):**
+- **No existing ones break:** no test file asserts `MAX_DURATION_MS =
+  300_000` (verified — the constant appears in no test; `FakeAudioScenarioTest`
+  case e tests ERR_SILENT on the default path, untouched).
+- New: `holdWarnDue(sessionMs): Boolean` as a pure function + test (13-min
+  threshold, hysteresis-free); a service timer analogous to
+  `startDeadlineJob` (coroutine) → `postEvent(StatusEvent.Hint(...))` —
+  transient routing (V7 seam, `StatusRoutingTest` covers regression).
+- Wiring: at the start of the hold gesture the service passes
+  `maxDurationMs = 900_000` to the source (the parameter already exists);
+  toggle sessions can get the same limit (practically irrelevant: F43 stops
+  toggle at the first 2.5-s pause anyway).
 
-### 6.3 Langzeit-Haltbarkeit — zwei Stufen (das eigentliche Technik-Problem)
+### 6.3 Long-term sustainability — two stages (the real technology problem)
 
-**Problem:** Der Partial-Pfad dekodiert den **kompletten** Puffer (`DictationController.window()`,
-`:462`) — Kosten je Decode wächst linear mit T, Gesamtarbeit quadratisch (C2-These; Fable §6.2
-bestätigt sie für Latenz, nicht Abbrüche). Zwei Messpunkte liegen vor, mit großer Spanne:
-- Gerät (C2-Export #1): decode_ms_max **583 ms @ 11,9 s** Puffer ⇒ ≈ **49 ms pro Audio-Sekunde**.
-- **Nutzer-Messwert: decode_ms_max 4102 ms @ ~8 s** — **im Repo nicht belegbar** (keine Datei nennt
-  diese Zahl); vermutlich andere Variante (fp32) / anderes Gerät / Host-Lauf. ⇒ genau deshalb:
-  **Messung zuerst.**
+**Problem:** the partial path decodes the **complete** buffer
+(`DictationController.window()`, `:462`) — the cost per decode grows linearly
+with T, the total work quadratically (C2 thesis; Fable §6.2 confirms it for
+latency, not aborts). Two measurement points exist, with a wide span:
+- Device (C2 export #1): decode_ms_max **583 ms @ 11.9 s** buffer ⇒ ≈ **49 ms
+  per audio second**.
+- **User measurement: decode_ms_max 4102 ms @ ~8 s** — **not evidenced in the
+  repo** (no file names this number); presumably a different variant (fp32) /
+  a different device / a host run. ⇒ precisely therefore: **measure first.**
 
-Hochrechnung mit 49 ms/s: decode(60 s) ≈ 2,9 s · decode(300 s) ≈ 15 s · decode(900 s) ≈ 44 s.
-Bei 4102-ms-Steigung (~512 ms/s) wäre schon decode(30 s) ≈ 15 s. In beiden Fällen gilt:
-**ohne Eingriff verletzt die Hypothesen-Latenz ab wenigen Minuten den Vertrag sichtbar**
-(Hyps laufen dem Sprecher hinterher), und der PCM-Puffer wächst linear (~1,92 MB/min → 15 min ≈
-28,8 MB — unkritisch; kritisch ist die **Rechenzeit**, nicht der Speicher).
+Extrapolation with 49 ms/s: decode(60 s) ≈ 2.9 s · decode(300 s) ≈ 15 s ·
+decode(900 s) ≈ 44 s. With a 4102-ms slope (~512 ms/s), decode(30 s) ≈ 15 s
+already. In both cases: **without intervention the hypothesis latency visibly
+violates the contract from a few minutes on** (hypos run behind the speaker),
+and the PCM buffer grows linearly (~1.92 MB/min → 15 min ≈ 28.8 MB —
+uncritical; critical is the **compute time**, not the memory).
 
-**Stufe 1 — v0.1.30 (Schnitt A unverändert):** Hold-Gate + Start-Fix + `status_res`. Der Vertrag
-ist damit zur Hälfte erfüllt („Stille bricht nicht mehr ab“). Die Obergrenze hält Sessions auf
-≤ 5 min, wo die Kostenkurve nach heutigem Stand *gerade noch* beherrschbar sein dürfte — aber das
-ist eine Annahme, kein Beweis. Deshalb läuft **ab sofort, parallel zum Release**:
-> **Messung zuerst (I3, kein App-Code):** `tools/engine_cost_curve.py` liefert decode_ms und RSS
-> für Puffer 5…**≥ 300 s (Pflicht), Ziel 900 s** und **klärt die 4102-vs-583-Diskrepanz**
-> (Variante fp32/fp16, Gerät vs. Host). Entscheidungsregel aus der Kurve: α = decode(T)/T in ms
-> pro Audio-Sekunde ⇒ Segmentlänge der Technik-Stufe W = 1 500 ms / α (so dass decode(W) ≤ 1,5 s).
+**Stage 1 — v0.1.30 (slice A unchanged):** hold gate + start fix +
+`status_res`. The contract is thereby half fulfilled ("silence no longer
+aborts"). The upper limit keeps sessions at ≤ 5 min, where per today's
+state the cost curve should *just about* remain controllable — but that is
+an assumption, not a proof. Therefore, **starting immediately, in parallel
+with the release**:
+> **Measure first (I3, no app code):** `tools/engine_cost_curve.py` delivers
+> decode_ms and RSS for buffers 5…**≥ 300 s (mandatory), target 900 s** and
+> **clarifies the 4102-vs-583 discrepancy** (variant fp32/fp16, device vs.
+> host). Decision rule from the curve: α = decode(T)/T in ms per audio second
+> ⇒ segment length of the technology stage W = 1,500 ms / α (so that
+> decode(W) ≤ 1.5 s).
 
-**Stufe 2 — v0.1.31 (Technik-Stufe), datenbasiert aus der Kurve. Drei Kandidaten:**
+**Stage 2 — v0.1.31 (technology stage), data-driven from the curve. Three
+candidates:**
 
-| | (a) DecodePace skaliert mit Pufferlänge | (b) rollierendes Decode-Fenster mit überlappungsfreier Text-Übernahme | (c) Zwischensegment-Finalisierung ohne Tonlücke |
+| | (a) DecodePace scales with buffer length | (b) rolling decode window with overlap-free text handover | (c) intermediate segment finalization without a sound gap |
 |---|---|---|---|
-| Mechanismus | `DecodePace.intervalMs` weiter öffnen (Klemmen 2000/6000 ms — `AsrThreadConfig.kt:72/73` — anheben/abschaffen; Takt folgt decode_ms) | Decode nur über `[T−W, T]`; Übernahme nur des **neuen** Textes; fester Überlappungsstreifen nur zur Wortgrenzen-Verknüpfung; **Finale bei UP über den GESAMT-Puffer** (28,8 MB @ 15 min — beherrschbar) | Periodisches „Mini-Finale“: Segment [T−W, T] wird wie ein `stop()` finalisiert und **permanent committet**; Decoder startet bei 0; Segmentgrenze **nur bei Stille** (Satz-/Wortgrenze aus der bereits vorhandenen Block-RMS-Klasse) oder Satzzeichen in der Hypothese | 
-| §5.1-Konformität | konform (Takt, kein Fenster) | **bricht die Sperre** — braucht die drei dokumentierten Defekt-Fixes (s. u.) + formale Nutzer-Freigabe E2 | **konform**: jedes Segment ist ein `whole_buffer`-Lauf — exakt der in §5.1 empfohlene Ansatz, nur zeitlich segmentiert; **keine neue Fenster-Zustandsmaschine, kein Agreement-Cache** |
-| Vertrags-Erfüllung „Hyp-Latenz ≤ 2 s @ 10 min“ | **NEIN**: decode(600 s) ≈ 29–300 s je nach α — Hyps laufen Minuten hinterher; (a) kauft nur Zeit, bis der Vertrag sichtbar bricht | ja, wenn W klein genug | ja: decode(W) ≤ 1,5 s per Konstruktion (W aus Kurve), unabhängig von Gesamtdauer |
-| Text-Korrektheit | voll (unveränderte Pipeline) | Risiko an Segmentgrenzen (Worttrennung); Finale heilt alles, aber **erst bei UP** — während der Session sichtbare Nahtfehler möglich | Segmentgrenze in Stille ⇒ geringes Naht-Risiko; jede Segment-Verkettung gegen Golden testbar (I3-Sidecar) |
-| Aufwand | ~0,25 Tag (nur Konstanten/Formel + Tests) | 2–3 Tage + E2-Freigabe + Defekt-Fixes; höchstes Regressionrisiko (Doktrin „keine Deadlock-Zustandsmaschine“) | ~1 Tag Kern (Segmenter + Puffer-Reset) + 0,25 Tag Cap/Warnung (B2) |
+| Mechanism | open up `DecodePace.intervalMs` further (clamps 2000/6000 ms — `AsrThreadConfig.kt:72/73` — raise/abolish; the cadence follows decode_ms) | decode only over `[T−W, T]`; handover only of the **new** text; a fixed overlap strip only for word-boundary stitching; **finale on UP over the TOTAL buffer** (28.8 MB @ 15 min — controllable) | a periodic "mini finale": segment [T−W, T] is finalized like a `stop()` and **permanently committed**; the decoder starts at 0; segment boundary **only on silence** (sentence/word boundary from the already existing block RMS class) or a punctuation mark in the hypothesis |
+| §5.1 conformity | conformant (cadence, no window) | **breaks the block** — needs the three documented defect fixes (see below) + formal user release E2 | **conformant**: every segment is a `whole_buffer` run — exactly the approach recommended in §5.1, only segmented in time; **no new window state machine, no agreement cache** |
+| Contract fulfillment "hypothesis latency ≤ 2 s @ 10 min" | **NO**: decode(600 s) ≈ 29–300 s depending on α — hypos run minutes behind; (a) only buys time until the contract visibly breaks | yes, if W is small enough | yes: decode(W) ≤ 1.5 s by construction (W from the curve), independent of total duration |
+| Text correctness | full (unchanged pipeline) | risk at segment boundaries (word splitting); the finale heals everything, but **only on UP** — visible seam errors possible during the session | segment boundary in silence ⇒ low seam risk; every segment concatenation testable against golden (I3 sidecar) |
+| Effort | ~0.25 day (constants/formula only + tests) | 2–3 days + E2 release + defect fixes; highest regression risk (doctrine "no deadlock state machine") | ~1 day core (segmenter + buffer reset) + 0.25 day cap/warning (B2) |
 
-**§5.1-Defekte und wie (b) ihnen begegnen müsste** (EXAKT aus `KONZEPT.md` §5.1, dort verifiziert):
-1. **Pause-Stall:** Fenster war auf `committed_s + 3 s` gedeckelt; bei Pause ≥ 3 s lieferte der VAD
-   dauerhaft „keine Sprache“, `committed_s` rückte nie vor → **alles nach der Pause ging verloren**.
-   → (b)-Gegenmaßnahme: Fenster position **nur nach Zeit/Bytes** (nie nach Commit-Fortschritt),
-   kein VAD als Vorwärtsbedingung. *Anmerkung: Für Hold-Sessions ist der Fall heute harmloser,
-   weil der Vertrag Stille zulässt — die Grundkonstruktion bleibt aber fehleranfällig.*
-2. **Kopplung Fenster ↔ Commit:** Fenster konnte nicht über `committed_s + n` hinausreichen →
-   stehender Commit = stehendes Fenster. → (b): Entkopplung — Decode-Fenster folgt der Aufnahmezeit,
-   Commit-Punkt = Fensterende minus Überlappungsstreifen (deterministisch, nicht verhandelbar).
-3. **Agreement-Deadlock:** Mit jedem Commit rückte der Commit-Punkt vor ⇒ der Agreement-Cache
-   sammelte nie 2 Treffer ⇒ dauerhafter Stillstand. → (b): Agreement-Verfahren **ersatzlos
-   streichen**; Textübernahme über deterministische Wortgrenze im Überlappungsstreifen.
+**§5.1 defects and how (b) would have to counter them** (EXACTLY from
+`KONZEPT.md` §5.1, verified there):
+1. **Pause stall:** the window was capped at `committed_s + 3 s`; on a pause
+   ≥ 3 s the VAD kept delivering "no speech", `committed_s` never advanced →
+   **everything after the pause was lost**. → (b) countermeasure: position
+   the window **only by time/bytes** (never by commit progress), no VAD as a
+   forward condition. *Note: for hold sessions the case is more harmless
+   today because the contract allows silence — but the basic construction
+   stays error-prone.*
+2. **Window ↔ commit coupling:** the window could not extend beyond
+   `committed_s + n` → a stuck commit = a stuck window. → (b): decoupling —
+   the decode window follows the recording time, the commit point = window
+   end minus overlap strip (deterministic, not negotiable).
+3. **Agreement deadlock:** with every commit the commit point advanced ⇒
+   the agreement cache never collected 2 hits ⇒ a permanent standstill. →
+   (b): **drop the agreement procedure entirely**; text handover via a
+   deterministic word boundary in the overlap strip.
 
-**Formulierung für KONZEPT §5.1 („präzisiert, nicht gebrochen“):** Die Empfehlung „whole_buffer
-ist robuster“ bleibt unangetastet — (c) **wendet sie an**, statt sie zu brechen. Sollte später (b)
-gewählt werden, gilt: **Der Nutzer-Vertrag „kontinuierlich“ (E1) steht über der Sperre — die Freigabe
-nach KONZEPT §5.1 ist seine Entscheidung** (formal über E2 mit den I3/I5-Daten einzuholen); die
-§5.1-Tabelle ist dann als „präzisiert“ zu dokumentieren: gleiche Defekte, benannte Gegenmaßnahmen
-(1–3), Messvergleich gegen Golden neu zu führen.
+**Wording for KONZEPT §5.1 ("refined, not broken"):** the recommendation
+"whole_buffer is more robust" stays untouched — (c) **applies** it instead of
+breaking it. Should (b) be chosen later: **the user contract "continuous"
+(E1) stands above the block — the release per KONZEPT §5.1 is the user's
+decision** (to be obtained formally via E2 with the I3/I5 data); the §5.1
+table is then to be documented as "refined": same defects, named
+countermeasures (1–3), the measurement comparison against golden to be redone.
 
-**Empfehlung: (c) Zwischensegment-Finalisierung** — Begründung: einzige Option, die die
-Hypothesen-Latenz-**Akzeptanz** bei 10 min garantiert erfüllt, §5.1-konform ist (keine neue
-Deadlock-fähige Zustandsmaschine — exakt die Lehre der Doktrin), und mit existierenden Bausteinen
-gebaut wird (Final-Pfad, Block-RMS-Stilleklassifikation aus F43 sind bereits da). (a) als
-**Begleitmaßnahme innerhalb der Segmente** (Takt bleibt cost-aware, unverändert). (b) nur falls
-(c)-Nahtfehler in den Golden-Tests wider Erwarten zu grob ausfallen — dann mit den Defekt-Fixes
-1–3 und nach E2.
+**Recommendation: (c) intermediate segment finalization** — reasoning: the
+only option that guarantees the hypothesis latency **acceptance** at 10 min,
+is §5.1-conformant (no new deadlock-capable state machine — exactly the
+doctrine's lesson), and is built from existing blocks (the finale path, the
+block RMS silence classification from F43 are already there). (a) as an
+**accompanying measure within the segments** (the cadence stays cost-aware,
+unchanged). (b) only if (c) seam errors in the golden tests turn out
+unexpectedly too coarse — then with the defect fixes 1–3 and after E2.
 
-**Aufträge v0.1.31 (je ≤4 Dateien, ≤~150 Zeilen):**
-- **B1 — Segmenter-Kern:** `DictationCoordinator.kt`, `DictationController.kt`,
-  `app/src/test/java/de/voicekeyboard/dictation/SegmentFinalizeTest.kt` (neu),
-  `KorpusTaktTest.kt` (Erweiterung: 600-s-Korpus, 2× 3-s-Pausen). Stille-/Satzzeichen-Grenzfunktion
-  `segmentBoundary(...)` als reine Funktion (JVM-testbar, Muster `DecodePace`). Segment-Finale über
-  den bestehenden Final-Pfad, danach Puffer-/Decode-Stats je Segment zurücksetzen (Achtung:
-  `Export`-Zähler `output_chars`/`had_output` sind **Session**-Zähler — nicht mittrealen).
-- **B2 — Obergrenze/Warnung (Option A, §6.2):** `VoiceKeyboardService.kt`, `strings.xml`,
-  `AudioRecordSource`-Verdrahtung über `audioSourceFactory` (kein Ändern der Quelle selbst),
-  `StartGateTest`-Erweiterung bzw. neuer `HoldWarnTest`.
-- **B3 — Nachweis:** Golden-Vergleich je Segment + Gesamt gegen I3-Sidecar (JVM mit Stub-Engine,
-  Muster KorpusTaktTest); **S3-Emulatorlauf 600 s erst NACH Technik-Stufe** (§6.4).
+**Tasks v0.1.31 (each ≤4 files, ≤~150 lines):**
+- **B1 — segmenter core:** `DictationCoordinator.kt`,
+  `DictationController.kt`,
+  `app/src/test/java/de/voicekeyboard/dictation/SegmentFinalizeTest.kt`
+  (new), `KorpusTaktTest.kt` (extension: 600-s corpus, 2× 3-s pauses). The
+  silence/punctuation boundary function `segmentBoundary(...)` as a pure
+  function (JVM-testable, DecodePace pattern). The segment finale via the
+  existing finale path, then reset the buffer/decode stats per segment
+  (careful: the export counters `output_chars`/`had_output` are **session**
+  counters — do not average them).
+- **B2 — upper limit/warning (option A, §6.2):** `VoiceKeyboardService.kt`,
+  `strings.xml`, `AudioRecordSource` wiring via `audioSourceFactory` (do not
+  change the source itself), `StartGateTest` extension resp. a new
+  `HoldWarnTest`.
+- **B3 — proof:** golden comparison per segment + total against the I3
+  sidecar (JVM with a stub engine, KorpusTaktTest pattern); the **S3
+  emulator run 600 s only AFTER the technology stage** (§6.4).
 
-**Akzeptanz Technik-Stufe (v0.1.31, Hold 10 min = Korpus 600 s mit 2× 3-s-Pausen):**
-- `hyp_gap_ms` (Median/p95) **≤ 2 000 ms**, `decode_ms_max ≤ 2 000 ms` je Segment;
-- **kein Abbruch**: `stop_cause=up` bzw. `fgs_stopped_by=up`, `last_error` leer, `ctl_failed=0`;
-- **ΔRSS < 150 MB** über 10 min (`dumpsys meminfo` TOTAL, Messbasis I5; PCM-Anteil ≈ 19,2 MB —
-  alles darüber ist Arena-/Codec-Wachstum und dann adressierbar);
-- **Text fortlaufend korrekt**: je Segment 100 % Golden, Verkettung = Golden-Gesamttext;
-- Obergrenzen-Lauf 15 min endet kontrolliert mit `maxdur`-Code **nach** vorheriger Warnung (13 min).
+**Acceptance technology stage (v0.1.31, hold 10 min = corpus 600 s with 2×
+3-s pauses):**
+- `hyp_gap_ms` (median/p95) **≤ 2,000 ms**, `decode_ms_max ≤ 2,000 ms` per
+  segment;
+- **no abort**: `stop_cause=up` resp. `fgs_stopped_by=up`, `last_error`
+  empty, `ctl_failed=0`;
+- **ΔRSS < 150 MB** over 10 min (`dumpsys meminfo` TOTAL, measurement basis
+  I5; the PCM share ≈ 19.2 MB — everything above that is arena/codec growth
+  and then addressable);
+- **text continuously correct**: per segment 100 % golden, concatenation =
+  the golden total text;
+- the upper-limit run 15 min ends in a controlled way with the `maxdur` code
+  **after** a prior warning (13 min).
 
-### 6.4 Emulator-Smoke-Checkliste (erweitert, v0.1.30 und v0.1.31)
+### 6.4 Emulator smoke checklist (extended, v0.1.30 and v0.1.31)
 
-| Version | Prüfling | Erwartung |
+| Version | Test item | Expectation |
 |---|---|---|
-| **v0.1.30** | **Halte-Diktat 180–240 s** (Korpus/Playback via `paplay`), **2× 3-s-Satzpausen** eingebaut | **KEIN Abbruch**; `output_chars` wächst über beide Pausen hinaus; Text nach Pausen fortlaufend; **Final erst nach UP**; Export: `fgs_stopped_by=up`, `mic_rel=holdup`, `status_res` wechselt recording→idle; `last_error` leer; `ctl_failed=0`. Bewusst **unter 300 s** (Obergrenze v0.1.30, §6.2) | 
-| **v0.1.30** | Kurz-Hold mit > 3 s **Stille vor Sprechbeginn** (Finger unten, nicht sprechen) | **kein ERR_SILENT** — Session lebt bis UP; danach „Kein Text erkannt“-Toast (A1-Gate + Vertragsfall §6.1) |
-| **v0.1.31** | **10-min-Korpuslauf (600 s)** via `tools/emu_korpus_run.sh` + Akzeptanz §6.3 | erst **NACH** Technik-Stufe — in v0.1.30 liefe er in den 300-s-Deckel und wäre „erwartet rot“ (kein Bug-Befund!) |
+| **v0.1.30** | **hold dictation 180–240 s** (corpus/playback via `paplay`), with **2× 3-s sentence pauses** built in | **NO abort**; `output_chars` grows beyond both pauses; text continuous after the pauses; **finale only after UP**; export: `fgs_stopped_by=up`, `mic_rel=holdup`, `status_res` switches recording→idle; `last_error` empty; `ctl_failed=0`. Deliberately **below 300 s** (the v0.1.30 upper limit, §6.2) |
+| **v0.1.30** | short hold with > 3 s **silence before speaking starts** (finger down, not speaking) | **no ERR_SILENT** — the session lives until UP; afterwards the "Kein Text erkannt" toast (A1 gate + contract case §6.1) |
+| **v0.1.31** | **10-min corpus run (600 s)** via `tools/emu_korpus_run.sh` + acceptance §6.3 | only **AFTER** the technology stage — in v0.1.30 it would run into the 300-s cap and be "expectedly red" (not a bug finding!) |
 
-Rahmenbedingungen wie §1 Bau Schritt 4: **<device> exklusiv**, nie parallel zum Bau,
-Vorbedingungs-Asserts (`pactl`-Sink sichtbar, `first3s_peak_dbfs > −30` nach 3 s), Debug-APK,
-Export-Pull als Datei (I5-Muster, sobald vorhanden, sonst 🐞-Zwischenablage).
+Framework conditions as §1 build step 4: **<device> exclusive**, never
+parallel to the build, precondition asserts (`pactl` sink visible,
+`first3s_peak_dbfs > −30` after 3 s), debug APK, export pull as a file (I5
+pattern, once available, otherwise the 🐞 clipboard).
 
 ---
 
-*Ende PLAN V0130. Kein git, keine Code-Änderungen — nur diese Datei.*
+*End PLAN V0130. No git, no code changes — only this file.*

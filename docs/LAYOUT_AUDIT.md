@@ -1,163 +1,173 @@
-# Layout-Audit (Rev 3) — Assets, Schema-Referenz, Regel-Lücken
+# Layout audit (rev 3) — assets, schema reference, rule gaps
 
-**Stand:** 2026-10-27 · **Prüfgegenstand:** `app/src/main/assets/layouts/*.json` (15 Dateien),
-`docs/LAYOUT_SCHEMA_REF.md`, verbindliche Quelle `docs/LAYOUT_REQUIREMENTS.md` (Rev 3).
+**Status:** 2026-10-27 · **Audit subject:** `app/src/main/assets/layouts/*.json`
+(15 files), `docs/LAYOUT_SCHEMA_REF.md`, binding source
+`docs/LAYOUT_REQUIREMENTS.md` (rev 3).
 
-**Methode:** Lesendes Python-Audit (`/tmp/audit2.py`, bewusst **nicht** im Repo) gegen
-den JSON-Parser-Vertrag (`LayoutParser.kt`, `LayoutAsset.kt`) und die Regeln 1–9 /
-§2.1 / §2.2 aus LAYOUT_REQUIREMENTS. Kein Gradle, keine Emulator-Interaktion, keine
-Änderung an Kotlin oder Assets. Rohbefunde: `/tmp/audit2.json`.
+**Method:** read-only Python audit (`/tmp/audit2.py`, deliberately **not** in
+the repo) against the JSON parser contract (`LayoutParser.kt`,
+`LayoutAsset.kt`) and rules 1–9 / §2.1 / §2.2 from LAYOUT_REQUIREMENTS. No
+Gradle, no emulator interaction, no changes to Kotlin or assets. Raw findings:
+`/tmp/audit2.json`.
 
-**Ergebnis in einem Satz:** Die **Pflicht-Symbole (§2.1) sind in allen 15 Sprachen
-vollständig** (der `&`-Rückbau ist erledigt), Schema/Zeilen/`label==value` sind
-sauber — offen sind **eine Sprach-Matrix-Lücke (§2.2 „Satzzeichen") in 5 Sprachen (6 Befunde)**,
-**3 fehlende `B`-Zeichen**, **1 fehlendes `A`-Zeichen** und **2 echte Regelkonflikte
-in der Spezifikation** (NFC vs. U+0387/U+037E, Regel 8 vs. σ/ς→Σ).
+**Result in one sentence:** the **mandatory symbols (§2.1) are complete in all
+15 languages** (the `&` rollback is done), schema/rows/`label==value` are
+clean — still open are **one language matrix gap (§2.2 "punctuation") in 5
+languages (6 findings)**, **3 missing `B` characters**, **1 missing `A`
+character**, and **2 real rule conflicts in the specification** (NFC vs.
+U+0387/U+037E, rule 8 vs. σ/ς→Σ).
 
-## (a) Prüfmatrix Sprache × Prüfung
+## (a) Audit matrix language × check
 
-Legende: ✓ = bestanden · ✗ = Fix nötig · ! = Hinweis (Regel/Präzisierung, kein Asset-Fehler)
+Legend: ✓ = passed · ✗ = fix needed · ! = hint (rule/clarification, not an
+asset error)
 
-| Sprache | Schema/Zeilen | IDs/Labels | label=value | NFC | §2.1 G1 | §2.1 G2 | §2.2 A | §2.2 B | §2.2 SZ | shift | Verdikt |
+| Language | Schema/rows | IDs/labels | label=value | NFC | §2.1 G1 | §2.1 G2 | §2.2 A | §2.2 B | §2.2 P | shift | Verdict |
 |---|---|---|---|---|---|---|---|---|---|---|---|
-| `de-de` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✗ | ✓ | **Fix nötig** |
-| `en-us` | ✓ | ✓ | ! | ✓ | ✓ | ✓ | ✓ | ✓ | ✗ | ✓ | **Fix nötig** |
+| `de-de` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✗ | ✓ | **Fix needed** |
+| `en-us` | ✓ | ✓ | ! | ✓ | ✓ | ✓ | ✓ | ✓ | ✗ | ✓ | **Fix needed** |
 | `fr-fr` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | OK |
 | `es-es` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | OK |
-| `it-it` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✗ | ✓ | ✓ | **Fix nötig** |
-| `pt-pt` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✗ | ✓ | ✓ | ✓ | **Fix nötig** |
-| `nl-nl` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✗ | ✓ | ✓ | **Fix nötig** |
-| `pl-pl` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✗ | ✓ | **Fix nötig** |
+| `it-it` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✗ | ✓ | ✓ | **Fix needed** |
+| `pt-pt` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✗ | ✓ | ✓ | ✓ | **Fix needed** |
+| `nl-nl` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✗ | ✓ | ✓ | **Fix needed** |
+| `pl-pl` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✗ | ✓ | **Fix needed** |
 | `tr-tr` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | OK |
-| `ru-ru` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✗ | ✓ | **Fix nötig** |
+| `ru-ru` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✗ | ✓ | **Fix needed** |
 | `cs-cz` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | OK |
 | `sv-se` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | OK |
 | `da-dk` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | OK |
 | `fi-fi` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | OK |
-| `el-gr` | ✓ | ✗ | ✓ | ✗ | ✓ | ✓ | ✓ | ✓ | ✗ | ✓ | **Fix nötig** |
+| `el-gr` | ✓ | ✗ | ✓ | ✗ | ✓ | ✓ | ✓ | ✓ | ✗ | ✓ | **Fix needed** |
 
-Geprüfte Einzelkriterien (je Asset, alle 4 Ebenen): Top-Level-Felder, `schemaVersion=1`,
-Dateiname==`id`, `language`-Pflichtfelder + `direction=ltr` + Tag aus §2.2,
-Zeilenzahl **paarweise** (`shift↔base`, `symbolsShift↔symbols`) und
-Breitensummen je Zeilenindex, keine doppelten IDs, keine doppelten Labels,
-`kind`/Aktion in Allowlist, `width>0`, Regel 5a–5d (inkl. `=\<`, `⌇`), Regel 6 (RTL),
-Regel 7 (NFC für Labels **und** Alternates), Regel 3 (max 8, ein Codepoint, keine
-Action-Namen, keine Duplikate), Regel 4 (space/backspace/enter/emoji/mic je Ebene,
-shift bzw. layer-Wechsel), §2.1 Gruppe 1+Ziffern (je genau 1× auf `symbols`),
-Gruppe 2 (1× auf `symbols` oder `symbolsShift`), §2.2 A/B/SZ, Regel 2 (shift-Großformen).
+Individual criteria checked (per asset, all 4 layers): top-level fields,
+`schemaVersion=1`, file name==`id`, `language` mandatory fields +
+`direction=ltr` + tag from §2.2, row count **pairwise** (`shift↔base`,
+`symbolsShift↔symbols`) and width sums per row index, no duplicate IDs, no
+duplicate labels, `kind`/action in the allowlist, `width>0`, rules 5a–5d
+(incl. `=\<`, `⌇`), rule 6 (RTL), rule 7 (NFC for labels **and** alternates),
+rule 3 (max 8, one codepoint, no action names, no duplicates), rule 4
+(space/backspace/enter/emoji/mic per layer, shift or layer switch), §2.1
+group 1 + digits (each exactly 1× on `symbols`), group 2 (1× on `symbols` or
+`symbolsShift`), §2.2 A/B/P, rule 2 (shift uppercase forms).
 
-## (b) Befunde
+## (b) Findings
 
-### B1 — Assets mit Fixbedarf
+### B1 — Assets needing fixes
 
-| Asset | Regel | Befund | Evidenz (Feld) | Empfohlener Fix |
+| Asset | Rule | Finding | Evidence (field) | Recommended fix |
 |---|---|---|---|---|
-| `de-de` | §2.2-SZ | `–` (U+2013) fehlt als eigene Taste | `layers.symbolsShift` enthält `„ … “ — ¿ ¡` — kein `–` | `hyphen`-Shift oder freie Taste in `symbolsShift` → `–` |
-| `en-us` | §2.2-SZ | `–` und `—` nur als Alternates, nicht als eigene Taste | `layers.base['m'].alternates = "—…–"`; `symbolsShift` hat `…`, aber kein `–`/`—` | `–`, `—` als eigene Tasten in `symbolsShift` (Platz ist da: 30/31 Textplätze) |
-| `it-it` | §2.2-B | `ü` ist nirgends erreichbar | `layers.base`: `ú í î ó á` vorhanden, `ü` fehlt; keine `alternates` mit `ü` | `ü` als Alternate auf `u` (max-8-Grenze beachten: `u` hat nur `ú`) |
-| `nl-nl` | §2.2-B | `ä` ist nirgends erreichbar | `layers.base['a'].alternates = "áà"`; `e→ëéèê`, `u→ü`, `i→ï`, `o→ö` | `ä` als Alternate auf `a` ergänzen (`áàä`) |
-| `pt-pt` | §2.2-A | `à` nur Alternate, §2.2 fordert eigene Taste (Stufe A) | `layers.base['a'].alternates = "à"` | `à` als eigene `base`-Taste (Reihe 1/2 hat Platz) **oder** §2.2-Zeile auf `B` herabstufen (fachlich vertretbar, siehe D2) |
-| `pl-pl` | §2.2-SZ | `”` fehlt | `layers.symbolsShift` enthält `„ … “ –` — kein `”` | `”` in `symbolsShift` ergänzen |
-| `ru-ru` | §2.2-SZ | `–` fehlt | `layers.symbolsShift` enthält `« » … №` — kein `–` | `–` in `symbolsShift` ergänzen |
-| `el-gr` | §2.2-SZ | `·` (Ano Teleia) nicht als eigene Taste | `layers.symbols['semicolon'].alternates` enthält U+0387, keine eigene Taste | eigene Taste mit **U+00B7** (NFC-stabil) in `symbolsShift` |
-| `el-gr` | R7 | Alternate `·` (U+0387) ist **nicht NFC** (NFC → U+00B7) | `layers.symbols['semicolon'].alternates[0]` | Alternate auf U+00B7 umstellen (oder entfernen) |
-| `el-gr` | R7 | Alternate `;` (U+037E) ist **nicht NFC** (NFC → `;`) | `layers.symbols['question'].alternates[0]` | Alternate entfernen — `;` ist bereits Gruppe 1 |
-| `el-gr` | R8 | zwei `shift`-Tasten mit Label `Σ` (`σ`, `ς`) | `layers.shift`: `final-sigma→Σ`, `σ→Σ` | **kein Asset-Fix** — Regel-8-Ausnahme in den Anforderungen (D1) |
+| `de-de` | §2.2-P | `–` (U+2013) missing as its own key | `layers.symbolsShift` contains `„ … “ — ¿ ¡` — no `–` | `hyphen`-shift or a free key in `symbolsShift` → `–` |
+| `en-us` | §2.2-P | `–` and `—` only as alternates, not as own keys | `layers.base['m'].alternates = "—…–"`; `symbolsShift` has `…`, but no `–`/`—` | `–`, `—` as own keys in `symbolsShift` (space is available: 30/31 text slots) |
+| `it-it` | §2.2-B | `ü` is not reachable anywhere | `layers.base`: `ú í î ó á` present, `ü` missing; no `alternates` with `ü` | add `ü` as an alternate on `u` (mind the max-8 limit: `u` has only `ú`) |
+| `nl-nl` | §2.2-B | `ä` is not reachable anywhere | `layers.base['a'].alternates = "áà"`; `e→ëéèê`, `u→ü`, `i→ï`, `o→ö` | add `ä` as an alternate on `a` (`áàä`) |
+| `pt-pt` | §2.2-A | `à` only an alternate; §2.2 requires an own key (level A) | `layers.base['a'].alternates = "à"` | `à` as its own `base` key (rows 1/2 have space) **or** downgrade the §2.2 row to `B` (professionally defensible, see D2) |
+| `pl-pl` | §2.2-P | `”` missing | `layers.symbolsShift` contains `„ … “ –` — no `”` | add `”` in `symbolsShift` |
+| `ru-ru` | §2.2-P | `–` missing | `layers.symbolsShift` contains `« » … №` — no `–` | add `–` in `symbolsShift` |
+| `el-gr` | §2.2-P | `·` (Ano Teleia) not an own key | `layers.symbols['semicolon'].alternates` contains U+0387, no own key | own key with **U+00B7** (NFC-stable) in `symbolsShift` |
+| `el-gr` | R7 | alternate `·` (U+0387) is **not NFC** (NFC → U+00B7) | `layers.symbols['semicolon'].alternates[0]` | switch the alternate to U+00B7 (or remove it) |
+| `el-gr` | R7 | alternate `;` (U+037E) is **not NFC** (NFC → `;`) | `layers.symbols['question'].alternates[0]` | remove the alternate — `;` is already in group 1 |
+| `el-gr` | R8 | two `shift` keys with the label `Σ` (`σ`, `ς`) | `layers.shift`: `final-sigma→Σ`, `σ→Σ` | **no asset fix** — rule 8 exception in the requirements (D1) |
 
-### B2 — Hinweise (kein Asset-Fehler, aber Regel-/Doku-Präzisierung)
+### B2 — Hints (not asset errors, but rule/documentation clarifications)
 
-| Asset | Regel | Befund | Evidenz | Empfehlung |
+| Asset | Rule | Finding | Evidence | Recommendation |
 |---|---|---|---|---|
-| `en-us` | R8 | Text-Label `‹`/`›` kollidiert mit der Legende der Cursor-Aktionen | `layers.symbolsShift` (Text `‹›`) vs. `cursor-left/right` | Regel 8 ausdrücklich auf **Text-Tasten** begrenzen; optional Textzeichen ersetzen |
-| `fr-fr` | §2.2-A/B | `ê` ist **eigene** base-Taste, §2.2 fordert nur `B` („erreichbar") — Übererfüllung, kollidiert aber mit der Notiz „auf AZERTY nicht direkt belegt" | `layers.base` = `…opéêq…`, zusätzlich `e.alternates` enthält `ê` | Doku: §2.2-Notiz entschärfen („darf eigene Taste sein") + Doppelpfad `e`/`ê` bereinigen |
-| `fr-fr` | R3 | `à` ist eigene Taste **und** Alternate von `a` | `layers.base['a'].alternates = "æâà"` | Doppelpfad entfernen (Regel 3 meint Eindeutigkeit des Tippwegs) |
-| `de-de`, `en-us` | R3-alt | Shift-Alternates spiegeln base-Alternates nur für **Buchstaben**; caseless Zeichen (`€ § – — … µ`) fehlen dort — fachlich korrekt | `de-de shift['e'].alternates = ÉÈÊËĘ` (ohne `€`), `en-us shift['s']` ohne `§` | Regel 3 präzisieren: Spiegelung nur für Zeichen **mit** Großform (D3) |
+| `en-us` | R8 | text label `‹`/`›` collides with the legend of the cursor actions | `layers.symbolsShift` (text `‹›`) vs. `cursor-left/right` | limit rule 8 explicitly to **text keys**; optionally replace the text characters |
+| `fr-fr` | §2.2-A/B | `ê` is an **own** base key; §2.2 requires only `B` ("reachable") — over-fulfillment, but it collides with the note "not directly mapped on AZERTY" | `layers.base` = `…opéêq…`, additionally `e.alternates` contains `ê` | documentation: soften the §2.2 note ("may be an own key") + clean up the double path `e`/`ê` |
+| `fr-fr` | R3 | `à` is an own key **and** an alternate of `a` | `layers.base['a'].alternates = "æâà"` | remove the double path (rule 3 means uniqueness of the typing path) |
+| `de-de`, `en-us` | R3-alt | shift alternates mirror base alternates only for **letters**; caseless characters (`€ § – — … µ`) are missing there — professionally correct | `de-de shift['e'].alternates = ÉÈÊËĘ` (without `€`), `en-us shift['s']` without `§` | clarify rule 3: mirroring only for characters **with** an uppercase form (D3) |
 
-## (c) Korrekturliste `docs/LAYOUT_SCHEMA_REF.md`
+## (c) Correction list `docs/LAYOUT_SCHEMA_REF.md`
 
-Alle Punkte sind **umgesetzt** (Datei korrigiert). Kurzfassung der Fehler:
+All items are **implemented** (file corrected). Short version of the errors:
 
-| # | Stelle | War falsch/unpräzise | Korrekt |
+| # | Spot | Was wrong/imprecise | Correct |
 |---|---|---|---|
-| 1 | Zeilenlängen | „`base`/`shift` gleich lang" — klang nach Tastenzahl | Geprüft wird **gleiche Zeilenzahl + gleiche Breitensumme je Zeilenindex**, paarweise `shift↔base` und `symbolsShift↔symbols` (`LayoutParser.validateSemantics`) |
-| 2 | Top-Level | „keine weiteren Felder" | Parser erzwingt das nur in `language`, `layers.<ebene>`, Key-Objekt, `deadKeys.<id>`; top-level sind 5 Felder **Konvention** |
-| 3 | `id` | Format fehlte | `^[a-z0-9-]+$`, Dateiname **muss** `<id>.json` sein (Repository lädt über die ID) |
-| 4 | `language` | Felder genannt, Regeln nicht | genau `tag`/`label`/`caseLocale`/`direction`; `direction ∈ {ltr,rtl}`; `tag` BCP-47 (`^[a-zA-Z]{2,3}(-[a-zA-Z0-9]{2,8})*$`); `tag` muss der §2.2-Zeile entsprechen |
-| 5 | `deadKeys` | nur `{}` gezeigt, Struktur unbekannt | Sub-Schema dokumentiert: `{"<id>": {"spacing": str, "combining": str?, "compose": {"<basis>": "<zeichen>"}}}` + Pflicht: jede `kind:"dead"`-Taste referenziert einen existierenden Eintrag (Parser prüft das) |
-| 6 | `caps` | „optionale alternative Beschriftung" | Feld existiert (`String`), **kein Asset nutzt es**; die Aktion `caps` steht in der Allowlist, wird ebenfalls nicht genutzt (Doppeltipp-Semantik derzeit nicht implementiert) |
-| 7 | Ziffern | „Shift-Gegenstücke (`! @ # $ % ^ & * ( )`)" | **Falsch und gefährlich**: diese Zeichen sind §2.1-Gruppe-1-Pflicht auf `symbols`; sie auf `symbolsShift` zu wiederholen verletzt Regel 8. Richtig: `symbolsShift` trägt `¹²³¼½¬°…`, keine Gruppe-1-Zeichen |
-| 8 | Duplikate | „ein Zeichen nur einmal als `value`" | Ausnahme dokumentiert: `σ`/`ς` teilen in `shift` das Label `Σ` (Regel-8-Ausnahme D1); Scope = Text-Tasten (Action-Legenden wie `‹ ›` sind separat) |
-| 9 | Funktionstasten | „in **jeder** Ebene … cursor-left, cursor-right" | Anforderung (§1.4) ist schwächer: space, backspace, shift/layer-base, enter, emoji, mic; `cursor-*`/`language` sind **Asset-Konvention**, keine Pflicht |
-| 10 | Platzkontrolle | „`symbols` = 11/11/8" | Realität: 4 Reihen (Text + Aktionszeile), Textreihen meist `11/11/10`; `el-gr`/`da-dk`/`fi-fi` 31, `de-de`/`en-us` 30 Textplätze. Als Beispiel, nicht als Regel formuliert |
-| 11 | Sprach-Tabelle `fr-fr` | `ê` als Pflicht-Taste | §2.2: `A = é è à ç ù`, `ê` nur `B`; Asset hat `ê` zusätzlich (Übererfüllung) — Tabelle entsprechend getrennt |
-| 12 | Sprach-Tabelle `tr-tr` | `i` fehlte | `i` **ist** eigene `base`-Taste (neben `ı`), shift `İ`/`I` |
-| 13 | Sprach-Tabelle `pt-pt` | `à` fehlte in der A-Liste | `à` gehört zu `A` (offener Asset-Fix B1) |
-| 14 | Satzzeichen §2.2 | **komplett gefehlt** | neue Tabelle „Sprachspezifische Satzzeichen" — Ursache der 6 SZ-Befunde |
-| 15 | Regeln 5c/5d/6/7/8 | nicht erwähnt | Verweis + Kurzfassung: NFC (Labels **und** Alternates), keine Steuer-/Kombinationszeichen, `label ∈ Z` (Pflicht ∪ Zusatz ∪ Sprachzeichen), RTL-Verbot, Duplikatverbot |
-| 16 | alternates | nur „max 8, nur Zeichen" | ergänzt: genau 1 Codepoint, NFC, keine Duplikate, nicht das eigene Zeichen, `shift`-Alternates = Großformen der `base`-Alternates **nur für Zeichen mit Großform** |
-| 17 | Regel 5e | fehlte | Action-Tasten tragen **kein** Zeichen aus dem Zeichen-Universum, nur Legenden (`⇧ ⌫ ⏎ 🌐 😊 ?123 ABC Leer ‹ ›`) oder ein Wort (`Leer`, `Διάστημα`) |
-| 18 | Artefakte | Beispiel `=\<`/`⌇` ohne Regelbezug | Verweis auf Regel 5a/5b (label≠value, 2 Codepoints) bzw. 5d (nicht in `Z`) |
+| 1 | row lengths | "`base`/`shift` equally long" — sounded like key count | what is checked is **equal row count + equal width sum per row index**, pairwise `shift↔base` and `symbolsShift↔symbols` (`LayoutParser.validateSemantics`) |
+| 2 | top level | "no further fields" | the parser enforces that only in `language`, `layers.<layer>`, key object, `deadKeys.<id>`; at top level there are 5 fields **by convention** |
+| 3 | `id` | format was missing | `^[a-z0-9-]+$`, the file name **must** be `<id>.json` (the repository loads via the ID) |
+| 4 | `language` | fields named, rules not | exactly `tag`/`label`/`caseLocale`/`direction`; `direction ∈ {ltr,rtl}`; `tag` BCP-47 (`^[a-zA-Z]{2,3}(-[a-zA-Z0-9]{2,8})*$`); `tag` must match the §2.2 row |
+| 5 | `deadKeys` | only `{}` shown, structure unknown | sub-schema documented: `{"<id>": {"spacing": str, "combining": str?, "compose": {"<basis>": "<character>"}}}` + mandatory: every `kind:"dead"` key references an existing entry (the parser checks this) |
+| 6 | `caps` | "optional alternative label" | the field exists (`String`), **no asset uses it**; the action `caps` is in the allowlist, likewise unused (double-tap semantics not implemented at the moment) |
+| 7 | digits | "shift counterparts (`! @ # $ % ^ & * ( )`)" | **wrong and dangerous**: these characters are §2.1 group 1 mandatory on `symbols`; repeating them on `symbolsShift` violates rule 8. Correct: `symbolsShift` carries `¹²³¼½¬°…`, no group 1 characters |
+| 8 | duplicates | "a character only once as a `value`" | exception documented: `σ`/`ς` share the label `Σ` in `shift` (rule 8 exception D1); scope = text keys (action legends like `‹ ›` are separate) |
+| 9 | function keys | "in **every** layer … cursor-left, cursor-right" | the requirement (§1.4) is weaker: space, backspace, shift/layer-base, enter, emoji, mic; `cursor-*`/`language` are **asset convention**, not mandatory |
+| 10 | space control | "`symbols` = 11/11/8" | reality: 4 rows (text + action row), text rows mostly `11/11/10`; `el-gr`/`da-dk`/`fi-fi` 31, `de-de`/`en-us` 30 text slots. State it as an example, not as a rule |
+| 11 | language table `fr-fr` | `ê` as a mandatory key | §2.2: `A = é è à ç ù`, `ê` only `B`; the asset has `ê` additionally (over-fulfillment) — table split accordingly |
+| 12 | language table `tr-tr` | `i` was missing | `i` **is** an own `base` key (beside `ı`), shift `İ`/`I` |
+| 13 | language table `pt-pt` | `à` was missing from the A list | `à` belongs to `A` (open asset fix B1) |
+| 14 | punctuation §2.2 | **completely missing** | new table "language-specific punctuation" — the cause of the 6 P findings |
+| 15 | rules 5c/5d/6/7/8 | not mentioned | reference + short summary: NFC (labels **and** alternates), no control/combining characters, `label ∈ Z` (mandatory ∪ supplementary ∪ language characters), RTL prohibition, duplicate prohibition |
+| 16 | alternates | only "max 8, characters only" | added: exactly 1 codepoint, NFC, no duplicates, not the own character, `shift` alternates = uppercase forms of the `base` alternates **only for characters with an uppercase form** |
+| 17 | rule 5e | was missing | action keys carry **no** character from the character universe, only legends (`⇧ ⌫ ⏎ 🌐 😊 ?123 ABC Leer ‹ ›`) or a word (`Leer`, `Διάστημα`) |
+| 18 | artifacts | examples `=\<`/`⌇` without a rule reference | reference to rule 5a/5b (label≠value, 2 codepoints) resp. 5d (not in `Z`) |
 
-## (d) Spezifikations-Korrekturen (D1–D3), in LAYOUT_REQUIREMENTS.md umgesetzt
+## (d) Specification corrections (D1–D3), implemented in LAYOUT_REQUIREMENTS.md
 
-- **D1 — Regel 8 braucht eine Ausnahme.** Griechisch hat zwei Tasten `σ` und `ς`;
-  beide Großformen sind `Σ` (Unicode-Ein-Codepoint-Großform, §3 legt `ς→Σ` fest).
-  Damit hat `shift` zwangsläufig zwei Tasten mit Label `Σ` — Regel 8 („keine
-  doppelten Labels") und Regel 2 („shift = Großform von base") sind sonst
-  unvereinbar. **Neue Fassung:** Duplikatverbot gilt für Text-Tasten; Ausnahme
-  sind `shift`-Tasten, deren `base`-Zeichen dieselbe Ein-Codepoint-Großform haben
-  (nur `σ`/`ς` → `Σ`; Asset-Namen `σ`, `final-sigma`).
-- **D2 — §2.2 `pt-pt`: `à` bleibt `A`.** `à` ist im Portugiesischen (Crase) ein
-  eigenes Graphem, nicht nur ein Akzent-Variant von `a`; es gehört auf eine eigene
-  Taste. Der Asset-Fix ist billig (Reihe 1/2 hat Platz), deshalb keine Herabstufung.
-- **D3 — Regel 3 (Alternate-Spiegelung) nur für Zeichen mit Großform.** `€ § – — … µ`
-  sind caseless; sie in `shift` zu spiegeln wäre falsch. Die Spiegelungsregel gilt
-  für Buchstaben; caseless Zeichen bleiben in `base` (oder dürfen in `shift`
-  identisch stehen, wenn die Implementierung es braucht).
+- **D1 — rule 8 needs an exception.** Greek has two keys `σ` and `ς`; both
+  uppercase forms are `Σ` (Unicode single-codepoint uppercase, §3 defines
+  `ς→Σ`). So `shift` necessarily has two keys with the label `Σ` — rule 8
+  ("no duplicate labels") and rule 2 ("shift = uppercase form of base") are
+  otherwise incompatible. **New wording:** the duplicate prohibition applies
+  to text keys; the exception is `shift` keys whose `base` character has the
+  same single-codepoint uppercase form (only `σ`/`ς` → `Σ`; asset names `σ`,
+  `final-sigma`).
+- **D2 — §2.2 `pt-pt`: `à` stays `A`.** In Portuguese (crase) `à` is its own
+  grapheme, not just an accent variant of `a`; it belongs on its own key. The
+  asset fix is cheap (rows 1/2 have space), hence no downgrade.
+- **D3 — rule 3 (alternate mirroring) only for characters with an uppercase
+  form.** `€ § – — … µ` are caseless; mirroring them in `shift` would be
+  wrong. The mirroring rule applies to letters; caseless characters stay in
+  `base` (or may appear identically in `shift` if the implementation needs
+  it).
 
-Zusätzlich in §2.2 `el-gr` präzisiert: die Ano Teleia wird als **U+00B7**
-(NFC-stabil) geführt — U+0387 ist kanonisch äquivalent und wird von NFC zu U+00B7
-normalisiert; das „griechische Fragezeichen" U+037E ist kanonisch identisch mit
-`;` (U+003B) und damit bereits durch Gruppe 1 abgedeckt — ein eigener Codepoint
-ist unter Regel 7 (NFC) nicht darstellbar.
+Additionally clarified in §2.2 `el-gr`: the Ano Teleia is tracked as **U+00B7**
+(NFC-stable) — U+0387 is canonically equivalent and normalized by NFC to
+U+00B7; the "Greek question mark" U+037E is canonically identical with `;`
+(U+003B) and thus already covered by group 1 — a separate codepoint cannot be
+represented under rule 7 (NFC).
 
-## (e) Verdikt je Sprache
+## (e) Verdict per language
 
-| Sprache | Verdikt | Offene Punkte |
+| Language | Verdict | Open points |
 |---|---|---|
-| `de-de` | **Fix nötig** | `–` als eigene Taste (§2.2-SZ) |
-| `en-us` | **Fix nötig** | `–`, `—` als eigene Tasten; Hinweis `‹ ›`-Label-Kollision |
-| `fr-fr` | OK | Hinweis: `ê` Übererfüllung, Doppelpfad `à`/`a` |
+| `de-de` | **Fix needed** | `–` as an own key (§2.2-P) |
+| `en-us` | **Fix needed** | `–`, `—` as own keys; hint `‹ ›` label collision |
+| `fr-fr` | OK | hint: `ê` over-fulfillment, double path `à`/`a` |
 | `es-es` | OK | — |
-| `it-it` | **Fix nötig** | `ü` erreichbar machen (§2.2-B) |
-| `pt-pt` | **Fix nötig** | `à` als eigene Taste (§2.2-A) |
-| `nl-nl` | **Fix nötig** | `ä` erreichbar machen (§2.2-B) |
-| `pl-pl` | **Fix nötig** | `”` ergänzen (§2.2-SZ) |
+| `it-it` | **Fix needed** | make `ü` reachable (§2.2-B) |
+| `pt-pt` | **Fix needed** | `à` as an own key (§2.2-A) |
+| `nl-nl` | **Fix needed** | make `ä` reachable (§2.2-B) |
+| `pl-pl` | **Fix needed** | add `”` (§2.2-P) |
 | `tr-tr` | OK | — |
-| `ru-ru` | **Fix nötig** | `–` ergänzen (§2.2-SZ) |
+| `ru-ru` | **Fix needed** | add `–` (§2.2-P) |
 | `cs-cz` | OK | — |
 | `sv-se` | OK | — |
 | `da-dk` | OK | — |
 | `fi-fi` | OK | — |
-| `el-gr` | **Fix nötig** | `·` (U+00B7) als eigene Taste; zwei nicht-NFC-Alternates entfernen; R8-Ausnahme ist Doku (D1) |
+| `el-gr` | **Fix needed** | `·` (U+00B7) as an own key; remove two non-NFC alternates; the R8 exception is documentation (D1) |
 
-**Summe: 8 von 15 Assets mit Fixbedarf**, 7 OK. Hinweise (kein Fix) gibt es für
-`fr-fr` (Übererfüllung `ê`, Doppelpfad `à`/`a`) und innerhalb der Fix-Assets für
-`de-de`/`en-us` (Regel-3-Präzisierung, Audit D3).
+**Total: 8 of 15 assets needing fixes**, 7 OK. Hints (no fix) exist for
+`fr-fr` (over-fulfillment `ê`, double path `à`/`a`) and, within the fix
+assets, for `de-de`/`en-us` (rule 3 clarification, audit D3).
 
-## (f) Testabdeckung — warum die Tests grün sind
+## (f) Test coverage — why the tests are green
 
-`LayoutCompletenessTest` prüft §2.2 **nur für `base`** (A- und B-Mengen) und §2.1
-für die Symbolebenen. **Nicht** geprüft und deshalb durchgerutscht:
+`LayoutCompletenessTest` checks §2.2 **only for `base`** (the A and B sets)
+and §2.1 for the symbol layers. **Not** checked, and therefore slipped
+through:
 
-1. §2.2-Spalte „Satzzeichen" (die 6 SZ-Befunde) — die Matrix hat keine Symbol-Spalte.
-2. NFC von Labels/Alternates (Regel 7) — `el-gr` U+0387/U+037E.
-3. Regel 8 außerhalb von `symbols`/`symbolsShift` (nur dort werden doppelte
-   Text-`value`s geprüft) — `el-gr` `Σ` in `shift` fällt nicht auf.
-4. Regel 3 im Detail (ein Codepoint, Duplikate, eigenes Zeichen, Spiegelung).
-5. Regel 5d (Zeichen-Universum `Z`) — nur die zwei Beispiel-Artefakte.
+1. the §2.2 column "punctuation" (the 6 P findings) — the matrix has no
+   punctuation column.
+2. NFC of labels/alternates (rule 7) — `el-gr` U+0387/U+037E.
+3. rule 8 outside `symbols`/`symbolsShift` (duplicate text `value`s are
+   checked only there) — `el-gr` `Σ` in `shift` goes unnoticed.
+4. rule 3 in detail (one codepoint, duplicates, own character, mirroring).
+5. rule 5d (character universe `Z`) — only the two example artifacts.
 
-**Empfehlung (Coders, Stufe 3):** `PunctuationCoverageTest` um die §2.2-SZ-Matrix
-erweitern, `NfcLabelTest` (Labels **und** Alternates), `LayoutArtifactTest`
-(Regel 5a–5e + `Z`) und eine Duplikatprüfung über **alle** Ebenen. Damit sind die
-8 Befunde dauerhaft abgesichert statt einmalig repariert.
+**Recommendation (coders, step 3):** extend `PunctuationCoverageTest` with
+the §2.2-P matrix, add `NfcLabelTest` (labels **and** alternates),
+`LayoutArtifactTest` (rules 5a–5e + `Z`), and a duplicate check across
+**all** layers. That secures the 8 findings permanently instead of repairing
+them once.

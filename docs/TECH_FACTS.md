@@ -1,203 +1,220 @@
-# Verifizierte technische Fakten (Umgebung + Abhängigkeiten)
+# Verified technical facts (environment + dependencies)
 
-Stand: 2026-10-27 (Review-Fassung). Jede Zeile trägt ihren Beleg-Grad:
+Status: 2026-10-27 (review version). Every line carries its evidence grade:
 
-- **[gemessen]** — in dieser Container-Umgebung direkt ausgeführt/gemessen.
-- **[SDK]** — direkt aus dem installierten Android SDK gelesen
-  (`/opt/android-sdk/platforms/android-36`: `android.jar`, `data/res/values/attrs_manifest.xml`).
-- **[AAR]** — direkt aus dem heruntergeladenen ONNX-Runtime-AAR gelesen
+- **[measured]** — executed/measured directly in this container environment.
+- **[SDK]** — read directly from the installed Android SDK
+  (`/opt/android-sdk/platforms/android-36`: `android.jar`,
+  `data/res/values/attrs_manifest.xml`).
+- **[AAR]** — read directly from the downloaded ONNX Runtime AAR
   (`AndroidManifest.xml`, `classes.jar`, `jni/**`).
-- **[Doku]** — aus offizieller Doku zitiert (URL genannt), im Container **nicht**
-  ausführbar; muss auf Gerät/Emulator bestätigt werden.
+- **[docs]** — quoted from official documentation (URL given), **not**
+  executable in the container; must be confirmed on a device/emulator.
 
-Nichts hier ist geraten. Werte ohne Beleg-Grad sind bewusst entfernt.
+Nothing here is guessed. Values without an evidence grade are deliberately
+removed.
 
-## 1. Build-Umgebung (Container)
+## 1. Build environment (container)
 
-| Komponente | Wert | Beleg |
+| Component | Value | Evidence |
 |---|---|---|
-| JDK | OpenJDK 17.0.20.1 (Debian) | [gemessen] |
-| Gradle | 8.10.2 (`/usr/local/bin/gradle`, Kotlin 1.9.24) | [gemessen] |
-| Android SDK | `/opt/android-sdk` (`sdk.dir` in `local.properties` gesetzt; `ANDROID_HOME` ist **nicht** gesetzt) | [gemessen] |
-| Plattformen | `android-35` (Android 15), `android-36` (Android 16), beide `IsBaseSdk=true`, ExtensionLevel 17 | [SDK] |
-| Build-Tools | 34.0.0, 35.0.0 | [gemessen] |
-| NDK | 27.0.12077973 (enthält `llvm-readelf`, `check_elf_alignment`-Workflow) | [gemessen] |
-| CMake | 3.31.0 | [gemessen] |
-| platform-tools | adb 1.0.41 (37.0.1) | [gemessen] |
-| Emulator | 37.2.12.0 | [gemessen] |
-| System-Images | `android-30`, `android-35`, `android-36` — **nur `google_apis/x86_64`** (Google-APIs-Image, enthält GMS-Bibliotheken) | [gemessen] |
-| AOSP-Image verfügbar | `system-images;android-36;default;x86_64` per `sdkmanager` installierbar (GrapheneOS-näher als `google_apis`) | [gemessen] |
-| KVM | `/dev/kvm` vorhanden, Modus 666, Gruppe `_ssh` → HW-Beschleunigung nutzbar | [gemessen] |
-| CPU / Disk | 16 Kerne, 44 TB, 37 TB frei | [gemessen] |
-| RAM | 60 GB total; **frei/available schwankt stark** (parallel laufende Agenten), bei Messung 1,1 GB available | [gemessen] |
-| Netz | `huggingface.co`, `repo1.maven.org`, `developer.android.com` → HTTP 200 | [gemessen] |
+| JDK | OpenJDK 17.0.20.1 (Debian) | [measured] |
+| Gradle | 8.10.2 (`/usr/local/bin/gradle`, Kotlin 1.9.24) | [measured] |
+| Android SDK | `/opt/android-sdk` (`sdk.dir` set in `local.properties`; `ANDROID_HOME` is **not** set) | [measured] |
+| Platforms | `android-35` (Android 15), `android-36` (Android 16), both `IsBaseSdk=true`, extension level 17 | [SDK] |
+| Build tools | 34.0.0, 35.0.0 | [measured] |
+| NDK | 27.0.12077973 (contains `llvm-readelf`, the `check_elf_alignment` workflow) | [measured] |
+| CMake | 3.31.0 | [measured] |
+| platform-tools | adb 1.0.41 (37.0.1) | [measured] |
+| Emulator | 37.2.12.0 | [measured] |
+| System images | `android-30`, `android-35`, `android-36` — **only `google_apis/x86_64`** (the Google APIs image, contains GMS libraries) | [measured] |
+| AOSP image available | `system-images;android-36;default;x86_64` installable via `sdkmanager` (closer to GrapheneOS than `google_apis`) | [measured] |
+| KVM | `/dev/kvm` present, mode 666, group `_ssh` → hardware acceleration usable | [measured] |
+| CPU / disk | 16 cores, 44 TB, 37 TB free | [measured] |
+| RAM | 60 GB total; **free/available fluctuates strongly** (agents running in parallel), 1.1 GB available at measurement time | [measured] |
+| Network | `huggingface.co`, `repo1.maven.org`, `developer.android.com` → HTTP 200 | [measured] |
 
-**Konsequenzen:** `sdk.dir=/opt/android-sdk` in `local.properties` ist Pflicht
-(Gradle findet das SDK sonst nicht). `ANDROID_HOME` muss für Tools gesetzt
-werden, die nicht über `local.properties` gehen (z. B. `sdkmanager`, `avdmanager`).
-Emulator-Tests sind real möglich. Ziel-SDK 36, minSdk ≥ 24 (siehe §3: ORT-AAR
-verlangt selbst `minSdkVersion=24`; Empfehlung 29+ bleibt).
-**Speicher ist der Engpass, nicht die CPU:** ein paralleler Emulator + ONNX-Inferenz
-(~0,9 GB RSS, siehe `docs/ASR_CONTRACT.md` §5) muss in den freien RAM passen —
-vor Emulator-Starts `free -m` prüfen, nicht blind parallelisieren.
+**Consequences:** `sdk.dir=/opt/android-sdk` in `local.properties` is
+mandatory (otherwise Gradle does not find the SDK). `ANDROID_HOME` must be
+set for tools that do not go through `local.properties` (e.g. `sdkmanager`,
+`avdmanager`). Emulator tests are realistically possible. Target SDK 36,
+minSdk ≥ 24 (see §3: the ORT AAR itself requires `minSdkVersion=24`; the
+recommendation of 29+ stands).
+**Memory is the bottleneck, not the CPU:** a parallel emulator + ONNX
+inference (~0.9 GB RSS, see `docs/ASR_CONTRACT.md` §5) must fit into the
+free RAM — check `free -m` before emulator starts, do not parallelize
+blindly.
 
-## 2. ASR-Modell: Parakeet TDT 0.6B v3 als ONNX
+## 2. ASR model: Parakeet TDT 0.6B v3 as ONNX
 
-Repo: `istupakov/parakeet-tdt-0.6b-v3-onnx` (HF-Revision
-`8f23f0c03c8761650bdb5b40aaf3e40d2c15f1ce`, Dateiliste + `config.json` per HF-API
-geprüft; SHA-256 aller vier Dateien siehe `docs/MODEL_SHA256.txt`).
+Repo: `istupakov/parakeet-tdt-0.6b-v3-onnx` (HF revision
+`8f23f0c03c8761650bdb5b40aaf3e40d2c15f1ce`, file list + `config.json`
+checked via the HF API; SHA-256 of all four files see
+`docs/MODEL_SHA256.txt`).
 
-| Datei | Größe | Rolle |
+| File | Size | Role |
 |---|---|---|
-| `encoder-model.int8.onnx` | 652.183.999 B | Encoder (int8, selbstenthaltend) |
-| `decoder_joint-model.int8.onnx` | 18.202.004 B | Decoder+Joint (int8) |
-| `nemo128.onnx` | 139.764 B | Mel-Feature-Extraktor (NeMo 128-bin log-mel) |
-| `vocab.txt` | 93.939 B | 8193 Token-Strings `<token> <id>`, `<blk>` = 8192 |
+| `encoder-model.int8.onnx` | 652,183,999 B | encoder (int8, self-contained) |
+| `decoder_joint-model.int8.onnx` | 18,202,004 B | decoder+joint (int8) |
+| `nemo128.onnx` | 139,764 B | mel feature extractor (NeMo 128-bin log-mel) |
+| `vocab.txt` | 93,939 B | 8193 token strings `<token> <id>`, `<blk>` = 8192 |
 
-Summe int8 ≈ **671 MB**. fp32-Variante: `encoder-model.onnx` (41,8 MB) +
-`encoder-model.onnx.data` (2435 MB) + `decoder_joint-model.onnx` (72,5 MB) — für
-Mobile ungeeignet. Nebenbefund [gemessen]: `config.json` enthält **kein**
-`max_tokens_per_step` → Default 10 ist zu kodieren (Details `ASR_CONTRACT.md` §1).
+The int8 sum ≈ **671 MB**. fp32 variant: `encoder-model.onnx` (41.8 MB) +
+`encoder-model.onnx.data` (2435 MB) + `decoder_joint-model.onnx` (72.5 MB) —
+unsuitable for mobile. Side finding [measured]: `config.json` contains
+**no** `max_tokens_per_step` → the default 10 must be coded (details
+`ASR_CONTRACT.md` §1).
 
-Nur zur Vollständigkeit: `nvidia/parakeet-tdt-0.6b-v3` bietet zusätzlich
-`parakeet-tdt-0.6b-v3.q8_0.gguf` (714 MB) — relevant nur, falls ein GGUF-Runtime-Weg
-gewählt wird; **ONNX ist der geplante Weg**.
+For completeness only: `nvidia/parakeet-tdt-0.6b-v3` additionally offers
+`parakeet-tdt-0.6b-v3.q8_0.gguf` (714 MB) — relevant only if a GGUF runtime
+path is chosen; **ONNX is the planned path**.
 
-**Konsequenzen:** 671 MB passen nicht ins APK → Download beim ersten Start
-(HTTPS, resumable, SHA-256-Prüfung, Fortschritt, Abbruch), Ablage in
-`filesDir/models/parakeet-tdt-0.6b-v3-int8/`, **aus Backup/D2D-Transfer
-ausgeschlossen** (sonst wandern 671 MB bei jeder Sicherung mit, siehe §4.5).
-Gemessener Laufzeit-Footprint des int8-Modells: **~0,9 GB RSS** (x86_64, 8 Threads);
-das ist die harte Geräte-Randbedingung und muss auf ARM64 nachgemessen werden.
+**Consequences:** 671 MB does not fit into the APK → download at the first
+start (HTTPS, resumable, SHA-256 check, progress, abort), stored in
+`filesDir/models/parakeet-tdt-0.6b-v3-int8/`, **excluded from
+backup/D2D transfer** (otherwise 671 MB migrate with every backup, see
+§4.5). Measured runtime footprint of the int8 model: **~0.9 GB RSS**
+(x86_64, 8 threads); that is the hard device constraint and must be
+re-measured on ARM64.
 
-## 3. ONNX Runtime für Android
+## 3. ONNX Runtime for Android
 
-Gemessen am aktuellen AAR `com.microsoft.onnxruntime:onnxruntime-android:1.31.1`
-(2026-10-26, `SHA-256 d4d50660300ed2c4f38ffdfd5ab5bfa3a22f995f282dda24f42ea3ea55467b49`,
-55.138.794 B) — gleiche Version wie das Python-`onnxruntime` 1.31.1, mit dem
-`ASR_CONTRACT.md` erzeugt wurde (reproduzierbar).
+Measured on the current AAR
+`com.microsoft.onnxruntime:onnxruntime-android:1.31.1` (2026-10-26,
+`SHA-256 d4d50660300ed2c4f38ffdfd5ab5bfa3a22f995f282dda24f42ea3ea55467b49`,
+55,138,794 B) — the same version as the Python `onnxruntime` 1.31.1 that
+`ASR_CONTRACT.md` was produced with (reproducible).
 
-| Fakt | Wert | Beleg |
+| Fact | Value | Evidence |
 |---|---|---|
-| AAR-Größe (alle 4 ABIs) | 55,1 MB | [gemessen] |
-| `jni/arm64-v8a` entpackt | 34,3 MB (`libonnxruntime.so` 34.208.680 B + JNI 122.576 B) | [gemessen] |
-| `jni/x86_64` entpackt | 40,9 MB | [gemessen] |
-| `jni/armeabi-v7a` / `x86` | 24,3 MB / 40,8 MB | [gemessen] |
-| `minSdkVersion` des AAR | **24** | [AAR] |
-| 16-KB-Page-Alignment der `.so` (alle ABIs) | `LOAD align = 0x4000` = 16 KB ✓ | [gemessen] (`llvm-readelf -l`) |
-| Vom AAR eingeschleuste Permissions | `INTERNET`, `ACCESS_NETWORK_STATE` | [AAR] |
-| Vom AAR eingeschleuster Provider | `ai.onnxruntime.TelemetryInitializer` (+ `telemetry.HttpClient`, `ConnectivityCallback`, `PowerInfoReceiver`) | [AAR] |
+| AAR size (all 4 ABIs) | 55.1 MB | [measured] |
+| `jni/arm64-v8a` unpacked | 34.3 MB (`libonnxruntime.so` 34,208,680 B + JNI 122,576 B) | [measured] |
+| `jni/x86_64` unpacked | 40.9 MB | [measured] |
+| `jni/armeabi-v7a` / `x86` | 24.3 MB / 40.8 MB | [measured] |
+| `minSdkVersion` of the AAR | **24** | [AAR] |
+| 16-KB page alignment of the `.so` (all ABIs) | `LOAD align = 0x4000` = 16 KB ✓ | [measured] (`llvm-readelf -l`) |
+| Permissions injected by the AAR | `INTERNET`, `ACCESS_NETWORK_STATE` | [AAR] |
+| Provider injected by the AAR | `ai.onnxruntime.TelemetryInitializer` (+ `telemetry.HttpClient`, `ConnectivityCallback`, `PowerInfoReceiver`) | [AAR] |
 
-**Konsequenzen (verbindlich):**
+**Consequences (binding):**
 
-1. **APK-Wachstum:** int8-Modell + ORT-AAR = 671 MB (Modelle, Download) + ~34 MB
-   native Libs (arm64). APK/AAB mit `abiFilters` auf `arm64-v8a` (+ `x86_64` nur
-   für Emulator-Builds) begrenzen; eine Universal-APK mit 4 ABIs wäre ~140 MB.
-2. **16-KB-Pages:** ab Android 15 gibt es Geräte mit 16-KB-Speicherseiten; Apps
-   mit nativen Libs müssen dafür gebaut sein (Google-Play-Auflage für Apps mit
-   `targetSdk ≥ 35` auf 64-Bit-Geräten; Updates ohne 16-KB-Support können ab
-   **1. Februar 2027** nicht mehr ausgeliefert werden). Die ORT-1.31.1-Libs sind
-   bereits `0x4000`-aligniert [gemessen], also kein Blocker — bei jedem ORT-Update
-   erneut prüfen (`llvm-readelf -l` bzw. `check_elf_alignment.sh` / `zipalign -c -P 16`).
-   [Doku: developer.android.com/guide/practices/page-sizes]
-3. **Telemetrie/Netz:** Die AAR bringt einen Telemetry-`ContentProvider` und
-   Netzwerk-Permissions mit. Für ein lokales ASR auf GrapheneOS muss der Provider
-   im App-Manifest per Manifest-Merger entfernt werden
-   (`<provider android:name="ai.onnxruntime.TelemetryInitializer" tools:node="remove" …/>`),
-   sonst initialisiert ORT seinen 1DS-HttpClient und darf HTTP senden (die native
-   Lib enthält den 1DS-Stack; sie meldet ohne Java-Client lediglich
-   „Android telemetry is unavailable …" [gemessen via `strings`]). `INTERNET`
-   bleibt nur für den Modell-Download drin — die Doku-/Store-Aussage „keine
-   Netzverbindung außer Modell-Download" ist also **nur nach** diesem Eingriff wahr.
-4. **CPU-EP ist der sichere Default** (`intra_op_num_threads` = physische Kerne);
-   NNAPI deckt nicht alle Parakeet-Ops ab. `nemo128.onnx` kapselt die
-   Mel-Extraktion → kein eigener DSP-Code (Eingang 16 kHz float-PCM, Ausgang Mel).
-   Achtung Speicher: `SessionOptions` mit deaktiviertem Memory-Pattern/Prepacking
-   und ggf. `use_ort_model_bytes_directly` prüfen — 0,9 GB RSS sind auf 4-GB-Geräten
-   grenzwertig (low-memory-killer).
+1. **APK growth:** int8 model + ORT AAR = 671 MB (models, download) + ~34 MB
+   native libs (arm64). Limit APK/AAB with `abiFilters` to `arm64-v8a` (+
+   `x86_64` for emulator builds only); a universal APK with 4 ABIs would be
+   ~140 MB.
+2. **16-KB pages:** from Android 15 there are devices with 16-KB memory
+   pages; apps with native libs must be built for that (a Google Play
+   requirement for apps with `targetSdk ≥ 35` on 64-bit devices; updates
+   without 16-KB support can no longer be delivered from **February 1,
+   2027**). The ORT 1.31.1 libs are already `0x4000`-aligned [measured], so
+   no blocker — re-check on every ORT update (`llvm-readelf -l` resp.
+   `check_elf_alignment.sh` / `zipalign -c -P 16`).
+   [Docs: developer.android.com/guide/practices/page-sizes]
+3. **Telemetry/network:** the AAR brings a telemetry `ContentProvider` and
+   network permissions. For a local ASR on GrapheneOS the provider must be
+   removed from the app manifest via the manifest merger
+   (`<provider android:name="ai.onnxruntime.TelemetryInitializer"
+   tools:node="remove" …/>`), otherwise ORT initializes its 1DS HTTP client
+   and may send HTTP (the native lib contains the 1DS stack; without the
+   Java client it merely reports "Android telemetry is unavailable …"
+   [measured via `strings`]). `INTERNET` stays in only for the model
+   download — the documentation/store statement "no network connection
+   except model download" is thus true **only after** this intervention.
+4. **The CPU EP is the safe default** (`intra_op_num_threads` = physical
+   cores); NNAPI does not cover all Parakeet ops. `nemo128.onnx`
+   encapsulates the mel extraction → no own DSP code (input 16 kHz float
+   PCM, output mel). Watch the memory: check `SessionOptions` with the
+   memory pattern/prepacking disabled and possibly
+   `use_ort_model_bytes_directly` — 0.9 GB RSS is borderline on 4-GB
+   devices (low-memory killer).
 
-## 4. Android-Plattform-Randbedingungen (API 34/35/36, GrapheneOS)
+## 4. Android platform constraints (API 34/35/36, GrapheneOS)
 
-### 4.1 Mikrofon + Foreground-Service
-- `foregroundServiceType="microphone"` = Flag `0x80`; ab `targetSdk 34` verlangt
-  der Start dieses Typs die Permission `FOREGROUND_SERVICE_MICROPHONE` **und**
-  eine von `RECORD_AUDIO` / `CAPTURE_AUDIO_OUTPUT` — sonst
-  `InvalidForegroundServiceTypeException`/`SecurityException`. Ohne den Typ kein
-  Mikrofonzugriff. [SDK: `attrs_manifest.xml`, `Manifest.permission`]
-- Zusätzlich `FOREGROUND_SERVICE` (Basis-Permission) und `POST_NOTIFICATIONS`
-  (Laufzeit-Permission ab API 33; ohne sie startet der Service, aber die
-  Notification ist unsichtbar → Nutzer sieht keine Aufnahme-Indikation).
+### 4.1 Microphone + foreground service
+- `foregroundServiceType="microphone"` = flag `0x80`; from `targetSdk 34`,
+  starting this type requires the permission
+  `FOREGROUND_SERVICE_MICROPHONE` **and** one of `RECORD_AUDIO` /
+  `CAPTURE_AUDIO_OUTPUT` — otherwise
+  `InvalidForegroundServiceTypeException`/`SecurityException`. Without the
+  type, no microphone access. [SDK: `attrs_manifest.xml`,
+  `Manifest.permission`]
+- Additionally `FOREGROUND_SERVICE` (the base permission) and
+  `POST_NOTIFICATIONS` (a runtime permission from API 33; without it the
+  service starts, but the notification is invisible → the user sees no
+  recording indication).
   [SDK: `Manifest.permission.POST_NOTIFICATIONS`]
-- **While-in-use-Regel:** Ein FGS, der while-in-use-Permissions (Kamera, Mikrofon,
-  Location) braucht, darf **nicht aus dem Hintergrund** gestartet werden — auch
-  nicht über eine der Background-Start-Ausnahmen. [Doku:
+- **While-in-use rule:** an FGS that needs while-in-use permissions
+  (camera, microphone, location) may **not be started from the background**
+  — not even via one of the background start exceptions. [Docs:
   developer.android.com/develop/background-work/services/fgs/restrictions-bg-start]
-  Für ein IME heißt das: Aufnahme erst starten, wenn die IME-Oberfläche sichtbar
-  ist (Mic-Taste in `onStartInputView`), nicht aus einem Timer/Broadcast. Der
-  umgekehrte Fall — Aufnahme läuft weiter, während die IME-Tastatur verdeckt ist
-  (anderes Fenster im Vordergrund) — ist der riskante Pfad und muss auf dem
-  Emulator explizit getestet werden.
-- **Architektur-Konsequenz:** Ein IME-Prozess mit sichtbarer Tastatur ist selbst
-  im Vordergrund; für kurze Diktate ist **kein** FGS nötig. Ein FGS ist nur für
-  „Aufnahme läuft weiter, während die Tastatur nicht sichtbar ist" erforderlich —
-  diese Produktentscheidung gehört bewusst getroffen (und dann mit §4.1-Regeln
-  gebaut), nicht implizit.
-- **FGS-Typen mit Zeitlimit:** `dataSync` und `mediaProcessing` dürfen ab
-  `targetSdk 35` nur **6 h pro 24 h** laufen; danach ruft das System
-  `Service.onTimeout(int, int)` und der Service muss sofort `stopSelf()` rufen
-  (sonst interne Exception). `microphone` hat dieses Limit **nicht** — ein
-  Diktat-FGS mit `microphone` ist also nicht zeitlich gekappt, `dataSync` als
-  „bequemer“ Typ wäre ein Fehler. [Doku:
+  For an IME this means: start recording only when the IME surface is
+  visible (mic key in `onStartInputView`), not from a timer/broadcast. The
+  reverse case — the recording keeps running while the IME keyboard is
+  covered (another window in front) — is the risky path and must be tested
+  explicitly on the emulator.
+- **Architecture consequence:** an IME process with a visible keyboard is
+  itself in the foreground; for short dictations **no** FGS is needed. An
+  FGS is only required for "the recording keeps running while the keyboard
+  is not visible" — this product decision must be made deliberately (and
+  then built with the §4.1 rules), not implicitly.
+- **FGS types with a time limit:** `dataSync` and `mediaProcessing` may run
+  only **6 h per 24 h** from `targetSdk 35`; after that the system calls
+  `Service.onTimeout(int, int)` and the service must call `stopSelf()`
+  immediately (otherwise an internal exception). `microphone` does **not**
+  have this limit — a dictation FGS with `microphone` is thus not
+  time-capped; `dataSync` as a "convenient" type would be a mistake. [Docs:
   developer.android.com/about/versions/15/behavior-changes-15]
 
-### 4.2 Sideload / Restricted Settings
-- `adb install` und Installation aus unbekannter Quelle funktionieren auf
-  GrapheneOS; die App braucht keinen Store. Eigener Signaturschlüssel liegt in
-  `keystore/` (siehe `IMPLEMENTATION_PLAN.md`). [Doku: grapheneos.org/usage,
+### 4.2 Sideload / restricted settings
+- `adb install` and installation from an unknown source work on GrapheneOS;
+  the app needs no store. The own signing key is in `keystore/` (see
+  `IMPLEMENTATION_PLAN.md`). [Docs: grapheneos.org/usage,
   developer.android.com]
-- „Restricted Settings" (Android 13+) betrifft **Accessibility- und
-  Notification-Listener-Services**, nicht `InputMethodService`; ein IME muss
-  also nicht über „Restricted Settings" freigeschaltet werden. [Doku; im
-  Container nicht prüfbar] **Trotzdem Testaufgabe**, weil GrapheneOS eigene
-  Defaults für Autofill/Accessibility hat und die Emulator-Images (google_apis)
-  das Verhalten nicht abbilden.
-- Kein Google Play Services / kein Google-Speech-Dienst → **jede** ASR lokal.
-  Kein `QUERY_ALL_PACKAGES` nötig.
+- "Restricted settings" (Android 13+) concerns **accessibility and
+  notification listener services**, not `InputMethodService`; an IME thus
+  does not have to be unlocked via "restricted settings". [Docs; not
+  checkable in the container] **Nevertheless a test task**, because
+  GrapheneOS has its own defaults for autofill/accessibility and the
+  emulator images (google_apis) do not reflect the behavior.
+- No Google Play services / no Google speech service → **every** ASR local.
+  No `QUERY_ALL_PACKAGES` needed.
 
-### 4.3 16-KB-Speicherseiten
-Siehe §3: gilt für alle Apps mit nativen Libraries (`targetSdk ≥ 35`), also auch
-für ONNX Runtime. Ein echter 16-KB-Emulatortest ist möglich — die Images sind
-separat installierbar [gemessen via `sdkmanager --list`]:
+### 4.3 16-KB memory pages
+See §3: applies to all apps with native libraries (`targetSdk ≥ 35`),
+including ONNX Runtime. A real 16-KB emulator test is possible — the
+images are separately installable [measured via `sdkmanager --list`]:
 
 ```bash
-sdkmanager "system-images;android-36;google_apis_ps16k;x86_64"    # 16-KB-Page-Image, API 36
-# Varianten: android-35;google_apis_ps16k;*, android-36;google_apis_playstore_ps16k,*
-# (alle per `sdkmanager --list | grep ps16k` bestätigt)
+sdkmanager "system-images;android-36;google_apis_ps16k;x86_64"    # 16-KB page image, API 36
+# Variants: android-35;google_apis_ps16k;*, android-36;google_apis_playstore_ps16k,*
+# (all confirmed via `sdkmanager --list | grep ps16k`)
 ```
 
-Die vorhandenen Images (`google_apis/x86_64`) sind **keine** 16-KB-Images.
-Ersatzprüfung ohne Gerät: ELF-`LOAD`-Alignment ≥ 2**14 (`llvm-readelf -l`, §3).
-[Doku: developer.android.com/guide/practices/page-sizes]
+The existing images (`google_apis/x86_64`) are **not** 16-KB images.
+Substitute check without a device: ELF `LOAD` alignment ≥ 2**14
+(`llvm-readelf -l`, §3).
+[Docs: developer.android.com/guide/practices/page-sizes]
 
-### 4.4 targetSdk 36 (Android 16) — was die App trifft
-- **Edge-to-Edge ist nicht mehr abwählbar** (`windowOptOutEdgeToEdgeEnforcement`
-  wird für `targetSdk ≥ 36` ignoriert) → Tastatur-View muss mit
-  `WindowInsets`/`imeInsets` umgehen statt mit Systemleisten-Annahmen.
-  [Doku: developer.android.com/about/versions/16/behavior-changes-16]
-- **Predictive Back ist Default** → Back-Geste darf die Tastatur nicht
-  unkontrolliert schließen; Migrationsschritte nötig. [ebd.]
-- **Orientierungs-/Resizability-/Seitenverhältnis-Restriktionen werden auf großen
-  Screens ignoriert** → Layout muss in jeder Fenstergröße funktionieren (Split
-  Screen, Tablet, Desktop-Windowing). [ebd.]
-- `android:exported` muss für alle Komponenten mit Intent-Filter explizit gesetzt
-  sein (IME-Service: `exported="true"`, sonst installiert die App ab API 31 nicht).
-  [SDK]
-- 16-KB-Pages-Anforderung (§4.3) hängt ebenfalls an `targetSdk ≥ 35`. [Doku]
+### 4.4 targetSdk 36 (Android 16) — what hits the app
+- **Edge-to-edge is no longer optional** (`windowOptOutEdgeToEdgeEnforcement`
+  is ignored for `targetSdk ≥ 36`) → the keyboard view must work with
+  `WindowInsets`/`imeInsets` instead of assumptions about the system bars.
+  [Docs: developer.android.com/about/versions/16/behavior-changes-16]
+- **Predictive back is the default** → the back gesture must not close the
+  keyboard uncontrolled; migration steps needed. [ibid.]
+- **Orientation/resizability/aspect-ratio restrictions are ignored on
+  large screens** → the layout must work at every window size (split
+  screen, tablet, desktop windowing). [ibid.]
+- `android:exported` must be set explicitly for all components with an
+  intent filter (IME service: `exported="true"`, otherwise the app does not
+  install from API 31). [SDK]
+- The 16-KB pages requirement (§4.3) also attaches to `targetSdk ≥ 35`.
+  [Docs]
 
-### 4.5 Backup / Daten-Extraktion
-Ab API 31 ersetzt `android:dataExtractionRules` das alte `fullBackupContent`.
-Für dieses Projekt Pflicht, nicht Kür: die 671 MB Modelldateien dürfen **nicht**
-in Cloud-Backup oder D2D-Transfer landen.
+### 4.5 Backup / data extraction
+From API 31, `android:dataExtractionRules` replaces the old
+`fullBackupContent`. For this project mandatory, not trimming: the 671 MB
+model files must **not** land in a cloud backup or a D2D transfer.
 
 ```xml
 <application android:allowBackup="false"
@@ -205,18 +222,19 @@ in Cloud-Backup oder D2D-Transfer landen.
              android:fullBackupContent="false">
 ```
 [SDK: `android:dataExtractionRules`, `android:fullBackupContent` in
-`attrs_manifest.xml`; Verhalten Doku developer.android.com/guide/topics/data/autobackup]
+`attrs_manifest.xml`; behavior docs developer.android.com/guide/topics/data/autobackup]
 
-### 4.6 Batterie / Sonstiges
-- `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` nur optional und erklärt anbieten
-  (Play-/Store-Richtlinien verbieten es sonst; hier Sideload, aber Vertrauen).
-- Kein `SCHEDULE_EXACT_ALARM`, kein `BOOT_COMPLETED`-Start (ab API 35 sind
-  bestimmte FGS-Typen aus `BOOT_COMPLETED` ohnehin gesperrt) — für ein IME
-  irrelevant.
+### 4.6 Battery / misc
+- `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` only optionally and with an
+  explanation offered (Play/store policies forbid it otherwise; here a
+  sideload, but trust).
+- No `SCHEDULE_EXACT_ALARM`, no `BOOT_COMPLETED` start (from API 35 certain
+  FGS types are barred from `BOOT_COMPLETED` anyway) — irrelevant for an
+  IME.
 
-## 5. IME-Technik (AOSP, ohne Google)
+## 5. IME technology (AOSP, without Google)
 
-### 5.1 Manifest-Pflichtteile (aus dem SDK abgeleitet, [SDK])
+### 5.1 Mandatory manifest parts (derived from the SDK, [SDK])
 ```xml
 <service android:name=".VoiceImeService"
          android:exported="true"
@@ -226,33 +244,36 @@ in Cloud-Backup oder D2D-Transfer landen.
 </service>
 ```
 `android.view.inputmethod.InputMethod.SERVICE_INTERFACE` /
-`SERVICE_META_DATA` sind die Konstanten dafür; `BIND_INPUT_METHOD` ist die
-System-Permission, die nur der System-Server hält — ohne sie kann keine fremde
-App die Tastatur binden.
+`SERVICE_META_DATA` are the constants for that; `BIND_INPUT_METHOD` is the
+system permission held only by the system server — without it no foreign
+app can bind the keyboard.
 
-### 5.2 API-Realität (geprüft gegen `android.jar` API 36)
-- **`InputMethodService.isProcessDefault()` existiert nicht** (in API 36 nicht
-  vorhanden). „Ist meine IME die aktive?" wird über
-  `Settings.Secure.DEFAULT_INPUT_METHOD` bzw.
-  `InputMethodManager.getEnabledInputMethodList()` ermittelt; zum Umschalten
-  `InputMethodManager.showInputMethodPicker()` oder
+### 5.2 API reality (checked against `android.jar` API 36)
+- **`InputMethodService.isProcessDefault()` does not exist** (absent in API
+  36). "Is my IME the active one?" is determined via
+  `Settings.Secure.DEFAULT_INPUT_METHOD` resp.
+  `InputMethodManager.getEnabledInputMethodList()`; for switching
+  `InputMethodManager.showInputMethodPicker()` or
   `InputMethodService.switchInputMethod(id)`. [SDK]
-- Für „soll die eigene View überhaupt angezeigt werden?" sind
-  `onEvaluateInputViewShown()`, `isInputViewShown()` und
-  `onShowInputRequested(int, boolean)` vorhanden — diese drei sind der richtige
-  Hebel (Hardware-Tastatur, `TYPE_NULL`, Extraktionsmodus). [SDK]
-- Weitere vorhandene Hooks: `isFullscreenMode()`, `onEvaluateFullscreenMode()`,
-  `getCurrentInputBinding()`, `onAppPrivateCommand()`,
-  `setCandidatesViewShown(boolean)`, `isExtractViewShown()`. [SDK]
-- `android.inputmethodservice.KeyboardView` ist deprecated → eigene View
-  (bestätigt die Design-Entscheidung).
-- Text-Injektion: `InputConnection.commitText()`, `deleteSurroundingText()`,
-  `setComposingText()`, `finishComposingText()` — kein AccessibilityService nötig.
-- Sicherheit: bei `EditorInfo.inputType` mit `TYPE_TEXT_VARIATION_PASSWORD`,
-  `TYPE_NULL` o. Ä. darf weder diktiert noch gelernt werden; die Mic-Taste muss
-  dort deaktiviert werden (Datenschutz-Zusage).
+- For "should my own view be shown at all?",
+  `onEvaluateInputViewShown()`, `isInputViewShown()`, and
+  `onShowInputRequested(int, boolean)` exist — these three are the right
+  lever (hardware keyboard, `TYPE_NULL`, extraction mode). [SDK]
+- Further hooks present: `isFullscreenMode()`,
+  `onEvaluateFullscreenMode()`, `getCurrentInputBinding()`,
+  `onAppPrivateCommand()`, `setCandidatesViewShown(boolean)`,
+  `isExtractViewShown()`. [SDK]
+- `android.inputmethodservice.KeyboardView` is deprecated → an own view
+  (confirms the design decision).
+- Text injection: `InputConnection.commitText()`,
+  `deleteSurroundingText()`, `setComposingText()`,
+  `finishComposingText()` — no accessibility service needed.
+- Security: with `EditorInfo.inputType` such as
+  `TYPE_TEXT_VARIATION_PASSWORD` or `TYPE_NULL`, neither dictation nor
+  learning is allowed; the mic key must be disabled there (privacy
+  promise).
 
-### 5.3 Emulator-Testablauf [gemessen: Werkzeuge vorhanden]
+### 5.3 Emulator test procedure [measured: tools present]
 ```bash
 export ANDROID_HOME=/opt/android-sdk
 avdmanager create avd -n vk36 -k "system-images;android-36;google_apis;x86_64" -d pixel_6
@@ -262,25 +283,42 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 adb shell ime enable  com.example.voicekeyboard/.VoiceImeService
 adb shell ime set     com.example.voicekeyboard/.VoiceImeService
 adb shell am start -a android.intent.action.SENDTO -d sms:10086 --es sms_body "test"
-adb shell input text "hallo"      # prüft commitText-Pfad
+adb shell input text "hallo"      # checks the commitText path
 adb exec-out screencap -p > screen.png
 ```
-Für GrapheneOS-nah: AOSP-Image statt `google_apis`
-(`system-images;android-36;default;x86_64`, per `sdkmanager` nachinstallierbar
-[gemessen]) — nur dort fehlen die GMS-Bibliotheken wirklich.
+For something close to GrapheneOS: the AOSP image instead of `google_apis`
+(`system-images;android-36;default;x86_64`, installable afterwards via
+`sdkmanager` [measured]) — only there are the GMS libraries really absent.
 
-### 5.4 Was im Container NICHT prüfbar ist
-Verhalten von GrapheneOS im Detail (Restricted Settings, Sandboxed Play,
-Permission-Defaults), echtes Mikrofon, ARM64-Latenz, 16-KB-Page-Gerät,
-Akku-/Doze-Verhalten. Alles davon gehört in die Geräte-Testliste
-(`DESIGN.md` §10.4), nicht in dieses Dokument als Behauptung.
+### 5.4 What is NOT checkable in the container
+The behavior of GrapheneOS in detail (restricted settings, sandboxed Play,
+permission defaults), a real microphone, ARM64 latency, a 16-KB page
+device, battery/Doze behavior. All of that belongs on the device test list
+(`DESIGN.md` §10.4), not in this document as an assertion.
 
-## Emulator mit echtem Mikrofon-Einlass (gemessen 2026-10-30, 03:2x-03:4x)
-Drei Bedingungen — jede einzelne war ein harter Blocker, keine ist optional:
-1. **`-allow-host-audio`** ist zwingend. Wörtlich aus `emulator -help`: „Allows sending of audio from audio input devices. **Otherwise, zeroes out audio.**" (Ohne diesen Schalter ist das Gast-Mikrofon softwareseitig auf Null gesetzt — exakt der Zustand, der wie „App hört nichts" aussieht.)
-2. **Kein `-no-window`.** Der Headless-Zweig (`qemu-system-x86_64-headless`) hat keinen Audio-Treiber; im Log steht dann `Could not init \`pa' audio driver` und die QEMU-Kommandozeile enthält gar kein Audiogerät. Unsichtbar geht es trotzdem: `QT_QPA_PLATFORM=offscreen` + `-qt-hide-window`.
-3. **`-audio pa` + PulseAudio am Standardpfad** (`$XDG_RUNTIME_DIR/pulse/native`, also `/run/user/<uid>/`). `alsa` ist als `-audio`-Wert **unbekannt** („Unknown audio driver `alsa'"). Null-Sink `vkmic` als Standard-Senke **und** deren Remap-Quelle als Standard-Quelle.
+## Emulator with a real microphone input (measured 2026-10-30, 03:2x-03:4x)
+Three conditions — each one was a hard blocker, none is optional:
+1. **`-allow-host-audio`** is mandatory. Verbatim from `emulator -help`:
+   "Allows sending of audio from audio input devices. **Otherwise, zeroes
+   out audio.**" (Without this flag the guest microphone is software-zeroed
+   — exactly the state that looks like "the app hears nothing".)
+2. **No `-no-window`.** The headless branch
+   (`qemu-system-x86_64-headless`) has no audio driver; the log then says
+   `Could not init \`pa' audio driver` and the QEMU command line contains
+   no audio device at all. Invisible still works:
+   `QT_QPA_PLATFORM=offscreen` + `-qt-hide-window`.
+3. **`-audio pa` + PulseAudio on the standard path** (`$XDG_RUNTIME_DIR/
+   pulse/native`, i.e. `/run/user/<uid>/`). `alsa` is **unknown** as an
+   `-audio` value ("Unknown audio driver `alsa'"). Null sink `vkmic` as the
+   default sink **and** its remap source as the default source.
 
-Betriebssenkенlage: **65 %** ⇒ Peak 19 834, RMS 1931 (kein Clipping). 100 % ⇒ Peak 32 768 = Übersteuerung; 30 % ist zu leise (RMS ≈ 180).
-Werkzeuge: `tools/emulator_audio_up.sh` (aufsetzen + End-to-End-Beweis), `tools/emulator_audio_down.sh` (Rückbau inkl. App/IME), `tools/check_mic_capture.py` (Peak/RMS pro Sekunde, keine Inhalte).
-Beweiskette bisher: Host-Monitor der Null-Sink Peak 20545 / RMS 3501 (`parec`) → Geräteaufnahme über `tinycap` bei 65 % Senkenlage **Peak 19834 / RMS 1931** → Ton kommt am virtuellen Mikrofon an. Vorher (ohne `-no-window`-Weg) war die Geräteaufnahme **still** (Peak 8 = Rauschen).
+Operating sink level: **65 %** ⇒ peak 19,834, RMS 1931 (no clipping).
+100 % ⇒ peak 32,768 = overdriven; 30 % is too quiet (RMS ≈ 180).
+Tools: `tools/emulator_audio_up.sh` (setup + end-to-end proof),
+`tools/emulator_audio_down.sh` (teardown including the app/IME),
+`tools/check_mic_capture.py` (peak/RMS per second, no content).
+Evidence chain so far: the host monitor of the null sink peak 20,545 /
+RMS 3,501 (`parec`) → device recording via `tinycap` at a 65 % sink level
+**peak 19,834 / RMS 1,931** → the sound arrives at the virtual microphone.
+Beforehand (without the non-`-no-window` path) the device recording was
+**silent** (peak 8 = noise).

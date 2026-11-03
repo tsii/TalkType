@@ -6,21 +6,21 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * D11 (docs/DESIGN_STOCK_LOOK.md „D11 — Rückmeldung gedrückte Taste", ab Zeile 240):
- * Reine Flächen-/Glyphen-Entscheidung ohne Android — die Naht, die KeyboardView
- * beim Zeichnen aufruft. Test-first, JVM.
+ * D11 (docs/DESIGN_STOCK_LOOK.md “D11 — Rückmeldung gedrückte Taste”, from line 240):
+ * pure surface/glyph decision without Android — the seam that KeyboardView
+ * calls while drawing. Test-first, JVM.
  *
- * REGELN (explizit, aufgelöste Reihenfolge):
- *  1. micRecording ist höchste Priorität (Mic-Aufnahmezustand, D10 bleibt).
- *  2. CAPS_FILL: Shift-Taste mit EINGERASTETEM capsLock — Akzentfläche bleibt
- *     auch beim Drücken (D11: „Gedrückt+Caps behält diese Akzentfüllung … ohne
- *     zusätzlichen Overlayauftrag"); abgeleitet NUR aus capsLock, nie aus
- *     shiftTemporary und nie aus symbolsShift.
- *  3. pressed (Overlay-Verstärkung D11-Punkt 1) — für alle anderen Tasten.
+ * RULES (explicit, resolved order):
+ *  1. micRecording is the highest priority (mic recording state, D10 stays).
+ *  2. CAPS_FILL: shift key with LATCHED capsLock — the accent surface stays
+ *     even when pressed (D11: “Pressed+Caps keeps this accent fill … without
+ *     an additional overlay assignment”); derived ONLY from capsLock, never
+ *     from shiftTemporary and never from symbolsShift.
+ *  3. pressed (overlay reinforcement D11 point 1) — for all other keys.
  *  4. normal.
- * Glyphenfarbe konträr zur Füllung: CAPS_FILL/MIC_RECORDING ⇒ Gegenfarbe
- * (micRecordingGlyph-Token), nie Akzent auf Akzent; temporäres Shift ⇒ nur
- * Glyphe akzentuiert (keyToggledGlyph-Token), Fläche bleibt normal.
+ * Glyph color contrary to the fill: CAPS_FILL/MIC_RECORDING ⇒ complementary
+ * color (micRecordingGlyph token), never accent on accent; temporary shift ⇒
+ * only the glyph accented (keyToggledGlyph token), surface stays normal.
  */
 class KeySurfaceTest {
 
@@ -42,121 +42,121 @@ class KeySurfaceTest {
         activeLayerIsSymbols = activeLayerIsSymbols,
     )
 
-    // (a) pressed > normal; capsLock-Füllung gewinnt gegen normal, verliert gegen micRecording.
+    // (a) pressed > normal; the capsLock fill beats normal, loses to micRecording.
     @Test
-    fun `pressed und capsFuellung schlagen normal - micRecording schlaegt alles`() {
+    fun `pressed and caps fill beat normal - micRecording beats everything`() {
         assertEquals(KeySurface.Surface.PRESSED, decide(pressed = true).surface)
         assertEquals(KeySurface.Surface.NORMAL, decide().surface)
-        // Caps-Füllung (eingerasteter Shift):
+        // caps fill (latched shift):
         val caps = decide(istShiftKey = true, capsLock = true)
         assertEquals(KeySurface.Surface.CAPS_FILL, caps.surface)
-        // ... gewinnt gegen normal UND bleibt beim Drücken (kein zweiter Overlayauftrag):
+        // ... beats normal AND stays when pressed (no second overlay assignment):
         assertEquals(
-            "Gedrückt+Caps: Akzentfüllung bleibt (D11)",
+            "pressed+caps: the accent fill stays (D11)",
             KeySurface.Surface.CAPS_FILL,
             decide(istShiftKey = true, capsLock = true, pressed = true).surface,
         )
-        // ... verliert gegen micRecording:
+        // ... loses to micRecording:
         assertEquals(
             KeySurface.Surface.MIC_RECORDING,
             decide(micRecording = true, istShiftKey = true, capsLock = true, pressed = true).surface,
         )
-        // Gedrückt+Caps: Glyphe bleibt die Gegenfarbe (kein Wechsel auf Akzent):
+        // pressed+caps: the glyph stays the complementary color (no switch to accent):
         assertEquals(
             KeySurface.Glyph.CONTRAST,
             decide(istShiftKey = true, capsLock = true, pressed = true).glyph,
         )
     }
 
-    // (b) shiftTemporary erzeugt KEINE Flächenfüllung — nur die akzentuierte Glyphe.
+    // (b) shiftTemporary creates NO surface fill — only the accented glyph.
     @Test
-    fun `shiftTemporary fuellt die Flaeche nicht - nur Glyphe akzentuiert`() {
+    fun `shiftTemporary does not fill the surface - only the glyph is accented`() {
         val r = decide(istShiftKey = true, shiftTemporary = true)
-        assertEquals("Fläche bleibt normal", KeySurface.Surface.NORMAL, r.surface)
+        assertEquals("surface stays normal", KeySurface.Surface.NORMAL, r.surface)
         assertEquals("Glyphe akzentuiert (keyToggledGlyph-Token)", KeySurface.Glyph.ACCENT, r.glyph)
-        // ...auch nicht in Kombination mit gedrückt:
+        // ...and not in combination with pressed either:
         assertEquals(
             KeySurface.Surface.PRESSED,
             decide(istShiftKey = true, shiftTemporary = true, pressed = true).surface,
         )
-        // Gedrückt+temporäres Shift: akzentuierte Glyphe bleibt über dem Overlay:
+        // pressed+temporary shift: the accented glyph stays above the overlay:
         assertEquals(
             KeySurface.Glyph.ACCENT,
             decide(istShiftKey = true, shiftTemporary = true, pressed = true).glyph,
         )
     }
 
-    // (c) symbolsShift erzwingt KEINE CapsLock-Füllung (Symbol-Ebene ist kein Caps-Zustand).
+    // (c) symbolsShift forces NO capsLock fill (the symbol layer is not a caps state).
     @Test
-    fun `symbolsShift erzwingt keine CapsFuellung`() {
+    fun `symbolsShift forces no caps fill`() {
         assertEquals(
             KeySurface.Surface.NORMAL,
             decide(istShiftKey = true, symbolShift = true).surface,
         )
-        // Auch auf der Symbolebene mit wahrem capsLock (Shift-Taste zeigt dort
-        // symbolShift, nicht Caps): keine Caps-Füllung.
+        // Also on the symbol layer with a true capsLock (the shift key shows
+        // symbolShift there, not caps): no caps fill.
         assertEquals(
             KeySurface.Surface.NORMAL,
             decide(istShiftKey = true, capsLock = true, symbolShift = true, activeLayerIsSymbols = true).surface,
         )
-        // Glyph bleibt wie heute akzentuiert (Toggle-Zustand sichtbar):
+        // Glyph stays accented as today (toggle state visible):
         assertEquals(KeySurface.Glyph.ACCENT, decide(istShiftKey = true, symbolShift = true).glyph)
     }
 
-    // (d) Glyphenfarbe ist die GEGENFARBE der Füllung — nie Akzent auf Akzent.
+    // (d) the glyph color is the COMPLEMENTARY color of the fill — never accent on accent.
     @Test
-    fun `Glyphe ist Gegenfarbe der Fuellung - kein Akzent auf Akzent`() {
+    fun `glyph is the complementary color of the fill - no accent on accent`() {
         assertEquals(KeySurface.Glyph.CONTRAST, decide(istShiftKey = true, capsLock = true).glyph)
         assertEquals(KeySurface.Glyph.CONTRAST, decide(micRecording = true).glyph)
-        // Auf Token-Ebene: micRecordingGlyph (Gegenfarbe) ist in BEIDEN Themes
-        // eine andere Farbe als accent — Akzent-auf-Akzent ist ausgeschlossen.
+        // on the token level: micRecordingGlyph (complementary color) is in BOTH
+        // themes a different color than accent — accent-on-accent is excluded.
         for (p in listOf(KeyboardTheme.LIGHT, KeyboardTheme.DARK)) {
-            assertNotEquals("Gegenfarbe muss sich vom Akzent unterscheiden (${p.accent})", p.accent, p.micRecordingGlyph)
+            assertNotEquals("the contrasting color must differ from the accent (${p.accent})", p.accent, p.micRecordingGlyph)
         }
     }
 
-    // (e) Normalpfad unverändert: normale Taste = NORMAL-Fläche, Rollen-Glyphfarbe.
+    // (e) normal path unchanged: normal key = NORMAL surface, role glyph color.
     @Test
-    fun `Normalpfad unveraendert`() {
+    fun `normal path unchanged`() {
         val r = decide()
         assertEquals(KeySurface.Surface.NORMAL, r.surface)
         assertEquals(KeySurface.Glyph.NORMAL, r.glyph)
-        // Gedrückte normale Taste: Fläche PRESSED, Glyphe UNVERÄNDERT (D11:
-        // gedrückt ändert die Textfarbe nicht).
+        // pressed normal key: surface PRESSED, glyph UNCHANGED (D11:
+        // pressed does not change the text color).
         val pressed = decide(pressed = true)
         assertEquals(KeySurface.Surface.PRESSED, pressed.surface)
         assertEquals(KeySurface.Glyph.NORMAL, pressed.glyph)
         assertTrue(
-            "MIC_RECORDING-Glyph ist die Gegenfarbe (D10 §2 unverändert)",
+            "the MIC_RECORDING glyph is the contrasting color (D10 §2 unchanged)",
             decide(micRecording = true).glyph == KeySurface.Glyph.CONTRAST,
         )
     }
 
-    // ---- F23a2: Hint-Platzierung (docs/DESIGN_KEY_POPUP.md §7.2) — reine Naht ----
+    // ---- F23a2: hint placement (docs/DESIGN_KEY_POPUP.md §7.2) — pure seam ----
 
     @Test
-    fun `hintAnchorX liegt rechtsbuendig innerhalb pad plus halber Inkbreite`() {
-        // Vorgabe des Auftrags: padPx 21 -> 98 - 21 - 9 = 68
+    fun `hintAnchorX is right-aligned within pad plus half the ink width`() {
+        // specification of the assignment: padPx 21 -> 98 - 21 - 9 = 68
         assertEquals(68f, KeySurface.hintAnchorX(98f, 21f, 18f), 1f)
-        // Doku-Beispiel §7.2: padPx = 4 dp @ density 420 = 10,5 px -> 78,5
+        // documentation example §7.2: padPx = 4 dp @ density 420 = 10.5 px -> 78.5
         assertEquals(78.5f, KeySurface.hintAnchorX(98f, 10.5f, 18f), 1f)
     }
 
     @Test
-    fun `hintTopOffsetDp ist nominal 2 dp bei voller Zeilenhoehe`() {
+    fun `hintTopOffsetDp is nominally 2 dp at full row height`() {
         assertEquals(2.0f, KeySurface.hintTopOffsetDp(4f, 55.0, 55), 0.01f)
     }
 
     @Test
-    fun `hintTopOffsetDp schrumpft relativ mit der Reihe`() {
-        // 44/55 x 2 dp = 1,6 dp (kleiner als 2)
+    fun `hintTopOffsetDp shrinks relative to the row`() {
+        // 44/55 x 2 dp = 1.6 dp (smaller than 2)
         assertEquals(1.6f, KeySurface.hintTopOffsetDp(4f, 44.0, 55), 0.05f)
     }
 
     @Test
-    fun `hintTopOffsetDp ueberschreitet 2 dp nie und wird nie negativ`() {
-        assertEquals(2.0f, KeySurface.hintTopOffsetDp(4f, 90.0, 55), 0.01f) // hoehere Reihe
-        assertEquals(0f, KeySurface.hintTopOffsetDp(4f, 0.0, 55), 0.01f) // kaputte Hoehe
-        assertEquals(0f, KeySurface.hintTopOffsetDp(4f, -10.0, 55), 0.01f) // negativ
+    fun `hintTopOffsetDp never exceeds 2 dp and never becomes negative`() {
+        assertEquals(2.0f, KeySurface.hintTopOffsetDp(4f, 90.0, 55), 0.01f) // taller row
+        assertEquals(0f, KeySurface.hintTopOffsetDp(4f, 0.0, 55), 0.01f) // broken height
+        assertEquals(0f, KeySurface.hintTopOffsetDp(4f, -10.0, 55), 0.01f) // negative
     }
 }

@@ -12,7 +12,7 @@ import org.robolectric.Robolectric
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 
-/** Lädt die echten Assets und validiert sie gegen den Parser. */
+/** Loads the real assets and validates them against the parser. */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35])
 class LayoutParserTest {
@@ -34,7 +34,7 @@ class LayoutParserTest {
     }
 
     @Test
-    fun `gueltiges de-de Asset parst und liefert alle Ebenen`() {
+    fun `a valid de-de asset parses and yields all layers`() {
         val parsed = LayoutParser.parse(asset("de-de.json"))
         assertEquals("de-de", parsed.id)
         assertEquals(1, parsed.schemaVersion)
@@ -44,20 +44,20 @@ class LayoutParserTest {
     }
 
     @Test
-    fun `gueltiges en-us Asset parst`() {
+    fun `a valid en-us asset parses`() {
         val parsed = LayoutParser.parse(asset("en-us.json"))
         assertEquals("en-us", parsed.id)
     }
 
     @Test
-    fun `alle 15 Sprach-Assets parst`() {
+    fun `all 15 language assets parse`() {
         val existing = existingAssets()
-        assertTrue("Assets im Verzeichnis: $existing", expectedAssets.all { it in existing })
+        assertTrue("assets in the directory: $existing", expectedAssets.all { it in existing })
         for (name in expectedAssets) {
             val parsed = try {
                 LayoutParser.parse(asset("$name.json"))
             } catch (e: LayoutParser.LayoutException) {
-                fail("Asset '$name' parst nicht: ${e.message}")
+                fail("asset '$name' does not parse: ${e.message}")
                 return
             }
             assertEquals(name, parsed.id)
@@ -65,17 +65,17 @@ class LayoutParserTest {
     }
 
     @Test
-    fun `ungueltiges JSON wirft LayoutException mit klarer Meldung`() {
+    fun `invalid JSON throws LayoutException with a clear message`() {
         try {
             LayoutParser.parse("{ kein json")
-            fail("LayoutException erwartet")
+            fail("LayoutException expected")
         } catch (e: LayoutParser.LayoutException) {
             assertTrue(e.message!!.contains("Kein gültiges JSON"))
         }
     }
 
     @Test
-    fun `unbekannte Aktion wird abgelehnt`() {
+    fun `an unknown action is rejected`() {
         val json = """
         {
           "schemaVersion": 1, "id": "xx-xx",
@@ -100,14 +100,14 @@ class LayoutParserTest {
         """.trimIndent()
         try {
             LayoutParser.parse(json)
-            fail("LayoutException erwartet")
+            fail("LayoutException expected")
         } catch (e: LayoutParser.LayoutException) {
             assertTrue(e.message!!.contains("unbekannte Aktion"))
         }
     }
 
     @Test
-    fun `fehlende Shift-Ebene wird abgelehnt`() {
+    fun `a missing shift layer is rejected`() {
         val json = """
         {
           "schemaVersion": 1, "id": "xx-xx",
@@ -122,25 +122,25 @@ class LayoutParserTest {
         """.trimIndent()
         try {
             LayoutParser.parse(json)
-            fail("LayoutException erwartet")
+            fail("LayoutException expected")
         } catch (e: LayoutParser.LayoutException) {
-            assertTrue("Meldung: ${e.message}", e.message!!.contains("'shift' fehlt"))
+            assertTrue("message: ${e.message}", e.message!!.contains("'shift' fehlt"))
         }
     }
 
     @Test
-    fun `unbekannte schemaVersion wird abgelehnt`() {
+    fun `an unknown schemaVersion is rejected`() {
         val json = """{"schemaVersion": 2, "id": "xx-xx"}"""
         try {
             LayoutParser.parse(json)
-            fail("LayoutException erwartet")
+            fail("LayoutException expected")
         } catch (e: LayoutParser.LayoutException) {
             assertTrue(e.message!!.contains("Unbekannte schemaVersion"))
         }
     }
 
     @Test
-    fun `abweichende Zeilensumme zwischen Ebenen wird abgelehnt`() {
+    fun `a deviating row sum between layers is rejected`() {
         val json = """
         {
           "schemaVersion": 1, "id": "xx-xx",
@@ -158,14 +158,14 @@ class LayoutParserTest {
         """.trimIndent()
         try {
             LayoutParser.parse(json)
-            fail("LayoutException erwartet")
+            fail("LayoutException expected")
         } catch (e: LayoutParser.LayoutException) {
-            assertTrue("Meldung: ${e.message}", e.message!!.contains("Zeilensumme"))
+            assertTrue("message: ${e.message}", e.message!!.contains("Zeilensumme"))
         }
     }
 
     @Test
-    fun `doppelte Tasten-ID in einer Ebene wird abgelehnt`() {
+    fun `a duplicate key ID within a layer is rejected`() {
         val json = """
         {
           "schemaVersion": 1, "id": "xx-xx",
@@ -182,16 +182,16 @@ class LayoutParserTest {
         """.trimIndent()
         try {
             LayoutParser.parse(json)
-            fail("LayoutException erwartet")
+            fail("LayoutException expected")
         } catch (e: LayoutParser.LayoutException) {
             assertTrue(e.message!!.contains("Doppelte Tasten-ID"))
         }
     }
 
-    // ---- M9a: availableIds-Scan + SpaceLabelRule ----
+    // ---- M9a: availableIds scan + SpaceLabelRule ----
 
     @Test
-    fun `M9a availableIds scannt alle 15 kanonischen ids ohne json-endung`() {
+    fun `M9a availableIds scans all 15 canonical ids without a json extension`() {
         val context = RuntimeEnvironment.getApplication() as Application
         val repo = LayoutRepository(context)
         val ids = repo.availableIds()
@@ -200,26 +200,26 @@ class LayoutParserTest {
             "tr-tr", "ru-ru", "cs-cz", "sv-se", "da-dk", "fi-fi", "el-gr",
         )
         assertEquals(15, ids.size)
-        assertEquals(canonical, ids) // kanonische Reihenfolge, keine Verzeichnisse, keine Endung
+        assertEquals(canonical, ids) // canonical order, no directories, no extension
         assertTrue(ids.none { it.endsWith(".json") })
     }
 
     @Test
-    fun `M9a label-regel espacio bleibt, blank erhaelt fallback, value bleibt space`() {
-        // Asset-Label mit Nicht-Whitespace ⇒ unverändert uebernehmen
+    fun `M9a label rule espacio stays, blank gets a fallback, value stays space`() {
+        // asset label with non-whitespace ⇒ take it over unchanged
         assertEquals("Espacio", SpaceLabelRule.resolve("Espacio", "Space"))
         assertEquals("Mellemrum", SpaceLabelRule.resolve("Mellemrum", "Space"))
-        // Blank-Label (da-dk/fi-fi symbols) ⇒ Fallback
+        // blank label (da-dk/fi-fi symbols) ⇒ fallback
         assertEquals("Space", SpaceLabelRule.resolve(" ", "Space"))
         assertEquals("Space", SpaceLabelRule.resolve("", "Space"))
-        // Einfuege-Wert bleibt unangetastet: die Assets committen value=="space"
+        // the insertion value stays untouched: the assets commit value=="space"
         val de = LayoutParser.parse(asset("de-de.json"))
         val spaceKey = de.layers.values.flatMap { it.rows.flatten() }.first { it.value == "space" }
         assertEquals("space", spaceKey.value)
         assertEquals("Leer", SpaceLabelRule.resolve(spaceKey.label, "Space"))
     }
 
-    // ---- M9b: E11 Space-Labels (Tabelle hinterlegt, nicht aus Assets abgelesen) ----
+    // ---- M9b: E11 space labels (table maintained, not read from the assets) ----
 
     private val e11Labels = mapOf(
         "de-de" to "Leer", "en-us" to "Space", "fr-fr" to "Espace", "es-es" to "Espacio",
@@ -229,39 +229,39 @@ class LayoutParserTest {
     )
 
     @Test
-    fun `M9b alle 15 assets haben E11-label auf space in allen ebenen`() {
+    fun `M9b all 15 assets carry the E11 label on space in all layers`() {
         for ((id, expected) in e11Labels) {
             val parsed = LayoutParser.parse(asset("$id.json"))
             for ((layerName, layer) in parsed.layers) {
                 val spaceKeys = layer.rows.flatten().filter { it.value == "space" }
-                assertEquals("Asset $id Ebene $layerName: genau 1 Space-Taste", 1, spaceKeys.size)
+                assertEquals("asset $id layer $layerName: exactly 1 space key", 1, spaceKeys.size)
                 val key = spaceKeys[0]
-                assertEquals("Asset $id Ebene $layerName Label", expected, key.label)
-                assertEquals("Asset $id Ebene $layerName value", "space", key.value)
+                assertEquals("asset $id layer $layerName label", expected, key.label)
+                assertEquals("asset $id layer $layerName value", "space", key.value)
             }
         }
     }
 
     @Test
-    fun `M9b gegenprobe falsches space-label wird abgelehnt`() {
+    fun `M9b counter-check a wrong space label is rejected`() {
         val parsed = LayoutParser.parse(asset("ru-ru.json"))
-        // Gegenprobe 1: abweichendes Label ("Leer" statt "Пробел") muss die Pruefung scheitern lassen
+        // counter-check 1: a deviating label ("Leer" instead of "Пробел") must make the check fail
         for ((layerName, layer) in parsed.layers) {
             val spaceKey = layer.rows.flatten().first { it.value == "space" }
             try {
-                org.junit.Assert.assertFalse("Gegenprobe: Label-Differenz haette auffallen muessen",
+                org.junit.Assert.assertFalse("counter-check: the label difference should have been noticed",
                     spaceKey.label == e11Labels.getValue("ru-ru"))
-                fail("Gegenprobe $layerName: abweichendes Label wurde nicht erkannt")
+                fail("counter-check $layerName: the deviating label was not detected")
             } catch (expected: AssertionError) {
-                // richtig: die Assertion ist false -> fail() wirft
+                // correct: the assertion is false -> fail() throws
             }
             assertEquals("Пробел", spaceKey.label)
         }
     }
 
-    // ---- F23a1: optionales hint-Feld (docs/DESIGN_DEDE_ZIELBILD.md §1/§4) ----
-    // Regel: ein kaputtes hint darf NIE die Tastatur killen — fehlend/leer/zu
-    // lang (> 2 Zeichen) -> null, die uebrigen Felder der Taste bleiben intakt.
+    // ---- F23a1: optional hint field (docs/DESIGN_DEDE_ZIELBILD.md §1/§4) ----
+    // rule: a broken hint must NEVER kill the keyboard — missing/empty/too long
+    // (> 2 characters) -> null, the key's remaining fields stay intact.
 
     private fun hintAsset(keyJson: String) = """
         {
@@ -288,22 +288,22 @@ class LayoutParserTest {
     private fun hintOf(keyJson: String) =
         LayoutParser.parse(hintAsset(keyJson)).layers.getValue("base").rows[0][0]
 
-    @Test fun `a) Taste ohne hint-Feld liefert null`() {
+    @Test fun `a) a key without a hint field yields null`() {
         org.junit.Assert.assertNull(hintOf("").hint)
     }
 
-    @Test fun `b) hint mit einer Ziffer wird gelesen`() {
+    @Test fun `b) a hint with a digit is read`() {
         assertEquals("1", hintOf(", \"hint\": \"1\"").hint)
     }
 
-    @Test fun `c) leerer hint wird zu null, nicht zum leeren String`() {
+    @Test fun `c) an empty hint becomes null, not the empty string`() {
         org.junit.Assert.assertNull(hintOf(", \"hint\": \"\"").hint)
     }
 
-    @Test fun `d) zu langer hint wird verworfen, uebrige Felder bleiben intakt`() {
+    @Test fun `d) a too long hint is discarded, the remaining fields stay intact`() {
         val key = hintOf(", \"hint\": \"abc\"")
-        org.junit.Assert.assertNull("hint mit > 2 Zeichen wird verworfen", key.hint)
-        // der wichtige Teil: die Taste selbst ist unversehrt geladen
+        org.junit.Assert.assertNull("a hint with > 2 characters is discarded", key.hint)
+        // the important part: the key itself is loaded intact
         assertEquals("q", key.id)
         assertEquals("q", key.label)
         assertEquals("q", key.value)
@@ -311,7 +311,7 @@ class LayoutParserTest {
         assertEquals(listOf("x", "y"), key.alternates)
     }
 
-    // ---- F24e1: optionales cellActions-Feld (Aktionszellen im Langdruck-Menue) ----
+    // ---- F24e1: optional cellActions field (action cells in the long-press menu) ----
 
     private fun cellActionsAsset(altJson: String, actionsJson: String?) = """
         {
@@ -339,11 +339,11 @@ class LayoutParserTest {
     private fun cellActionsOf(altJson: String, actionsJson: String?) =
         LayoutParser.parse(cellActionsAsset(altJson, actionsJson)).layers.getValue("base").rows[0][0].cellActions
 
-    @Test fun `F24e1 a) fehlende cellActions liefern emptyList`() {
+    @Test fun `F24e1 a) missing cellActions yield emptyList`() {
         assertEquals(emptyList<String>(), cellActionsOf("\",\", \"!\", \"?\"", null))
     }
 
-    @Test fun `F24e1 b) funf cellActions an Taste mit funf alternates bleiben 5, leerstring bleibt`() {
+    @Test fun `F24e1 b) five cellActions on a key with five alternates stay 5, empty string stays`() {
         val got = cellActionsOf(
             "\",\", \"!\", \"?\", \"‹\", \"›\"",
             "\"\", \"\", \"\", \"cursor-left\", \"cursor-right\"",
@@ -352,7 +352,7 @@ class LayoutParserTest {
         assertEquals(listOf("", "", "", "cursor-left", "cursor-right"), got)
     }
 
-    // ---- F27a1: MARGIN-Randflaechen (Stock-Geometrie) ----
+    // ---- F27a1: MARGIN margin surfaces (stock geometry) ----
 
     private fun marginAsset(marginJson: String) = """
         {
@@ -378,7 +378,7 @@ class LayoutParserTest {
         }
         """.trimIndent()
 
-    @Test fun `F27a1 a) margin-Key wird geparst (kind MARGIN, width durchgereicht)`() {
+    @Test fun `F27a1 a) a margin key is parsed (kind MARGIN, width passed through)`() {
         val key = LayoutParser.parse(
             marginAsset("""{"id": "margin-left", "kind": "margin", "width": 1.5}"""),
         ).layers.getValue("base").rows[0][0]
@@ -389,7 +389,7 @@ class LayoutParserTest {
         assertTrue(key.alternates.isEmpty())
     }
 
-    @Test fun `F27a1 b) margin mit value wird abgelehnt`() {
+    @Test fun `F27a1 b) a margin with a value is rejected`() {
         val json = marginAsset("""{"id": "margin-left", "kind": "margin", "width": 1, "value": "x"}""")
         var caught = false
         try {
@@ -397,6 +397,6 @@ class LayoutParserTest {
         } catch (e: LayoutParser.LayoutException) {
             caught = true
         }
-        assertTrue("margin mit value muss abgelehnt werden", caught)
+        assertTrue("a margin with a value must be rejected", caught)
     }
 }

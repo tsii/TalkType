@@ -1,8 +1,8 @@
 package de.voicekeyboard.audio
 
 /**
- * Ein geschlossenes PCM16-Mono-Fenster (16 kHz), wie es AsrEngine.transcribe()
- * erhält. Kein Android-Typ, damit die ASR-Pipeline JVM-testbar bleibt.
+ * A closed PCM16 mono window (16 kHz), as AsrEngine.transcribe() receives it.
+ * No Android type, so that the ASR pipeline stays JVM-testable.
  */
 class PcmWindow(val samples: ShortArray, val sampleRate: Int) {
 
@@ -12,11 +12,11 @@ class PcmWindow(val samples: ShortArray, val sampleRate: Int) {
         }
     }
 
-    /** Dauer des Fensters in Sekunden. */
+    /** Duration of the window in seconds. */
     val audioSeconds: Double
         get() = if (sampleRate == 0) 0.0 else samples.size.toDouble() / sampleRate
 
-    /** PCM16 → float32 [-1, 1] (32768-Nenner), wie es `waveforms` erwartet. */
+    /** PCM16 → float32 [-1, 1] (32768 divisor), as expected by `waveforms`. */
     fun toFloatMono(): FloatArray {
         val out = FloatArray(samples.size)
         for (i in samples.indices) out[i] = samples[i] / 32768f

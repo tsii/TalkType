@@ -1,18 +1,18 @@
 package de.voicekeyboard.model
 
 /**
- * Verbindliche Modell-Dateiliste: Werte EXAKT aus docs/MODEL_SHA256.txt
- * und docs/ASR_CONTRACT.md §1 (Dateigrößen gemessen, Summe int8 ≈ 671 MB).
+ * Binding model file list: values EXACTLY from docs/MODEL_SHA256.txt
+ * and docs/ASR_CONTRACT.md §1 (file sizes measured, sum int8 ≈ 671 MB).
  *
- * Die Namen sind gleichzeitig die Whitelist für jeden Dateizugriff des
- * [ModelStore] (Pfad-Traversal-Schutz) und die Erwartung für die
- * SHA-256-Ende-zu-Ende-Prüfung des [ModelDownloader].
+ * The names are at the same time the whitelist for every file access of the
+ * [ModelStore] (path traversal protection) and the expectation for the
+ * SHA-256 end-to-end check of the [ModelDownloader].
  */
 /**
- * V5 (V1-01-Fix): Trennung von URL-Pfad und Dateisystem-Name.
- * [urlPath] = Pfad im CDN-Repo (darf Unterverzeichnisse enthalten, z. B.
- * "assets/token_vocab.bin"); [storeName] = flacher, traveralsicherer Name
- * im Modellverzeichnis. A: beide identisch (kein Re-Download).
+ * V5 (V1-01 fix): separation of URL path and file system name.
+ * [urlPath] = path in the CDN repo (may contain subdirectories, e. g.
+ * "assets/token_vocab.bin"); [storeName] = flat, traversal-safe name
+ * in the model directory. A: both identical (no re-download).
  */
 data class ModelFile(
     val storeName: String,
@@ -25,13 +25,13 @@ object ModelManifest {
 
     const val BASE_URL_ONNX = "https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx/resolve/main/"
 
-    /** Variante B (LiteRT, cached streaming) — Basis aus dem Arm-Repo. */
+    /** Variant B (LiteRT, cached streaming) — base from the Arm repo. */
     const val BASE_URL_LITERT = "https://huggingface.co/Arm/parakeet-tdt-0-6b-v3-int8-litert/resolve/main/"
 
-    /** Kompatibilitätsalias: heutige Einzelmenge = Variante A (unkontrollierte Aufrufer). */
+    /** Compatibility alias: today's single set = variant A (uncontrolled callers). */
     const val BASE_URL = BASE_URL_ONNX
 
-    /** Variante A (ONNX_CPU): heutige Liste, unangetastet. */
+    /** Variant A (ONNX_CPU): today's list, untouched. */
     val ONNX: List<ModelFile> = listOf(
         ModelFile(
             storeName = "nemo128.onnx",
@@ -55,7 +55,7 @@ object ModelManifest {
         ),
     )
 
-    /** Variante B (LITERT_CPU): Arm/parakeet-tdt-0-6b-v3-int8-litert, 5 Dateien. */
+    /** Variant B (LITERT_CPU): Arm/parakeet-tdt-0-6b-v3-int8-litert, 5 files. */
     val LITERT: List<ModelFile> = listOf(
         ModelFile(
             storeName = "parakeet_tdt_nemo_encoder_cached_int8_dynamic_litert.tflite",
@@ -80,32 +80,32 @@ object ModelManifest {
         ModelFile(
             storeName = "token_vocab.bin",
             urlPath = "assets/token_vocab.bin",
-            sizeBytes = 78_669L, // HF-API gemessen (V2-Fix)
+            sizeBytes = 78_669L, // HF API measured (V2 fix)
             sha256 = "e5893bde019de49606a1543e45f12114e71fa0a7c0d27345af9576cf8f24f8fd",
         ),
     )
 
-    /** Manifest je Variante (V1): A = heutige Liste, B = LiteRT-Set. */
+    /** Manifest per variant (V1): A = today's list, B = LiteRT set. */
     fun forVariant(variant: de.voicekeyboard.model.ModelVariant): List<ModelFile> =
         when (variant) {
             de.voicekeyboard.model.ModelVariant.ONNX_CPU -> ONNX
             de.voicekeyboard.model.ModelVariant.LITERT_CPU -> LITERT
         }
 
-    /** Kompatibilität: DEFAULT bleibt Alias auf A. */
+    /** Compatibility: DEFAULT stays an alias to A. */
     val DEFAULT: List<ModelFile> = ONNX
 
     val TOTAL_BYTES: Long = DEFAULT.sumOf { it.sizeBytes }
 
-    /** Gesamtgröße je Variante (V1: Platzbedarf für Setup-Anzeige). */
+    /** Total size per variant (V1: space requirement for the setup display). */
     fun totalBytes(variant: de.voicekeyboard.model.ModelVariant): Long =
         forVariant(variant).filter { it.sizeBytes > 0 }.sumOf { it.sizeBytes }
 
     /**
-     * V5: Whitelist je Variante, bewusst TRAVERSAL-SCHARF: der Name muss flach
-     * sein (kein '/', kein '\\', nicht "."/"..", nicht leer) und exakt dem
-     * storeName der Variante entsprechen. urlPath-Präfixe sind hier NIEMALS
-     * erlaubt (der storeName ist flach, nur der URL-Pfad darf tiefer liegen).
+     * V5: whitelist per variant, deliberately TRAVERSAL-STRICT: the name must be flat
+     * (no '/', no '\\', not "."/"..", not empty) and match exactly the
+     * storeName of the variant. urlPath prefixes are NEVER allowed here
+     * (the storeName is flat, only the URL path may lie deeper).
      */
     fun isAllowedName(storeName: String, variant: de.voicekeyboard.model.ModelVariant): Boolean =
         storeName.isNotEmpty() &&
@@ -113,7 +113,7 @@ object ModelManifest {
             storeName != "." && storeName != ".." &&
             storeName in forVariant(variant).map { it.storeName }
 
-    /** Kompatibilität (Default = Variante A). */
+    /** Compatibility (default = variant A). */
     fun isAllowedName(storeName: String): Boolean = isAllowedName(storeName, de.voicekeyboard.model.ModelVariant.ONNX_CPU)
 
     fun fileByName(name: String): ModelFile? = DEFAULT.firstOrNull { it.storeName == name }

@@ -20,25 +20,24 @@ import java.io.File
 import java.util.concurrent.atomic.AtomicInteger
 
 /**
- * F30 (docs/EMULATOR_DIKTAT_HARNESS.md, Option C): Vier deterministische
- * Abbruch-Szenarien mit der Debug-only [FakeWavAudioSource] (debug-Quellordner,
- * daher steht dieser Test in testDebug, nicht in test — testReleaseUnitTest
- * dürfte die Debug-Klasse nicht referenzieren) und dem ECHTEN
- * DictationCoordinator; die Engine ist ein Test-Double (kein ONNX, kein
- * Android-Audio).
+ * F30 (docs/EMULATOR_DIKTAT_HARNESS.md, option C): four deterministic
+ * abort scenarios with the debug-only [FakeWavAudioSource] (debug source
+ * folder, hence this test lives in testDebug, not in test — testReleaseUnitTest
+ * must not reference the debug class) and the REAL DictationCoordinator;
+ * the engine is a test double (no ONNX, no Android audio).
  *
- * Zeit: virtuelle ms-Uhr, die Quelle UND Coordinator (nowMs) teilen. Der
- * Test-Thread "pumpt" die Uhr; die Quelle liefert 10-ms-Blöcke ab ihrem
- * Fälligkeitsdatum — KEIN Thread.sleep im Rhythmus.
+ * Time: a virtual ms clock shared by the source AND the coordinator (nowMs).
+ * The test thread "pumps" the clock; the source delivers 10-ms blocks from
+ * their due date — NO Thread.sleep in the rhythm.
  *
- * Hinweis (ehrlich): Die Hypothesen-Intervall-Gate (2 s) im Controller nutzt
- * die Echtzeit-nanoTime (nicht über den Coordinator injizierbar) — Szenario (a)
- * pumpt daher ~4 s REALZEIT, damit ≥ 2 Intervalle deterministisch überschritten
- * werden; die restlichen Szenarien brauchen keine Partials.
+ * Note (honest): the hypothesis interval gate (2 s) in the controller uses
+ * real-time nanoTime (not injectable via the coordinator) — scenario (a)
+ * therefore pumps ~4 s REAL TIME so that ≥ 2 intervals are deterministically
+ * exceeded; the remaining scenarios need no partials.
  */
 class FakeAudioScenarioTest {
 
-    /** Virtuelle ms-Uhr (Start != 0: 0 ist das Coordinator-Sentinel "nie gestartet"). */
+    /** Virtual ms clock (start != 0: 0 is the coordinator sentinel "never started"). */
     private class VirtualClock(startMs: Long = 1_000_000L) {
         private val lock = Any()
         @Volatile private var t = startMs
@@ -48,7 +47,7 @@ class FakeAudioScenarioTest {
         }
     }
 
-    /** Fake-Engine: zählt Decodes, liefert konstant Text (keine Inhalte relevant). */
+    /** Fake engine: counts decodes, returns constant text (no content relevant). */
     private class FakeAsrEngine : AsrEngine {
         val transcribeCalls = AtomicInteger(0)
         override fun load(modelDir: File) {}
@@ -77,11 +76,11 @@ class FakeAudioScenarioTest {
             File(System.getProperty("user.dir"), "testdata/de_smoke.wav"),
         )
         return candidates.firstOrNull { it.isFile }
-            ?: error("de_smoke.wav nicht gefunden (user.dir=${System.getProperty("user.dir")})")
+            ?: error("de_smoke.wav not found (user.dir=${System.getProperty("user.dir")})")
     }
 
-    /** Virtuelle Zeit in Schritten pumpt (Realzeit-Verzögerung lässt die
-     *  Capture-/Consumer-Threads laufen; der Rhythmus bleibt virtual). */
+    /** Pumps virtual time in steps (the real-time delay lets the
+     *  capture/consumer threads run; the rhythm stays virtual). */
     private suspend fun VirtualClock.pumpTo(targetMs: Long, stepMs: Long, realDelayMs: Long) {
         while (now() < targetMs) {
             advanceTo(now() + stepMs)
@@ -91,13 +90,13 @@ class FakeAudioScenarioTest {
 
     private fun newScope() = CoroutineScope(Dispatchers.Default)
 
-    /** Minimaler s16le-mono-WAV-Writer (44-Byte-Header + data) fuer die
-     *  Stille-/Misch-Testdateien (Regel 9: Testdateien lokal, keine Inhalte geloggt). */
+    /** Minimal s16le-mono WAV writer (44-byte header + data) for the
+     *  silence/mix test files (rule 9: test files local, no content logged). */
     private fun writeWav(samples: ShortArray): File {
         val data = ByteArray(samples.size * 2)
         for (i in samples.indices) {
-            // Int-Op (die Short-Bitop-Overload ist in dieser Kotlin-Umgebung
-            // nicht auflösbar — empirisch an Compile-Fehlern belegt):
+            // Int op (the short bit-op overload is not resolvable in this
+            // Kotlin environment — evidenced empirically by compile errors):
             data[i * 2] = (samples[i].toInt() and 0xff).toByte()
             data[i * 2 + 1] = (samples[i].toInt() shr 8).toByte()
         }
@@ -115,19 +114,19 @@ class FakeAudioScenarioTest {
             out.write(16); out.write(0); out.write(0); out.write(0) // 16000 Hz
             le32(32000)                             // ByteRate
             out.write(2); out.write(0)              // BlockAlign
-            out.write(16); out.write(0)             // Bittiefe
+            out.write(16); out.write(0)             // bit depth
             out.write("data".toByteArray()); le32(data.size)
             out.write(data)
         }
         return file
     }
 
-    /** Stille WAV: Nullsamples (Blöcke laufen, RMS = 0 — der F31-Fall). */
+    /** Silent WAV: zero samples (blocks keep running, RMS = 0 — the F31 case). */
     private fun silentWav(seconds: Int): File =
         writeWav(ShortArray(seconds * 16_000))
 
-    /** Misch-WAV aus Segmenten (ms, laut?). "Laut" = Sinus 200 Hz, Amplitude
-     *  12000 ≈ −9 dBFS Peak → Block-RMS ≈ −12 dBFS, weit über der −40-Schwelle. */
+    /** Mixed WAV from segments (ms, loud?). "Loud" = 200 Hz sine, amplitude
+     *  12000 ≈ −9 dBFS peak → block RMS ≈ −12 dBFS, far above the −40 threshold. */
     private fun segmentWav(segments: List<Pair<Int, Boolean>>): File {
         val n = segments.sumOf { it.first } * 16
         val s = ShortArray(n)
@@ -144,62 +143,62 @@ class FakeAudioScenarioTest {
         return writeWav(s)
     }
 
-    /** Mischung: [silentMs] Stille, dann [loudMs] Sinus (bestehende F31-Tests). */
+    /** Mix: [silentMs] silence, then [loudMs] sine (existing F31 tests). */
     private fun mixWav(silentMs: Int, loudMs: Int): File =
         segmentWav(listOf(silentMs to false, loudMs to true))
 
-    /** Wartet (nur im Test!) bis der asynchrone stop()-Worker IDLE erreicht. */
+    /** Waits (only in the test!) until the async stop() worker reaches IDLE. */
     private fun awaitIdle(c: DictationCoordinator, timeoutMs: Long = 5000) {
         val deadline = System.currentTimeMillis() + timeoutMs
         while (c.state != DictationState.IDLE && System.currentTimeMillis() < deadline) {
             Thread.sleep(10)
         }
-        assertEquals("stop()-Worker muss nach IDLE enden", DictationState.IDLE, c.state)
+        assertEquals("the stop() worker must end in IDLE", DictationState.IDLE, c.state)
     }
 
-    // (a) Durchgehend 10 s: kein Stall, cap_blocks > 0, hyp wächst; UP → final.
+    // (a) Continuously 10 s: no stall, cap_blocks > 0, hyp grows; UP → final.
     @Test
-    fun `a durchgehend 10 s - kein Stall, cap_blocks positiv, hyp waechst`() = runBlocking {
+    fun `a continuously 10 s - no stall, cap_blocks positive, hyp grows`() = runBlocking {
         val clock = VirtualClock()
         val t0 = clock.now()
         val src = FakeWavAudioSource(wav(), nowMs = { clock.now() })
         val engine = FakeAsrEngine()
         val scope = newScope()
         val c = DictationCoordinator(scope, { src }, { engine }, FakeSink(), nowMs = { clock.now() })
-        assertTrue("start muss gelingen", c.start())
-        // 10 s Virtualzeit in ~4 s Realzeit (2-s-Intervall-Gate läuft auf Echtzeit).
+        assertTrue("start must succeed", c.start())
+        // 10 s virtual time in ~4 s real time (the 2-s interval gate runs on real time).
         clock.pumpTo(t0 + 10_000L, stepMs = 25L, realDelayMs = 10L)
-        assertEquals("vor dem Stop keine Abbruch-Ursache (kein ERR_STALL)", "-", c.lastAbortReason)
-        assertTrue("cap_blocks > 0 (sind ${c.capBlocks()})", c.capBlocks() > 500)
-        assertTrue("hyp wächst (sind ${c.hypCount})", c.hypCount >= 2)
-        c.stop() // "UP" nach 10 s
+        assertEquals("before the stop no abort cause (no ERR_STALL)", "-", c.lastAbortReason)
+        assertTrue("cap_blocks > 0 (are ${c.capBlocks()})", c.capBlocks() > 500)
+        assertTrue("hyp grows (are ${c.hypCount})", c.hypCount >= 2)
+        c.stop() // "UP" after 10 s
         awaitIdle(c)
-        assertEquals("Nutzerfall: finaler Stop", "final", c.lastAbortReason)
+        assertEquals("user case: final stop", "final", c.lastAbortReason)
         scope.cancel()
     }
 
-    // (b) Stille ab Sessionstart: nach 3 s Watchdog → ERR_STALL "no_audio",
-    //     Session beendet, 0 empfangene Blöcke.
+    // (b) Silence from session start: after 3 s watchdog → ERR_STALL "no_audio",
+    //     session ended, 0 received blocks.
     @Test
-    fun `b Stille ab Start - nach 3 s ERR_STALL no_audio und Session beendet`() = runBlocking {
+    fun `b silence from start - after 3 s ERR_STALL no_audio and session ended`() = runBlocking {
         val clock = VirtualClock()
         val t0 = clock.now()
         val src = FakeWavAudioSource(wav(), silenceFromMs = t0, nowMs = { clock.now() })
         val scope = newScope()
         val c = DictationCoordinator(scope, { src }, { FakeAsrEngine() }, FakeSink(), nowMs = { clock.now() })
-        assertTrue("start muss gelingen", c.start())
+        assertTrue("start must succeed", c.start())
         clock.pumpTo(t0 + 3_400L, stepMs = 100L, realDelayMs = 10L)
-        assertFalse("Session muss nach dem Watchdog beendet sein", c.isActive)
-        assertEquals("Watchdog-Grund (stall/no_audio-Pfad)", "audio_error:stall", c.lastAbortReason)
-        assertEquals("in Stille keine Blöcke empfangen", 0, c.capBlocks())
+        assertFalse("the session must have ended after the watchdog", c.isActive)
+        assertEquals("watchdog cause (stall/no_audio path)", "audio_error:stall", c.lastAbortReason)
+        assertEquals("in silence no blocks received", 0, c.capBlocks())
         scope.cancel()
     }
 
-    // (c) Aussetzer 3,5 s (1000..4500 ms): Watchdog feuert GENAU EINMAL —
-    //     im Gap, aber VOR dem Gap-Ende (die Source hätte ab 4500 weiter-
-    //     geliefert; die Session ist dann schon tot).
+    // (c) Dropout 3.5 s (1000..4500 ms): the watchdog fires EXACTLY ONCE —
+    //     in the gap, but BEFORE the gap end (the source would have resumed
+    //     delivery at 4500; by then the session is already dead).
     @Test
-    fun `c Aussetzer 3 5 s - ERR_STALL genau einmal, noch vor Gap-Ende`() = runBlocking {
+    fun `c dropout 3 5 s - ERR_STALL exactly once, still before the gap end`() = runBlocking {
         val clock = VirtualClock()
         val t0 = clock.now()
         val src = FakeWavAudioSource(
@@ -207,155 +206,155 @@ class FakeAudioScenarioTest {
         )
         val scope = newScope()
         val c = DictationCoordinator(scope, { src }, { FakeAsrEngine() }, FakeSink(), nowMs = { clock.now() })
-        assertTrue("start muss gelingen", c.start())
+        assertTrue("start must succeed", c.start())
         clock.pumpTo(t0 + 900L, stepMs = 25L, realDelayMs = 5L)
-        assertTrue("vor dem Gap liefern Blöcke (sind ${c.capBlocks()})", c.capBlocks() >= 80)
-        assertEquals("vor dem Gap noch kein Abbruch", "-", c.lastAbortReason)
-        // Gap-Phase: Stopp-Limit 3000 → Feuern zwischen t0+4000 und t0+4500.
+        assertTrue("before the gap blocks are delivered (are ${c.capBlocks()})", c.capBlocks() >= 80)
+        assertEquals("before the gap still no abort", "-", c.lastAbortReason)
+        // gap phase: stop limit 3000 → fires between t0+4000 and t0+4500.
         clock.pumpTo(t0 + 4_200L, stepMs = 100L, realDelayMs = 10L)
-        assertFalse("Session im Gap beendet (vor Gap-Ende 4500)", c.isActive)
+        assertFalse("session ended in the gap (before the gap end 4500)", c.isActive)
         assertEquals("audio_error:stall", c.lastAbortReason)
-        // "Genau einmal": der Capture-Loop ist zurückgekehrt — weiterspumpen
-        // ändert nichts (kein zweites Feuern, kein Weiterlaufen).
+        // "Exactly once": the capture loop has returned — further pumping
+        // changes nothing (no second firing, no continued running).
         clock.pumpTo(t0 + 6_000L, stepMs = 100L, realDelayMs = 5L)
-        assertEquals("zweites Feuern unmöglich", "audio_error:stall", c.lastAbortReason)
-        assertFalse("Session bleibt beendet", c.isActive)
+        assertEquals("a second firing is impossible", "audio_error:stall", c.lastAbortReason)
+        assertFalse("the session stays ended", c.isActive)
         scope.cancel()
     }
 
-    // (d) Ende nach 1,2 s + UP: der NUTZERFALL aus der Analyse — abort_reason
-    //     "final", audio_s ≈ 1,2 s.
+    // (d) End after 1.2 s + UP: the USER CASE from the analysis — abort_reason
+    //     "final", audio_s ≈ 1.2 s.
     @Test
-    fun `d Ende nach 1 2 s - abort_reason final und audio_s rund 1 2 (Nutzerfall)`() = runBlocking {
+    fun `d end after 1 2 s - abort_reason final and audio_s around 1 2 (user case)`() = runBlocking {
         val clock = VirtualClock()
         val t0 = clock.now()
         val src = FakeWavAudioSource(wav(), stopAfterMs = t0 + 1_200L, nowMs = { clock.now() })
         val scope = newScope()
         val c = DictationCoordinator(scope, { src }, { FakeAsrEngine() }, FakeSink(), nowMs = { clock.now() })
-        assertTrue("start muss gelingen", c.start())
+        assertTrue("start must succeed", c.start())
         clock.pumpTo(t0 + 1_200L, stepMs = 20L, realDelayMs = 5L)
-        c.stop() // "UP" — 1,2 s gehalten, wie im Export
+        c.stop() // "UP" — held 1.2 s, as in the export
         awaitIdle(c)
-        assertEquals("finaler Stop (Nutzerfall)", "final", c.lastAbortReason)
-        assertTrue("audio_s ≈ 1,2 (ist ${c.audioMs} ms)", c.audioMs in 1_150L..1_250L)
-        assertTrue("Finale lief durch", c.lastStopOutcome is StopOutcome.FinalRan)
+        assertEquals("final stop (user case)", "final", c.lastAbortReason)
+        assertTrue("audio_s ≈ 1.2 (is ${c.audioMs} ms)", c.audioMs in 1_150L..1_250L)
+        assertTrue("the finale ran through", c.lastStopOutcome is StopOutcome.FinalRan)
         scope.cancel()
     }
 
-    // (e) F31: Blöcke laufen durchgehend, sind aber STILL (−56-dBFS-Nutzerfall):
-    //     nach 3000 ms genau EIN ERR_SILENT, Session beendet, cap_blocks > 0
-    //     (im Gegensatz zu ERR_STALL: hier KOMMEN Blöcke).
+    // (e) F31: blocks keep running, but are SILENT (the −56-dBFS user case):
+    //     after 3000 ms exactly ONE ERR_SILENT, session ended, cap_blocks > 0
+    //     (in contrast to ERR_STALL: here blocks DO arrive).
     @Test
-    fun `e durchgehend still - nach 3 s genau ein ERR_SILENT, Session beendet`() = runBlocking {
+    fun `e continuously silent - after 3 s exactly one ERR_SILENT, session ended`() = runBlocking {
         val clock = VirtualClock()
         val t0 = clock.now()
         val src = FakeWavAudioSource(silentWav(8), nowMs = { clock.now() })
         val scope = newScope()
         val c = DictationCoordinator(scope, { src }, { FakeAsrEngine() }, FakeSink(), nowMs = { clock.now() })
-        assertTrue("start muss gelingen", c.start())
+        assertTrue("start must succeed", c.start())
         clock.pumpTo(t0 + 3_400L, stepMs = 100L, realDelayMs = 10L)
-        assertFalse("Session muss nach dem Stille-Watchdog beendet sein", c.isActive)
-        assertEquals("Stille-Watchdog-Grund", "audio_error:silence", c.lastAbortReason)
-        assertTrue("Blöcke WAREN da (Stille ≠ Stall, sind ${c.capBlocks()})", c.capBlocks() > 0)
-        // Genau einmal: Capture-Loop ist zurückgekehrt — Weiterspumpen ändert nichts.
+        assertFalse("the session must have ended after the silence watchdog", c.isActive)
+        assertEquals("silence watchdog cause", "audio_error:silence", c.lastAbortReason)
+        assertTrue("blocks WERE there (silence ≠ stall, are ${c.capBlocks()})", c.capBlocks() > 0)
+        // exactly once: the capture loop has returned — further pumping changes nothing.
         clock.pumpTo(t0 + 6_000L, stepMs = 100L, realDelayMs = 5L)
-        assertEquals("zweites Feuern unmöglich", "audio_error:silence", c.lastAbortReason)
-        assertFalse("Session bleibt beendet", c.isActive)
+        assertEquals("a second firing is impossible", "audio_error:silence", c.lastAbortReason)
+        assertFalse("the session stays ended", c.isActive)
         scope.cancel()
     }
 
-    // (f) F31: 1,5 s Stille, dann LAUT (Sinus): kein ERR_SILENT — die ersten
-    //     1,5 s sind unter der 3-s-Grenze, danach hält der laute Stream die
-    //     Stille-Uhr zurück. loud_s zählt die laute Zeit mit.
+    // (f) F31: 1.5 s silence, then LOUD (sine): no ERR_SILENT — the first
+    //     1.5 s stay under the 3-s limit, after that the loud stream holds back
+    //     the silence clock. loud_s counts the loud time.
     @Test
-    fun `f still dann laut - kein ERR_SILENT, loud_s waechst`() = runBlocking {
+    fun `f silent then loud - no ERR_SILENT, loud_s grows`() = runBlocking {
         val clock = VirtualClock()
         val t0 = clock.now()
         val src = FakeWavAudioSource(mixWav(silentMs = 1_500, loudMs = 5_000), nowMs = { clock.now() })
         val scope = newScope()
         val c = DictationCoordinator(scope, { src }, { FakeAsrEngine() }, FakeSink(), nowMs = { clock.now() })
-        assertTrue("start muss gelingen", c.start())
+        assertTrue("start must succeed", c.start())
         clock.pumpTo(t0 + 1_500L, stepMs = 50L, realDelayMs = 10L)
-        assertEquals("in den ersten 1,5 s Stille: noch kein Abbruch (< 3 s)", "-", c.lastAbortReason)
+        assertEquals("in the first 1.5 s of silence: still no abort (< 3 s)", "-", c.lastAbortReason)
         clock.pumpTo(t0 + 6_500L, stepMs = 100L, realDelayMs = 20L)
-        assertTrue("Session läuft weiter (laute Blöcke halten die Stille-Uhr)", c.isActive)
-        assertEquals("kein ERR_SILENT nach dem Signal", "-", c.lastAbortReason)
-        assertTrue("loud_s zählt die laute Zeit (ist ${c.loudS()} s)", c.loudS() in 3.0..5.2)
+        assertTrue("the session keeps running (loud blocks hold the silence clock)", c.isActive)
+        assertEquals("no ERR_SILENT after the signal", "-", c.lastAbortReason)
+        assertTrue("loud_s counts the loud time (is ${c.loudS()} s)", c.loudS() in 3.0..5.2)
         c.stop()
         awaitIdle(c)
-        assertEquals("finaler Stop", "final", c.lastAbortReason)
+        assertEquals("final stop", "final", c.lastAbortReason)
         scope.cancel()
     }
 
-    // (g) F31-Abgrenzung: KEINE Blöcke (Quelle tot) → weiterhin ERR_STALL
-    //     (nicht ERR_SILENT) — die capBlocks > 0-Bedingung trennt die Fälle.
+    // (g) F31 distinction: NO blocks (source dead) → still ERR_STALL
+    //     (not ERR_SILENT) — the capBlocks > 0 condition separates the cases.
     @Test
-    fun `g keine Blcke - weiterhin ERR_STALL, kein ERR_SILENT`() = runBlocking {
+    fun `g no blocks - still ERR_STALL, no ERR_SILENT`() = runBlocking {
         val clock = VirtualClock()
         val t0 = clock.now()
         val src = FakeWavAudioSource(wav(), silenceFromMs = t0, nowMs = { clock.now() })
         val scope = newScope()
         val c = DictationCoordinator(scope, { src }, { FakeAsrEngine() }, FakeSink(), nowMs = { clock.now() })
-        assertTrue("start muss gelingen", c.start())
+        assertTrue("start must succeed", c.start())
         clock.pumpTo(t0 + 3_400L, stepMs = 100L, realDelayMs = 10L)
-        assertFalse("Session beendet", c.isActive)
-        assertEquals("ohne Blöcke bleibt es ERR_STALL", "audio_error:stall", c.lastAbortReason)
-        assertEquals("keine Blöcke → keine Stille-Messung", 0, c.capBlocks())
+        assertFalse("session ended", c.isActive)
+        assertEquals("without blocks it stays ERR_STALL", "audio_error:stall", c.lastAbortReason)
+        assertEquals("no blocks → no silence measurement", 0, c.capBlocks())
         scope.cancel()
     }
 
-    // (h) F31-Messung: durchgehend lauter Stream (Sinus) → loud_s ≈ Sendedauer.
+    // (h) F31 measurement: continuously loud stream (sine) → loud_s ≈ send duration.
     @Test
-    fun `h lauter Stream - loud_s misst die laute Zeit`() = runBlocking {
+    fun `h loud stream - loud_s measures the loud time`() = runBlocking {
         val clock = VirtualClock()
         val t0 = clock.now()
         val src = FakeWavAudioSource(mixWav(silentMs = 0, loudMs = 3_000), nowMs = { clock.now() })
         val scope = newScope()
         val c = DictationCoordinator(scope, { src }, { FakeAsrEngine() }, FakeSink(), nowMs = { clock.now() })
-        assertTrue("start muss gelingen", c.start())
+        assertTrue("start must succeed", c.start())
         clock.pumpTo(t0 + 3_000L, stepMs = 50L, realDelayMs = 5L)
-        assertTrue("Blöcke liefen (sind ${c.capBlocks()})", c.capBlocks() >= 280)
-        // Fälligkeits-Off-by-One: Block i ist AB sessionStart+i×10 fällig (inklusive)
-        // → am Pump-Ende sind 301 Blöcke möglich (3,01 s); Band dahinter abgeleitet.
-        assertTrue("loud_s ≈ 3 (ist ${c.loudS()} s)", c.loudS() in 2.9..3.05)
+        assertTrue("blocks ran (are ${c.capBlocks()})", c.capBlocks() >= 280)
+        // due-date off-by-one: block i is due FROM sessionStart+i×10 (inclusive)
+        // → at the end of pumping 301 blocks are possible (3.01 s); the band below is derived.
+        assertTrue("loud_s ≈ 3 (is ${c.loudS()} s)", c.loudS() in 2.9..3.05)
         c.stop()
         awaitIdle(c)
         scope.cancel()
     }
 
-    // (i) F31b/REVIEW-P1 → F41/F43: 4 s LAUT, dann streamende Stille →
-    //     KEIN ERR_SILENT (die Stille-ERKENNUNG startet nach dem ersten lauten
-    //     Block nie — F31b bleibt), ABER die Aufnahme beendet sich nach
-    //     TRAILING_SILENCE_MS = 2,5 s Pause AUTOMATISCH REGULÄR (finaler Decode,
-    //     kein ERR_*) — vorher musste der Nutzer sie manuell beenden (F41-Repro
-    //     Symptom 1: 30 s Stille, Session lief weiter, FGS ebenfalls).
+    // (i) F31b/REVIEW-P1 → F41/F43: 4 s LOUD, then stream silence →
+    //     NO ERR_SILENT (silence DETECTION never starts after the first loud
+    //     block — F31b stays), BUT the recording ends AUTOMATICALLY and
+    //     REGULARLY after TRAILING_SILENCE_MS = 2.5 s of pause (final decode,
+    //     no ERR_*) — before, the user had to end it manually (F41 repro
+    //     symptom 1: 30 s of silence, the session kept running, FGS as well).
     @Test
-    fun `i 4 s laut dann 5 s Pause - auto-final nach 2,5 s Stille, kein ERR_SILENT`() = runBlocking {
+    fun `i 4 s loud then 5 s pause - auto-final after 2 5 s of silence, no ERR_SILENT`() = runBlocking {
         val clock = VirtualClock()
         val t0 = clock.now()
         val src = FakeWavAudioSource(segmentWav(listOf(4_000 to true, 5_000 to false)), nowMs = { clock.now() })
         val scope = newScope()
         val c = DictationCoordinator(scope, { src }, { FakeAsrEngine() }, FakeSink(), nowMs = { clock.now() })
-        assertTrue("start muss gelingen", c.start())
+        assertTrue("start must succeed", c.start())
         clock.pumpTo(t0 + 4_000L, stepMs = 50L, realDelayMs = 10L)
-        assertEquals("nach 4 s Laut: kein Abbruch", "-", c.lastAbortReason)
+        assertEquals("after 4 s loud: no abort", "-", c.lastAbortReason)
         clock.pumpTo(t0 + 6_400L, stepMs = 100L, realDelayMs = 20L)
-        assertTrue("Pause < 2,5 s: Session läuft weiter (F43)", c.isActive)
-        assertEquals("kein ERR_SILENT nach dem ersten lauten Block", "-", c.lastAbortReason)
+        assertTrue("pause < 2.5 s: the session keeps running (F43)", c.isActive)
+        assertEquals("no ERR_SILENT after the first loud block", "-", c.lastAbortReason)
         clock.pumpTo(t0 + 9_000L, stepMs = 100L, realDelayMs = 20L)
         awaitIdle(c)
-        assertFalse("Pause ≥ 2,5 s: automatischer regulärer Abschluss (F43)", c.isActive)
-        assertEquals("auto-final, kein ERR_SILENT/ERR_STALL", "final", c.lastAbortReason)
-        assertTrue("auto-final: Outcome FinalRan", c.lastStopOutcome is StopOutcome.FinalRan)
+        assertFalse("pause ≥ 2.5 s: automatic regular finish (F43)", c.isActive)
+        assertEquals("auto-final, no ERR_SILENT/ERR_STALL", "final", c.lastAbortReason)
+        assertTrue("auto-final: outcome FinalRan", c.lastStopOutcome is StopOutcome.FinalRan)
         scope.cancel()
     }
 
-    // (j) F31b→F41/F43: 2,5 s still, 0,5 s LAUT, dann 5 s still → KEIN ERR_SILENT
-    //     (das everLoud-FLAG gate-ete und gate-et die Stille-ERKENNUNG weiter
-    //     dauerhaft), aber die streamende Stille beendet die Session jetzt
-    //     REGULÄR nach 2,5 s (F43-auto-final) statt ewig weiterzulaufen.
+    // (j) F31b→F41/F43: 2.5 s silent, 0.5 s LOUD, then 5 s silent → NO ERR_SILENT
+    //     (the everLoud FLAG gated and continues to permanently gate the silence
+    //     DETECTION), but the stream silence now ends the session REGULARLY
+    //     after 2.5 s (F43 auto-final) instead of running on forever.
     @Test
-    fun `j still laut still - kein ERR_SILENT, Stille endet automatisch regulaer (F43)`() = runBlocking {
+    fun `j silent loud silent - no ERR_SILENT, silence ends automatically regularly (F43)`() = runBlocking {
         val clock = VirtualClock()
         val t0 = clock.now()
         val src = FakeWavAudioSource(
@@ -363,38 +362,38 @@ class FakeAudioScenarioTest {
         )
         val scope = newScope()
         val c = DictationCoordinator(scope, { src }, { FakeAsrEngine() }, FakeSink(), nowMs = { clock.now() })
-        assertTrue("start muss gelingen", c.start())
+        assertTrue("start must succeed", c.start())
         clock.pumpTo(t0 + 3_000L, stepMs = 100L, realDelayMs = 10L)
-        assertTrue("an der 3-s-Grenze: Session läuft (lauter Block bei 2,5 s)", c.isActive)
+        assertTrue("at the 3-s limit: the session runs (loud block at 2.5 s)", c.isActive)
         clock.pumpTo(t0 + 5_400L, stepMs = 100L, realDelayMs = 20L)
-        assertTrue("Stille < 2,5 s: Session läuft weiter (F43)", c.isActive)
+        assertTrue("silence < 2.5 s: the session keeps running (F43)", c.isActive)
         clock.pumpTo(t0 + 8_000L, stepMs = 100L, realDelayMs = 20L)
         awaitIdle(c)
-        assertFalse("Stille ≥ 2,5 s: automatischer regulärer Abschluss (F43)", c.isActive)
-        assertEquals("kein ERR_SILENT (Flag-gated) — reguläres auto-final", "final", c.lastAbortReason)
-        assertTrue("auto-final: Outcome FinalRan", c.lastStopOutcome is StopOutcome.FinalRan)
+        assertFalse("silence ≥ 2.5 s: automatic regular finish (F43)", c.isActive)
+        assertEquals("no ERR_SILENT (flag-gated) — regular auto-final", "final", c.lastAbortReason)
+        assertTrue("auto-final: outcome FinalRan", c.lastStopOutcome is StopOutcome.FinalRan)
         scope.cancel()
     }
 
-    // (k) F31b-Timing: durchgehend still (NIE laut) — UNTER der 3-s-Grenze läuft
-    //     die Session weiter, DARNACH genau ein ERR_SILENT (Grenze bei ~3 s).
+    // (k) F31b timing: continuously silent (NEVER loud) — BELOW the 3-s limit
+    //     the session keeps running, AFTERWARDS exactly one ERR_SILENT (limit at ~3 s).
     @Test
-    fun `k nie laut - unter 3 s laeuft die Session, danach genau ein ERR_SILENT`() = runBlocking {
+    fun `k never loud - below 3 s the session runs, afterwards exactly one ERR_SILENT`() = runBlocking {
         val clock = VirtualClock()
         val t0 = clock.now()
         val src = FakeWavAudioSource(silentWav(8), nowMs = { clock.now() })
         val scope = newScope()
         val c = DictationCoordinator(scope, { src }, { FakeAsrEngine() }, FakeSink(), nowMs = { clock.now() })
-        assertTrue("start muss gelingen", c.start())
+        assertTrue("start must succeed", c.start())
         clock.pumpTo(t0 + 2_900L, stepMs = 50L, realDelayMs = 5L)
-        assertTrue("unter der 3-s-Grenze: Session läuft weiter", c.isActive)
-        assertEquals("unter der Grenze: kein Abbruch", "-", c.lastAbortReason)
+        assertTrue("below the 3-s limit: the session keeps running", c.isActive)
+        assertEquals("below the limit: no abort", "-", c.lastAbortReason)
         clock.pumpTo(t0 + 3_400L, stepMs = 100L, realDelayMs = 10L)
-        assertFalse("über der Grenze: Session beendet", c.isActive)
-        assertEquals("ERR_SILENT (nie laut, Blöcke laufen)", "audio_error:silence", c.lastAbortReason)
-        // Genau einmal:
+        assertFalse("above the limit: session ended", c.isActive)
+        assertEquals("ERR_SILENT (never loud, blocks running)", "audio_error:silence", c.lastAbortReason)
+        // exactly once:
         clock.pumpTo(t0 + 5_000L, stepMs = 100L, realDelayMs = 5L)
-        assertEquals("zweites Feuern unmöglich", "audio_error:silence", c.lastAbortReason)
+        assertEquals("a second firing is impossible", "audio_error:silence", c.lastAbortReason)
         scope.cancel()
     }
 }

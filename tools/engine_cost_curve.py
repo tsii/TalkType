@@ -1,26 +1,26 @@
 #!/usr/bin/env python3
-"""I3 (PLAN_V0130 6.3 + Fable 4): Kostenkurve des whole_buffer-Decodes.
+"""I3 (PLAN_V0130 6.3 + Fable 4): cost curve of the whole_buffer decode.
 
-Misst decode_ms (Mel+Encoder+TDT-Decode, wie der Partial-Pfad der App den
-VOLLSTANDIGEN Puffer dekodiert) fuer Pufferlaengen T = 5..300 s (Pflicht)
-plus 900 s (Ziel, nur wenn die Pflichtlaeufe < 10 min dauern). Audio wird
-aus testdata/hold/hold_korpus_180.wav + de_part1/2.wav gelooped und auf T s
-zugeschnitten (Regel 9: Audio-Inhalte werden NIE ausgegeben, nur Zahlen).
+Measures decode_ms (mel+encoder+TDT decode, how the app's partial path
+decodes the COMPLETE buffer) for buffer lengths T = 5..300 s (mandatory)
+plus 900 s (goal, only if the mandatory runs take < 10 min). Audio is
+looped from testdata/hold/hold_korpus_180.wav + de_part1/2.wav and cut to
+T s (rule 9: audio contents are NEVER printed, only numbers).
 
-Variante: encoder-model.int8.onnx + decoder_joint-model.int8.onnx (int8) +
-nemo128.onnx (fp32-Mel) — identisch zum APK-Export (MODEL_SHA256-gepinnt);
-Muster: tools/reference_decode.py (TdtReference wird importiert, kein Code
-dupliziert).
+Variant: encoder-model.int8.onnx + decoder_joint-model.int8.onnx (int8) +
+nemo128.onnx (fp32 mel) — identical to the APK export (MODEL_SHA256-pinned);
+pattern: tools/reference_decode.py (TdtReference is imported, no code
+duplicated).
 
-Entscheidungsregel (PLAN 6.3): alpha = Steigung decode_ms pro Audio-Sekunde
-(Fit durch den Ursprung), W = 1500 ms / alpha (laengstes Fenster mit
-decode <= 1,5 s). Klargrund: Diskrepanz C2-Export 583 ms @ 11,9 s
-(~49 ms/s, Geraet) vs. Nutzer-Messung 4102 ms @ ~8 s (~512 ms/s) — hier:
-gleiche Variante auf dem Host; Abweichung dokumentieren, nie raten.
+Decision rule (PLAN 6.3): alpha = slope of decode_ms per audio second
+(fit through the origin), W = 1500 ms / alpha (longest window with
+decode <= 1.5 s). Background: the discrepancy C2 export 583 ms @ 11.9 s
+(~49 ms/s, device) vs. user measurement 4102 ms @ ~8 s (~512 ms/s) — here:
+the same variant on the host; document the deviation, never guess.
 
-Aufruf: .venv-asr/bin/python tools/engine_cost_curve.py [--threads N]
-Ausgabe: reports/engine_cost_curve.csv (T,decode_ms_med,rss_delta_mb) +
-Konsolenzeilen alpha_ms_per_audio_s= / W_sek= / Extrapolation 600/900 s.
+Usage: .venv-asr/bin/python tools/engine_cost_curve.py [--threads N]
+Output: reports/engine_cost_curve.csv (T,decode_ms_med,rss_delta_mb) +
+console lines alpha_ms_per_audio_s= / W_sek= / extrapolation 600/900 s.
 """
 from __future__ import annotations
 
@@ -50,7 +50,7 @@ POOL_FILES = [
 
 
 def build_audio(target_s: int, pool: list[np.ndarray]) -> np.ndarray:
-    """T s Audio aus dem Pool loopen und exakt zuschneiden (16 kHz mono)."""
+    """Loop T s of audio from the pool and cut it exactly (16 kHz mono)."""
     need = target_s * SR
     out = np.empty(need, dtype=np.float32)
     pos, i = 0, 0
@@ -75,7 +75,7 @@ def measure(ref: TdtReference, t_s: int, pool: list[np.ndarray], runs: int = 3) 
     rss_before = vmrss_mb()
     decode_ms = []
     for _ in range(runs):
-        r = ref.run(audio)  # Text wird ignoriert (Regel 9)
+        r = ref.run(audio)  # text is ignored (rule 9)
         decode_ms.append((r["t_mel"] + r["t_enc"] + r["t_dec"]) * 1000.0)
     rss_after = vmrss_mb()
     del audio
@@ -88,27 +88,27 @@ def measure(ref: TdtReference, t_s: int, pool: list[np.ndarray], runs: int = 3) 
 
 
 def main() -> None:
-    p = argparse.ArgumentParser(description="whole_buffer-Decode-Kostenkurve (I3)")
+    p = argparse.ArgumentParser(description="whole_buffer decode cost curve (I3)")
     p.add_argument("--threads", type=int,
                    default=min(8, len(__import__("os").sched_getaffinity(0))),
-                   help="intra_op_num_threads (Default: min(8, Kerne))")
+                   help="intra_op_num_threads (default: min(8, cores))")
     p.add_argument("--models", default=str(DEFAULT_MODELS))
-    p.add_argument("--runs", type=int, default=3, help="Median ueber N Laeufe je T")
+    p.add_argument("--runs", type=int, default=3, help="median over N runs per T")
     p.add_argument("--skip-goal", action="store_true",
-                   help="900-s-Ziellauf auslassen (nach Host-OOM: 900-s-Puffer "
-                        "brauchte >12 GB RSS und wurde vom Container-OOM gekillt)")
+                   help="skip the 900-s goal run (after host OOM: the 900-s buffer "
+                        "needed >12 GB RSS and was killed by the container OOM)")
     args = p.parse_args()
 
-    print("# Variante: int8-Encoder + int8-Decoder + fp32-Mel "
+    print("# variant: int8 encoder + int8 decoder + fp32 mel "
           "(encoder-model.int8.onnx / decoder_joint-model.int8.onnx / nemo128.onnx) — "
-          "identisch zum APK-Export", flush=True)
+          "identical to the APK export", flush=True)
     print(f"# threads={args.threads} runs/T={args.runs} "
           f"ort={__import__('onnxruntime').__version__}", flush=True)
 
     ref = TdtReference(Path(args.models), args.threads)
     pool = [load_waveform(f) for f in POOL_FILES]
     print(f"# audio pool: {[f.name for f in POOL_FILES]} "
-          f"(loop->T s zugeschnitten)", flush=True)
+          f"(loop->cut to T s)", flush=True)
 
     t0 = time.perf_counter()
     results = []
@@ -120,12 +120,12 @@ def main() -> None:
               f"runs=[{runs}] rss_delta_mb={r['rss_delta_mb']:+7.1f} "
               f"elapsed={time.perf_counter() - t0:7.1f}s", flush=True)
 
-    # Ziel 900 s nur, wenn die Pflichtlaeufe unter 10 min blieben und nicht
-    # --skip-goal gesetzt ist (Host-Befund 2026-11-01: 900-s-Puffer => OOM bei
-    # ~12,2 GB anon-RSS, Container-OOM-Kill — als Messpunkt dokumentiert).
+    # the 900-s goal only if the mandatory runs stayed under 10 min and
+    # --skip-goal is not set (host finding 2026-11-01: 900-s buffer => OOM at
+    # ~12.2 GB anon RSS, container OOM kill — documented as a measurement point).
     if args.skip_goal:
-        print("# Ziel 900 s uebersprungen (--skip-goal; frueherer Lauf: "
-              "OOM-Kill bei ~12,2 GB RSS)", flush=True)
+        print("# 900-s goal skipped (--skip-goal; earlier run: "
+              "OOM kill at ~12.2 GB RSS)", flush=True)
     elif time.perf_counter() - t0 < 600.0:
         for t_s in TS_GOAL:
             r = measure(ref, t_s, pool, args.runs)
@@ -133,11 +133,11 @@ def main() -> None:
             runs = ",".join(f"{x:.0f}" for x in r["decode_ms_runs"])
             print(f"T={r['t']:>4}s decode_ms_med={r['decode_ms_med']:8.1f} "
                   f"runs=[{runs}] rss_delta_mb={r['rss_delta_mb']:+7.1f} "
-                  f"elapsed={time.perf_counter() - t0:7.1f}s (Ziel)", flush=True)
+                  f"elapsed={time.perf_counter() - t0:7.1f}s (goal)", flush=True)
     elif time.perf_counter() - t0 >= 600.0:
-        print("# Ziel 900 s uebersprungen (Pflichtlaeufe >= 10 min)", flush=True)
+        print("# 900-s goal skipped (mandatory runs >= 10 min)", flush=True)
 
-    # Steigung: Fit durch den Ursprung (decode(0)=0 ist konstruiert).
+    # slope: fit through the origin (decode(0)=0 is by construction).
     xs = np.array([r["t"] for r in results], dtype=np.float64)
     ys = np.array([r["decode_ms_med"] for r in results], dtype=np.float64)
     alpha = float((xs * ys).sum() / (xs * xs).sum())
@@ -156,12 +156,12 @@ def main() -> None:
 
     print(f"alpha_ms_per_audio_s={alpha:.1f}", flush=True)
     print(f"W_sek={w_sek:.1f}", flush=True)
-    print(f"# groesstes GEMESSENES T mit decode<=1500ms: {max_ok}s", flush=True)
+    print(f"# largest MEASURED T with decode<=1500ms: {max_ok}s", flush=True)
     print(f"extrapolation_decode_600s_s={alpha * 600 / 1000.0:.1f}", flush=True)
     print(f"extrapolation_decode_900s_s={alpha * 900 / 1000.0:.1f}", flush=True)
-    # Diskrepanz-Referenzpunkte (nur Zahlen):
-    print("# referenz: geraet C2-Export ~49 ms/s (583 ms @ 11,9 s); "
-          "nutzermessung ~512 ms/s (4102 ms @ ~8 s)", flush=True)
+    # discrepancy reference points (numbers only):
+    print("# reference: device C2 export ~49 ms/s (583 ms @ 11.9 s); "
+          "user measurement ~512 ms/s (4102 ms @ ~8 s)", flush=True)
 
 
 if __name__ == "__main__":

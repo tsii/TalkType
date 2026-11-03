@@ -1,42 +1,42 @@
-# Review F13a — Statusleisten-Enteisung (StatusBarText, Watchdog, R-2/R-2b)
+# Review F13a — Status bar unfreezing (StatusBarText, watchdog, R-2/R-2b)
 
-**Reviewer:** DeepSeek V4 Pro 0813 · **Datum:** 2026-10-30
-**Umfang:** `ime/StatusBarText.kt` (neu), `ime/StatusBarTextTest.kt` (neu), `ime/VoiceKeyboardService.kt` (geändert), `res/values/strings.xml` (angehängt). Kein Build/Emulator.
+**Reviewer:** DeepSeek V4 Pro 0813 · **Date:** 2026-10-30
+**Scope:** `ime/StatusBarText.kt` (new), `ime/StatusBarTextTest.kt` (new), `ime/VoiceKeyboardService.kt` (changed), `res/values/strings.xml` (appended). No build/emulator.
 
 ---
 
-## Befunde
+## Findings
 
-| Sev | Datei:Zeile | Befund | Minimaländerung |
+| Sev | File:Line | Finding | Minimal change |
 |---|---|---|---|
-| **P2** | `VoiceKeyboardService.kt:250, 553` + `StatusBarText.kt:56-59` (`extra != null && !extraTransient → sticky`) | **Überbreites „extra⇒sticky" friert Nicht-Fehler ein.** Die reine Regel macht **jedes** `extra`, das nicht der Starttext ist, zu einem sticky-Fehler. Zwei Aufrufer übergeben aber Hinweise/Bestätigungen: Z.250 `emoji_blocked_recording` und Z.553 `"Diagnose kopiert — Teilen-Dialog geöffnet"` — beides keine Fehler, bleiben aber jetzt als R-2-Sticky stehen. B1-Kern (Starttext) ist gefixt, aber die Regel verfehlt „Hint/Bestätigung vs. Fehler". | Ein eigenes Transient-/Hint-Signal statt generischem `extra`→sticky: nur Fehler-Keys (`dictation_error_*`, `setup_error_*`) als sticky führen; `emoji_blocked`/`Diagnose kopiert` über den transienten Kanal (oder `extraIsSticky=false`). |
-| **P2** | `VoiceKeyboardService.kt:396, 838` | **`SystemClock.uptimeMillis()` statt `elapsedRealtime()`.** `uptimeMillis` **pausiert im Deep-Sleep** — der 15-s-Watchdog (`START_DEADLINE_MS`) und der Klärheitsvergleich `lastErrorSeenAtMs >= transientSetAtMs` wären über einen Screen-Off/Bildschirm-Aus dehnen. Beim Diktat praktisch selten, aber die „Frist"-Semantik (15 s) ist dann nicht hart. `currentTimeMillis` wird nirgends verwendet (gut, kein Wall-Clock-Sprung). | `SystemClock.elapsedRealtime()` für Deadline und beide Zeitstempel (monoton + schlafübergreifend). |
-| **P2** | `StatusBarTextTest.kt` (7 Tests) vs. `VoiceKeyboardService.kt`-Verdrahtung | **Tests beweisen die reine Funktion, nicht die Verdrahtung.** B1 war ein Ver-drahtungsfehler (alt: `if (extra != null) stickyError = extra` + Starttext als `extra`). Die 7 Tests prüfen nur `StatusBarText.select`; ein Rückschritt in der **Service**-Verdrahtung (Starttext wieder als `extra` statt als `transientStatus`, Z.395) würde **keinen** Test rot machen. Konkret: Test „extra ist nur sticky wenn es kein transienter Text ist" finge `select(extra=start, transientText=start)→extraIsSticky=true`, aber nicht `updateStatus(start)` im Service. | Ein schmaler Verdrahtungstest (oder ein Assert, dass `updateStatus` den Starttext nie als `extra` erhält): z. B. „onMicDown setzt transientStatus, ruft updateStatus() ohne extra". |
+| **P2** | `VoiceKeyboardService.kt:250, 553` + `StatusBarText.kt:56-59` (`extra != null && !extraTransient → sticky`) | **Over-broad "extra⇒sticky" freezes non-errors.** The pure rule turns **every** `extra` that is not the start text into a sticky error. But two callers pass hints/confirmations: line 250 `emoji_blocked_recording` and line 553 `"Diagnose kopiert — Teilen-Dialog geöffnet"` — neither is an error, yet both now remain as R-2 stickies. The B1 core (start text) is fixed, but the rule misses "hint/confirmation vs. error". | A dedicated transient/hint signal instead of generic `extra`→sticky: only error keys (`dictation_error_*`, `setup_error_*`) become sticky; `emoji_blocked`/`Diagnose kopiert` via the transient channel (or `extraIsSticky=false`). |
+| **P2** | `VoiceKeyboardService.kt:396, 838` | **`SystemClock.uptimeMillis()` instead of `elapsedRealtime()`.** `uptimeMillis` **pauses during deep sleep** — the 15-s watchdog (`START_DEADLINE_MS`) and the clarity comparison `lastErrorSeenAtMs >= transientSetAtMs` would stretch across a screen-off/display-off. Rare in practice during dictation, but the "deadline" semantics (15 s) is then not strict. `currentTimeMillis` is used nowhere (good, no wall-clock jump). | `SystemClock.elapsedRealtime()` for the deadline and both timestamps (monotonic + spans sleep). |
+| **P2** | `StatusBarTextTest.kt` (7 tests) vs. `VoiceKeyboardService.kt` wiring | **Tests prove the pure function, not the wiring.** B1 was a wiring error (old: `if (extra != null) stickyError = extra` + start text as `extra`). The 7 tests only check `StatusBarText.select`; a regression in the **service** wiring (start text again as `extra` instead of as `transientStatus`, line 395) would turn **no** test red. Concretely: the test "extra is only sticky if it is not transient text" would catch `select(extra=start, transientText=start)→extraIsSticky=true`, but not `updateStatus(start)` in the service. | A narrow wiring test (or an assert that `updateStatus` never receives the start text as `extra`): e.g. "onMicDown sets transientStatus, calls updateStatus() without extra". |
 
 ---
 
-## Antworten auf die sechs Fragen
+## Answers to the six questions
 
-1. **Starttext sticky/später verdeckend?** **Nein.** Der Starttext wird seit F13a ausschließlich über `transientStatus = getString(R.string.dictation_starting)` (Z.395) gesetzt und `updateStatus()` **ohne** `extra` aufgerufen (Z.397). `StatusBarText.select` behandelt `transientText` nie als sticky (`extraIsSticky=false`), und `stickyError = extra` (Z.877) läuft nur, wenn die reine Funktion `extraIsSticky` meldet. B1 ist damit zu; einzig die o. g. Nebenwirkung (Hinweise/Bestätigungen werden ungewollt sticky) bleibt.
+1. **Start text sticky/later obscuring?** **No.** Since F13a the start text is set exclusively via `transientStatus = getString(R.string.dictation_starting)` (line 395) and `updateStatus()` is called **without** `extra` (line 397). `StatusBarText.select` never treats `transientText` as sticky (`extraIsSticky=false`), and `stickyError = extra` (line 877) only runs when the pure function reports `extraIsSticky`. B1 is thus closed; only the side effect described above (hints/confirmations unintentionally becoming sticky) remains.
 
-2. **Watchdog abgebrochen/Zombie.** `startDeadlineJob` wird gekündigt: im `finally` des Async-Starts (Z.482), vor Wieder-Start (Z.403) und implizit durch `serviceScope.cancel()` in `onDestroy`. **Kein Zombie:** läuft die Frist ab, setzt der Watchdog `startAbandoned=true`; der nachfolgend fertige Start prüft `abandoned` → `coordinator?.abort(); micRecording=false; stopFgs()` (Z.443-454) — ein verspäteter Erfolg wird abgebaut, nicht stumm weitergeführt. `abortDictation()`/`stopDictationIfRunning()` brauchen kein eigenes `cancel()`, weil sie nur bei bereits `startingUp=false` laufen (der `finally` hat den Watchdog dann schon gekündigt).
+2. **Watchdog cancelled/zombie.** `startDeadlineJob` gets cancelled: in the `finally` of the async start (line 482), before re-start (line 403), and implicitly via `serviceScope.cancel()` in `onDestroy`. **No zombie:** if the deadline expires, the watchdog sets `startAbandoned=true`; the subsequently completed start checks `abandoned` → `coordinator?.abort(); micRecording=false; stopFgs()` (lines 443-454) — a late success is torn down, not silently continued. `abortDictation()`/`stopDictationIfRunning()` need no own `cancel()` because they only run once `startingUp=false` (the `finally` has already cancelled the watchdog by then).
 
-3. **Stale-Werte für den nächsten Start?** Nein: `transientStatus/transientSetAtMs/lastErrorSeenAtMs/startAbandoned/successJustFinished` werden in `onMicDown` (Z.371-375, 399) bzw. `finally` (Z.485) zurückgesetzt; `successJustFinished` ist Einmal-Flag (Z.875) und wird direkt nach `select` genullt. Uhr = `SystemClock.uptimeMillis` (P2 s. o.), **nicht** `currentTimeMillis` — kein Wall-Clock-Sprung. `lastErrorSeenAtMs` ist „Zeit des ersten Fehlers"; für den `>=`-Vergleich zum transienten Starttext reicht das (erster Fehler ist stets ≥ Starttext).
+3. **Stale values for the next start?** No: `transientStatus/transientSetAtMs/lastErrorSeenAtMs/startAbandoned/successJustFinished` are reset in `onMicDown` (lines 371-375, 399) and in `finally` (line 485); `successJustFinished` is a one-shot flag (line 875) and is cleared directly after `select`. Clock = `SystemClock.uptimeMillis` (P2 above), **not** `currentTimeMillis` — no wall-clock jump. `lastErrorSeenAtMs` is "time of the first error"; that suffices for the `>=` comparison against the transient start text (the first error is always ≥ the start text).
 
-4. **Reihenfolgen `startingUp=false` vs. laufender Coordinator.** Beide (Watchdog-Körper und Async-Start-`finally`) hüpfen per `withContext(Main)` und sind auf Main **atomar** (keine Suspension dazwischen) → kein Partial-Interleaving: (a) Watchdog zuerst ⇒ `startingUp=false, abandoned=true`, der spätere Start wird im `abandoned`-Zweig abgebrochen; (b) Start zuerst ⇒ `startingUp=false, started=true, micRecording=true, updateStatus()`, der `finally` kündigt den Watchdog, bevor er feuert. **Kein „Mikro ohne Rückmeldung"-Zustand gefunden.** (Nicht als Concurrency-Test fixiert — offen, s. unten.)
+4. **Orderings `startingUp=false` vs. a running coordinator.** Both (watchdog body and async-start `finally`) hop via `withContext(Main)` and are **atomic** on Main (no suspension in between) → no partial interleaving: (a) watchdog first ⇒ `startingUp=false, abandoned=true`, the later start is aborted in the `abandoned` branch; (b) start first ⇒ `startingUp=false, started=true, micRecording=true, updateStatus()`, the `finally` cancels the watchdog before it fires. **No "mic without feedback" state found.** (Not pinned as a concurrency test — open, see below.)
 
-5. **Hätten die 7 Tests B1 gefangen?** **Teilweise — nur die reine Funktion, nicht die Verdrahtung.** B1 war ein Verdrahtungsfehler im Service; der neue Test „extra ist nur sticky wenn es kein transienter Text ist" finge eine Regression **innerhalb** von `StatusBarText.select`, aber keinen Rückschritt der Service-Wiring (Starttext wieder als `extra` in `updateStatus`). Siehe P2 oben.
+5. **Would the 7 tests have caught B1?** **Partially — only the pure function, not the wiring.** B1 was a wiring error in the service; the new test "extra is only sticky if it is not transient text" would catch a regression **inside** `StatusBarText.select`, but not a regression of the service wiring (start text again as `extra` in `updateStatus`). See P2 above.
 
-6. **Regel 9/10.** Alle neuen/geänderten Status-Strings (`dictation_starting`, `dictation_start_too_long`, `dictation_no_text`) enthalten keinerlei Audio-/Textinhalt, keinen Pfad, keine URL, keine Autokorrektur; `strings.xml` ist nur angehängt (`dictation_start_too_long` neu, Menge 12→13). Die Diagnose-Kurzform in `updateStatus` bleibt `FLAG_DEBUGGABLE`-geschützt und zeigt nur Zahlen (Z.856-868). Kein Verstoß.
+6. **Rules 9/10.** All new/changed status strings (`dictation_starting`, `dictation_start_too_long`, `dictation_no_text`) contain no audio/text content, no path, no URL, no autocorrection; `strings.xml` is only appended (`dictation_start_too_long` new, count 12→13). The diagnostics short form in `updateStatus` remains `FLAG_DEBUGGABLE`-protected and shows only numbers (lines 856-868). No violation.
 
 ---
 
-## SUMME
+## TOTAL
 
-**P0 = 0 · P1 = 0 · P2 = 3** (Hinweise/Bestätigungen werden ungewollt sticky; `uptimeMillis` statt `elapsedRealtime`; reine-Funktion-Tests ohne Verdrahtungsabdeckung).
+**P0 = 0 · P1 = 0 · P2 = 3** (hints/confirmations unintentionally sticky; `uptimeMillis` instead of `elapsedRealtime`; pure-function tests without wiring coverage).
 
-**Nicht belegbar (offen):**
-- Watchdog/`finally`-Wettlauf ist nur per Codeprüfung belegt, **nicht** als Concurrency-Test fixiert.
-- Die 7 `StatusBarTextTest`s habe ich gelesen, nicht ausgeführt (kein Build).
-- Verhalten bei echtem Deep-Sleep (Screen-Off) der `uptimeMillis`-Deadline ist eine Plausibilitätsaussage, kein Gerätebeweis.
-- Der Gerätetest der ursprünglichen B1-Ursache (Streaming-Freeze) wurde hier nicht reproduziert (nur Analyse).
+**Not provable (open):**
+- The watchdog/`finally` race is evidenced only by code inspection, **not** pinned as a concurrency test.
+- I read the 7 `StatusBarTextTest`s, did not run them (no build).
+- Behavior under genuine deep sleep (screen off) of the `uptimeMillis` deadline is a plausibility statement, not device evidence.
+- The device test of the original B1 cause (streaming freeze) was not reproduced here (analysis only).

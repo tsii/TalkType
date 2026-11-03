@@ -16,29 +16,29 @@ import android.widget.LinearLayout
 import android.widget.TextView
 
 /**
- * AP2 (docs/PLAN_C2_FABLE_R2.md §1.2): „feindlicher Editor“ für die C2-Simulation —
- * Debug-Build NUR (Emulator/Phone; Skript §1.3 Schritt 5 startet sie per
+ * AP2 (docs/PLAN_C2_FABLE_R2.md §1.2): „hostile editor“ for the C2 simulation —
+ * debug build ONLY (emulator/phone; script §1.3 step 5 starts it via
  * `am start -n de.voicekeyboard/.debug.HostileEditorActivity --es mode <mode>`).
- * Ein EditText, dessen Verhalten das Intent-Extra `mode` wählt — jeder Modus
- * imitiert ein reales App-Muster, um die jeweilige Zielhypothese zu provozieren:
+ * An EditText whose behavior is chosen by the intent extra `mode` — each mode
+ * imitates a real app pattern to provoke the respective target hypothesis:
  *
- *  - `plain`      Kontrolle (wie DebugInputActivity).
- *  - `restart:N`  nach je N Zeichen Zuwachs `imm.restartInput(view)` (H-E1;
- *                 Chrome-/Apps-Restart-Muster).
- *  - `cursor:N`   nach je N Zeichen Zuwachs `setSelection(len-1)` dann
- *                 `setSelection(len)` (Compose-/Autokorrektur-Muster, H-E2).
- *  - `spans`      bei jedem Text-Change SuggestionSpan+UnderlineSpan auf das
- *                 letzte Wort (Spell-Checker-Muster, H-E2).
- *  - `slowmain:MS` afterTextChanged blockiert den Main-Thread MS ms (H-E3;
- *                 z. B. 300/1500 — echte Busy-Wait-Schleife, kein sleep-Problem:
- *                 Blockieren IST der Modus).
- *  - `hideime:S`  nach S Sekunden `imm.hideSoftInputFromWindow(...)` (H-A2).
- *  - `webview`    WebView mit contenteditable-DIV, fester Offline-Inhalt
- *                 (~2000 Zeichen, data:-URL, KEIN Netzwerk — Regel: kein
- *                 Netzwerkzugriff) — echtes Chrome-Restart-Verhalten (H-E1).
+ *  - `plain`      control (like DebugInputActivity).
+ *  - `restart:N`  after every N characters of growth `imm.restartInput(view)` (H-E1;
+ *                 Chrome/app restart pattern).
+ *  - `cursor:N`   after every N characters of growth `setSelection(len-1)` then
+ *                 `setSelection(len)` (Compose/autocorrect pattern, H-E2).
+ *  - `spans`      on every text change SuggestionSpan+UnderlineSpan on the
+ *                 last word (spell checker pattern, H-E2).
+ *  - `slowmain:MS` afterTextChanged blocks the main thread for MS ms (H-E3;
+ *                 e.g. 300/1500 — real busy-wait loop, no sleep problem:
+ *                 blocking IS the mode).
+ *  - `hideime:S`  after S seconds `imm.hideSoftInputFromWindow(...)` (H-A2).
+ *  - `webview`    WebView with contenteditable DIV, fixed offline content
+ *                 (~2000 characters, data: URL, NO network — rule: no
+ *                 network access) — real Chrome restart behavior (H-E1).
  *
- * Regel 9: Diese Activity loggt NUR TextLÄNGEN und Modus-Codes unter dem Tag
- * [TAG] — niemals Textinhalte.
+ * Rule 9: this activity logs ONLY text LENGTHS and mode codes under the tag
+ * [TAG] — never text contents.
  */
 class HostileEditorActivity : Activity() {
 
@@ -75,7 +75,7 @@ class HostileEditorActivity : Activity() {
     private fun installMode(field: EditText) {
         val imm = getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager
         when (val m = mode) {
-            "plain" -> Unit // Kontrolle: nichts feindliches
+            "plain" -> Unit // control: nothing hostile
             "spans" -> field.addTextChangedListener(SpanChanger(field))
             "hideime" -> field.postDelayed(
                 {
@@ -104,31 +104,31 @@ class HostileEditorActivity : Activity() {
         }
     }
 
-    // ---- Modi: Helfer -------------------------------------------------------------
+    // ---- Modes: helpers -------------------------------------------------------------
 
-    /** restart:N / cursor:N — N als Int (Default 40). */
+    /** restart:N / cursor:N — N as Int (default 40). */
     private fun intArg(m: String): Int =
         m.substringAfter(':').toIntOrNull() ?: 40
 
-    /** slowmain:MS — Dauer in ms (Default 300). */
+    /** slowmain:MS — duration in ms (default 300). */
     private fun msArg(m: String): Long =
         m.substringAfter(':').toLongOrNull() ?: 300L
 
-    /** hideime — Sekunden als Double (mode ohne ':', Default 10 s). */
+    /** hideime — seconds as Double (mode without ':', default 10 s). */
     private fun secondsArg(m: String, defaultSeconds: Double): Double =
         if (m.contains(':')) m.substringAfter(':').toDoubleOrNull() ?: defaultSeconds else defaultSeconds
 
-    /** H-E3: den Main-Thread MS ms blockieren (busy — blockieren ist der Modus). */
+    /** H-E3: block the main thread for MS ms (busy — blocking is the mode). */
     private fun busyBlockMain(ms: Long) {
         val until = android.os.SystemClock.uptimeMillis() + ms
         log("slowmain block ms=$ms")
         while (android.os.SystemClock.uptimeMillis() < until) {
-            // bewusst busy-wait: Thread.sleep wäre von der Runtime künstlich
-            // unterbrechbar/verschiebbar; die Blockade soll real sein.
+            // deliberately busy-wait: Thread.sleep would be artificially
+            // interruptible/reschedulable by the runtime; the blockade should be real.
         }
     }
 
-    /** `spans`: bei JEDEM Text-Change Suggestion-+UnderlineSpan auf das letzte Wort. */
+    /** `spans`: on EVERY text change Suggestion+UnderlineSpan on the last word. */
     private class SpanChanger(private val field: EditText) : android.text.TextWatcher {
         override fun beforeTextChanged(s: CharSequence, a: Int, b: Int, c: Int) = Unit
         override fun onTextChanged(s: CharSequence, a: Int, b: Int, c: Int) = Unit
@@ -147,8 +147,8 @@ class HostileEditorActivity : Activity() {
     }
 
     /**
-     * Ruft [action] nach je N ZEICHEN ZUWACHS (kumulativ gezählt, robuster als
-     * je Einzeländerung — PASTE/Commit-Blöcke zählen mit).
+     * Calls [action] after every N CHARACTERS OF GROWTH (counted cumulatively, more robust
+     * than per single change — PASTE/commit blocks count along).
      */
     private class EveryNChars(
         private val field: EditText,
@@ -161,7 +161,7 @@ class HostileEditorActivity : Activity() {
         override fun onTextChanged(s: CharSequence, start: Int, before: Int, count: Int) = Unit
         override fun afterTextChanged(s: Editable) {
             val len = s.length
-            if (len <= seen) { // Löschung/Ersatz: Zähler folgen
+            if (len <= seen) { // deletion/replacement: the counter follows
                 seen = len
                 return
             }
@@ -175,7 +175,7 @@ class HostileEditorActivity : Activity() {
         }
     }
 
-    /** `webview`: Offline-WebView mit contenteditable-DIV (~2000 Zeichen Inhalt, data:-URL). */
+    /** `webview`: offline WebView with contenteditable DIV (~2000 characters of content, data: URL). */
     private fun buildWebView() {
         val body = buildString {
             append("Webview-Korpus ")
@@ -188,7 +188,7 @@ class HostileEditorActivity : Activity() {
             "<html><body contenteditable=\"true\" style=\"font-size:16px;padding:8px\">" +
             body + "</body></html>"
         val webView = WebView(this).apply {
-            settings.javaScriptEnabled = false // kein Skript, kein Netzwerk
+            settings.javaScriptEnabled = false // no script, no network
             loadDataWithBaseURL(null, html, "text/html", "utf-8", null)
         }
         setContentView(webView)
@@ -196,7 +196,7 @@ class HostileEditorActivity : Activity() {
     }
 
     private fun log(what: String) {
-        // Regel 9: nur Längen/Codes — niemals Textinhalte.
+        // Rule 9: lengths/codes only — never text contents.
         Log.i(TAG, what)
     }
 

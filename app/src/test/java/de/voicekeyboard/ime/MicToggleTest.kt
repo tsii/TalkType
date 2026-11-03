@@ -5,70 +5,70 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 
 /**
- * F9 d (P2) + F8 Q6 (P1): Zustandsmaschine des Fußreihen-Mikrofons.
- * Die Taste muss (a) starten UND stoppen und (b) in Zwischenzuständen
- * bewusst nichts tun — sonst meldet sie „Start fehlgeschlagen“.
+ * F9 d (P2) + F8 Q6 (P1): state machine of the footer-row microphone.
+ * The key must (a) start AND stop and (b) deliberately do nothing in
+ * intermediate states — otherwise it reports "start failed".
  */
 class MicToggleTest {
 
     @Test
-    fun `ohne Coordinator startet der erste Tap`() {
+    fun `without a coordinator the first tap starts`() {
         assertEquals(MicToggleAction.START, micToggleAction(null))
     }
 
     @Test
-    fun `IDLE startet die Aufnahme`() {
+    fun `IDLE starts the recording`() {
         assertEquals(MicToggleAction.START, micToggleAction(DictationState.IDLE))
     }
 
     @Test
-    fun `RECORDING stoppt die Aufnahme (zweiter Tap ist kein Schlucken mehr)`() {
+    fun `RECORDING stops the recording (the second tap no longer swallows)`() {
         assertEquals(MicToggleAction.STOP, micToggleAction(DictationState.RECORDING))
     }
 
     @Test
-    fun `STARTING und FINALIZING sind ein bewusstes Nichtstun`() {
+    fun `STARTING and FINALIZING are a deliberate do-nothing`() {
         assertEquals(MicToggleAction.IGNORE, micToggleAction(DictationState.STARTING))
         assertEquals(MicToggleAction.IGNORE, micToggleAction(DictationState.FINALIZING))
     }
 
     @Test
-    fun `jede Zustand der enum ist zugeordnet, kein Fall faellt durch`() {
-        // START/STOP nur in IDLE bzw RECORDING; alle anderen Zustände IGNORE.
+    fun `every enum state is assigned, no case falls through`() {
+        // START/STOP only in IDLE or RECORDING; all other states IGNORE.
         for (s in DictationState.entries) {
             val a = micToggleAction(s)
             when (s) {
                 DictationState.IDLE -> assertEquals(MicToggleAction.START, a)
                 DictationState.RECORDING -> assertEquals(MicToggleAction.STOP, a)
-                else -> assertEquals("Zustand $s darf keinen Start/Stop auslösen", MicToggleAction.IGNORE, a)
+                else -> assertEquals("state $s must not trigger a start/stop", MicToggleAction.IGNORE, a)
             }
         }
     }
 
-    // ---- D10-Rest §1: HALTEGESTE auf dem Fussreihen-Mikrofon ----
+    // ---- D10 rest §1: HOLD GESTURE on the footer-row microphone ----
 
     @Test
-    fun `Haltegeste DOWN startet nur aus IDLE - kein Toggle-Stop ueber die Press-Ebene`() {
+    fun `hold gesture DOWN starts only from IDLE - no toggle stop across the press level`() {
         assertEquals(MicHoldAction.START, micHoldPressAction(null))
         assertEquals(MicHoldAction.START, micHoldPressAction(DictationState.IDLE))
-        // In laufenden/uebergangenen Zustaenden ist DOWN bewusst NICHTS:
+        // In running/intermediate states DOWN is deliberately NOTHING:
         assertEquals(MicHoldAction.IGNORE, micHoldPressAction(DictationState.RECORDING))
         assertEquals(MicHoldAction.IGNORE, micHoldPressAction(DictationState.STARTING))
         assertEquals(MicHoldAction.IGNORE, micHoldPressAction(DictationState.FINALIZING))
     }
 
     @Test
-    fun `Haltegeste UP beendet mit Finale - nie gestartet heisst bewusst nichts`() {
+    fun `hold gesture UP ends with a final - never started means deliberately nothing`() {
         assertEquals(MicHoldAction.STOP, micHoldReleaseAction(DictationState.RECORDING, cancelled = false))
         assertEquals(MicHoldAction.STOP, micHoldReleaseAction(DictationState.STARTING, cancelled = false))
-        // IDLE/FINALIZING: kein Stop (nicht gestartet bzw. Finale laeuft bereits)
+        // IDLE/FINALIZING: no stop (not started or the final is already running)
         assertEquals(MicHoldAction.IGNORE, micHoldReleaseAction(null, cancelled = false))
         assertEquals(MicHoldAction.IGNORE, micHoldReleaseAction(DictationState.IDLE, cancelled = false))
         assertEquals(MicHoldAction.IGNORE, micHoldReleaseAction(DictationState.FINALIZING, cancelled = false))
     }
 
     @Test
-    fun `CANCEL bricht ohne Finale ab - nur aus laufender Aufnahme`() {
+    fun `CANCEL aborts without a final - only from a running recording`() {
         assertEquals(MicHoldAction.ABORT, micHoldReleaseAction(DictationState.RECORDING, cancelled = true))
         assertEquals(MicHoldAction.ABORT, micHoldReleaseAction(DictationState.STARTING, cancelled = true))
         assertEquals(MicHoldAction.IGNORE, micHoldReleaseAction(DictationState.IDLE, cancelled = true))
@@ -77,7 +77,7 @@ class MicToggleTest {
     }
 
     @Test
-    fun `Haltegeste deckt jeden DictationState in jeder Event-Kombination ab`() {
+    fun `hold gesture covers every DictationState in every event combination`() {
         for (s in DictationState.entries) {
             val press = micHoldPressAction(s)
             val release = micHoldReleaseAction(s, cancelled = false)
@@ -94,7 +94,7 @@ class MicToggleTest {
                     assertEquals(MicHoldAction.ABORT, cancel)
                 }
                 else -> assertEquals(
-                    "Zustand $s darf auf kein Haltegeste-Ereignis reagieren",
+                    "state $s must not react to any hold-gesture event",
                     MicHoldAction.IGNORE, press,
                 ).also {
                     assertEquals(MicHoldAction.IGNORE, release)
@@ -104,14 +104,14 @@ class MicToggleTest {
         }
     }
 
-    // ---- T3 (v0.1.35, Debugger-Design, Beweis /tmp/vk_phone_e2.log Z.74-97):
-    // Tap/Hold-Klassifikation der Fußzeilen-Mikro-Geste (micHoldReleaseDecision) ----
+    // ---- T3 (v0.1.35, debugger design, evidence /tmp/vk_phone_e2.log l.74-97):
+    // tap/hold classification of the footer micro gesture (micHoldReleaseDecision) ----
 
-    // ① frischer Tap, UP 150 ms VOR start_ok ⇒ TOGGLE_ON — die Session läuft
-    // weiter (STARTING = Start noch nicht fertig), das Flag bleibt UNgesetzt
-    // (micStartFinishedAction RUN ⇒ nach start_ok RECORDING, kein Stop).
+    // ① fresh tap, UP 150 ms BEFORE start_ok ⇒ TOGGLE_ON — the session keeps
+    // running (STARTING = start not yet finished), the flag stays UNSET
+    // (micStartFinishedAction RUN ⇒ RECORDING after start_ok, no stop).
     @Test
-    fun `T3 frischer Tap 150ms VOR start_ok - TOGGLE_ON, Session laeuft weiter`() {
+    fun `T3 fresh tap 150ms BEFORE start_ok - TOGGLE_ON, session keeps running`() {
         assertEquals(
             MicReleaseDecision.TOGGLE_ON,
             micHoldReleaseDecision(
@@ -122,15 +122,15 @@ class MicToggleTest {
                 startingUp = true,
             ),
         )
-        // TOGGLE_ON setzt KEIN wantedStop-Flag — nach start_ok läuft die Session (RUN):
+        // TOGGLE_ON sets NO wantedStop flag — after start_ok the session runs (RUN):
         assertEquals(MicStartFinishAction.RUN, micStartFinishedAction(wantedStop = false, wantedAbort = false))
     }
 
-    // ② frischer Tap, UP 40 ms NACH start_ok ⇒ TOGGLE_ON, KEIN Stop — genau der
-    // Beweisfall (Warm): vorher tötete micHoldReleaseAction(RECORDING, UP) die
-    // Session sofort (stopped ok=0/audio_s=0, 10-90 ms nach start_ok).
+    // ② fresh tap, UP 40 ms AFTER start_ok ⇒ TOGGLE_ON, NO stop — exactly the
+    // evidence case (warm): before, micHoldReleaseAction(RECORDING, UP) killed
+    // the session immediately (stopped ok=0/audio_s=0, 10-90 ms after start_ok).
     @Test
-    fun `T3 frischer Tap 40ms NACH start_ok - TOGGLE_ON, kein Stop, Session lebt`() {
+    fun `T3 fresh tap 40ms AFTER start_ok - TOGGLE_ON, no stop, session lives`() {
         assertEquals(
             MicReleaseDecision.TOGGLE_ON,
             micHoldReleaseDecision(
@@ -141,20 +141,20 @@ class MicToggleTest {
                 startingUp = false,
             ),
         )
-        // auch der Down-lose-Fall (null = kein Coordinator) ist ein frischer Tap:
+        // the Down-lost case (null = no coordinator) is a fresh tap too:
         assertEquals(
             MicReleaseDecision.TOGGLE_ON,
             micHoldReleaseDecision(null, DictationState.RECORDING, 40L, cancelled = false, startingUp = false),
         )
     }
 
-    // ③ Hold > 300 ms ⇒ echter Hold-Release: STOP mit Finale; Variante Release
-    // WÄHREND des Starts ⇒ HOLD_STOP_PENDING — der nachgereichte Stop greift NACH
-    // Startende (micStartFinishedAction STOP_AFTER_START, nicht blind KEEP_RUNNING).
+    // ③ hold > 300 ms ⇒ a real hold release: STOP with a final; release variant
+    // DURING the start ⇒ HOLD_STOP_PENDING — the pending stop applies AFTER
+    // the start end (micStartFinishedAction STOP_AFTER_START, not blind KEEP_RUNNING).
     @Test
-    fun `T3 Hold ueber 300ms - Stop mit Finale - Release im Start haelt pending Stop nach`() {
+    fun `T3 hold over 300ms - stop with a final - release during start holds the pending stop`() {
         assertEquals(
-            "Hold-Release auf laufender Session: regulärer Stop mit Finale",
+            "hold-release on a running session: regular stop with a final",
             MicReleaseDecision.HOLD_STOP,
             micHoldReleaseDecision(DictationState.IDLE, DictationState.RECORDING, 350L, cancelled = false, startingUp = false),
         )
@@ -164,38 +164,38 @@ class MicToggleTest {
             micHoldReleaseDecision(DictationState.IDLE, DictationState.STARTING, 350L, cancelled = false, startingUp = true),
         )
         assertEquals(
-            "Release auf RECORDING, während start_ok noch aussteht: pending Stop",
+            "release on RECORDING while start_ok is still pending: pending stop",
             MicReleaseDecision.HOLD_STOP_PENDING,
             micHoldReleaseDecision(DictationState.IDLE, DictationState.RECORDING, 350L, cancelled = false, startingUp = true),
         )
-        // der pending Stop greift NACH Startende WIRKLICH (T3 ersetzt KEEP_RUNNING):
+        // the pending stop REALLY applies AFTER the start end (T3 replaces KEEP_RUNNING):
         assertEquals(MicStartFinishAction.STOP_AFTER_START, micStartFinishedAction(wantedStop = true, wantedAbort = false))
-        // Grenze: genau 300 ms sind noch ein Tap (>) — 301 ms schon Hold:
+        // boundary: exactly 300 ms is still a tap (>) — 301 ms already a hold:
         assertEquals(MicReleaseDecision.TOGGLE_ON,
             micHoldReleaseDecision(DictationState.IDLE, DictationState.RECORDING, MIC_TAP_MAX_MS, cancelled = false, startingUp = false))
         assertEquals(MicReleaseDecision.HOLD_STOP,
             micHoldReleaseDecision(DictationState.IDLE, DictationState.RECORDING, MIC_TAP_MAX_MS + 1, cancelled = false, startingUp = false))
     }
 
-    // ④ Gegenprobe: zweiter Tap auf die laufende Session ⇒ TOGGLE_OFF bleibt
-    // (regulär ausschalten) — die T3-Klassifikation öffnet keinen Dauertoaster.
+    // ④ counter-check: second tap on the running session ⇒ TOGGLE_OFF stays
+    // (regular switch off) — the T3 classification opens no endless toaster.
     @Test
-    fun `T3 Gegenprobe - zweiter Tap auf laufender Session ist TOGGLE_OFF`() {
+    fun `T3 counter-check - second tap on a running session is TOGGLE_OFF`() {
         assertEquals(
             MicReleaseDecision.TOGGLE_OFF,
             micHoldReleaseDecision(DictationState.RECORDING, DictationState.RECORDING, 120L, cancelled = false, startingUp = false),
         )
         assertEquals(
-            "Tap auf startender Session schaltet ebenfalls aus",
+            "a tap on a starting session switches off as well",
             MicReleaseDecision.TOGGLE_OFF,
             micHoldReleaseDecision(DictationState.RECORDING, DictationState.STARTING, 120L, cancelled = false, startingUp = true),
         )
-        // CANCEL unverändert: Abbruch ohne Finale (nur aus laufender/startender Aufnahme):
+        // CANCEL unchanged: abort without a final (only from a running/starting recording):
         assertEquals(MicReleaseDecision.ABORT,
             micHoldReleaseDecision(DictationState.RECORDING, DictationState.RECORDING, 120L, cancelled = true, startingUp = false))
         assertEquals(MicReleaseDecision.IGNORE,
             micHoldReleaseDecision(DictationState.IDLE, DictationState.IDLE, 120L, cancelled = true, startingUp = false))
-        // Session endete zwischen DOWN und UP: bewusst nichts:
+        // the session ended between DOWN and UP: deliberately nothing:
         assertEquals(MicReleaseDecision.IGNORE,
             micHoldReleaseDecision(DictationState.RECORDING, DictationState.FINALIZING, 120L, cancelled = false, startingUp = false))
     }

@@ -1,8 +1,8 @@
 package de.voicekeyboard.layouts
 
 /**
- * Sprachsensitives Case-Mapping. Türkisches i→İ und ı→I werden explizit
- * behandelt (CASE_PATTERN muss für tr anders lauten als Locale.Upper).
+ * Language-sensitive case mapping. Turkish i→İ and ı→I are handled explicitly
+ * (CASE_PATTERN must behave differently for tr than Locale.Upper).
  */
 object CaseMapper {
 

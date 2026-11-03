@@ -12,16 +12,16 @@ import java.nio.LongBuffer
 import kotlin.math.min
 
 /**
- * Parakeet TDT 0.6B v3 (int8) über ONNX Runtime — Mel → Encoder → TDT-Greedy.
+ * Parakeet TDT 0.6B v3 (int8) over ONNX Runtime — Mel → encoder → TDT greedy.
  *
  * Pipeline (docs/ASR_CONTRACT.md §2/§3):
  *  PCM16 → float32 [-1,1] → nemo128 (waveforms [1,N] float / waveforms_lens [1] int64)
  *  → features [1,128,T] → encoder (audio_signal [1,128,T] float / length [1] int64)
  *  → outputs [1,1024,T/8], frames = min(encoded_lengths[0], outputs.shape[2])
- *  → TdtGreedy mit JointStep-Adapter (frame-weise, encoder_outputs [1,1024,1]).
+ *  → TdtGreedy with a JointStep adapter (frame-wise, encoder_outputs [1,1024,1]).
  *
- * Kein Softmax, kein Sampling, kein Resampling. Logging nur Dauern (Tag "VK-ASR"),
- * niemals Audiodaten oder Texte.
+ * No softmax, no sampling, no resampling. Logging durations only (tag "VK-ASR"),
+ * never audio data or texts.
  */
 class ParakeetAsrEngine : AsrEngine, Closeable {
 
@@ -35,7 +35,7 @@ class ParakeetAsrEngine : AsrEngine, Closeable {
     override fun load(modelDir: File) {
         check(sessions == null) { "AsrEngine.load() wurde bereits aufgerufen" }
         val vocabFile = File(modelDir, "vocab.txt")
-        check(vocabFile.isFile) { "vocab.txt fehlt im Modellordner" } // Regel 9: nie Pfade in Fehlermeldungen
+        check(vocabFile.isFile) { "vocab.txt fehlt im Modellordner" } // rule 9: never paths in error messages
         val vocab = Vocabulary.parse(vocabFile.readText())
         this.sessions = OnnxSessions.load(modelDir)
         this.vocab = vocab
@@ -53,7 +53,7 @@ class ParakeetAsrEngine : AsrEngine, Closeable {
             return Hypothesis(IntArray(0), "", IntArray(0), sessionId, runId, 0, false)
         }
 
-        // ---- 1. Mel-Frontend: waveforms [1,N] float, waveforms_lens [1] int64 ----
+        // ---- 1. Mel frontend: waveforms [1,N] float, waveforms_lens [1] int64 ----
         val mel0 = System.nanoTime()
         val features: FloatArray
         val melTime: Int
@@ -115,15 +115,15 @@ class ParakeetAsrEngine : AsrEngine, Closeable {
         val encNanos = System.nanoTime() - enc0
         check(encFrames > 0) { "Encoder lieferte 0 Frames für $nSamples Samples" }
 
-        // NaN-Guard VOR dem Decode (§7 Fehlerabbildung): ein NaN/Inf-Encoder-Output
-        // darf nicht erst den kompletten Decoder durchlaufen (Argmax auf NaN → Index 0).
+        // NaN guard BEFORE the decode (§7 error mapping): a NaN/Inf encoder output
+        // must not run through the complete decoder first (argmax on NaN → index 0).
         for (v in encOut) {
             if (!v.isFinite()) {
                 throw IllegalStateException("Encoder-Output enthält NaN/Inf (Wert $v)")
             }
         }
 
-        // ---- 3. TDT-Greedy mit JointStep-Adapter ----
+        // ---- 3. TDT greedy with JointStep adapter ----
         val dec0 = System.nanoTime()
         val budget = TokenBudget.budgetTokens(window.audioSeconds)
         val joint = EncoderJointStep(env, sessions.decoder, encOut, encFrames)
@@ -136,7 +136,7 @@ class ParakeetAsrEngine : AsrEngine, Closeable {
         }
         val text = vocab.detokenize(result.tokenIds)
 
-        // Nur Dauern/Kennzahlen loggen — KEINE Audiodaten, KEINE Texte.
+        // Log durations/metrics only — NO audio data, NO texts.
         Log.i(
             TAG,
             "audio=${"%.1f".format(window.audioSeconds * 1000.0)}ms samples=$nSamples frames=$encFrames " +
@@ -170,12 +170,12 @@ class ParakeetAsrEngine : AsrEngine, Closeable {
 }
 
 /**
- * JointStep-Adapter: füttert pro Schritt decoder_joint mit
- *  encoder_outputs [1,1024,1] (Frame t), targets [1,1] int32,
+ * JointStep adapter: feeds decoder_joint per step with
+ *  encoder_outputs [1,1024,1] (frame t), targets [1,1] int32,
  *  target_length [1] int32, input_states_1/2 [2,1,640] float
- * und liest outputs [1,1,1,8198] + output_states_1/2 zurück.
- * Achsenreihenfolge von outputs ist gemessen [B,T,U,8198] (§2) — bei T=U=1
- * ist der lineare Buffer genau [0,0,0,*], deshalb passt das flache Auslesen.
+ * and reads back outputs [1,1,1,8198] + output_states_1/2.
+ * The axis order of outputs is measured as [B,T,U,8198] (§2) — at T=U=1
+ * the linear buffer is exactly [0,0,0,*], hence the flat read-out works.
  */
 private class EncoderJointStep(
     private val env: OrtEnvironment,
@@ -190,7 +190,7 @@ private class EncoderJointStep(
 
     override fun step(frameIndex: Int, lastLabel: Int, states1: FloatArray, states2: FloatArray): JointOut {
         require(frameIndex in 0 until encFrames) { "Frame-Index $frameIndex außerhalb [0,$encFrames)" }
-        // Frame-Spalte aus [1,1024,T] (kanal-major) extrahieren
+        // Extract the frame column from [1,1024,T] (channel-major)
         val t = frameIndex
         for (ch in 0 until AsrContract.ENCODER_DIM) {
             frame[ch] = encOut[ch * encFrames + t]

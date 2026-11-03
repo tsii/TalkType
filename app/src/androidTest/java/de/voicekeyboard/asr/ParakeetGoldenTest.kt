@@ -12,17 +12,17 @@ import java.io.File
 import java.io.RandomAccessFile
 
 /**
- * Instrumented Golden-Test (Stufe 2b-2): beweist, dass die ASR-Engine auf dem
- * Gerät die EXAKTEN Token-IDs aus docs/ASR_CONTRACT.md §4.1 liefert.
+ * Instrumented golden test (stage 2b-2): proves that the ASR engine on the
+ * device delivers the EXACT token IDs from docs/ASR_CONTRACT.md §4.1.
  *
- * Vergleichsreihenfolge (§4.1): erst Token-IDs (Decode-Fehler), dann Text
- * (Detok-Fehler). `de_smoke` enthält einen dokumentierten echten Modellfehler
- * (`Dikti-Funktion` statt `Diktierfunktion`) — der Golden-Test hält den
- * Modell-Output fest, nicht den Wunschtext.
+ * Comparison order (§4.1): first token IDs (decode error), then text
+ * (detok error). `de_smoke` contains a documented real model error
+ * (`Dikti-Funktion` instead of `Diktierfunktion`) — the golden test pins the
+ * model output, not the wishful text.
  *
- * Voraussetzung (Emulator-Setup): Modelle unter /data/local/tmp/models,
- * WAVs unter /data/local/tmp/testdata. Fehlt etwas, wird der Test per
- * Assume SKIIPPED (nicht rot).
+ * Prerequisite (emulator setup): models under /data/local/tmp/models,
+ * WAVs under /data/local/tmp/testdata. If anything is missing, the test is
+ * SKIPPED via Assume (not red).
  */
 @RunWith(AndroidJUnit4::class)
 class ParakeetGoldenTest {
@@ -31,7 +31,7 @@ class ParakeetGoldenTest {
         private const val MODELS_DIR = "/data/local/tmp/models"
         private const val TESTDATA_DIR = "/data/local/tmp/testdata"
 
-        /** ASR_CONTRACT.md §4.1 Golden-Token-IDs. */
+        /** ASR_CONTRACT.md §4.1 golden token IDs. */
         private val GOLDEN_SMOKE = intArrayOf(
             1960, 7877, 7036, 4189, 1076, 317, 2893, 1607, 7868, 7877, 601, 615,
             360, 6085, 7918, 7995, 1297, 1240, 1593, 1044, 357, 567, 4949, 5027,
@@ -56,21 +56,21 @@ class ParakeetGoldenTest {
             "$MODELS_DIR/decoder_joint-model.int8.onnx",
             "$MODELS_DIR/vocab.txt",
         ).all { File(it).isFile }
-        assumeTrue("Golden-Modelle fehlen unter $MODELS_DIR — Test wird übersprungen (Emulator-Setup)", modelsOk)
-        assumeTrue("Test-WAV fehlt: $path — Test wird übersprungen (Emulator-Setup)", f.isFile)
+        assumeTrue("golden models missing under $MODELS_DIR — test is skipped (emulator setup)", modelsOk)
+        assumeTrue("test WAV missing: $path — test is skipped (emulator setup)", f.isFile)
         return f
     }
 
     /**
-     * Eigener minimaler RIFF/WAVE-Parser (kein Fremdimport): PCM16 mono 16 kHz.
-     * Liest nur die Chunks "fmt " und "data"; unbekannte Chunks werden übersprungen.
+     * Own minimal RIFF/WAVE parser (no third-party import): PCM16 mono 16 kHz.
+     * Reads only the chunks "fmt " and "data"; unknown chunks are skipped.
      */
     private fun parseWavPcm16Mono16k(file: File): PcmWindow {
         RandomAccessFile(file, "r").use { raf ->
             val header = ByteArray(12)
             raf.readFully(header)
-            require(String(header, 0, 4, Charsets.US_ASCII) == "RIFF") { "Kein RIFF: ${file.name}" }
-            require(String(header, 8, 4, Charsets.US_ASCII) == "WAVE") { "Kein WAVE: ${file.name}" }
+            require(String(header, 0, 4, Charsets.US_ASCII) == "RIFF") { "no RIFF: ${file.name}" }
+            require(String(header, 8, 4, Charsets.US_ASCII) == "WAVE") { "no WAVE: ${file.name}" }
             var audioFormat = -1
             var channels = -1
             var sampleRate = -1
@@ -92,7 +92,7 @@ class ParakeetGoldenTest {
                     }
                     "data" -> {
                         val nSamples = chunkSize / 2
-                        require(chunkSize % 2 == 0) { "data-Chunk keine PCM16-Ausrichtung" }
+                        require(chunkSize % 2 == 0) { "data chunk not PCM16 aligned" }
                         val bytes = ByteArray(chunkSize)
                         raf.readFully(bytes)
                         val out = ShortArray(nSamples)
@@ -101,15 +101,15 @@ class ParakeetGoldenTest {
                         }
                         samples = out
                     }
-                    else -> raf.seek(raf.filePointer + chunkSize + (chunkSize % 2)) // Padding
+                    else -> raf.seek(raf.filePointer + chunkSize + (chunkSize % 2)) // padding
                 }
-                if (chunkSize % 2 == 1) raf.seek(raf.filePointer + 1) // odd-size Padding
+                if (chunkSize % 2 == 1) raf.seek(raf.filePointer + 1) // odd-size padding
             }
-            require(audioFormat == 1) { "Kein PCM (format=$audioFormat): ${file.name}" }
-            require(channels == 1) { "Nicht mono (channels=$channels): ${file.name}" }
-            require(sampleRate == PcmWindow.SAMPLE_RATE_16K) { "Nicht 16 kHz (=$sampleRate): ${file.name}" }
-            require(bitsPerSample == 16) { "Nicht 16 bit (=$bitsPerSample): ${file.name}" }
-            return PcmWindow(checkNotNull(samples) { "Kein data-Chunk: ${file.name}" }, sampleRate)
+            require(audioFormat == 1) { "not PCM (format=$audioFormat): ${file.name}" }
+            require(channels == 1) { "not mono (channels=$channels): ${file.name}" }
+            require(sampleRate == PcmWindow.SAMPLE_RATE_16K) { "not 16 kHz (=$sampleRate): ${file.name}" }
+            require(bitsPerSample == 16) { "not 16 bit (=$bitsPerSample): ${file.name}" }
+            return PcmWindow(checkNotNull(samples) { "no data chunk: ${file.name}" }, sampleRate)
         }
     }
 
@@ -130,12 +130,12 @@ class ParakeetGoldenTest {
             val window = parseWavPcm16Mono16k(wav)
             val hypothesis = runBlocking { engine.transcribe(window, sessionId = 1, runId = 1) }
             assertEquals(
-                "$wavName: Token-IDs weichen vom Golden ab (ASR_CONTRACT §4.1)",
+                "$wavName: token IDs deviate from the golden (ASR_CONTRACT §4.1)",
                 expectedIds.toList(),
                 hypothesis.tokenIds.toList(),
             )
-            assertEquals("$wavName: Text weicht vom Golden ab", expectedText, hypothesis.text)
-            assertFalse("$wavName: Dekodierung unvollständig", hypothesis.incomplete)
+            assertEquals("$wavName: text deviates from the golden", expectedText, hypothesis.text)
+            assertFalse("$wavName: decoding incomplete", hypothesis.incomplete)
         }
     }
 

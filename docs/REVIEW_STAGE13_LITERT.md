@@ -1,50 +1,50 @@
-# Review Stufe 13 — LiteRT-Anbindung (V3/V5/V6a/V6b/V8)
+# Review Stage 13 — LiteRT integration (V3/V5/V6a/V6b/V8)
 
-**Reviewer:** DeepSeek V4 Pro 0813 · **Datum:** 2026-10-29
-**Gegenstand:** `LiteRtAsrEngine`, `LiteRtFeaturizer`, `FeaturizerStats`, `ModelFile` (storeName/urlPath), variantenbewusste Whitelist, `EngineFactory`-Fallback. **Kein Build/Emulator** (265/0 Unit, assembleDebugAndroidTest grün — übt NICHT den Encoder-Load).
+**Reviewer:** DeepSeek V4 Pro 0813 · **Date:** 2026-10-29
+**Subject:** `LiteRtAsrEngine`, `LiteRtFeaturizer`, `FeaturizerStats`, `ModelFile` (storeName/urlPath), variant-aware whitelist, `EngineFactory` fallback. **No build/emulator** (265/0 unit, assembleDebugAndroidTest green — does NOT exercise the encoder load).
 
 ---
 
-## Befundtabelle
+## Findings table
 
-| ID | Sev | Datei:Zeile | Befund | Evidenz | Fix |
+| ID | Sev | File:Line | Finding | Evidence | Fix |
 |---|---|---|---|---|---|
-| L1-01 | **P1** | `LiteRtAsrEngine.kt:50-53` (`f.readBytes()` + `ByteBuffer.allocateDirect`) | **Encoder-Load OOMt den App-Heap.** `load()` führt für jede `.tflite` **`f.readBytes()`** aus — für den Encoder (648 784 320 B) ist das ein **648-MB-Java-Heap-`ByteArray`**, der den Android-App-Heap (256–512 MB, kein `largeHeap`) **garantiert** sprengt (`OutOfMemoryError`) — noch vor der Direct-Kopie. Selbst mit largeHeap entsteht ein Dreifach-Peak (648 MB Heap + 648 MB Direct + ~648 MB Interpreter-native). Der Instrumented-Test öffnet nur den 262-KB-Featurizer → der 648-MB-Pfad ist ungetestet. `catch (e: Exception)` fängt das `Error` **nicht**, d. h. ein OOM lässt bereits geöffnete Interpreter offen. | `val bytes = f.readBytes()` … `ByteBuffer.allocateDirect(bytes.size).put(bytes)`; `catch (e: Exception)`. | `Interpreter(File, options)` (mmap, keine Heap-Kopie) statt Byte-Array verwenden, oder per `FileChannel` direkt in den Direct-Buffer streamen; `OutOfMemoryError` zusätzlich fangen und Teileröffnung schließen. |
-| L1-02 | P2 | `LiteRtAsrEngine.kt:118-131` (`openFeaturizerOnly`/`attachFeaturizer`) | **Öffentlicher Test-Hook umgeht die Manifest-Vollprüfung.** `openFeaturizerOnly(file)` prüft nur `file.isFile` (keine Größe/SHA256 gegen `ModelManifest`); beliebiger Pfad wird als Featurizer geladen. Produktiv heute unerreichbar (B ist nicht in die IME verdrahtet, `EngineFactory.create` nicht in `buildCoordinator` verwendet), aber ein **latentes** P1 beim Verdrahten — löse ich es jetzt nicht, kann ein nicht verifizierter Pfad per Inkarnation der Engine geladen werden. | `openFeaturizerOnly` `check(file.isFile)` ohne Manifest; `attachFeaturizer(file)` öffnet blind. | `@VisibleForTesting` annotieren (oder entfernen) und den Produktions-`attachFeaturizer`/`load` gegen `ModelManifest` (Größe+SHA) prüfen; Test-Hook nie aus Produktionscode aufrufbar. |
-| L1-03 | P2 | `EngineFactory.kt:31-41` (`create(variant, store)`) | **Fallback auf A ist nicht sichtbar verdrahtet.** `Result.usedVariant` trägt die *tatsächlich* gestartete Engine, aber es existiert kein Konsument, der sie in die Statuszeile/die Debug-Zeile abbildet — der Nutzer würde B „gewählt" glauben, während A läuft. Die Anzeige muss `usedVariant` (nicht die Gewählte) zeigen. | `data class Result(engine, usedVariant)`; kein Aufrufer wertet `usedVariant` aus. | Beim Verdrahten die Status-/Diagnosezeile aus `usedVariant` speisen („Variante B nicht bereit — ONNX aktiv" statt stiller B-Anzeige). |
-| L1-04 | Note | `LiteRtFeaturizer.kt` `scrubForUser` | **Regel-9-Bereinigung gut, aber hostname-lose Reste bleiben.** Tokenweise: `substringAfterLast('/')`/`('\')` kürzt Pfade/URLs auf den Dateinamen (kein Host/kein `files/`-Pfad) — korrekt. Ein Token **ohne** `/` `\` (z. B. ein nackter Hostname/IP wie `cdn.example.com` oder eine `Signature=`-Query als einzelnes Token ohne `/`) bliebe stehen; Modell-Inhalte erscheinen in LiteRT-Meldungen ohnehin nicht. | `scrubForUser`: `if (tok.contains('/')||tok.contains('\\')) else tok`; `take(160)`. | Zusätzlich `://`-haltige, `?`-/`=`-Query-förmige und Nicht-ASCII-Tokens verwerfen. |
-| L1-05 | Note | `build.gradle.kts` (`-Xskip-metadata-version-check`) | **Risiko niedrig, but real am Rand.** litert 2.3.2 (Kotlin ≥ 2.4-Metadaten) an Compiler 2.0.21: die Flag setzt die Metadaten-Versionsprüfung außer Kraft. Erste Reibungspunkte wären (a) `inline`-/`value class`-Methoden aus litert-Kotlin-Code (Mangled-Names/VerifyError) und (b) `@JvmDefault`-Interface-Defaults / SAM-Konvertierungen — beide erst zur Laufzeit (`NoSuchMethodError`/`VerifyError`). litert ist überwiegend Java, daher `ANNAHME:` praktisch unkritisch; ein Laufzeit-Smoke-Test des Featurizer-Pfads (bereits instrumented grün) deckt den Hauptweg ab. | — | Kotlin-Version angleichen oder Laufzeit-Smoke für jede genutzte litert-API (bereits teilweise über `V6a`-Instrumented). |
-| L1-06 | Note | (Featurizer-Resultat) | **Qualitäts-Gate (≥95 % Wortidentität, ≤2 % Distanz, Ankerwörter) ist noch nicht messbar.** B-`transcribe()` wirft `AsrNotReadyException` (V4/V9/V10 ausstehend); es fehlt ein Vergleichslauf A↔B auf denselben 4 WAVs gegen `ASR_CONTRACT §4.1`. Das Gate ist definiert, aber noch kein Testapparat. | `transcribe()` wirft; kein A/B-Harness. | Sobald B dekodiert: A↔B-Vergleichslauf auf die 4 WAVs + Golden gegen §4.1 als eigenständigen Test. |
-| L1-07 | Note | `app/build.gradle.kts` `abiFilters` | **Sideload-Version sollte arm64-only sein.** Debug 82,6 MB → 123,5 MB (litert-Native ×2 ABIs). Für GrapheneOS-Pixel (arm64) ließe sich x86_64 streichen; der x86_64-Emulator-Nachweis benötigt den x86_64-Lib aber weiterhin → Aufteilung über einen Release-/Sideload-Flavor (`arm64-v8a`) vs. Debug (beide ABIs). | `abiFilters += x86_64 + arm64-v8a`; +41 MB. | Release-Sideload-Variante auf `arm64-v8a` begrenzen; Debug für den Emulator beide. |
-| L1-08 | ✓ | `ModelManifest.kt:17-21,81-82` + `ModelStore.kt:119,215,271-278` | **V5 (Stage-12-P1) ist behoben.** `ModelFile` trennt `storeName` (flach, `token_vocab.bin`) von `urlPath` (`assets/token_vocab.bin`); `isAllowedName(storeName, variant)` ist variantenbewusst und verbietet `/`; `activate(staging, variant)` prüft gegen das Varianten-Manifest und liefert bei fehlender/hash-falscher Datei `false`. | `storeName="token_vocab.bin"`, `urlPath="assets/token_vocab.bin"`; `isAllowedName(storeName, variant)`; `activate`→`if(!f.isFile||…) return false`. | — |
+| L1-01 | **P1** | `LiteRtAsrEngine.kt:50-53` (`f.readBytes()` + `ByteBuffer.allocateDirect`) | **Encoder load OOMs the app heap.** `load()` executes **`f.readBytes()`** for each `.tflite` — for the encoder (648,784,320 B) that is a **648-MB Java-heap `ByteArray`** which **guaranteed** blows up the Android app heap (256–512 MB, no `largeHeap`) (`OutOfMemoryError`) — even before the direct copy. Even with largeHeap a triple peak arises (648 MB heap + 648 MB direct + ~648 MB interpreter-native). The instrumented test opens only the 262-KB featurizer → the 648-MB path is untested. `catch (e: Exception)` does **not** catch the `Error`, i.e. an OOM leaves already-opened interpreters open. | `val bytes = f.readBytes()` … `ByteBuffer.allocateDirect(bytes.size).put(bytes)`; `catch (e: Exception)`. | Use `Interpreter(File, options)` (mmap, no heap copy) instead of a byte array, or stream directly into the direct buffer via `FileChannel`; additionally catch `OutOfMemoryError` and close partially opened interpreters. |
+| L1-02 | P2 | `LiteRtAsrEngine.kt:118-131` (`openFeaturizerOnly`/`attachFeaturizer`) | **Public test hook bypasses the manifest completeness check.** `openFeaturizerOnly(file)` checks only `file.isFile` (no size/SHA256 against `ModelManifest`); an arbitrary path is loaded as the featurizer. Unreachable in production today (B is not wired into the IME, `EngineFactory.create` is not used in `buildCoordinator`), but a **latent** P1 on wiring — if not resolved now, an unverified path can be loaded via an incarnation of the engine. | `openFeaturizerOnly` `check(file.isFile)` without the manifest; `attachFeaturizer(file)` opens blindly. | Annotate with `@VisibleForTesting` (or remove it) and check the production `attachFeaturizer`/`load` against `ModelManifest` (size+SHA); the test hook must never be callable from production code. |
+| L1-03 | P2 | `EngineFactory.kt:31-41` (`create(variant, store)`) | **The fallback to A is not visibly wired.** `Result.usedVariant` carries the *actually* started engine, but no consumer exists that maps it into the status row/debug line — the user would believe B was "chosen" while A is running. The display must show `usedVariant` (not the chosen one). | `data class Result(engine, usedVariant)`; no caller evaluates `usedVariant`. | On wiring, feed the status/diagnostic line from `usedVariant` ("Variante B nicht bereit — ONNX aktiv" instead of a silent B display). |
+| L1-04 | Note | `LiteRtFeaturizer.kt` `scrubForUser` | **Rule-9 scrubbing good, but hostname-less remnants remain.** Token-wise: `substringAfterLast('/')`/`('\')` trims paths/URLs to the file name (no host, no `files/` path) — correct. A token **without** `/` `\` (e.g. a bare hostname/IP like `cdn.example.com` or a `Signature=` query as a single token without `/`) would remain; model contents do not appear in LiteRT messages anyway. | `scrubForUser`: `if (tok.contains('/')||tok.contains('\\')) else tok`; `take(160)`. | Additionally discard tokens containing `://`, of `?`/`=`-query form, and non-ASCII. |
+| L1-05 | Note | `build.gradle.kts` (`-Xskip-metadata-version-check`) | **Risk low, but real at the edge.** litert 2.3.2 (Kotlin ≥ 2.4 metadata) against compiler 2.0.21: the flag overrides the metadata version check. First friction points would be (a) `inline`/`value class` methods from litert Kotlin code (mangled names/VerifyError) and (b) `@JvmDefault` interface defaults/SAM conversions — both only at runtime (`NoSuchMethodError`/`VerifyError`). litert is mostly Java, hence `ASSUMPTION:` practically uncritical; a runtime smoke test of the featurizer path (already green instrumented) covers the main path. | — | Align the Kotlin version or run a runtime smoke test for every litert API used (already partially covered by the `V6a` instrumented test). |
+| L1-06 | Note | (featurizer result) | **The quality gate (≥95% word identity, ≤2% distance, anchor words) is not yet measurable.** B `transcribe()` throws `AsrNotReadyException` (V4/V9/V10 pending); a comparison run A↔B on the same 4 WAVs against `ASR_CONTRACT §4.1` is missing. The gate is defined but there is no test apparatus yet. | `transcribe()` throws; no A/B harness. | As soon as B decodes: A↔B comparison run on the 4 WAVs + golden against §4.1 as a standalone test. |
+| L1-07 | Note | `app/build.gradle.kts` `abiFilters` | **The sideload version should be arm64-only.** Debug 82.6 MB → 123.5 MB (litert native ×2 ABIs). For a GrapheneOS Pixel (arm64), x86_64 could be dropped; the x86_64 emulator proof still needs the x86_64 lib → split via a release/sideload flavor (`arm64-v8a`) vs. debug (both ABIs). | `abiFilters += x86_64 + arm64-v8a`; +41 MB. | Limit the release sideload variant to `arm64-v8a`; debug keeps both for the emulator. |
+| L1-08 | ✓ | `ModelManifest.kt:17-21,81-82` + `ModelStore.kt:119,215,271-278` | **V5 (stage-12 P1) is fixed.** `ModelFile` separates `storeName` (flat, `token_vocab.bin`) from `urlPath` (`assets/token_vocab.bin`); `isAllowedName(storeName, variant)` is variant-aware and forbids `/`; `activate(staging, variant)` checks against the variant manifest and returns `false` for a missing/hash-wrong file. | `storeName="token_vocab.bin"`, `urlPath="assets/token_vocab.bin"`; `isAllowedName(storeName, variant)`; `activate`→`if(!f.isFile||…) return false`. | — |
 
 ---
 
-## Punktgenaue Antworten
+## Point-by-point answers
 
-1. **Speicher:** `readBytes()` (648-MB-Haufen) + `allocateDirect` (648-MB-Direct) + Interpreter-native ⇒ **App-Heap-OOM** beim Encoder (L1-01); `raw_wav` (486 KB) ist unkritisch. `close()` wird bei Partialfehler (Exception-Zweig) und im Service-`shutdown` aufgerufen, aber der OOM-Fall (Error) fängt/löscht nicht.
-2. **Metadaten-Flag:** risikoarm (litert überwiegend Java); erste Reibung bei inline/value-class-calls und `@JvmDefault`/SAM (Laufzeit `NoSuchMethodError`/`VerifyError`).
-3. **`openFeaturizerOnly`/`attachFeaturizer`:** latent P1 — öffentlicher, nicht-manifest geprüfter Test-Hook; produktiv derzeit unerreichbar (L1-02).
-4. **Fallback-Kontrakt:** `usedVariant` existiert, aber nichts zeigt ihn an → stille A-Aktivierung; Anzeige muss die *gestartete* Engine zeigen (L1-03).
-5. **Regel 9:** Pfad/URL → Dateiname (korrekt), aber slash-lose Host-/Query-Tokens bleiben (L1-04).
-6. **Qualitäts-Gate:** definiert, aber noch nicht messbar (B dekodiert nicht; kein A/B-Lauf) (L1-06).
-7. **ABI:** Sideload arm64-only empfehlen (L1-07).
+1. **Memory:** `readBytes()` (648-MB pile) + `allocateDirect` (648-MB direct) + interpreter-native ⇒ **app-heap OOM** on the encoder (L1-01); `raw_wav` (486 KB) is uncritical. `close()` is called on a partial error (exception branch) and in the service `shutdown`, but the OOM case (Error) is not caught/cleaned up.
+2. **Metadata flag:** low risk (litert mostly Java); first friction with inline/value-class calls and `@JvmDefault`/SAM (runtime `NoSuchMethodError`/`VerifyError`).
+3. **`openFeaturizerOnly`/`attachFeaturizer`:** latent P1 — public, non-manifest-checked test hook; currently unreachable in production (L1-02).
+4. **Fallback contract:** `usedVariant` exists, but nothing displays it → silent A activation; the display must show the *started* engine (L1-03).
+5. **Rule 9:** path/URL → file name (correct), but slash-less host/query tokens remain (L1-04).
+6. **Quality gate:** defined, but not yet measurable (B does not decode; no A/B run) (L1-06).
+7. **ABI:** recommend sideload arm64-only (L1-07).
 
 ---
 
-## Verdikt
+## Verdict
 
-- **V3 (Anbindung): nicht freigabefähig** — 1 P1 (L1-01 648-MB-`readBytes`-Heap-OOM im Encoder-Load) + 2 P2 (L1-02/L1-03).
-- **V5 (Whitelist/Pfad): freigabefähig** — Stage-12-P1 korrekt behoben (L1-08).
-- **V6a/V6b (Featurizer-Beweis + DEX): freigabefähig** — Beweis über `runForMultipleInputsOutputs`, `NEUTRAL`-Modus fachlich begründet (toter `log_mel`); nicht selbst gegen echte `.tflite` geprüft.
-- **V8 (Featurizer/Stats): freigabefähig mit Note** (L1-04/Scrub-Rest).
+- **V3 (integration): not ready for release** — 1 P1 (L1-01 648-MB `readBytes` heap OOM in the encoder load) + 2 P2 (L1-02/L1-03).
+- **V5 (whitelist/path): ready for release** — stage-12 P1 correctly fixed (L1-08).
+- **V6a/V6b (featurizer proof + DEX): ready for release** — proof via `runForMultipleInputsOutputs`, the `NEUTRAL` mode professionally justified (dead `log_mel`); not checked itself against real `.tflite`.
+- **V8 (featurizer/stats): ready for release with a note** (L1-04/scrub remainder).
 
-**Gesamt: nicht freigabefähig** (L1-01 P1) — verbleibt bis der Encoder ohne Heap-Kopie (mmap/stream) geladen wird.
+**Overall: not ready for release** (L1-01 P1) — remains until the encoder is loaded without a heap copy (mmap/stream).
 
-**Nicht geprüft (kein Gerät/Gradle):** echtes Laden des 648-MB-Encoders, `-Xskip-metadata`-Laufzeitwirkung, `scrubForUser` gegen reale LiteRT-Fehlermeldungen, A/B-Vergleichslauf.
+**Not checked (no device/Gradle):** real loading of the 648-MB encoder, `-Xskip-metadata` runtime effect, `scrubForUser` against real LiteRT error messages, A/B comparison run.
 
 ## Top-3
 
-1. **L1-01 (P1)** — Encoder über `Interpreter(File, options)` (mmap) oder `FileChannel`→Direct laden — nie `readBytes()` eines 648-MB-Haufens; `OutOfMemoryError` mit Teileröffnungs-Schließung behandeln.
-2. **L1-02 (P2)** — `openFeaturizerOnly`/`attachFeaturizer` auf `@VisibleForTesting` stellen und im Produktionspfad Größe/SHA prüfen.
-3. **L1-03 (P2)** — `usedVariant` in der Status-/Diagnosezeile anzeigen (Fallback auf A sichtbar machen).
+1. **L1-01 (P1)** — Load the encoder via `Interpreter(File, options)` (mmap) or `FileChannel`→direct — never `readBytes()` a 648-MB pile; handle `OutOfMemoryError` with partial-open closing.
+2. **L1-02 (P2)** — Put `openFeaturizerOnly`/`attachFeaturizer` behind `@VisibleForTesting` and check size/SHA in the production path.
+3. **L1-03 (P2)** — Display `usedVariant` in the status/diagnostic line (make the fallback to A visible).

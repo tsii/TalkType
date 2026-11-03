@@ -1,23 +1,23 @@
 package de.voicekeyboard.dictation
 
 /**
- * Push-to-Talk-Zustände (DESIGN.md §2.4, KONZEPT.md §2.1).
+ * Push-to-talk states (DESIGN.md §2.4, KONZEPT.md §2.1).
  *
- * IDLE → STARTING → RECORDING → FINALIZING → IDLE; Fehler/Abbruch führt über
- * geordnetes Cleanup nach IDLE. CANCELLING/STOPPING entfallen als eigene
- * Zustände in dieser Stufe: [DictationController.abort] bzw. [DictationController.stop]
- * laufen synchron und deterministisch nach IDLE.
+ * IDLE → STARTING → RECORDING → FINALIZING → IDLE; errors/abort go through
+ * orderly cleanup back to IDLE. CANCELLING/STOPPING are dropped as separate
+ * states at this stage: [DictationController.abort] and [DictationController.stop]
+ * run synchronously and deterministically back to IDLE.
  */
 enum class DictationState {
-    /** Keine Aufnahme. start() ist erlaubt. */
+    /** No recording. start() is allowed. */
     IDLE,
 
-    /** Aufnahme wird initialisiert (Ressourcen/Session anlegen). */
+    /** Recording is being initialized (creating resources/session). */
     STARTING,
 
-    /** Mikrofon läuft, Blöcke kommen über feedAudio herein. */
+    /** Microphone is running, blocks arrive via feedAudio. */
     RECORDING,
 
-    /** Taste losgelassen: finales Decode des Gesamtpuffers läuft. */
+    /** Key released: the final decode of the entire buffer is running. */
     FINALIZING,
 }

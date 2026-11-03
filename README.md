@@ -1,37 +1,39 @@
 # Voice Keyboard
 
-Android-Tastatur (IME) für GrapheneOS: **15 Sprachen tippen** und **offline diktieren** —
-ohne Google-Dienste, ohne Netzwerkzugriff zur Laufzeit, ohne Wörterbücher oder Autokorrektur.
+Android keyboard (IME) for GrapheneOS: **type in 15 languages** and **dictate offline** —
+without Google services, without network access at runtime, without dictionaries or autocorrect.
 
 <p align="center">
-  <img src="docs/img/tastatur-0.1.38.png" alt="Voice Keyboard — QWERTZ-Tastatur (15 Sprachen, Y-Reihe zentriert)" width="720">
+  <img src="docs/img/tastatur-0.1.38.png" alt="Voice Keyboard — QWERTZ keyboard (15 languages, Y row centered)" width="720">
 </p>
 
-## Was es kann
+## What it can do
 
-- Tastatur mit 15 Layouts (Schichtsystem: Grund-/Shift-/Symbol-/Emoji-Ebene), Optik nah am Systemstandard, heller und dunkler Modus.
-- Diktat über ein lokales Spracherkennungsmodell (Parakeet, int8, ~670 MB). Audio verlässt das Gerät nie.
-- Modell-Download einmalig per Nutzerentscheid; Netz danach automatisch wieder aus.
-- Mikro per Haltegeste: halten = Aufnahme, loslassen = Abschluss; Status und Fehler in der Statuszeile.
+- Keyboard with 15 layouts (layer system: base/shift/symbol/emoji levels), look close to the system default, light and dark mode.
+- Dictation via a local speech recognition model (Parakeet, int8, ~670 MB). Audio never leaves the device.
+  Verified on German **and** English dictation (golden tests plus corpus harness —
+  `SegmentGoldenTest`, `KorpusTaktTest`).
+- One-time model download by user decision; network automatically back off afterwards.
+- Microphone via hold gesture: hold = record, release = finish; status and errors in the status row.
 
-## Datenschutz
+## Privacy
 
-Kein Telemetry-Provider, keine Absturzmeldungen, keine Wortlisten. Die einzige
-Netzberechtigung besteht für den einmaligen Modell-Download. Diagnosefelder (🐞) zeigen
-nur Messwerte wie Pegel, Zeit und Pfadtyp — niemals Audio- oder Textinhalte.
+No telemetry provider, no crash reports, no word lists. The only
+network permission exists for the one-time model download. Diagnostic fields (🐞) show
+only measurements such as level, time and path type — never audio or text content.
 
-## Bauen
+## Build
 
 ```
 export ANDROID_HOME=/opt/android-sdk
 ./gradlew --offline assembleRelease      # APK
-./gradlew --offline testDebugUnitTest    # Unit-Tests
+./gradlew --offline testDebugUnitTest    # unit tests
 ```
-Erfordert Android-SDK 35 und arm64-Zielgeräte. Release-Signaturschlüssel wird nicht
-mitgeliefert.
+Requires Android SDK 35 and arm64 target devices. The release signing key is not
+included.
 
 ## Status
 
-Frühes Stadium (0.1.x), Entwicklung auf einem echten Gerät geprüft. Diktat funktioniert
-auf Deutsch; weitere Sprachen brauchen eigene Erkennungsmodelle. Siehe `docs/` für
-Konzept, Layout-Anforderungen und ASR-Vertrag.
+Early stage (0.1.x), development verified on a real device. Dictation works
+in German; other languages need their own recognition models. See `docs/` for
+concept, layout requirements and the ASR contract.

@@ -3,41 +3,41 @@ package de.voicekeyboard.keyboard
 import kotlin.math.abs
 
 /**
- * F22 (docs/DESIGN_KEY_POPUP.md §1/§6): reine Geometrie-/Auswahl-Naht des
- * Langdruckmenüs — KEIN Android-Typ, analog [KeySurface]; der KeyboardView
- * bleibt Adapter für Touch, Timer und Zeichnen.
+ * F22 (docs/DESIGN_KEY_POPUP.md §1/§6): pure geometry/selection seam of the
+ * long-press menu — NO Android type, analogous to [KeySurface]; the KeyboardView
+ * remains the adapter for touch, timers and drawing.
  *
- * Maße (density 420, 2,625 px/dp): Zelle 48 dp = 126 px, Menühöhe 56 dp = 147 px,
- * Abstand zur Grundtaste 8 dp = 21 px. Das Grundzeichen bleibt auf seiner echten
- * Taste — das Menü hat NUR die Alternativen-Zellen (Asset-Deckel 8, keine neunte
- * Zelle; effektive View-Obergrenze s. [MAX_CELLS]).
- * Zellintervalle: links geschlossen, rechts offen; außerhalb -> keine Auswahl.
+ * Dimensions (density 420, 2.625 px/dp): cell 48 dp = 126 px, menu height 56 dp = 147 px,
+ * gap to the base key 8 dp = 21 px. The base character stays on its real
+ * key — the menu has ONLY the alternate cells (asset cap 8, no ninth
+ * cell; effective view upper bound see [MAX_CELLS]).
+ * Cell intervals: closed on the left, open on the right; outside -> no selection.
  */
 object LongPressMenu {
 
     /**
-     * DESIGN §3: höchstens acht Alternativen-Zellen (>8 ist Validierungsfall des
-     * Assets — der Deckel selbst bleibt 8). Vc39-Realitätsnachzug (REVIEW_V0137):
-     * der Renderer (KeyboardView.openLongPressMenu) unterdrückt ZUSÄTZLICH Mengen,
-     * deren Menü nicht in die View passt — Formel: menuW(n) = n·cell + (n+1)·pad.
-     * Bei 1080 px View, cell = 126 px, pad = 11 px (density 2,625) gilt:
-     * n=8 → 8·126 + 9·11 = 1107 px > 1080 ⇒ Guard menuW > width unterdrückt,
-     * effektiv max 7 (n=7 → 7·126 + 8·11 = 970 px passt). Ändert Dichte, View-
-     * Breite oder Pad, verschiebt sich diese Grenze — Formel hier halten, damit
-     * der Drift sichtbar bleibt.
+     * DESIGN §3: at most eight alternate cells (>8 is a validation case of the
+     * asset — the cap itself stays 8). Vc39 reality follow-up (REVIEW_V0137):
+     * the renderer (KeyboardView.openLongPressMenu) ADDITIONALLY suppresses sets
+     * whose menu does not fit into the view — formula: menuW(n) = n·cell + (n+1)·pad.
+     * With a 1080 px view, cell = 126 px, pad = 11 px (density 2.625) it holds:
+     * n=8 → 8·126 + 9·11 = 1107 px > 1080 ⇒ guard menuW > width suppresses,
+     * effectively max 7 (n=7 → 7·126 + 8·11 = 970 px fits). Changing density, view
+     * width or pad shifts this bound — keep the formula here so the
+     * drift stays visible.
      */
     const val MAX_CELLS = 8
 
-    /** Zellanzahl mit Deckel 8 — die Liste selbst wird hier nicht still gekürzt validiert. */
+    /** Cell count with cap 8 — the list itself is not silently shortened here during validation. */
     fun cellCount(alternates: List<String>): Int = minOf(alternates.size, MAX_CELLS)
 
     /**
-     * F23c (AOSP-Beleg rowkeys_qwertz1.xml: keyHintLabel + additionalMoreKeys):
-     * Der Hint wird zusaetzliche Popup-Zelle, damit die Ziffer per Langdruck
-     * erreichbar ist. Regeln: der Hint kommt AN DAS ENDE (Sprachalternates
-     * bleiben vorn, Zelle 0 verschiebt sich nicht); keine Verdopplung; null/
-     * blank entfaellt; ueber [maxCells] faellt ZUERST der Hint, nie eine
-     * Sprachalternate.
+     * F23c (AOSP evidence rowkeys_qwertz1.xml: keyHintLabel + additionalMoreKeys):
+     * The hint becomes an additional popup cell so the digit is reachable via
+     * long-press. Rules: the hint goes AT THE END (language alternates
+     * stay in front, cell 0 does not shift); no duplication; null/
+     * blank is dropped; above [maxCells] the HINT drops first, never a
+     * language alternate.
      */
     fun withHint(alternates: List<String>, hint: String?, maxCells: Int): List<String> {
         val h = hint?.trim().orEmpty()
@@ -46,36 +46,36 @@ object LongPressMenu {
     }
 
     /**
-     * F24e0 (DESIGN_KEY_POPUP.md §7, Nutzerentscheidung 07:2x): eine Menuzelle kann
-     * eine AKTION tragen statt Text zu committen (z. B. cursor_left/cursor_right aus
-     * der Fusszeile). [actionCells] ist die optionale, parallel zu den Zellen
-     * indizierte Aktionsliste (kurz = die restlichen Zellen sind Text); null bedeutet
-     * "wie bisher: Text committen". Ein leerer/nur-Whitespace-Eintrag ist wie kein
-     * Eintrag (F24e5: "" = normales Textfeld, Asset-Schreibweise aus F24e1; waere er
-     * eine "Aktion" mit leerem Namen, fielde er ins onAction-when und es passierte
-     * nichts — Geraetefall Punkt-Menue). Reine Logik, keine Android-Typen.
+     * F24e0 (DESIGN_KEY_POPUP.md §7, user decision 07:2x): a menu cell can
+     * carry an ACTION instead of committing text (e. g. cursor_left/cursor_right from
+     * the footer row). [actionCells] is the optional action list indexed in parallel
+     * to the cells (short = the remaining cells are text); null means
+     * "as before: commit text". An empty/whitespace-only entry is like no
+     * entry (F24e5: "" = normal text field, asset notation from F24e1; if it were
+     * an "action" with an empty name, it would fall into the onAction-when and nothing
+     * would happen — device finding point-menu). Pure logic, no Android types.
      */
     fun cellAction(index: Int, actionCells: List<String>): String? =
         actionCells.getOrNull(index)?.takeIf { it.isNotBlank() }
 
     /**
-     * Menübreite in px: n Zellen plus Polsterstreifen der Breite [padPx] an beiden
-     * Außenkanten UND zwischen den Zellen: `n*cellPx + (n+1)*padPx`
-     * (Vorgabe: 126·3 + 10·4 = 418). n ≤ 0 -> 0.
+     * Menu width in px: n cells plus padding strips of width [padPx] on both
+     * outer edges AND between the cells: `n*cellPx + (n+1)*padPx`
+     * (spec: 126·3 + 10·4 = 418). n ≤ 0 -> 0.
      */
     fun menuWidthPx(cellPx: Int, n: Int, padPx: Int): Int =
         if (n <= 0) 0 else cellPx * n + padPx * (n + 1)
 
     /**
-     * T7 (v0.1.37, Nutzerbefund Symbolebene): Popup-links aus der MENGE der
-     * Zellen — Standard-Zentrierung über der Grundtaste ([keyCenterX]), dann
-     * Klemmung des Start-x an beide View-Kanten, so dass KEINE Zelle außerhalb
-     * des Views läuft (Zellen werden NIE abgeschnitten). Rein geometrisch:
-     * Menübreite = [menuWidthPx] aus [menuCount] Zellen; Klemmung wie
-     * [menuLeftPx] (breiter als der View -> 0; Pass-Fit entscheidet der
-     * Adapter, der dann nicht öffnet). Rot-Beleg Invariante: 10 Zellen
-     * (126 px + 11 px Polster) sind 1381 px > 1080 px View — KEINE Position
-     * hält alle Zellen im View.
+     * T7 (v0.1.37, user finding symbol layer): popup-left from the SET of
+     * cells — default centering over the base key ([keyCenterX]), then
+     * clamping the start-x to both view edges so that NO cell runs outside
+     * the view (cells are NEVER cut off). Purely geometric:
+     * menu width = [menuWidthPx] from [menuCount] cells; clamping as in
+     * [menuLeftPx] (wider than the view -> 0; pass-fit is decided by the
+     * adapter, which then does not open). Red evidence invariant: 10 cells
+     * (126 px + 11 px padding) are 1381 px > 1080 px view — NO position
+     * keeps all cells inside the view.
      */
     fun menuLeftClamped(
         menuCount: Int,
@@ -86,9 +86,9 @@ object LongPressMenu {
     ): Int = menuLeftPx(keyCenterX, menuWidthPx(cellW, menuCount, padPx), viewWidth)
 
     /**
-     * Menü-links: mittig über der Grundtaste ([keyCenterX]), geklemmt an
-     * `[0, viewWidth - menuWidth]` — nie negativ, auch wenn das Menü breiter als
-     * die View wäre (dann 0; Pass-Fit entscheidet der Adapter).
+     * Menu-left: centered over the base key ([keyCenterX]), clamped to
+     * `[0, viewWidth - menuWidth]` — never negative, even if the menu were wider
+     * than the view (then 0; pass-fit is decided by the adapter).
      */
     fun menuLeftPx(keyCenterX: Int, menuWidth: Int, viewWidth: Int): Int {
         if (menuWidth >= viewWidth) return 0
@@ -96,16 +96,16 @@ object LongPressMenu {
     }
 
     /**
-     * Zeilenposition (F28a + T1-Zweizonenregel):
-     *  - Zeile 0 (Buchstabenreihe Q..P): **T1-Zweizonenregel** (kein Band bekannt):
-     *    Zone A komplett OBERHALB der Taste im View ([row0MenuBelowKey] false),
-     *    sonst Zone B Kante (top=0) — NIE unter der Taste. **T5 (vc37)**: mit
-     *    bekanntem Statusband ([statusBandPx] > 0, Adapter: eigene top-Kante im
-     *    Stack) öffnet das r0-Menü stattdessen IM BAND (menuTopForStatusBand) —
-     *    Nutzer-Willen: eine Zeile über der Buchstabentaste, dort wo
-     *    Statuszeile+🐞 sitzen; Invariante: nie unter die Reihe der Taste.
-     *  - Fußzeile: direkt über der Taste, Klemmung auf 0 (F28a2).
-     *  - mittlere Zeilen: eine Zeile höher, Klemmung auf 0 (F28a).
+     * Row position (F28a + T1 two-zone rule):
+     *  - Row 0 (letter row Q..P): **T1 two-zone rule** (no band known):
+     *    zone A entirely ABOVE the key in the view ([row0MenuBelowKey] false),
+     *    otherwise zone B edge (top=0) — NEVER below the key. **T5 (vc37)**: with
+     *    a known status band ([statusBandPx] > 0, adapter: own top edge in the
+     *    stack) the r0 menu opens IN THE BAND instead (menuTopForStatusBand) —
+     *    user intent: one row above the letter key, right where
+     *    status row + 🐞 sit; invariant: never below the key's row.
+     *  - Footer row: directly above the key, clamped to 0 (F28a2).
+     *  - middle rows: one row higher, clamped to 0 (F28a).
      */
     fun menuTopPx(
         keyTop: Int,
@@ -117,11 +117,11 @@ object LongPressMenu {
         padPx: Int = 10,
         cellPx: Int = 126,
         spaceAbovePx: Int = 0,
-        /** T5 (vc37): Bandhöhe über der View-Oberkante (Statuszeile+🐞); 0 = kein
-         *  Band ⇒ T1-Zweizonenregel. Default 0 hält ALLE Bestandsaufrufe byte-identisch. */
+        /** T5 (vc37): band height above the view's top edge (status row + 🐞); 0 = no
+         *  band ⇒ T1 two-zone rule. Default 0 keeps ALL existing calls byte-identical. */
         statusBandPx: Int = 0,
-        /** T5 (vc37): Oberkante der Reihe unter der gedrückten Taste — Invariante
-         *  der Band-Zone (top + menuH ≤ rowBelowTop). Default: unverbindlich. */
+        /** T5 (vc37): top edge of the row below the pressed key — invariant
+         *  of the band zone (top + menuH ≤ rowBelowTop). Default: non-binding. */
         rowBelowTop: Int = Int.MAX_VALUE,
     ): Int = when {
         rowIndex == 0 -> menuTopForStatusBand(keyTop, menuHeight, gapPx, statusBandPx, rowBelowTop)
@@ -130,17 +130,17 @@ object LongPressMenu {
     }
 
     /**
-     * T5 (vc37, Nutzer-Urteil Emulator-Bild): Position des r0-Langdruckmenüs
-     * (oberste Reihe, Q..P) — **Band-Zone**: das Menü öffnet IM STATUSBAND, eine
-     * Zeile über der Buchstabentaste (dort wo Statuszeile+🐞 sitzen; das Band
-     * gehört zum Root/Stack, NICHT zur KeyboardView — top = −statusBandPx in
-     * View-Koordinaten). [statusBandPx] = Bandhöhe über der View-Oberkante
-     * (Adapter: eigene top-Kante im Stack); 0 = kein Band ⇒ T1-Zweizonenregel
-     * unverändert (Regressionsschutz). [rowBelowTop] = Oberkante der Reihe
-     * UNTER der gedrückten (Invariante top + menuH ≤ rowBelowTop — das Menü
-     * überdeckt nie die Reihe unter der Taste; der Überhang menuH − statusBandPx
-     * ragt nur in die oberste Reihe). Guard: verletzt die Band-Zone die
-     * Invariante (Riesenmenü), fällt sie auf die Zweizonenregel zurück.
+     * T5 (vc37, user verdict emulator screenshot): position of the r0 long-press menu
+     * (top row, Q..P) — **band zone**: the menu opens IN THE STATUS BAND, one
+     * row above the letter key (right where status row + 🐞 sit; the band
+     * belongs to the root/stack, NOT to the KeyboardView — top = −statusBandPx in
+     * view coordinates). [statusBandPx] = band height above the view's top edge
+     * (adapter: own top edge in the stack); 0 = no band ⇒ T1 two-zone rule
+     * unchanged (regression protection). [rowBelowTop] = top edge of the row
+     * BELOW the pressed one (invariant top + menuH ≤ rowBelowTop — the menu
+     * never covers the row below the key; the overhang menuH − statusBandPx
+     * protrudes only into the top row). Guard: if the band zone violates the
+     * invariant (huge menu), it falls back to the two-zone rule.
      */
     fun menuTopForStatusBand(
         keyTop: Int,
@@ -149,12 +149,12 @@ object LongPressMenu {
         statusBandPx: Int,
         rowBelowTop: Int,
     ): Int {
-        // T5 Band-Zone: top = statusBandTop (= −statusBandPx im View-System) — nur
-        // wenn die Invariante hält (Menüunterkante nie unter die Reihe der Taste).
+        // T5 band zone: top = statusBandTop (= −statusBandPx in the view system) — only
+        // if the invariant holds (the menu's bottom edge never goes below the key's row).
         val bandTop = -statusBandPx
         if (statusBandPx > 0 && bandTop + menuHeight <= rowBelowTop) return bandTop
-        // T5-Fallback (3) / Bestand: T1-Zweizonenregel — Zone A oben im View,
-        // sonst Zone B Kante (nie unter der Taste).
+        // T5 fallback (3) / existing behavior: T1 two-zone rule — zone A at the top of the view,
+        // otherwise zone B edge (never below the key).
         return if (row0MenuBelowKey(keyTop, menuHeight, gapPx, 10, 126, 0)) {
             0
         } else {
@@ -163,16 +163,16 @@ object LongPressMenu {
     }
 
     /**
-     * T1: reine r0-Zonen-Entscheidung (Bestandsunterschrift B1 unverändert) —
-     * true ⇒ oben passt NICHT in den View (above = keyTop − gap − menuHeight
-     * < 0) ⇒ **Zone B: Kante (top=0)**. B1 lief in diesem Fall die Position
-     * UNTER der Taste (vc34-Nutzerbefund: exakt über Reihe 2); T1 ersetzt den
-     * Below-Fallback durch die Kante. Der Adapter leitet die Arming-Zone aus
-     * DEMSELBEN Ergebnis ab (gemeinsamer Wechsel: das Menü liegt nie unter der
-     * Taste ⇒ [stillArmed] läuft im F22-L-Standard, menuBelowKey=false).
-     * [padPx]/[cellPx]/[spaceAbovePx] bleiben aus Signatur-Stabilität erhalten,
-     * beeinflussen die Entscheidung aber NICHT (Overlay über der View-Oberkante
-     * garantiert keine Sichtbarkeit, F54/F34).
+     * T1: pure r0 zone decision (existing signature B1 unchanged) —
+     * true ⇒ above does NOT fit into the view (above = keyTop − gap − menuHeight
+     * < 0) ⇒ **zone B: edge (top=0)**. B1 in this case returned the position
+     * BELOW the key (vc34 user finding: exactly over row 2); T1 replaces the
+     * below-fallback with the edge. The adapter derives the arming zone from
+     * THE SAME result (shared switch: the menu is never below the
+     * key ⇒ [stillArmed] runs in the F22-L default, menuBelowKey=false).
+     * [padPx]/[cellPx]/[spaceAbovePx] remain for signature stability,
+     * but do NOT influence the decision (an overlay above the view's top edge
+     * guarantees no visibility, F54/F34).
      */
     fun row0MenuBelowKey(
         keyTop: Int,
@@ -184,9 +184,9 @@ object LongPressMenu {
     ): Boolean = keyTop - gapPx - menuHeight < 0
 
     /**
-     * Auswahl: [offsetX] ist die waagrechte Innenkoordinate relativ zum Beginn
-     * der ersten Zelle. Zellintervalle links geschlossen, rechts offen;
-     * außerhalb (negativ, jenseits n·cellPx, n ≤ 0, cellPx ≤ 0) -> -1.
+     * Selection: [offsetX] is the horizontal interior coordinate relative to the start
+     * of the first cell. Cell intervals closed on the left, open on the right;
+     * outside (negative, beyond n·cellPx, n ≤ 0, cellPx ≤ 0) -> -1.
      */
     fun pick(offsetX: Int, cellPx: Int, n: Int): Int {
         if (n <= 0 || cellPx <= 0 || offsetX < 0) return -1
@@ -195,15 +195,15 @@ object LongPressMenu {
     }
 
     /**
-     * F22-M (Geraetefund <device>, oberste Reihe): ersetzt das Aufwaerts-Tor
-     * F22-K. Eine Zelle gewinnt erst, wenn der Finger die Grundtaste WIRKLICH
-     * verlassen hat — in WELCHE Richtung ist egal: innerhalb der um [slopPx]
-     * verkleinerten Grundtaste (Offset vom Tastenmittelpunkt) gewinnt NIE eine
-     * Zelle. Grund der Richtungs-Offenheit: bei Reihe 0 klemmt [menuTopPx] das
-     * Menü an die View-Oberkante; ein Aufwaerts-Tor y < keyTop - slop < 0 waere
-     * fuer die obere Reihe dauerhaft unerreichbar (0 Zeichen in allen Zellen).
-     * Halten ohne Bewegung = innerhalb der Grundtaste = Grundzeichen — der
-     * F22-K-Geraetefund („è“ ohne Schieben) bleibt damit behoben.
+     * F22-M (device finding <device>, top row): replaces the upward gate
+     * F22-K. A cell only wins once the finger has REALLY left the base key —
+     * in WHICH direction does not matter: within the base key shrunk by [slopPx]
+     * (offset from the key center) a cell NEVER wins. Reason for the direction
+     * openness: in row 0 [menuTopPx] clamps the menu to the view's top edge;
+     * an upward gate y < keyTop - slop < 0 would be permanently unreachable
+     * for the top row (0 characters in all cells).
+     * Holding without movement = inside the base key = base character — the
+     * F22-K device finding ("è" without sliding) therefore stays fixed.
      */
     fun cellWins(
         offsetXFromKeyCenter: Int,
@@ -215,25 +215,25 @@ object LongPressMenu {
         abs(offsetYFromKeyCenter) <= keyHeight / 2 - slopPx)
 
     /**
-     * F24e5-NACHSCHLAG: seitliche Bewaffnungs-Grenzen als Offset zur down-Position.
-     * Die Zone ist die TATSAECHLICHE Palette (nach dem Rand-Clamp aus [menuLeftPx]),
-     * nicht die halbe Nennbreite um die Tastenmitte — bei angeschobenen Paletten
-     * (left=384 statt 399) lag sonst die aeusserste Zelle ausserhalb der Zone und
-     * die Palette oeffnete per Schieben nie. Rueckgabe (minOffsetX, maxOffsetX).
+     * F24e5 LOOKUP: lateral arming bounds as offset to the down position.
+     * The zone is the ACTUAL palette (after the edge clamp in [menuLeftPx]),
+     * not half the nominal width around the key center — with shifted palettes
+     * (left=384 instead of 399) the outermost cell would otherwise lie outside the zone and
+     * the palette would never open via sliding. Returns (minOffsetX, maxOffsetX).
      */
     fun armZoneOffsets(centerX: Int, width: Int, menuWidthPx: Int, menuLeftPx: Int, slopPx: Int): Pair<Int, Int> =
         (menuLeftPx - slopPx - centerX) to (menuLeftPx + menuWidthPx + slopPx - centerX)
 
     /**
-     * F22-L (Geraetefund <device> b/c): Bewaffnungs-ZONE statt 8-dp-Kugel.
-     * Die 8-dp-Kugel aus D12 §2 killte fast jeden Langdruck, bevor die 450-ms-
-     * Schwelle lief — Stock/AOSP erlaubt jedoch: halten, DANN in die Menuezeile
-     * schieben. Die Menuezeile liegt UEBER der Grundtaste, daher ist Aufwaerts-
-     * Schieben der vorgesehene Weg, kein Abbruch. Zone relativ zum DOWN-Punkt
-     * (y negativ = oben): seitlich |offsetX| ≤ keyWidth/2 + slopPx (grosszuegig —
-     * 21 px erreicht jeder Finger in < 100 ms), aufwaerts bis menuHeightPx +
-     * gapPx + slopPx (nie enger als das spaetere Popup), abwaerts nur bis
-     * keyHeight/2 + slopPx; sonst false = Geste wirklich verlassen.
+     * F22-L (device finding <device> b/c): arming ZONE instead of 8-dp sphere.
+     * The 8-dp sphere from D12 §2 killed almost every long-press before the 450-ms
+     * threshold ran — stock/AOSP however allows: hold, THEN slide into the menu
+     * row. The menu row lies ABOVE the base key, so sliding upward is the
+     * intended path, not an abort. Zone relative to the DOWN point
+     * (y negative = up): laterally |offsetX| ≤ keyWidth/2 + slopPx (generous —
+     * 21 px any finger reaches in < 100 ms), upward up to menuHeightPx +
+     * gapPx + slopPx (never tighter than the later popup), downward only up to
+     * keyHeight/2 + slopPx; otherwise false = gesture really left.
      */
     fun stillArmed(
         offsetX: Int,
@@ -244,17 +244,17 @@ object LongPressMenu {
         menuHeightPx: Int,
         gapPx: Int,
         /**
-         * F24e5-NACHSCHLAG: seitliche Offset-Grenzen aus [armZoneOffsets] (die
-         * tatsaechliche, ggf. an den Rand geclimte Palette + slop). (0, 0) = nicht
-         * gesetzt -> altes Verhalten (halbe Tastenbreite + slop). Loslassen
-         * AUSSERHALB einer Zelle committet ohnehin nie (KeyboardView
-         * popupSelectionAt / cellWins), es kann kein falsches Zeichen entstehen.
+         * F24e5 LOOKUP: lateral offset bounds from [armZoneOffsets] (the
+         * actual, edge-clamped if applicable, palette + slop). (0, 0) = not
+         * set -> old behavior (half key width + slop). Releasing
+         * OUTSIDE a cell never commits anyway (KeyboardView
+         * popupSelectionAt / cellWins), no wrong character can arise.
          */
         minOffsetX: Int = 0,
         maxOffsetX: Int = 0,
-        /** F38: Menü liegt UNTER der Grundtaste (Zeile 0) — vertikale Zone
-         *  gespiegelt: abwaerts bis menuHeightPx + gapPx + slopPx (Schwenk ins
-         *  Menü bleibt bewaffnet), aufwaerts nur keyHeight/2 + slopPx. */
+        /** F38: menu lies BELOW the base key (row 0) — vertical zone
+         *  mirrored: downward up to menuHeightPx + gapPx + slopPx (a swing into the
+         *  menu stays armed), upward only keyHeight/2 + slopPx. */
         menuBelowKey: Boolean = false,
     ): Boolean {
         val halfW = keyWidth / 2 + slopPx
@@ -264,12 +264,12 @@ object LongPressMenu {
             offsetX >= minOffsetX && offsetX <= maxOffsetX
         }
         if (!inX) return false
-        if (menuBelowKey) { // F38: Menü unter der Taste (Zeile 0) — Zone gespiegelt
-            if (offsetY > menuHeightPx + gapPx + slopPx) return false // unter dem Menue
-            if (offsetY < -(keyHeight / 2 + slopPx)) return false       // aufwaerts verlassen
+        if (menuBelowKey) { // F38: menu below the key (row 0) — zone mirrored
+            if (offsetY > menuHeightPx + gapPx + slopPx) return false // below the menu
+            if (offsetY < -(keyHeight / 2 + slopPx)) return false       // left upward
         } else {
-            if (offsetY < -(menuHeightPx + gapPx + slopPx)) return false // ueber dem Menue
-            if (offsetY > keyHeight / 2 + slopPx) return false           // abwaerts verlassen
+            if (offsetY < -(menuHeightPx + gapPx + slopPx)) return false // above the menu
+            if (offsetY > keyHeight / 2 + slopPx) return false           // left downward
         }
         return true
     }

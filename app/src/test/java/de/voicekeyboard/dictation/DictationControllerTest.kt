@@ -16,7 +16,7 @@ import java.io.File
 
 class DictationControllerTest {
 
-    /** Fake-Sink: zeichnet Deltas auf, bildet Text am Cursor ab, kann fehlschlagen. */
+    /** Fake sink: records deltas, applies text at the cursor, can fail. */
     private class RecordingSink : EditorSink {
         var text: String = ""
         var failNext = false
@@ -37,7 +37,7 @@ class DictationControllerTest {
         override fun ownLength(): Int = text.length
     }
 
-    /** Fake-ASR: liefert konfigurierbaren Text, kann Fehler und alte Sessions simulieren. */
+    /** Fake ASR: returns configurable text, can simulate errors and old sessions. */
     private class FakeEngine : AsrEngine {
         var nextText = ""
         var failNext = false
@@ -60,7 +60,7 @@ class DictationControllerTest {
                 tokenIds = IntArray(0),
                 text = nextText,
                 frameTimesMs = IntArray(0),
-                sessionId = forceSessionId ?: sessionId, // Echo der aktuellen Session
+                sessionId = forceSessionId ?: sessionId, // echo of the current session
                 runId = runId,
                 audioSamples = window.samples.size,
                 incomplete = false,
@@ -78,32 +78,32 @@ class DictationControllerTest {
 
     private fun seconds(n: Int): PcmBlock = PcmBlock(0, 0, ShortArray(n * 16_000))
 
-    // --- Idempotenz (KONZEPT §2.1) ---
+    // --- idempotency (KONZEPT §2.1) ---
 
     @Test fun doubleStartIsNoOp() {
         val f = Fixture()
         assertTrue(f.controller.start())
         assertEquals(DictationState.RECORDING, f.controller.state)
-        assertFalse(f.controller.start()) // doppeltes start(): kein Neustart
+        assertFalse(f.controller.start()) // double start(): no restart
         assertEquals(DictationState.RECORDING, f.controller.state)
         runBlocking { f.controller.stop() }
         assertEquals(DictationState.IDLE, f.controller.state)
-        runBlocking { f.controller.stop() } // stop() ohne Start: No-Op
+        runBlocking { f.controller.stop() } // stop() without start: no-op
         assertEquals(DictationState.IDLE, f.controller.state)
         assertEquals(0, f.engine.calls)
         assertNull(f.controller.lastErrorCode)
     }
 
-    // --- min_audio_s = 2.0 gilt nur für Partials (ASR_CONTRACT §4.4) ---
+    // --- min_audio_s = 2.0 applies only to partials (ASR_CONTRACT §4.4) ---
 
     @Test fun partialsBelowMinAudioAreNotDecoded() {
         val f = Fixture()
         f.engine.nextText = "Hallo"
         f.controller.start()
-        runBlocking { f.controller.feedAudio(seconds(1)) } // 1,0 s < 2,0 s
-        assertEquals(0, f.engine.calls) // Guard: keine Halluzinations-Partial
+        runBlocking { f.controller.feedAudio(seconds(1)) } // 1.0 s < 2.0 s
+        assertEquals(0, f.engine.calls) // guard: no hallucination partial
         assertEquals("", f.sink.text)
-        runBlocking { f.controller.feedAudio(seconds(1)) } // 2,0 s erreicht
+        runBlocking { f.controller.feedAudio(seconds(1)) } // 2.0 s reached
         assertEquals(1, f.engine.calls)
         assertEquals("Hallo", f.sink.text)
     }
@@ -112,35 +112,35 @@ class DictationControllerTest {
         val f = Fixture()
         f.engine.nextText = "Kurz"
         f.controller.start()
-        runBlocking { f.controller.feedAudio(seconds(1)) } // kein Partial (Guard)
+        runBlocking { f.controller.feedAudio(seconds(1)) } // no partial (guard)
         assertEquals(0, f.engine.calls)
-        runBlocking { f.controller.stop() } // Release ⇒ immer final dekodieren
+        runBlocking { f.controller.stop() } // release ⇒ always decode the final
         assertEquals(1, f.engine.calls)
         assertEquals("Kurz", f.sink.text)
         assertEquals(DictationState.IDLE, f.controller.state)
     }
 
-    // --- Finalisierung ersetzt den Partialtext vollständig ---
+    // --- finalization replaces the partial text completely ---
 
     @Test fun finalizationReplacesPartialTail() {
         val f = Fixture()
         f.controller.start()
         f.engine.nextText = "Das ist derzw"
-        runBlocking { f.controller.feedAudio(seconds(2)) } // Partial
+        runBlocking { f.controller.feedAudio(seconds(2)) } // partial
         assertEquals("Das ist derzw", f.sink.text)
-        f.engine.nextText = "Das ist der zweite" // „zw“ muss ersetzt werden
-        runBlocking { f.controller.stop() } // Final: ganze Differenz
+        f.engine.nextText = "Das ist der zweite" // "zw" must be replaced
+        runBlocking { f.controller.stop() } // final: the whole difference
         assertEquals("Das ist der zweite", f.sink.text)
         assertEquals(DictationState.IDLE, f.controller.state)
-        // minimales Delta: nur „zw“ gelöscht, Rest angehängt
+        // minimal delta: only "zw" deleted, the rest appended
         assertEquals(listOf(0 to "Das ist derzw", 2 to " zweite"), f.sink.calls)
     }
 
-    // --- Verspätete Ergebnisse alter Sessions werden verworfen ---
+    // --- late results of old sessions are discarded ---
 
     @Test fun lateResultOfOldSessionIsDiscarded() {
         val f = Fixture()
-        f.controller.start() // Session 1
+        f.controller.start() // session 1
         f.engine.nextText = "Alt"
         runBlocking { f.controller.feedAudio(seconds(2)) }
         assertEquals("Alt", f.sink.text)
@@ -150,33 +150,33 @@ class DictationControllerTest {
             IntArray(0), "STALE", IntArray(0),
             sessionId = 1, runId = 99, audioSamples = 32_000, incomplete = false,
         )
-        assertFalse(f.controller.applyPartial(stale)) // IDLE → verworfen
+        assertFalse(f.controller.applyPartial(stale)) // IDLE → discarded
         assertEquals("Alt", f.sink.text)
 
-        f.controller.start() // Session 2 (neue sessionId)
+        f.controller.start() // session 2 (new sessionId)
         assertEquals(2, f.controller.sessionId)
-        assertFalse(f.controller.applyPartial(stale)) // Session-ID passt nicht
-        assertEquals("Alt", f.sink.text) // nichts geschrieben
+        assertFalse(f.controller.applyPartial(stale)) // session ID doesn't match
+        assertEquals("Alt", f.sink.text) // nothing written
 
         f.engine.nextText = "Neu"
-        runBlocking { f.controller.feedAudio(seconds(2)) } // Session 2 schreibt normal
+        runBlocking { f.controller.feedAudio(seconds(2)) } // session 2 writes normally
         assertEquals("AltNeu", f.sink.text)
     }
 
     @Test fun lateFinalFromForcedSessionIdIsDiscarded() {
         val f = Fixture()
-        f.controller.start() // Session 1
+        f.controller.start() // session 1
         f.engine.nextText = "Eins"
         runBlocking { f.controller.feedAudio(seconds(2)) }
         assertEquals("Eins", f.sink.text)
-        f.engine.forceSessionId = 42 // Engine liefert Resultat fremder Session
+        f.engine.forceSessionId = 42 // engine returns a result of a foreign session
         f.engine.nextText = "FALSCH"
         runBlocking { f.controller.stop() }
-        assertEquals("Eins", f.sink.text) // verworfen, Partialtext bleibt
+        assertEquals("Eins", f.sink.text) // discarded, the partial text stays
         assertEquals(DictationState.IDLE, f.controller.state)
     }
 
-    // --- Fehlerpfad → Idle, Text bleibt, Recovery möglich ---
+    // --- error path → idle, text stays, recovery possible ---
 
     @Test fun partialEngineErrorGoesToIdleAndRecovers() {
         val f = Fixture()
@@ -187,23 +187,23 @@ class DictationControllerTest {
         assertEquals("asr_partial_error", f.controller.lastErrorCode)
         assertTrue(f.sink.calls.isEmpty())
 
-        assertTrue(f.controller.start()) // Sitzung kann neu starten
+        assertTrue(f.controller.start()) // the session can restart
         f.engine.nextText = "Weiter"
         runBlocking { f.controller.feedAudio(seconds(2)) }
         assertEquals("Weiter", f.sink.text)
     }
 
-    // F26b (C2-Export): Bufferstand der letzten akzeptierten Hypothese + Reset bei start()
-    @Test fun `letzte Hypothese merkt den Bufferstand und start nullt ihn`() {
+    // F26b (C2 export): buffer level of the last accepted hypothesis + reset on start()
+    @Test fun `last hypothesis remembers the buffer level and start resets it`() {
         val f = Fixture()
         f.controller.start()
-        assertEquals("vor der ersten Hypothese 0", 0f, f.controller.lastHypothesisBufferSeconds, 1e-4f)
+        assertEquals("before the first hypothesis 0", 0f, f.controller.lastHypothesisBufferSeconds, 1e-4f)
         f.engine.nextText = "Eins"
-        runBlocking { f.controller.feedAudio(seconds(2)) } // 2.0 s Puffer -> Partial
-        assertEquals("2.0 s Puffer beim Decode", 2.0f, f.controller.lastHypothesisBufferSeconds, 1e-4f)
+        runBlocking { f.controller.feedAudio(seconds(2)) } // 2.0 s buffer -> partial
+        assertEquals("2.0 s buffer at the decode", 2.0f, f.controller.lastHypothesisBufferSeconds, 1e-4f)
         runBlocking { f.controller.stop() }
-        assertTrue(f.controller.start()) // neue Sitzung: Feld zurueck auf 0
-        assertEquals("nach start() 0", 0f, f.controller.lastHypothesisBufferSeconds, 1e-4f)
+        assertTrue(f.controller.start()) // new session: field back to 0
+        assertEquals("after start() 0", 0f, f.controller.lastHypothesisBufferSeconds, 1e-4f)
         runBlocking { f.controller.stop() }
     }
 
@@ -216,36 +216,36 @@ class DictationControllerTest {
         runBlocking { f.controller.stop() }
         assertEquals(DictationState.IDLE, f.controller.state)
         assertEquals("asr_final_error", f.controller.lastErrorCode)
-        assertEquals("Teil", f.sink.text) // bereits Geschriebenes bleibt stehen
+        assertEquals("Teil", f.sink.text) // what was already written stays
     }
 
-    // --- Fremdeingabe im Editor stoppt Schreibzugriffe ---
+    // --- foreign input in the editor stops write access ---
 
     @Test fun foreignSelectionBlocksFurtherWrites() {
         val f = Fixture()
         f.controller.start()
-        f.controller.onUpdateSelection(0, 0, 10, 10) // Baseline (Nutzer-Cursor)
+        f.controller.onUpdateSelection(0, 0, 10, 10) // baseline (user cursor)
         f.engine.nextText = "Hallo"
         runBlocking { f.controller.feedAudio(seconds(2)) }
         assertEquals("Hallo", f.sink.text)
-        f.controller.onUpdateSelection(10, 10, 15, 15) // Callback unseres Edits
-        f.controller.onUpdateSelection(15, 15, 9, 9)   // Nutzer greift ein (Cursor)
+        f.controller.onUpdateSelection(10, 10, 15, 15) // callback of our edit
+        f.controller.onUpdateSelection(15, 15, 9, 9)   // user intervenes (cursor)
         f.engine.nextText = "Hallo Welt"
-        runBlocking { f.controller.feedAudio(seconds(1)) } // 3,0 s → Partial-Versuch
-        // A2b (PLAN_V0133 §A2b): reiner Cursor-Griff lässt den Editor-INHALT
-        // unangetastet — der actualBeforeCursor-Suffixbeweis re-baselined und
-        // die Hypothese wird geschrieben (Abnahme: „Session endet nicht
-        // durch W1/W3d selbst"; Fremdtext byteweise unangetastet).
+        runBlocking { f.controller.feedAudio(seconds(1)) } // 3.0 s → partial attempt
+        // A2b (PLAN_V0133 §A2b): a pure cursor grab leaves the editor CONTENT
+        // untouched — the actualBeforeCursor suffix proof re-baselines and the
+        // hypothesis is written (acceptance: "the session does not end via
+        // W1/W3d itself"; foreign content untouched byte by byte).
         assertEquals("Hallo Welt", f.sink.text)
         assertEquals(DictationState.RECORDING, f.controller.state)
 
-        // FREMDER/ABWEICHENDER Inhalt bleibt W1: kein Sink-Zugriff, lost bleibt.
-        f.sink.text = "fremd" // Nutzer ersetzt alles
+        // FOREIGN/DIVERGENT content stays W1: no sink access, lost stays.
+        f.sink.text = "fremd" // user replaces everything
         f.controller.onUpdateSelection(0, 0, 2, 5) // Range ⇒ lost=true
         f.engine.nextText = "Hallo Welt mehr"
-        runBlocking { f.controller.feedAudio(seconds(1)) } // 4,0 s → Partial-Versuch
-        assertEquals("kein Schreiben bei fremdem Inhalt", "fremd", f.sink.text)
-        assertEquals(DictationState.RECORDING, f.controller.state) // Aufnahme läuft weiter
+        runBlocking { f.controller.feedAudio(seconds(1)) } // 4.0 s → partial attempt
+        assertEquals("no writing with foreign content", "fremd", f.sink.text)
+        assertEquals(DictationState.RECORDING, f.controller.state) // recording keeps running
     }
 
     @Test fun abortGoesToIdleWithoutFinalDecode() {
@@ -257,11 +257,11 @@ class DictationControllerTest {
         f.engine.nextText = "SOLLTE NICHT KOMMEN"
         f.controller.abort()
         assertEquals(DictationState.IDLE, f.controller.state)
-        assertEquals(1, f.engine.calls) // kein Final-Decode beim Abbruch
+        assertEquals(1, f.engine.calls) // no final decode on abort
         assertEquals("Start", f.sink.text)
     }
 
-    // --- A-1: Editorwechsel während RECORDING bricht kontrolliert ab ---
+    // --- A-1: an editor change during RECORDING aborts in a controlled way ---
 
     @Test fun editorChangeDuringRecordingAbortsToIdle() {
         val f = Fixture()
@@ -270,12 +270,12 @@ class DictationControllerTest {
         runBlocking { f.controller.feedAudio(seconds(2)) }
         assertEquals("Start", f.sink.text)
         f.engine.nextText = "SOLLTE NICHT KOMMEN"
-        f.controller.onEditorChanged() // Editor/App-Wechsel
+        f.controller.onEditorChanged() // editor/app change
         assertEquals(DictationState.IDLE, f.controller.state)
-        // kein Final-Decode, kein Schreiben:
-        runBlocking { f.controller.feedAudio(seconds(2)) } // Audio nach Wechsel: No-Op
+        // no final decode, no writing:
+        runBlocking { f.controller.feedAudio(seconds(2)) } // audio after the change: no-op
         assertEquals(1, f.engine.calls)
-        assertEquals("Start", f.sink.text) // neuer Editor bleibt leer von uns
+        assertEquals("Start", f.sink.text) // the new editor stays empty from us
         assertEquals("aborted", f.controller.lastErrorCode)
     }
 
@@ -284,7 +284,7 @@ class DictationControllerTest {
         f.controller.start()
         f.engine.nextText = "Text"
         runBlocking { f.controller.feedAudio(seconds(2)) }
-        // FINALIZING wird synchron durchlaufen — wir testen den Pfad über abort-Semantik:
+        // FINALIZING is passed through synchronously — we test the path via abort semantics:
         f.controller.onEditorChanged()
         assertEquals(DictationState.IDLE, f.controller.state)
     }
@@ -294,12 +294,12 @@ class DictationControllerTest {
         f.controller.onEditorChanged()
         assertEquals(DictationState.IDLE, f.controller.state)
         assertNull(f.controller.lastErrorCode)
-        assertTrue(f.controller.start()) // danach normal startbar
+        assertTrue(f.controller.start()) // startable normally afterwards
     }
 
-    // --- F17b/C2: Decode-Zeit-Diagnose (decodeMsMax/P95/bufferSeconds) ---
+    // --- F17b/C2: decode time diagnostics (decodeMsMax/P95/bufferSeconds) ---
 
-    /** Fake-Engine, die die injizierte Uhr pro transcribe um vorgegebene ms weiterstellt. */
+    /** Fake engine that advances the injected clock by the given ms per transcribe. */
     private class TimedFakeEngine(
         private val clockMs: MutableLong,
         private val decodeMs: List<Long>,
@@ -311,7 +311,7 @@ class DictationControllerTest {
         ): Hypothesis {
             val t = decodeMs[minOf(calls, decodeMs.lastIndex)]
             calls++
-            clockMs.value += t // simuliert Decode-Arbeit auf der injizierten Uhr
+            clockMs.value += t // simulates decode work on the injected clock
             return Hypothesis(
                 tokenIds = IntArray(0), text = "t", frameTimesMs = IntArray(0),
                 sessionId = sessionId, runId = runId,
@@ -340,9 +340,9 @@ class DictationControllerTest {
     @Test fun decodeStatsSingleRunMaxEqualsP95() {
         val (controller, _) = timedFixture(listOf(100L))
         controller.start()
-        runBlocking { controller.feedAudio(seconds(2)) } // 2,0 s ⇒ ein Partial-Decode
+        runBlocking { controller.feedAudio(seconds(2)) } // 2.0 s ⇒ one partial decode
         assertEquals(100L, controller.decodeMsMax())
-        assertEquals(controller.decodeMsMax(), controller.decodeMsP95()) // ein Lauf: max == p95
+        assertEquals(controller.decodeMsMax(), controller.decodeMsP95()) // one run: max == p95
         assertEquals(2.0, controller.bufferSeconds(), 0.0)
     }
 
@@ -350,103 +350,102 @@ class DictationControllerTest {
         val (controller, _) = timedFixture(listOf(100L, 200L, 900L))
         controller.start()
         runBlocking {
-            controller.feedAudio(seconds(2)) // Decode 1: 100 ms bei 2,0 s Puffer
+            controller.feedAudio(seconds(2)) // decode 1: 100 ms at a 2.0 s buffer
             assertEquals(2.0, controller.bufferSeconds(), 0.0)
-            controller.feedAudio(seconds(2)) // Decode 2: 200 ms bei 4,0 s Puffer
+            controller.feedAudio(seconds(2)) // decode 2: 200 ms at a 4.0 s buffer
             assertEquals(4.0, controller.bufferSeconds(), 0.0)
-            controller.feedAudio(seconds(2)) // Decode 3: 900 ms bei 6,0 s Puffer
+            controller.feedAudio(seconds(2)) // decode 3: 900 ms at a 6.0 s buffer
         }
         assertEquals(3, controller.hypothesesThisSession)
         assertEquals(900L, controller.decodeMsMax())
         assertTrue("p95 > 0: ${controller.decodeMsP95()}", controller.decodeMsP95() > 0L)
-        assertEquals(6.0, controller.bufferSeconds(), 0.0) // steigt mit gefuettertem Audio
+        assertEquals(6.0, controller.bufferSeconds(), 0.0) // grows with the fed audio
     }
 
-    // --- F21: cost-aware Decode-Takt (nur WANN, nie WAS — Finale bleibt heilig) ---
+    // --- F21: cost-aware decode pace (only WHEN, never WHAT — the final stays sacred) ---
 
     @Test fun pacingSkipsSlowEnginePartialsButFinalAlwaysRuns() {
         val now = MutableLong(0L)
-        val engine = TimedFakeEngine(now, listOf(4000L)) // jeder Lauf "braucht" 4000 ms
+        val engine = TimedFakeEngine(now, listOf(4000L)) // every run "needs" 4000 ms
         val sink = RecordingSink()
         val controller = DictationController(
             engine, sink, clock = { now.value * 1_000_000 }, decodePacing = true,
         )
         controller.start()
         runBlocking {
-            controller.feedAudio(seconds(2)) // Decode 1: Intervall base 2000, 2,0 s erreicht
+            controller.feedAudio(seconds(2)) // decode 1: interval base 2000, 2.0 s reached
             assertEquals(1, engine.calls)
-            assertEquals(6000L, controller.decodePaceMs()) // 2x4000=8000 -> auf max 6000 kappt
+            assertEquals(6000L, controller.decodePaceMs()) // 2x4000=8000 -> clamped to max 6000
         }
-        // Nach 4000 ms Laufziel = 6000 ms (Kappung) — erst bei 8,0 s Puffer wieder Partial.
+        // after the 4000 ms run target = 6000 ms (clamp) — the next partial only at an 8.0 s buffer.
         runBlocking {
-            repeat(5) { controller.feedAudio(seconds(1)) } // 3,0..7,0 s: alles zu frueh
-            assertEquals("Aufrufzahl steigt NICHT pro Block", 1, engine.calls)
+            repeat(5) { controller.feedAudio(seconds(1)) } // 3.0..7.0 s: all too early
+            assertEquals("call count does NOT grow per block", 1, engine.calls)
             assertEquals(5, controller.decodeSkips())
-            controller.feedAudio(seconds(1)) // 8,0 s: 8,0-2,0 = 6,0 s >= 6,0 s -> Decode 2
+            controller.feedAudio(seconds(1)) // 8.0 s: 8.0-2.0 = 6.0 s >= 6.0 s -> decode 2
             assertEquals(2, engine.calls)
-            assertEquals(6000L, controller.decodePaceMs()) // 2x4000=8000 -> auf max 6000 kappt
-            // FINALE unangetastet: stop() dekodiert immer, Endtext vollständig
+            assertEquals(6000L, controller.decodePaceMs()) // 2x4000=8000 -> clamped to max 6000
+            // FINAL untouched: stop() always decodes, final text complete
             controller.stop()
         }
-        assertEquals(3, engine.calls) // Finale war der 3. transcribe
+        assertEquals(3, engine.calls) // the final was the 3rd transcribe
         assertEquals("t", sink.text)
         assertEquals(DictationState.IDLE, controller.state)
     }
 
     @Test fun pacingOffDefaultStillDecodesEveryBlock() {
-        val (engine, controller) = pacingOffFixture() // Default: pacing AUS
+        val (engine, controller) = pacingOffFixture() // default: pacing OFF
         controller.start()
         runBlocking {
-            controller.feedAudio(seconds(2)) // alle Blocks >= 2,0 s -> jeder dekodiert
+            controller.feedAudio(seconds(2)) // all blocks >= 2.0 s -> each one decoded
             controller.feedAudio(seconds(1))
             controller.feedAudio(seconds(1))
             controller.feedAudio(seconds(1))
             controller.feedAudio(seconds(1))
         }
-        assertEquals(5, engine.calls) // ein transcribe je Block (Verhalten wie bisher)
+        assertEquals(5, engine.calls) // one transcribe per block (behavior as before)
         assertEquals(0, controller.decodeSkips())
-        assertEquals(0L, controller.decodePaceMs()) // Pacing aus -> Intervall 0
+        assertEquals(0L, controller.decodePaceMs()) // pacing off -> interval 0
     }
 
-    /** Default-Controller (pacing AUS) mit vorgeberuhr-Engine. */
+    /** Default controller (pacing OFF) with a preset-clock engine. */
     private fun pacingOffFixture(): Pair<TimedFakeEngine, DictationController> {
         val now = MutableLong(0L)
         val engine = TimedFakeEngine(now, listOf(4000L))
         return engine to DictationController(engine, RecordingSink(), clock = { now.value * 1_000_000 })
     }
 
-    // --- AP3-P2 (Review): Schreibverweigerungs-Detektor zählt erst nach dem
-    // ersten erfolgreichen Commit — vorher ist isOwned=false NORMAL (Baseline
-    // noch nicht etabliert). Detektor 1 (Selection-Flip) unberührt. ---
+    // --- AP3-P2 (review): the write-denial detector only counts after the
+    // first successful commit — before that isOwned=false is NORMAL (the
+    // baseline is not established yet). Detector 1 (selection flip) untouched. ---
 
-    @Test fun `AP3-P2 Verweigerung VOR erstem Commit zaehlt nicht danach mit Sekundenwert`() {
-        // (A) VOR dem ersten Commit: unerwarteter Selection-Callback (lost=true),
-        // die erste Hypothese wird verweigert — NORMALFALL, KEIN Detektor-Treffer:
+    @Test fun `AP3-P2 denial BEFORE the first commit does not count - afterwards with a seconds value`() {
+        // (A) BEFORE the first commit: unexpected selection callback (lost=true),
+        // the first hypothesis is denied — NORMAL CASE, NO detector hit:
         val f = Fixture()
         f.controller.start()
-        f.controller.onUpdateSelection(0, 0, 1, 2) // SELEKTIONSBEREICH (1≠2) → Tracker lost
+        f.controller.onUpdateSelection(0, 0, 1, 2) // SELECTION RANGE (1≠2) → tracker lost
         f.engine.nextText = "Hallo"
-        runBlocking { f.controller.feedAudio(seconds(2)) } // Decode läuft, Schreiben verweigert
-        assertEquals("kein Commit gelaufen", "", f.sink.text)
-        assertEquals("Verweigerung vor Commit zählt NICHT", 0, f.controller.ownershipDeniedCount)
-        assertEquals("owner_lost_at_s bleibt -1", -1.0, f.controller.ownershipDeniedAtS, 1e-9)
+        runBlocking { f.controller.feedAudio(seconds(2)) } // decode runs, write denied
+        assertEquals("no commit ran", "", f.sink.text)
+        assertEquals("denial before the commit does NOT count", 0, f.controller.ownershipDeniedCount)
+        assertEquals("owner_lost_at_s stays -1", -1.0, f.controller.ownershipDeniedAtS, 1e-9)
 
-        // (B) NACH dem ersten Commit: erst committen (isOwned ok ⇒ hadOutput),
-        // DANN echter FREMDINHALT — P2 (REVIEW_A2_A4): nur ECHTE Verweigerungen
-        // zählen; eine bloße Selektion mit intaktem Suffix wird re-baselined und
-        // geschrieben (kein Detektor-Treffer). Nächste Hypothese verweigert ⇒
-        // Treffer mit Sekundenwert:
+        // (B) AFTER the first commit: commit first (isOwned ok ⇒ hadOutput),
+        // THEN real FOREIGN CONTENT — P2 (REVIEW_A2_A4): only REAL denials count;
+        // a mere selection with an intact suffix is re-baselined and written
+        // (no detector hit). The next hypothesis denied ⇒ hit with a seconds value:
         val f2 = Fixture()
         f2.controller.start()
         f2.engine.nextText = "Hallo"
-        runBlocking { f2.controller.feedAudio(seconds(2)) } // erster Commit ("Hallo")
-        assertEquals("Commit ist gelaufen", "Hallo", f2.sink.text)
-        f2.sink.text = "fremd ersetzt alles" // Suffix weg — Re-Baseline scheitert
-        f2.controller.onUpdateSelection(0, 0, 1, 2) // SELEKTIONSBEREICH (1≠2) → lost
+        runBlocking { f2.controller.feedAudio(seconds(2)) } // first commit ("Hallo")
+        assertEquals("the commit ran", "Hallo", f2.sink.text)
+        f2.sink.text = "fremd ersetzt alles" // suffix gone — re-baseline fails
+        f2.controller.onUpdateSelection(0, 0, 1, 2) // SELECTION RANGE (1≠2) → lost
         f2.engine.nextText = "Hallo Welt"
-        runBlocking { f2.controller.feedAudio(seconds(2)) } // 4,0 s — Verweigerung
-        assertEquals("ECHTE Verweigerung nach Commit zählt", 1, f2.controller.ownershipDeniedCount)
-        assertEquals("Sekundenwert (Session-Audio)", 4.0, f2.controller.ownershipDeniedAtS, 0.05)
-        assertEquals("kein Schreiben in den fremden Editor", "fremd ersetzt alles", f2.sink.text)
+        runBlocking { f2.controller.feedAudio(seconds(2)) } // 4.0 s — denial
+        assertEquals("REAL denial after the commit counts", 1, f2.controller.ownershipDeniedCount)
+        assertEquals("seconds value (session audio)", 4.0, f2.controller.ownershipDeniedAtS, 0.05)
+        assertEquals("no writing into the foreign editor", "fremd ersetzt alles", f2.sink.text)
     }
 }

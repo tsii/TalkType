@@ -20,33 +20,33 @@ import java.io.File
 import java.util.concurrent.atomic.AtomicLong
 
 /**
- * B3 (PLAN_V0130 §6.3-B3): GOLDEN-NACHWEIS JE SEGMENT — die Verkettung der
- * Segment-Commits ist NAHT-INVARIANT exakt golden, egal WOHIN die (a)-Naht
- * fällt (Consumer-Lag ist scheduling-abhängig, B1-Befund).
+ * B3 (PLAN_V0130 §6.3-B3): GOLDEN PROOF PER SEGMENT — the chaining of the
+ * segment commits is SEAM-INVARIANTLY exactly golden, no matter WHERE the
+ * (a) seam falls (consumer lag is scheduling-dependent, B1 finding).
  *
- * Deterministischer Transkriptions-Stub ([RunScannerEngine]): das Audio
- * kodiert Wörter als Amplituden-Läufe (6000→"alpha.", 9000→"bravo.",
- * 12000→"charlie." — Punkt im Wort, naht-invariant); der Stub transkribiert
- * ein Fenster, indem er Läufe scannt:
- *  - ein Wort-Lauf, der das FENSTERENDE berührt, ist SCHNITT-VERDÄCHTIG und
- *    wird VERWORFEN (das Folge-Segment emittiert ihn als führenden Rest) —
- *    genau das macht die Kette verlust- und duplikatfrei über ALLE Naht-
- *    positionen; Korpus-Start und -Ende sind mit Stille gepolstert, sodass
- *    nur geschnittene Läufe am Rand liegen können.
- *  - Cut-Positionen sind 2-s-quantisiert (Flush-Takt) — die Wortgrenzen des
- *    Korpus liegen absichtlich NICHT auf 2-s-Multipeln.
+ * Deterministic transcription stub ([RunScannerEngine]): the audio encodes
+ * words as amplitude runs (6000→"alpha.", 9000→"bravo.", 12000→"charlie."
+ * — period inside the word, seam-invariant); the stub transcribes a window
+ * by scanning runs:
+ *  - a word run that TOUCHES the window end is CUT-SUSPECT and is DISCARDED
+ *    (the following segment emits it as a leading rest) — exactly this makes
+ *    the chain loss- and duplicate-free across ALL seam positions; corpus
+ *    start and end are padded with silence so only cut runs can sit at the
+ *    edges.
+ *  - cut positions are quantized to 2 s (flush pace) — the corpus word
+ *    boundaries deliberately do NOT lie on 2 s multiples.
  *
- * Szenarien (segmentFinalizeMs = 35 000, Hold-Gate: F43 aus):
- *  - (a) Kette „Alpha—Pause 1,5 s—Bravo—Pause 1,5 s—Charlie": Verkettung ==
- *    "alpha. bravo. charlie." EXAKT (genau ein Leerzeichen je Naht, keine
- *    Duplikate/Verluste — unabhängig von der (racy) (a)-Naht-Position).
- *  - (b) UP finalisiert NUR den Rest (Charlie) — Gesamttext unverändert
- *    korrekt, FinalRan.
- *  - (c) (b)-Zwangssegment bei 36 s ohne Satzpausen (Trade-off dokumentiert):
- *    genau ein Leerzeichen an der (b)-Naht, keine Wort-Verdopplung.
- *  - (d) 2× identischer Korpus ⇒ identische Verkettung (Determinismus).
+ * Scenarios (segmentFinalizeMs = 35,000, hold gate: F43 off):
+ *  - (a) chain "alpha—pause 1.5 s—bravo—pause 1.5 s—charlie": chaining ==
+ *    "alpha. bravo. charlie." EXACTLY (exactly one space per seam, no
+ *    duplicates/losses — independent of the (racy) (a) seam position).
+ *  - (b) UP finalizes ONLY the rest (charlie) — total text still correct,
+ *    FinalRan.
+ *  - (c) (b) forced segment at 36 s without sentence pauses (trade-off
+ *    documented): exactly one space at the (b) seam, no word duplication.
+ *  - (d) 2× the identical corpus ⇒ identical chaining (determinism).
  *
- * Regel 9: Fixture-Wörter sind Testkonstanten, nie Nutzerdaten.
+ * Rule 9: fixture words are test constants, never user data.
  */
 class SegmentGoldenTest {
 
@@ -54,13 +54,13 @@ class SegmentGoldenTest {
         val now = AtomicLong(1_000_000L)
     }
 
-    /** Skript-Quelle: Abschnitte (ms, Amplitude); 0 = Stille; 320er-Blöcke.
-     *  [paceUs]: TEST-HARNESS-Pacing je Block — ohne ihn überholt der Capture
-     *  den Consumer im Self-Paced-Betrieb µs-schnell, die (a)-Pause ist vorbei,
-     *  BEVOR die erste Dekodierung lastHypPunct gesetzt hat (B1-Befund,
-     *  SegmentGolden-a-Lauf: segments=0). Mit ~500 µs/Block dekodiert der
-     *  Consumer (2-s-Flush ≈ 50 ms real) VOR der Satzpause (~120 ms real) —
-     *  die (a)-Kette wird deterministisch scharf. */
+    /** Script source: sections (ms, amplitude); 0 = silence; 320-sample blocks.
+     *  [paceUs]: TEST-HARNESS pacing per block — without it the capture
+     *  overtakes the consumer µs-fast in self-paced mode, the (a) pause is over
+     *  BEFORE the first decode has set lastHypPunct (B1 finding,
+     *  SegmentGolden-a run: segments=0). With ~500 µs/block the consumer
+     *  decodes (2 s flush ≈ 50 ms real) BEFORE the sentence pause (~120 ms
+     *  real) — the (a) chain becomes deterministically sharp. */
     private class AmpScriptSource(
         private val clock: VClock,
         private val script: List<Pair<Long, Short>>,
@@ -91,7 +91,7 @@ class SegmentGoldenTest {
             if (released) return -1
             val t = nextIdx * blockMs
             if (t >= totalMs) {
-                Thread.sleep(1) // Skript-Ende: kein Block, virtuelle Uhr steht
+                Thread.sleep(1) // script end: no block, virtual clock stands still
                 return 0
             }
             val due = base + t
@@ -113,14 +113,14 @@ class SegmentGoldenTest {
     }
 
     /**
-     * Deterministischer Transkriptions-Stub: Amplituden-Läufe → Wörter.
-     * Ein Lauf, der das FENSTERENDE berührt, gilt als geschnitten und wird
-     * verworfen (das Folge-Segment liefert den Rest als führenden Lauf) —
-     * dadurch ist die SEGMENT-VERKETTUNG über alle Naht-Positionen exakt.
+     * Deterministic transcription stub: amplitude runs → words.
+     * A run that TOUCHES the window end counts as cut and is discarded (the
+     * following segment delivers the rest as a leading run) — thereby the
+     * SEGMENT CHAINING is exact across all seam positions.
      */
     private class RunScannerEngine(
         private val words: Map<Short, String>,
-        private val minRunSamples: Int = 4_800, // 0,3 s — Filter für Split-Reste
+        private val minRunSamples: Int = 4_800, // 0.3 s — filter for split rests
     ) : AsrEngine {
         var calls = 0
             private set
@@ -141,7 +141,7 @@ class SegmentGoldenTest {
             var appended = 0
             while (i < s.size) {
                 if (kotlin.math.abs(s[i].toInt() - runAmp.toInt()) > 100) {
-                    // Lauf [runStart, i) beendet — KEIN Fensterende-Berühren
+                    // run [runStart, i) finished — NOT touching the window end
                     if (i - runStart >= minRunSamples) {
                         words[runAmp]?.let { w ->
                             if (appended > 0) out.append(' ')
@@ -154,12 +154,11 @@ class SegmentGoldenTest {
                 }
                 i++
             }
-            // Letzter Lauf berührt zwingend das FENSTERENDE und wird NICHT
-            // emittiert (Schnitt-verdächtig: das Folge-Segment liefert den
-            // Rest als führenden Lauf) — das Korpus-End-Polster sorgt dafür,
-            // dass im FINALFenster der letzte Lauf Stille ist und die Wörter
-            // davor durch Amplitudenwechsel geschlossen (und damit emittiert)
-            // werden.
+            // The last run necessarily TOUCHES the window end and is NOT
+            // emitted (cut-suspect: the following segment delivers the rest
+            // as a leading run) — the corpus end padding ensures that in the
+            // FINAL window the last run is silence and the words before it are
+            // closed by amplitude changes (and therefore emitted).
             val text = out.toString()
             return Hypothesis(
                 IntArray(0), text, IntArray(0), sessionId, runId,
@@ -170,7 +169,7 @@ class SegmentGoldenTest {
         override fun close() {}
     }
 
-    /** Echter Schreib-Sink: spiegelt den Editor-Textstand (nie geloggt, Regel 9). */
+    /** Real write sink: mirrors the editor text state (never logged, rule 9). */
     private class RecordingSink : EditorSink {
         val text = StringBuilder()
         override fun replaceBeforeCursor(replaceLength: Int, newText: String) {
@@ -189,30 +188,30 @@ class SegmentGoldenTest {
         val totalMs: Long,
     )
 
-    /** Wörter als Amplituden — Punkt im Wort (naht-invariant). */
+    /** Words as amplitudes — period inside the word (seam-invariant). */
     private val words = mapOf(
         6_000.toShort() to "alpha.",
         9_000.toShort() to "bravo.",
         12_000.toShort() to "charlie.",
     )
 
-    /** (a)/(b)/(d)-Korpus: Pad—Alpha—Pause—Bravo—Pause—Charlie—Pad (~13,6 s). */
+    /** (a)/(b)/(d) corpus: pad—alpha—pause—bravo—pause—charlie—pad (~13.6 s). */
     private val chainScript = listOf(
-        500L to 0.toShort(),          // Start-Polster: kein Lauf am Rand
-        3_200L to 6_000.toShort(),    // alpha 0,5–3,7 s
-        1_500L to 0.toShort(),        // Pause 1 (Satzpause, Regel a)
-        2_800L to 9_000.toShort(),    // bravo 5,2–8,0 s — Grenze NICHT auf 2-s-Raster
-        1_600L to 0.toShort(),        // Pause 2
-        2_900L to 12_000.toShort(),   // charlie 9,6–12,5 s
-        500L to 0.toShort(),          // End-Polster: letzter Lauf im Fenster = Stille
+        500L to 0.toShort(),          // start padding: no run at the edge
+        3_200L to 6_000.toShort(),    // alpha 0.5–3.7 s
+        1_500L to 0.toShort(),        // pause 1 (sentence pause, rule a)
+        2_800L to 9_000.toShort(),    // bravo 5.2–8.0 s — boundary NOT on the 2 s grid
+        1_600L to 0.toShort(),        // pause 2
+        2_900L to 12_000.toShort(),   // charlie 9.6–12.5 s
+        500L to 0.toShort(),          // end padding: last run in the window = silence
     )
 
-    /** (c)-Korpus: 46 s Monolog ohne Satzpausen (nur Amplitudenwechsel). */
+    /** (c) corpus: 46 s monologue without sentence pauses (amplitude changes only). */
     private val monologScript = listOf(
         500L to 0.toShort(),
-        15_000L to 6_000.toShort(),   // alpha 0,5–15,5
-        15_000L to 9_000.toShort(),   // bravo 15,5–30,5
-        15_000L to 12_000.toShort(),  // charlie 30,5–45,5 (36-s-Schnitt mittendrin)
+        15_000L to 6_000.toShort(),   // alpha 0.5–15.5
+        15_000L to 9_000.toShort(),   // bravo 15.5–30.5
+        15_000L to 12_000.toShort(),  // charlie 30.5–45.5 (36 s cut in the middle)
         500L to 0.toShort(),
     )
 
@@ -230,7 +229,7 @@ class SegmentGoldenTest {
             scope, { src }, { engine }, sink,
             tracker = OwnershipTracker(),
             nowMs = { clock.now.get() },
-            autoStopSuppressed = { true }, // Hold-Vertrag: F43 aus — Naht nur über Segmenter
+            autoStopSuppressed = { true }, // hold contract: F43 off — seams only via the segmenter
             segmentFinalizeMs = 35_000L,
         )
         assertTrue(coordinator.start())
@@ -254,86 +253,88 @@ class SegmentGoldenTest {
         return ctx.sink.text.toString()
     }
 
-    // ---- (a) Verkettung == Golden, exakt, naht-invariant ----
+    // ---- (a) chaining == golden, exact, seam-invariant ----
 
     @Test
-    fun `(a) Segment-Verkettung ist exakt golden - ein Leerzeichen je Naht, keine Duplikate`() {
+    fun `(a) segment chaining is exactly golden - one space per seam, no duplicates`() {
         val ctx = runChain(chainScript)
         try {
             val c = ctx.coordinator
-            // Mindestens eine (a)-Grenze an den Satzpausen; die exakte Anzahl
-            // ist naht-positionabhängig (1–2 Schnitte decken die Kette).
+            // at least one (a) boundary at the sentence pauses; the exact count
+            // depends on the seam position (1–2 cuts cover the chain).
             assertTrue(
-                "mind. eine Segmentgrenze (Ist=${c.segmentFinalizations()})",
+                "at least one segment boundary (actual=${c.segmentFinalizations()})",
                 c.segmentFinalizations() in 1..2,
             )
-            assertNull("kein ERR", c.lastError)
+            assertNull("no ERR", c.lastError)
             val text = finishAndText(ctx)
+            // T10 (v0.1.39) nachgezogen: das SESSION-Finale hängt hinter dem
+            // Satzzeichen-Ende EIN Leerzeichen an (Golden + trail_sp).
             assertEquals(
-                "Verkettung == Golden-Gesamttext (exakt, ein Leerzeichen je Naht)",
-                "alpha. bravo. charlie.",
+                "chain == golden total text (exact, one space per seam, T10 final space)",
+                "alpha. bravo. charlie. ",
                 text,
             )
-            assertFalse("keine Doppelleerzeichen (Naht-Regel)", text.contains("  "))
+            assertFalse("no double spaces (seam rule)", text.contains("  "))
         } finally {
             ctx.scope.cancel()
         }
     }
 
-    // ---- (b) UP finalisiert nur den Rest — Gesamttext unverändert korrekt ----
+    // ---- (b) UP finalizes only the rest — total text unchanged and correct ----
 
     @Test
-    fun `(b) UP finalisiert nur das Rest-Buffer - Gesamttext bleibt golden`() {
+    fun `(b) UP finalizes only the rest buffer - total text stays golden`() {
         val ctx = runChain(chainScript)
         try {
             val c = ctx.coordinator
             val text = finishAndText(ctx)
-            assertTrue("FinalRan (ist ${c.lastStopOutcome})", c.lastStopOutcome is StopOutcome.FinalRan)
-            assertEquals("Gesamttext unverändert korrekt", "alpha. bravo. charlie.", text)
-            // Das UP-Final-Fenster ist NIE die ganze Session (Rest-Vertrag);
-            // (ist die Naht ganz am Ende, wird das leere Rest übersprungen —
-            // das letzte Fenster ist dann das Mini-Finale, ebenfalls < Session.)
+            assertTrue("FinalRan (is ${c.lastStopOutcome})", c.lastStopOutcome is StopOutcome.FinalRan)
+            assertEquals("total text unchanged and correct (+ T10 final space)", "alpha. bravo. charlie. ", text)
+            // the UP final window is NEVER the whole session (rest contract);
+            // (if the seam is right at the end, the empty rest is skipped — the
+            // last window is then the mini final, likewise < session.)
             val lastWindow = ctx.engine.windowSeconds.last()
             assertTrue(
-                "UP/Mini-Fenster segment-lokal (Ist=$lastWindow)",
+                "UP/mini window segment-local (actual=$lastWindow)",
                 lastWindow <= 13.6,
             )
-            assertNull("kein ERR", c.lastError)
+            assertNull("no ERR", c.lastError)
         } finally {
             ctx.scope.cancel()
         }
     }
 
-    // ---- (c) (b)-Zwangssegment ohne Satzpausen: Naht-Trade-off beherrscht ----
+    // ---- (c) (b) forced segment without sentence pauses: seam trade-off mastered ----
 
     @Test
-    fun `(c) b-Zwangssegment bei 36 s - ein Leerzeichen an der Naht, keine Verdopplung`() {
-        // Trade-off (dokumentiert, PLAN §6.3 (b)-Spalte): der Zwangsschnitt
-        // trifft KEINE Satzpause — die Naht fällt mitten ins Wort-Feld. Der
-        // Scanner verwirft den Schnitt-Rest im alten Segment und emittiert ihn
-        // im neuen als führenden Lauf: genau EIN Leerzeichen an der (b)-Naht,
-        // keine Wort-Verdopplung, kein Verlust.
+    fun `(c) b forced segment at 36 s - one space at the seam, no duplication`() {
+        // trade-off (documented, PLAN §6.3 (b) column): the forced cut hits NO
+        // sentence pause — the seam falls into the middle of the word field.
+        // the scanner discards the cut rest in the old segment and emits it in
+        // the new one as a leading run: exactly ONE space at the (b) seam, no
+        // word duplication, no loss.
         val ctx = runChain(monologScript)
         try {
             val c = ctx.coordinator
             val text = finishAndText(ctx)
             assertEquals(
-                "Zwangssegment: (b)-Naht mit genau einem Leerzeichen",
-                "alpha. bravo. charlie.",
+                "forced segment: (b) seam with exactly one space (+ T10 final space)",
+                "alpha. bravo. charlie. ",
                 text,
             )
-            assertEquals("genau EIN (b)-Schnitt (36 s, deterministisch)", 1, c.segmentFinalizations())
-            assertFalse("keine Doppelleerzeichen", text.contains("  "))
-            assertNull("kein ERR", c.lastError)
+            assertEquals("exactly ONE (b) cut (36 s, deterministic)", 1, c.segmentFinalizations())
+            assertFalse("no double spaces", text.contains("  "))
+            assertNull("no ERR", c.lastError)
         } finally {
             ctx.scope.cancel()
         }
     }
 
-    // ---- (d) Determinismus: 2× identischer Korpus ⇒ identische Verkettung ----
+    // ---- (d) determinism: 2× the identical corpus ⇒ identical chaining ----
 
     @Test
-    fun `(d) zweimal identischer Korpus - identische Verkettung (Determinismus)`() {
+    fun `(d) twice the identical corpus - identical chaining (determinism)`() {
         val text1 = runChain(chainScript).let { ctx ->
             try {
                 finishAndText(ctx)
@@ -348,7 +349,7 @@ class SegmentGoldenTest {
                 ctx.scope.cancel()
             }
         }
-        assertEquals("2. Lauf == 1. Lauf (Determinismus)", text1, text2)
-        assertEquals("beide Läufe == Golden", "alpha. bravo. charlie.", text1)
+        assertEquals("2nd run == 1st run (determinism)", text1, text2)
+        assertEquals("both runs == golden (+ T10 final space)", "alpha. bravo. charlie. ", text1)
     }
 }

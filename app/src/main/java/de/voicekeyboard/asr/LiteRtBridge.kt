@@ -1,39 +1,39 @@
 package de.voicekeyboard.asr
 
 /**
- * V13: Indirektion zwischen Varianten-Registry und der LiteRT-Engine.
+ * V13: indirection between the variant registry and the LiteRT engine.
  *
- * Variante B (LITERT_CPU) hat das Qualitäts-Gate nicht bestanden
- * (docs/VARIANT_B_QUALITY.md: 50,2 % Wort-Identität, 33,2 % CED, Sprache-
- * Kippen bei führender Stille) und wird NICHT ausgeliefert. Der Quellcode
- * bleibt als Debug-Source-Set erhalten (Messtür offen, kein Löschen — die
- * Dateien sind die einzige Aufbewahrung).
+ * Variant B (LITERT_CPU) did not pass the quality gate
+ * (docs/VARIANT_B_QUALITY.md: 50.2 % word identity, 33.2 % CED, language
+ * flipping on leading silence) and is NOT shipped. The source code
+ * remains as a debug source set (measurement door stays open, no deletion —
+ * the files are the sole preservation).
  *
- * [provider] wird NUR vom Debug-Source-Set gesetzt (LiteRtBridgeSetup);
- * in Release bleibt er null ⇒ EngineFactory fällt dokumentiert auf
- * ParakeetAsrEngine (ONNX_CPU) zurück. ModelVariant.LITERT_CPU bleibt als
- * Typ erhalten (Persistenz-Abwärtskompatibilität), kann in Release nie
- * eine LiteRT-Engine erzeugen.
+ * [provider] is set ONLY by the debug source set (LiteRtBridgeSetup);
+ * in release it stays null ⇒ EngineFactory falls back, as documented, to
+ * ParakeetAsrEngine (ONNX_CPU). ModelVariant.LITERT_CPU remains as a
+ * type (persistence backward compatibility), can in release never
+ * produce a LiteRT engine.
  */
 object LiteRtBridge {
 
-    /** Liefert die LiteRT-Engine oder null (Release: immer null). */
+    /** Delivers the LiteRT engine or null (release: always null). */
     @Volatile
     var provider: (() -> AsrEngine?)? = null
 
     /**
-     * Liefert den Provider, installiert ihn vorher einmalig über den
-     * Varianten-Source-Set (debug: LiteRtAsrEngine; release: null — dort
-     * existiert die Setup-Klasse, installiert aber nichts).
+     * Delivers the provider, installing it beforehand once via the
+     * variant source set (debug: LiteRtAsrEngine; release: null — there
+     * the setup class exists but installs nothing).
      */
     fun acquire(): (() -> AsrEngine?)? {
         if (provider == null && !bootstrapTried) {
             bootstrapTried = true
             try {
-                // Laedt LiteRtBridgeSetupKt und fuehrt dessen Initialisierer aus
+                // Loads LiteRtBridgeSetupKt and executes its initializer
                 Class.forName("de.voicekeyboard.asr.LiteRtBridgeSetup")
             } catch (_: ClassNotFoundException) {
-                // Release-Setup-Klasse fehlt nie; andere Ladefehler => Provider null
+                // The release setup class is never missing; other load errors => provider null
             }
         }
         return provider

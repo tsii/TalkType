@@ -19,19 +19,19 @@ import de.voicekeyboard.keyboard.KeyboardTheme
 import de.voicekeyboard.keyboard.KeyboardView
 
 /**
- * Container der IME (V2: Moduswechsel statt Overlay, EMOJI_PANEL_DESIGN_V2 §2).
+ * IME container (V2: mode switch instead of overlay, EMOJI_PANEL_DESIGN_V2 §2).
  *
- * Genau zwei Modi, gegenseitig ausschließende Stack-Kinder:
- *  - Tastatur: statusRow VISIBLE, keyboardView VISIBLE, Emoji-Block GONE.
- *  - Emoji:    statusRow VISIBLE, keyboardView GONE (vollständig, auch unterste
- *              Reihe — keine unsichtbaren Keyboard-Trefferflächen), Emoji-Block
- *              VISIBLE mit nativem Footer-Button „Zur Tastatur“.
+ * Exactly two modes, mutually exclusive stack children:
+ *  - Keyboard: statusRow VISIBLE, keyboardView VISIBLE, emoji block GONE.
+ *  - Emoji:    statusRow VISIBLE, keyboardView GONE (completely, bottom row too
+ *              — no invisible keyboard hit surfaces), emoji block
+ *              VISIBLE with native footer button „Zur Tastatur“.
  *
- * Keine Overlay-Rechnung: kein onLayout-Höhenhandling, keine Margen/Gravity-Anker
- * für das Panel (die drei Overlay-Varianten sind gerätewiderlegt, M8b-3b/c/d).
- * Der Größenvertrag ist ein Designmaß: Emoji-Block 240 dp Gesamthöhe inkl.
- * Footer; EmojiPanel height=0 + Gewicht 1 — der Layout-Manager verteilt.
- * System-Navigationsinsets sind EINMAL als unteres Root-Padding gesetzt.
+ * No overlay math: no onLayout height handling, no margin/gravity anchors
+ * for the panel (the three overlay variants are refuted by the device, M8b-3b/c/d).
+ * The size contract is a design measure: emoji block 240 dp total height incl.
+ * footer; EmojiPanel height=0 + weight 1 — the layout manager distributes.
+ * System navigation insets are set ONCE as bottom root padding.
  */
 class ImeRootView @JvmOverloads constructor(
     context: Context,
@@ -40,42 +40,42 @@ class ImeRootView @JvmOverloads constructor(
 
     val statusText: TextView
     val micButton: Button
-    /** P0 (2026-11-01): 🐞 als ERSTES View-Kind der statusRow (48 dp, rechts) —
-     *  vorher dynamisches addView im Service (brüchig, ungetestet, verschwand
-     *  geräteseitig). Immer sichtbar, Service hängt nur den Listener an. */
+    /** P0 (2026-11-01): 🐞 as the FIRST view child of the statusRow (48 dp, right) —
+     *  previously a dynamic addView in the service (fragile, untested, disappeared
+     *  on the device). Always visible, the service only attaches the listener. */
     val debugButton: Button
-    /** T9 (v0.1.38): die Statuszeile als Ganzes — NUR Debug sichtbar (s. init);
-     *  die Sichtbarkeit ist Tests zugänglich, ohne über micButton.parent zu gehen. */
+    /** T9 (v0.1.38): the status row as a whole — visible in DEBUG only (see init);
+     *  the visibility is accessible to tests without going over micButton.parent. */
     val statusRow: LinearLayout
     val keyboardView: KeyboardView
     val emojiPanel: EmojiPanelView
 
-    /** Nativer Rückweg-Button im Emoji-Block (V2 §3): voll, breit, ≥48dp, eigener Hit-Test. */
+    /** Native way-back button in the emoji block (V2 §3): full, wide, ≥48dp, own hit test. */
     val backToKeyboardButton: Button
 
-    /** Emoji-Inhaltsblock: alternatives Stack-Kind (kein Overlay). */
+    /** Emoji content block: alternative stack child (no overlay). */
     private val emojiBlock: LinearLayout
 
     init {
         val density = resources.displayMetrics.density
 
-        // S4 — Stock-Tokens (DESIGN_STOCK_LOOK §1): ALLE Farben der Leiste, des
-        // Roots und der nativen Buttons kommen aus KeyboardTheme (hell/dunkel nach
-        // System-Nachtmodus) — kein hartkodierter Farbwert in dieser Datei.
+        // S4 — stock tokens (DESIGN_STOCK_LOOK §1): ALL colors of the bar, of the
+        // root and of the native buttons come from KeyboardTheme (light/dark by
+        // system night mode) — no hard-coded color value in this file.
         val palette: KeyboardPalette = KeyboardTheme.palette(
             isDark = (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) ==
                 Configuration.UI_MODE_NIGHT_YES,
         )
-        // Dark muss auch am Root greifen (Sol §1) — deckende Fläche für den ganzen Stack.
+        // Dark must take effect at the root too (spec §1) — opaque surface for the whole stack.
         setBackgroundColor(palette.background)
 
         statusText = TextView(context).apply {
-            // P0 (2026-11-01, Nutzer-Entscheidung): Grundzustand NIE leer —
-            // vorher (S4) bewusst "", weil der Service den Text setzt; der
-            // Service-Weg (updateStatus) bleibt, "Bereit" ist nur der
-            // Konstruktions-Default, falls er (noch) nicht lief.
+            // P0 (2026-11-01, user decision): the ground state is NEVER empty —
+            // previously (S4) deliberately "", because the service sets the text; the
+            // service path (updateStatus) stays, "Bereit" is only the
+            // construction default in case it (still) did not run.
             text = "Bereit"
-            // Sol §1: Status 12 sp, sekundäre Textfarbe (Texte links).
+            // Spec §1: status 12 sp, secondary text color (texts on the left).
             textSize = KeyboardTheme.SP_SECONDARY_SP
             setTextColor(palette.textSecondary)
             gravity = Gravity.CENTER_VERTICAL
@@ -85,8 +85,8 @@ class ImeRootView @JvmOverloads constructor(
 
         micButton = Button(context).apply {
             text = "🎤"
-            isEnabled = true // Push-to-Talk: Touch-Down startet, Touch-Up stoppt (Service verdrahtet)
-            // S4: nativer Button ohne fremdes Relief-Thema — Farben aus den Tokens.
+            isEnabled = true // push-to-talk: touch-down starts, touch-up stops (service wiring)
+            // S4: native button without a foreign relief theme — colors from the tokens.
             setTextColor(palette.textFunctional)
             setBackgroundColor(palette.background)
             layoutParams = LinearLayout.LayoutParams(
@@ -96,8 +96,8 @@ class ImeRootView @JvmOverloads constructor(
         }
 
         debugButton = Button(context).apply {
-            // P0: 48-dp-Trefferfläche, RECHTS (letztes Kind der statusRow),
-            // Tokens wie micButton (kein fremdes Relief-Thema).
+            // P0: 48-dp hit surface, RIGHT (last child of the statusRow),
+            // tokens like micButton (no foreign relief theme).
             text = "🐞"
             contentDescription = "Diagnose kopieren/teilen"
             isAllCaps = false
@@ -112,39 +112,39 @@ class ImeRootView @JvmOverloads constructor(
             )
         }
 
-        // T9 (v0.1.38): Statuszeile NUR DEBUG — im Release (FLAG_DEBUGGABLE fehlt)
-        // bleibt die statusRow GONE: Statustext + 🎤 + 🐞 belegen KEINEN Layout-
-        // platz, die Tastatur erhält das volle Höhenbudget. Injizierbare Naht:
-        // context.applicationInfo.flags, EINMAL gelesen (Robolectric-Tests steuern
-        // das Bit). Service-Updates (statusText.text, micButton.isEnabled/
-        // isActivated) sind reine Property-Sets auf weiterhin angehängten Views —
-        // bei GONE gefahrlos, kein Guard nötig (geprüft: VoiceKeyboardService
-        // :1537/1550/1552 und syncMicUi :921). T5-Band-Overlay: ohne sichtbare
-        // statusRow liegt die KeyboardView an der Stack-Oberkante (top = 0) ⇒
-        // statusBandPx = 0 ⇒ menuTopForStatusBand fällt auf die T1-Zweizonenregel
-        // zurück (Bestands-Fallback).
+        // T9 (v0.1.38): status row DEBUG ONLY — in the release (FLAG_DEBUGGABLE missing)
+        // the statusRow stays GONE: status text + 🎤 + 🐞 occupy NO layout
+        // space, the keyboard receives the full height budget. Injectable seam:
+        // context.applicationInfo.flags, read ONCE (Robolectric tests control
+        // the bit). Service updates (statusText.text, micButton.isEnabled/
+        // isActivated) are pure property sets on still-attached views —
+        // safe while GONE, no guard needed (checked: VoiceKeyboardService
+        // :1537/1550/1552 and syncMicUi :921). T5 band overlay: without a visible
+        // statusRow the KeyboardView sits at the stack's top edge (top = 0) ⇒
+        // statusBandPx = 0 ⇒ menuTopForStatusBand falls back to the T1 two-zone rule
+        // (existing fallback).
         val debugStatusRow =
             (context.applicationInfo?.flags ?: 0) and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE != 0
 
         statusRow = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            // T21/S2-Höhenhaushalt (DESIGN_STOCK_LOOK §3): DIESER Zeilenblock ist die
-            // EINE Stelle, an der die Statuszeile in den Höhenhaushalt eingeht —
-            // explizite 48-dp-Höhe (nicht „versehentlich“ über die Debug-Taste
-            // gezogen). Der vertikale Stack unten misst die statusRow zuerst und
-            // zieht ihre Höhe von der Child-MeasureSpec der KeyboardView ab
+            // T21/S2 height budget (DESIGN_STOCK_LOOK §3): THIS row block is the
+            // ONE place where the status row enters the height budget —
+            // explicit 48-dp height (not "accidentally" pulled in via the debug
+            // button). The vertical stack below measures the statusRow first and
+            // subtracts its height from the KeyboardView's child MeasureSpec
             // (LinearLayout.onMeasure → measureChildBeforeLayout); KeyboardView
-            // rechnet deshalb mit statusLinePx = 0 — GENAU EINMAL, kein Doppelabzug.
+            // therefore computes with statusLinePx = 0 — EXACTLY ONCE, no double subtraction.
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 (48 * density).toInt(),
             )
-            // S4: 1-dp-Trennlinie UNTER der Leiste (Sol §1 „Trennlinien: 1 dp unter
+            // S4: 1-dp separator line BELOW the bar (spec §1 „Trennlinien: 1 dp unter
             // der Diagnoseleiste — einzige feste Linie, auch in Emoji-Ansicht
-            // konsistent“). Als Hintergrund-Layer INNERHALB der 48 dp, damit sich
-            // die Abzugskette (Keys-Budget) nicht erneut ändert — kein zusätzliches
-            // Stack-Kind, keine Messänderung.
+            // konsistent“). As a background layer WITHIN the 48 dp so that the
+            // subtraction chain (key budget) does not change again — no additional
+            // stack child, no measurement change.
             val fill = GradientDrawable().apply { setColor(palette.background) }
             val line = GradientDrawable().apply { setColor(palette.separator) }
             background = LayerDrawable(arrayOf(fill, line)).apply {
@@ -152,14 +152,14 @@ class ImeRootView @JvmOverloads constructor(
             }
             addView(statusText)
             addView(micButton)
-            addView(debugButton) // P0: rechts, fest in der Zeile (kein dynamisches addView)
-            // T9 (vc39): Release ⇒ GONE (kein Layout-Platz); Debug ⇒ Bestand (VISIBLE).
-            // T9b-Härtung (vc39-Beweislauf, Review-Nachlese): die Modi-Wechsler
-            // showEmojiPanel()/hideEmojiPanel() fassen NUR keyboardView/emojiBlock an —
-            // nie statusRow; der Service setzt überhaupt keine visibility. Damit kein
-            // künftiger Wechsler die Release-Zeile zurückholt, bleibt die Setzung hier
-            // die einzige Stelle und ist per Test erzwungen (ImeRootViewLayoutTest:
-            // Release-Test prüft GONE in Tastatur- UND Emoji-Modus inkl. Roundtrip).
+            addView(debugButton) // P0: right, fixed in the row (no dynamic addView)
+            // T9 (vc39): release ⇒ GONE (no layout space); debug ⇒ as before (VISIBLE).
+            // T9b hardening (vc39 evidence run, review follow-up): the mode switchers
+            // showEmojiPanel()/hideEmojiPanel() touch ONLY keyboardView/emojiBlock —
+            // never statusRow; the service sets no visibility at all. So that no
+            // future switcher pulls the release row back, the setting here remains
+            // the only place and is enforced by a test (ImeRootViewLayoutTest:
+            // the release test checks GONE in keyboard AND emoji mode incl. roundtrip).
             visibility = if (debugStatusRow) VISIBLE else GONE
         }
 
@@ -169,18 +169,18 @@ class ImeRootView @JvmOverloads constructor(
             LinearLayout.LayoutParams.WRAP_CONTENT,
         )
 
-        // Emoji-Block (Designmaß 240dp gesamt inkl. Footer): Panel gewichtet (height=0,
-        // weight=1), Footer-Button darunter, außerhalb des Panel-Canvas/Hit-Tests.
+        // Emoji block (design measure 240dp total incl. footer): panel weighted (height=0,
+        // weight=1), footer button below, outside the panel canvas/hit test.
         emojiPanel = EmojiPanelView(context).apply {
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
-                0, // Gewicht verteilt — keine berechnete Höhe
+                0, // weight distributes — no computed height
                 1f,
             )
         }
         backToKeyboardButton = Button(context).apply {
             text = context.getString(R.string.emoji_back_to_keyboard)
-            // S4: nativer Footer-Button in den Tokens (kein Activity-Theme-Relief).
+            // S4: native footer button in the tokens (no activity theme relief).
             setTextColor(palette.textFunctional)
             setBackgroundColor(palette.background)
             layoutParams = LinearLayout.LayoutParams(
@@ -192,31 +192,31 @@ class ImeRootView @JvmOverloads constructor(
             orientation = LinearLayout.VERTICAL
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
-                (240 * density).toInt(), // Designmaß inkl. Footer (V2 §2)
+                (240 * density).toInt(), // design measure incl. footer (V2 §2)
             )
             addView(emojiPanel)
             addView(backToKeyboardButton)
-            visibility = GONE // Start: Tastaturmodus
+            visibility = GONE // start: keyboard mode
         }
 
-        // Der Stack ist das einzige inhaltliche Kind der Root.
+        // The stack is the root's only content child.
         val stack = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
-            // F28a: das Langdruckmenü der obersten Tastenreihe wird UEBER die
-            // Statusleiste gezeichnet (negatives top im KeyboardView-Koordinatensystem).
-            // Der Stack darf seine Kinder daher NICHT auf die Child-/eigene Grenze
-            // klemmen, sonst wäre der über die View-Oberkante hinausreichende Teil
-            // der Palette unsichtbar. NUR diese zwei Properties — kein Layout-Umbau.
+            // F28a: the long-press menu of the top key row is drawn OVER the
+            // status bar (negative top in the KeyboardView coordinate system).
+            // The stack must therefore NOT clamp its children to the child/own
+            // bound, otherwise the part of the palette extending beyond the
+            // view's top edge would be invisible. ONLY these two properties — no layout rebuild.
             clipChildren = false
             clipToPadding = false
-            // F34/P2-2 (REVIEW_F29_F33): die statusRow liegt in der Z-Ordnung ÜBER
-            // der KeyboardView — das r0-Popup (negatives top) ist nur Canvas-Zeichnung
-            // im KeyboardView-Child und würde die 🐞-Taste zwar touchbar, aber
-            // visuell verdecken. Elevation = Z-Anhebung OHNE Layout-/Geometrie-
-            // Änderung (OutlineProvider.NONE: keine Schattenkante).
+            // F34/P2-2 (REVIEW_F29_F33): the statusRow lies ABOVE the
+            // KeyboardView in Z order — the r0 popup (negative top) is mere canvas
+            // drawing in the KeyboardView child and would leave the 🐞 button
+            // touchable, but cover it visually. Elevation = Z lift WITHOUT a
+            // layout/geometry change (OutlineProvider.NONE: no shadow edge).
             statusRow.elevation = 1f
-            // Kein Umriss = keine Schattenkante; die NONE-Konstante ist im
-            // Offline-SDK-Stub nicht auflösbar (F34-Workaround 2026-11-01).
+            // No outline = no shadow edge; the NONE constant is not
+            // resolvable in the offline SDK stub (F34 workaround 2026-11-01).
             statusRow.outlineProvider = object : ViewOutlineProvider() {
                 override fun getOutline(v: View, o: android.graphics.Outline) {}
             }
@@ -226,38 +226,38 @@ class ImeRootView @JvmOverloads constructor(
         }
         addView(stack)
 
-        // System-Navigationsinsets als normaler unterer Innenabstand, einmal für
-        // den gesamten Stack (V2 §2) — kein Panelpositionierungs-Hack.
+        // System navigation insets as a normal bottom padding, once for the
+        // entire stack (V2 §2) — no panel positioning hack.
         //
-        // T21/S2-Höhenhaushalt (DESIGN_STOCK_LOOK §3): DIESE Zeile (setPadding mit
-        // `nav`) ist die EINE Stelle, an der der Navigationsinset abgezogen wird:
-        // FrameLayout reduziert die MeasureSpec des Stacks um das Root-Padding,
-        // KeyboardView selbst rechnet mit navInsetPx = 0 — GENAU EINMAL.
-        // Daraus folgt der Integrationsvertrag: Root-Angebot H → Keyboard-Child
-        // erhält H − nav − 48 dp und skaliert ALLE Reihen in genau dieses Budget.
+        // T21/S2 height budget (DESIGN_STOCK_LOOK §3): THIS line (setPadding with
+        // `nav`) is the ONE place where the navigation inset is subtracted:
+        // the FrameLayout reduces the stack's MeasureSpec by the root padding,
+        // KeyboardView itself computes with navInsetPx = 0 — EXACTLY ONCE.
+        // The integration contract follows from that: root offer H → keyboard child
+        // receives H − nav − 48 dp and scales ALL rows into exactly this budget.
         setOnApplyWindowInsetsListener { v, insets ->
             val nav = insets.systemGestureInsets.bottom
                 .coerceAtLeast(insets.systemWindowInsetBottom)
-            // P0-0.1.20: INSET-ANOMALIE-Deckel — ein aehnlich großes bottom-Systeminset
-            // (neueer OS-Stand, IME im eigenen Prozess) duerfe nie den ganzen Stack
-            // einquetschen: das untere Root-Padding ist der EINZIGE Mechanismus, der
-            // die Statuszeile (48 dp) von oben herdruecken/komprimieren kann. Der Deckel
-            // gilt NUR fuer das Padding (Hoehe-Abzug bleibt genau einmal), nicht fuer
-            // die Insets-Auslieferung.
+            // P0-0.1.20: INSET ANOMALY cap — a similarly large bottom system inset
+            // (newer OS, IME in its own process) must never squeeze the whole stack:
+            // the bottom root padding is the ONLY mechanism that can push/compress
+            // the status row (48 dp) from above. The cap applies ONLY to the
+            // padding (the height subtraction stays exactly once), not to the
+            // insets delivery.
             val navCapped = nav.coerceAtMost((120 * v.resources.displayMetrics.density).toInt())
             v.setPadding(v.paddingLeft, v.paddingTop, v.paddingRight, navCapped)
             insets
         }
     }
 
-    /** Emoji-Modus (idempotent): Tastatur GONE, Emoji-Block VISIBLE. */
+    /** Emoji mode (idempotent): keyboard GONE, emoji block VISIBLE. */
     fun showEmojiPanel() {
         if (isEmojiPanelVisible) return
         keyboardView.visibility = GONE
         emojiBlock.visibility = VISIBLE
     }
 
-    /** Tastaturmodus (idempotent): Emoji-Block GONE, Tastatur VISIBLE; keine MotionEvent-Weitergabe. */
+    /** Keyboard mode (idempotent): emoji block GONE, keyboard VISIBLE; no MotionEvent forwarding. */
     fun hideEmojiPanel() {
         if (!isEmojiPanelVisible) return
         emojiBlock.visibility = GONE

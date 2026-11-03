@@ -1,32 +1,32 @@
 package de.voicekeyboard.asr.litert
 
 /**
- * V8: Statistik für die Featurizer-Normalisierung (feature_mean/feature_inv_std).
+ * V8: statistics for the featurizer normalization (feature_mean/feature_inv_std).
  *
- * Die Arm-Pipeline verlangt beide Eingänge, aber es ist KEIN Herstellerwert
- * öffentlich. Zwei Modi:
- *  - [NEUTRAL]: mean 0 / inv_std 1 — identitätsnormalisierung (ANNAHME, als
- *    dokumentierter Fallback, KEINE erfundenen Konstanten).
- *  - [fromMel]: bildet Mittelwert/Streuung pro Feature-Dimension aus dem gerade
- *    berechneten log_mel (exakt NeMos `normalize_per_feature`): nach dem ersten
- *    run() werden die Statistiken aus log_mel gezogen und die Features damit
- *    neu skaliert — kein zweiter Inferenzlauf nötig.
+ * The ARM pipeline requires both inputs, but there is NO manufacturer value
+ * public. Two modes:
+ *  - [NEUTRAL]: mean 0 / inv_std 1 — identity normalization (ASSUMPTION, as a
+ *    documented fallback, NO invented constants).
+ *  - [fromMel]: computes mean/spread per feature dimension from the just
+ *    computed log_mel (exactly NeMo's `normalize_per_feature`): after the first
+ *    run() the statistics are drawn from log_mel and the features are rescaled
+ *    with them — no second inference run needed.
  *
- * Produktionsverdrahtung (V8): [fromMel] — siehe LiteRtFeaturizer.
+ * Production wiring (V8): [fromMel] — see LiteRtFeaturizer.
  */
 object FeaturizerStats {
 
-    /** Dimension des Feature-Vektors (log-mel bins der Parakeet-Pipeline). */
+    /** Dimension of the feature vector (log-mel bins of the Parakeet pipeline). */
     const val FEATURE_DIM = 128
 
-    /** Identitätsmodus (mean=0, inv_std=1) — dokumentierte ANNAHME, nur Fallback. */
+    /** Identity mode (mean=0, inv_std=1) — documented ASSUMPTION, fallback only. */
     fun neutralMean(): FloatArray = FloatArray(FEATURE_DIM)
     fun neutralInvStd(): FloatArray = FloatArray(FEATURE_DIM) { 1f }
 
     /**
-     * Statistik aus log_mel [frames][128]: Mittelwert und inverse Std-Abweichung
-     * PRO Feature-Dimension (normalize_per_feature). Frames mit Mask 0 (Polster)
-     * dürfen NICHT in die Statistik einfließen — Aufrufer filtert vorher.
+     * Statistics from log_mel [frames][128]: mean and inverse std deviation
+     * PER feature dimension (normalize_per_feature). Frames with mask 0 (padding)
+     * must NOT flow into the statistics — the caller filters beforehand.
      */
     fun fromMel(logMel: FloatArray, frames: Int, mask: BooleanArray): Pair<FloatArray, FloatArray> {
         val mean = FloatArray(FEATURE_DIM)

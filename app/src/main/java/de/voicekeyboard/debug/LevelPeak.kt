@@ -1,49 +1,49 @@
 package de.voicekeyboard.debug
 
 /**
- * Hält den höchsten während einer Diktat-Sitzung gesehenen Audio-Pegel fest.
+ * Holds the highest audio level seen during a dictation session.
  *
- * Reine JVM-Logik (kein Android-Typ), damit die Anzeige ohne Gerät bewiesen ist.
- * Regel 9: es wird ausschliesslich ein Maximalwert geführt — keine Samples,
- * keine Kurven, keine Zeitreihen, nichts was auf Inhalte schliessen liesse.
+ * Pure JVM logic (no Android type), so that the display is proven without a device.
+ * Rule 9: only a maximum value is kept — no samples,
+ * no curves, no time series, nothing that would allow conclusions about contents.
  *
- * Der Wertebereich der Eingabe ist linear 0..1 (siehe `AudioLevelListener`).
+ * The input value range is linear 0..1 (see `AudioLevelListener`).
  */
 class LevelPeak {
 
     @Volatile private var max: Float = 0f
 
     /**
-     * Pegel eines Blocks melden. Ausserhalb des Bereichs liegende oder
-     * nicht-zahlende Werte werden ignoriert (kein Absturz in der Diagnose).
+     * Report the level of a block. Values outside the range or
+     * non-numeric values are ignored (no crash in the diagnostics).
      */
     fun note(rms: Float) {
         if (!rms.isFinite() || rms <= 0f) return
         if (rms > max) max = if (rms > 1f) 1f else rms
     }
 
-    /** Spitze in Prozent (0..100), ganzzahlig — genau das, was die Diagnosezeile zeigt. */
+    /** Peak in percent (0..100), integer — exactly what the status row shows. */
     fun percent(): Int = (max * 100f).toInt().coerceIn(0, 100)
 
     /**
-     * Spitze in dBFS (<= 0) oder null, wenn nie ein Pegel gemessen wurde.
-     * Warum: peak_pct runt bei leiser Aufnahme auf 0..2 und ist dort nicht mehr
-     * aufloesend. -34 dBFS (Telefonbefund) ist als Zahl erst erkennbar.
+     * Peak in dBFS (<= 0) or null if no level was ever measured.
+     * Why: peak_pct drops to 0..2 for a quiet recording and is not
+     * resolvable there. -34 dBFS (phone finding) only becomes recognizable as a number.
      */
     fun dbfs(): Double? {
         if (max <= 0f) return null
         return (20.0 * kotlin.math.log10(max.toDouble())).coerceAtMost(0.0)
     }
 
-    /** Für den Sitzungsbeginn: Spitze vergessen. */
+    /** For the session start: forget the peak. */
     fun reset() {
         max = 0f
     }
 
     /**
-     * Kurzform für die Diagnosezeile: „2 (-34 dB)“ bzw. „0“. Der Prozentwert
-     * allein ist bei leiser Aufnahme nicht unterscheidbar (0 vs. 2 vs. 3),
-     * die dBFS-Stufe macht den Unterschied sichtbar (Telefonbefund -34 dBFS).
+     * Short form for the status row: "2 (-34 dB)" or "0". The percent value
+     * alone is not distinguishable for a quiet recording (0 vs. 2 vs. 3),
+     * the dBFS step makes the difference visible (phone finding -34 dBFS).
      */
     fun short(): String {
         val p = percent()

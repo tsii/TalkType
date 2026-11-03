@@ -28,19 +28,19 @@ import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.atomic.AtomicInteger
 
 /**
- * F17c: Kettentest Controller → Coordinator → Collector → Snapshot.
- * DebugInfoFormatterTest baut sein DebugSnapshot selbst — löscht man eine
- * Collector-Zeile (z. B. `decodeMsMax = coordinator?.decodeMsMax()`), bleibt
- * der Formatter-Test grün und der 🐞-Export zeigt dauerhaft `-`. Genau das
- * fängt dieser Test: echter Coordinator mit echtem Decode-Lauf, echter
- * Collector-Aufruf, Behauptung: die drei C2-Felder sind gesetzt (nicht null)
- * und bufferSeconds > 0.
+ * F17c: chain test Controller → Coordinator → Collector → Snapshot.
+ * DebugInfoFormatterTest builds its own DebugSnapshot — if someone deletes a
+ * collector line (e.g. `decodeMsMax = coordinator?.decodeMsMax()`), the
+ * formatter test stays green and the 🐞 export shows `-` permanently. This
+ * test catches exactly that: a real coordinator with a real decode run, a
+ * real collector call, claim: the three C2 fields are set (not null)
+ * and bufferSeconds > 0.
  */
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [35]) // Projekt-Muster: SDK 36 braucht Java 21, Test-JVM ist 17
+@Config(sdk = [35]) // project pattern: SDK 36 needs Java 21, the test JVM is 17
 class DebugInfoCollectorTest {
 
-    /** Fake-Quelle: liefert 3 Blöcke à 16000 Samples (3,0 s) und endet. */
+    /** Fake source: delivers 3 blocks of 16000 samples each (3.0 s) and ends. */
     private class QueueSource : AudioSource {
         private val queue = ConcurrentLinkedQueue(
             listOf(ShortArray(16_000), ShortArray(16_000), ShortArray(16_000)),
@@ -68,7 +68,7 @@ class DebugInfoCollectorTest {
         override fun release() {}
     }
 
-    /** Fake-Engine: zählt, gibt kurzen Text — das Fenster wird wie echt dekodiert. */
+    /** Fake engine: counts, returns short text — the window is decoded as if real. */
     private class CountingEngine : AsrEngine {
         val calls = AtomicInteger(0)
         override fun load(modelDir: File) {}
@@ -92,7 +92,7 @@ class DebugInfoCollectorTest {
     }
 
     @Test
-    fun `collector fuellt decode_ms_max p95 und buffer_s aus dem coordinator`() {
+    fun `collector fills decode_ms_max p95 and buffer_s from the coordinator`() {
         val context = ApplicationProvider.getApplicationContext<Context>()
         val engine = CountingEngine()
         val scope = CoroutineScope(Dispatchers.Default)
@@ -101,16 +101,16 @@ class DebugInfoCollectorTest {
             { QueueSource() },
             { engine },
             NopSink(),
-            // F28b1: GEFRORENE virtuelle Uhr (nicht 0 — das ist das "nie gestartet"
-            // -Sentinel). QueueSource liefert 3 s Audio auf einmal und geht dann
-            // in Stille; mit der Echtzeit-Uhr würde der Stall-Watchdog (3 s ohne
-            // Block) mitten in der 3-s-Wartezeit die Session abbrechen. Dieser
-            // Test prüft die Collector-Kette, keinen Stall.
+            // F28b1: FROZEN virtual clock (not 0 — that is the "never started"
+            // sentinel). QueueSource delivers 3 s of audio at once and then goes
+            // silent; with a real-time clock the stall watchdog (3 s without a
+            // block) would abort the session in the middle of the 3 s wait. This
+            // test checks the collector chain, not a stall.
             nowMs = { 1_000L },
         )
         try {
             assertTrue(coordinator.start())
-            // Warten, bis 3,0 s geflossen sind (Final-Decode läuft spätestens in stop()).
+            // wait until 3.0 s have flowed (the final decode runs at the latest in stop()).
             val deadline = System.currentTimeMillis() + 3000
             while (coordinator.audioSeconds < 3.0 && System.currentTimeMillis() < deadline) {
                 Thread.sleep(10)
@@ -123,16 +123,16 @@ class DebugInfoCollectorTest {
                 Thread.sleep(10)
             }
             assertEquals(DictationState.IDLE, coordinator.state)
-            assertTrue("mind. ein Decode-Lauf", engine.calls.get() >= 1)
+            assertTrue("at least one decode run", engine.calls.get() >= 1)
 
-            // Kette (1): Coordinator reicht auf den Controller durch.
+            // chain (1): the coordinator passes through to the controller.
             assertTrue(
-                "bufferSeconds muss Decode-Puffer zeigen: ${coordinator.bufferSeconds()}",
+                "bufferSeconds must show the decode buffer: ${coordinator.bufferSeconds()}",
                 coordinator.bufferSeconds() > 0.0,
             )
 
-            // Kette (2): echter Collector-Aufruf — Löschte jemand eine der drei
-            // Zeilen im Collector, wäre das Feld null und dieser Test ROT.
+            // chain (2): real collector call — if someone deleted one of the three
+            // lines in the collector, the field would be null and this test RED.
             val snapshot = DebugInfoCollector(context).collect(
                 modelStore = ModelStore(
                     File(System.getProperty("java.io.tmpdir"), "vk-f17c-${System.nanoTime()}")
@@ -143,34 +143,34 @@ class DebugInfoCollectorTest {
                 threadConfig = AsrThreadConfig.DEFAULT,
                 permissions = AndroidPermissionsRequester({ false }, { false }),
             )
-            assertNotNull("decodeMsMax durchgereicht", snapshot.decodeMsMax)
-            assertNotNull("decodeMsP95 durchgereicht", snapshot.decodeMsP95)
-            assertNotNull("bufferSeconds durchgereicht", snapshot.bufferSeconds)
-            // F21: Takt-Felder — gleiche Kette, sonst wieder der F17c-Fehler
-            assertNotNull("decodePaceMs durchgereicht", snapshot.decodePaceMs)
-            assertNotNull("decodeSkips durchgereicht", snapshot.decodeSkips)
-            assertTrue("bufferSeconds > 0 nach echtem Decode", snapshot.bufferSeconds!! > 0.0)
+            assertNotNull("decodeMsMax passed through", snapshot.decodeMsMax)
+            assertNotNull("decodeMsP95 passed through", snapshot.decodeMsP95)
+            assertNotNull("bufferSeconds passed through", snapshot.bufferSeconds)
+            // F21: pace fields — same chain, otherwise the F17c error again
+            assertNotNull("decodePaceMs passed through", snapshot.decodePaceMs)
+            assertNotNull("decodeSkips passed through", snapshot.decodeSkips)
+            assertTrue("bufferSeconds > 0 after a real decode", snapshot.bufferSeconds!! > 0.0)
             assertTrue("decodeMsMax >= 0", snapshot.decodeMsMax!! >= 0L)
 
-            // Kette (3): im formatierten Export stehen Zahlen, keine Striche.
+            // chain (3): the formatted export shows numbers, no dashes.
             val out = DebugInfoFormatter.format(snapshot)
-            assertTrue("decode_ms_max im Export", Regex("decode_ms_max: \\d+").containsMatchIn(out))
-            assertTrue("decode_ms_p95 im Export", Regex("decode_ms_p95: \\d+").containsMatchIn(out))
-            assertTrue("buffer_s im Export", Regex("buffer_s: [0-9]").containsMatchIn(out))
-            assertTrue("decode_pace_ms im Export", Regex("decode_pace_ms: \\d+").containsMatchIn(out))
-            assertTrue("decode_skips im Export", Regex("decode_skips: \\d+").containsMatchIn(out))
+            assertTrue("decode_ms_max in the export", Regex("decode_ms_max: \\d+").containsMatchIn(out))
+            assertTrue("decode_ms_p95 in the export", Regex("decode_ms_p95: \\d+").containsMatchIn(out))
+            assertTrue("buffer_s in the export", Regex("buffer_s: [0-9]").containsMatchIn(out))
+            assertTrue("decode_pace_ms in the export", Regex("decode_pace_ms: \\d+").containsMatchIn(out))
+            assertTrue("decode_skips in the export", Regex("decode_skips: \\d+").containsMatchIn(out))
         } finally {
             coordinator.shutdown()
             scope.coroutineContext[kotlinx.coroutines.Job]?.cancel()
         }
     }
 
-    // A4a (PLAN_V0133 §A4a): Collector-Durchreichung der A2b-Schreib-Diagnose —
-    // Fensterwerte aus dem A2b-Diagnoseobjekt (lastDecodeWindow), Session-Zähler
-    // über die Coordinator-Durchreiche. Löscht jemand EINE Collector-Zuordnung,
-    // ist das Feld null und dieser Test ROT. Nur Zahlen/Codes (Regel 9).
+    // A4a (PLAN_V0133 §A4a): collector pass-through of the A2b write diagnostics —
+    // window values from the A2b diagnostics object (lastDecodeWindow), session
+    // counters via the coordinator pass-through. If someone deletes ONE collector
+    // assignment, the field is null and this test RED. Numbers/codes only (rule 9).
     @Test
-    fun `collector reicht die A2b-Schreib-Diagnose durch`() {
+    fun `collector passes through the A2b write diagnostics`() {
         val context = ApplicationProvider.getApplicationContext<Context>()
         val engine = CountingEngine()
         val scope = CoroutineScope(Dispatchers.Default)
@@ -179,7 +179,7 @@ class DebugInfoCollectorTest {
             { QueueSource() },
             { engine },
             NopSink(),
-            nowMs = { 1_000L }, // gefrorene Uhr — s. Test oben (kein Stall-Abbruch)
+            nowMs = { 1_000L }, // frozen clock — see test above (no stall abort)
         )
         try {
             assertTrue(coordinator.start())
@@ -194,8 +194,8 @@ class DebugInfoCollectorTest {
             ) {
                 Thread.sleep(10)
             }
-            assertTrue("mind. ein Decode-Lauf", engine.calls.get() >= 1)
-            assertTrue("mind. ein Schreib-DELTA", coordinator.writeDeltaCount() >= 1)
+            assertTrue("at least one decode run", engine.calls.get() >= 1)
+            assertTrue("at least one write DELTA", coordinator.writeDeltaCount() >= 1)
 
             val snapshot = DebugInfoCollector(context).collect(
                 modelStore = ModelStore(
@@ -207,25 +207,25 @@ class DebugInfoCollectorTest {
                 threadConfig = AsrThreadConfig.DEFAULT,
                 permissions = AndroidPermissionsRequester({ false }, { false }),
             )
-            // Fensterwerte (A2b-Diagnoseobjekt) — nach echtem Decode alle gesetzt:
-            assertNotNull("lastDecodeMs durchgereicht", snapshot.lastDecodeMs)
-            assertNotNull("hypLen durchgereicht", snapshot.hypLen)
-            assertNotNull("currentLen durchgereicht", snapshot.currentLen)
-            assertNotNull("committedLen durchgereicht", snapshot.committedLen)
-            assertNotNull("writeReason durchgereicht", snapshot.writeReason)
+            // window values (A2b diagnostics object) — all set after a real decode:
+            assertNotNull("lastDecodeMs passed through", snapshot.lastDecodeMs)
+            assertNotNull("hypLen passed through", snapshot.hypLen)
+            assertNotNull("currentLen passed through", snapshot.currentLen)
+            assertNotNull("committedLen passed through", snapshot.committedLen)
+            assertNotNull("writeReason passed through", snapshot.writeReason)
             assertTrue(
-                "writeReason ist geschlossener Code",
+                "writeReason is a closed code",
                 snapshot.writeReason in setOf("same", "w1", "w3d", "delta"),
             )
-            // Session-Zähler + letzte Schreibposition — mit Coordinator nie null:
-            assertNotNull("writeSame durchgereicht", snapshot.writeSame)
-            assertNotNull("writeW1 durchgereicht", snapshot.writeW1)
-            assertNotNull("writeW3d durchgereicht", snapshot.writeW3d)
+            // session counters + last write position — never null with a coordinator:
+            assertNotNull("writeSame passed through", snapshot.writeSame)
+            assertNotNull("writeW1 passed through", snapshot.writeW1)
+            assertNotNull("writeW3d passed through", snapshot.writeW3d)
             assertTrue("writeDelta >= 1", snapshot.writeDelta!! >= 1)
-            assertNotNull("lastWriteAudioS durchgereicht", snapshot.lastWriteAudioS)
-            assertTrue("nach DELTA >= 0", snapshot.lastWriteAudioS!! >= 0.0)
+            assertNotNull("lastWriteAudioS passed through", snapshot.lastWriteAudioS)
+            assertTrue("after DELTA >= 0", snapshot.lastWriteAudioS!! >= 0.0)
 
-            // Export zeigt Zahlen/Codes statt Striche (Release-wirksam, main-source):
+            // export shows numbers/codes instead of dashes (effective in release, main source):
             val out = DebugInfoFormatter.format(snapshot)
             assertTrue(Regex("write_delta: \\d+").containsMatchIn(out))
             assertTrue(Regex("hyp_len: \\d+").containsMatchIn(out))

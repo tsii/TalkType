@@ -13,22 +13,22 @@ import org.junit.Test
 import java.io.File
 
 /**
- * A5 (v0.1.34): Sitzungs-Reset der Sink-Eigentumsspanne — die ownSpan-Leiche
- * zwischen Diktat-Sitzungen (Toggle-W1-Fall).
+ * A5 (v0.1.34): session reset of the sink ownership span — the ownSpan corpse
+ * between dictation sessions (toggle-W1 case).
  *
- * Root-Cause (Debugger conv-6cf9903c): [InputConnectionSink.ownSpan] überlebt
- * das Sitzungsende — Coordinator+Sink werden über Sitzungen hinweg
- * wiederverwendet (VoiceKeyboardService), `DictationController.start()` setzt
- * nur Typer/Tracker zurück. Ab der ZWEITEN Hypothese der Folgesitzung
- * scheitert `DeltaTyper.ownershipVerified` (sink.ownLength() ≠
- * currentText.length) ⇒ W1, nichts landet mehr im Editor.
+ * Root cause (debugger conv-6cf9903c): [InputConnectionSink.ownSpan] survives
+ * the session end — coordinator+sink are reused across sessions
+ * (VoiceKeyboardService), `DictationController.start()` resets only
+ * typer/tracker. From the SECOND hypothesis of the following session on,
+ * `DeltaTyper.ownershipVerified` fails (sink.ownLength() ≠
+ * currentText.length) ⇒ W1, nothing reaches the editor anymore.
  *
- * Testumgebung: ECHTER [InputConnectionSink] über eine Fake-[InputConnection]
- * (JVM, Direkt-Executor) — genau wie die Produktion, nur ohne Looper.
+ * Test environment: REAL [InputConnectionSink] over a fake [InputConnection]
+ * (JVM, direct executor) — exactly like production, just without a Looper.
  */
 class InputConnectionSinkSessionTest {
 
-    /** Fake-Engine: liefert konfigurierbaren Text für die aktuelle Session. */
+    /** Fake engine: returns configurable text for the current session. */
     private class FakeEngine : AsrEngine {
         var nextText = ""
         override fun load(modelDir: File) {}
@@ -49,9 +49,9 @@ class InputConnectionSinkSessionTest {
     }
 
     /**
-     * Fake-InputConnection (StringBuilder) für JVM-Unit-Tests — Muster wie der
-     * instrumentierte Fake (DictationPipelineTest), hier minimal: zählt
-     * delete/commit-Kontakte, verbotene Operationen (setComposingText) brechen hart.
+     * Fake InputConnection (StringBuilder) for JVM unit tests — pattern like the
+     * instrumented fake (DictationPipelineTest), minimal here: counts
+     * delete/commit contacts, forbidden operations (setComposingText) abort hard.
      */
     private class FakeInputConnection(initial: String = "") : InputConnection {
         private val buf = StringBuilder(initial)
@@ -61,7 +61,7 @@ class InputConnectionSinkSessionTest {
             private set
         val text: String get() = buf.toString()
 
-        /** Simuliert Editor-Austausch/Nutzereingabe zwischen Sitzungen. */
+        /** Simulates an editor swap/user input between sessions. */
         fun replaceAll(newText: String) {
             buf.setLength(0)
             buf.append(newText)
@@ -93,7 +93,7 @@ class InputConnectionSinkSessionTest {
         override fun setComposingText(text: CharSequence, newCursorPosition: Int): Boolean =
             error("setComposingText verboten (DESIGN §6)")
 
-        // ---- restliche Interface-Member: neutrale Defaults ----
+        // ---- remaining interface members: neutral defaults ----
         override fun getSelectedText(flags: Int): CharSequence? = ""
         override fun setSelection(start: Int, end: Int): Boolean = true
         override fun performEditorAction(actionCode: Int): Boolean = true
@@ -123,9 +123,10 @@ class InputConnectionSinkSessionTest {
     private fun seconds(n: Int): PcmBlock = PcmBlock(0, 0, ShortArray(n * 16_000))
 
     /**
-     * REVIEW_A5_W P0-Gegenprobe: Produktions-Wrap CountingSink(EditorSink) wie
-     * VoiceKeyboardService (:1008/:1081). Ohne resetSession()-Delegation im Wrapper
-     * wäre der Interface-Default ein No-op und die Leiche bliebe in Produktion.
+     * REVIEW_A5_W P0 counter-check: production wrap CountingSink(EditorSink) like
+     * VoiceKeyboardService (:1008/:1081). Without resetSession() delegation in
+     * the wrapper the interface default would be a no-op and the corpse would
+     * survive in production.
      */
     private class CountingWrapper(private val inner: de.voicekeyboard.editor.EditorSink) :
         de.voicekeyboard.editor.EditorSink {
@@ -141,87 +142,87 @@ class InputConnectionSinkSessionTest {
         override fun resetSession() = inner.resetSession()
     }
 
-    // --- A5 (a): Sitzungsübergabe-Reproduktion — ownSpan-Leiche ⇒ W1 ---
+    // --- A5 (a): session handover reproduction — ownSpan corpse ⇒ W1 ---
 
-    @Test fun `Sitzungswechsel resettet die Sink-Spanne und Sitzung 2 schreibt Delta statt W1`() {
+    @Test fun `session switch resets the sink span and session 2 writes a delta instead of W1`() {
         val ic = FakeInputConnection()
         val sink = InputConnectionSink({ ic }, InputConnectionSink.DIRECT_EXECUTOR)
         val engine = FakeEngine()
         val controller = DictationController(engine, sink)
 
-        // --- Sitzung 1: eigene Spanne > 0 hinterlassen ---
+        // --- session 1: leave behind an own span > 0 ---
         assertTrue(controller.start())
         engine.nextText = "Hallo"
         runBlocking { controller.feedAudio(seconds(2)) }
-        assertEquals("Sitzung 1 hat in den Editor geschrieben", "Hallo", ic.text)
+        assertEquals("session 1 wrote into the editor", "Hallo", ic.text)
         assertEquals(5, sink.ownLength())
         assertEquals("Hallo", sink.ownText())
         runBlocking { controller.stop() }
 
-        // --- Sitzungswechsel: dieselbe Sink-Instanz, NEUE Diktation ---
+        // --- session switch: the same sink instance, NEW dictation ---
         assertTrue(controller.start())
-        // A5: die Spanne der Vorgänger-Sitzung ist NICHT mehr unsere —
-        // Besitz vererbt sich nicht über die Sitzungsgrenze.
-        assertEquals("ownLength nach Sitzungswechsel", 0, sink.ownLength())
-        assertEquals("ownText nach Sitzungswechsel", "", sink.ownText())
+        // A5: the span of the previous session is NOT ours anymore —
+        // ownership does not carry over the session boundary.
+        assertEquals("ownLength after the session switch", 0, sink.ownLength())
+        assertEquals("ownText after the session switch", "", sink.ownText())
 
-        // --- Sitzung 2, erste Hypothese: DELTA, Text landet im Sink ---
+        // --- session 2, first hypothesis: DELTA, the text lands in the sink ---
         engine.nextText = "Welt"
         runBlocking { controller.feedAudio(seconds(2)) }
         assertEquals("delta", controller.writeReason)
         assertEquals("Welt", sink.ownText())
 
-        // --- Sitzung 2, Revision der eigenen Spanne: der Toggle-W1-Fall.
-        // Mit ownSpan-Leiche scheitert DeltaTyper.ownershipVerified
-        // (ownLength 9 ≠ currentText 4) ⇒ W1; mit Reset ⇒ DELTA. ---
+        // --- session 2, revision of the own span: the toggle-W1 case.
+        // With the ownSpan corpse DeltaTyper.ownershipVerified fails
+        // (ownLength 9 ≠ currentText 4) ⇒ W1; with the reset ⇒ DELTA. ---
         engine.nextText = "Welt mehr"
         runBlocking { controller.feedAudio(seconds(1)) }
-        assertEquals("kein W1 in Sitzung 2 (ownSpan-Leiche)", 0, controller.writeW1Count)
+        assertEquals("no W1 in session 2 (ownSpan corpse)", 0, controller.writeW1Count)
         assertEquals("delta", controller.writeReason)
-        assertEquals("Sitzung-1-Text bleibt, Sitzung 2 schreibt", "HalloWelt mehr", ic.text)
+        assertEquals("session-1 text stays, session 2 writes", "HalloWelt mehr", ic.text)
         assertEquals("Welt mehr", sink.ownText())
         runBlocking { controller.stop() }
     }
 
-    // --- A5 (b): Der Reset ist nicht-nachträglich — nach resetSession() wendet
-    // apply KEINE Längen aus der ALTEN Spanne mehr an: ein verspäteter Delta-Rest
-    // der Vorgänger-Sitzung darf den Fremd-Editor nicht mehr anfassen. ---
+    // --- A5 (b): the reset is not retroactive — after resetSession() apply
+    // no longer uses lengths from the OLD span: a late delta rest of the
+    // previous session must not touch the foreign editor anymore. ---
 
-    @Test fun `resetSession ist nicht nachtraeglich - Laengen der alten Spanne aendern den Fremdeditor nicht`() {
+    @Test fun `resetSession is not retroactive - old span lengths do not modify the foreign editor`() {
         val ic = FakeInputConnection()
         val sink = InputConnectionSink({ ic }, InputConnectionSink.DIRECT_EXECUTOR)
 
-        // Sitzung-1-Rest: eigene Spanne der Länge 5 hinterlassen
+        // session-1 rest: leave behind an own span of length 5
         sink.replaceBeforeCursor(0, "Hallo")
         assertEquals(5, sink.ownLength())
         assertEquals(1, ic.commits)
 
-        // Sitzungswechsel: die alte Spanne ist NICHT mehr unsere …
+        // session switch: the old span is NOT ours anymore …
         sink.resetSession()
         assertEquals(0, sink.ownLength())
         assertEquals("", sink.ownText())
 
-        // … und der Editor ist inzwischen FREMD (App-Austausch/Nutzereingabe):
+        // … and the editor has become FOREIGN in the meantime (app swap/user input):
         ic.replaceAll("Fremdtext")
 
-        // Verspäteter Delta-Rest der ALTEN Sitzung: replaceLength 5 kommt aus der
-        // Leiche. Der Aufruf darf den Fremd-Editor NICHT mehr verändern — kein
-        // deleteSurroundingText, kein commitText (außerhalb der eigenen Spanne
-        // gibt es keinen Besitz; der Edit scheitert kontrolliert VOR jeder
-        // Editorberührung).
+        // Late delta rest of the OLD session: replaceLength 5 comes from the
+        // corpse. The call must NOT modify the foreign editor anymore — no
+        // deleteSurroundingText, no commitText (outside our own span there is
+        // no ownership; the edit fails in a controlled way BEFORE touching
+        // the editor).
         val outcome = runCatching { sink.replaceBeforeCursor(5, "X") }
-        assertTrue("Anwendung alter Spannlänge muss fehlschlagen", outcome.isFailure)
+        assertTrue("applying the old span length must fail", outcome.isFailure)
         assertEquals("Fremd-Editor unangetastet", "Fremdtext", ic.text)
-        assertEquals("kein deleteSurroundingText am Fremd-Editor", 0, ic.deletes)
-        assertEquals("kein zusaetzlicher commit am Fremd-Editor", 1, ic.commits)
+        assertEquals("no deleteSurroundingText on the foreign editor", 0, ic.deletes)
+        assertEquals("no additional commit on the foreign editor", 1, ic.commits)
     }
 
-    // --- REVIEW_A5_W P0-Gegenprobe: dieselbe Sitzungsübergabe durch den
-    // Produktions-Wrap (CountingWrapper wie VoiceKeyboardService.CountingSink).
-    // Der Wrapper MUSS resetSession() an den inneren Sink durchreichen — sonst
-    // ist es in Produktion ein Interface-No-op und die Leiche überlebt. ---
+    // --- REVIEW_A5_W P0 counter-check: the same session handover through the
+    // production wrap (CountingWrapper like VoiceKeyboardService.CountingSink).
+    // The wrapper MUST pass resetSession() through to the inner sink —
+    // otherwise it is an interface no-op in production and the corpse survives. ---
 
-    @Test fun `produktions-wrap CountingSink delegiert Sitzungsreset an den inneren Sink`() {
+    @Test fun `production wrap CountingSink delegates the session reset to the inner sink`() {
         val ic = FakeInputConnection()
         val inner = InputConnectionSink({ ic }, InputConnectionSink.DIRECT_EXECUTOR)
         val wrapped = CountingWrapper(inner)
@@ -235,12 +236,12 @@ class InputConnectionSinkSessionTest {
         runBlocking { controller.stop() }
 
         assertTrue(controller.start())
-        assertEquals("Wrapper-Reicht Sitzungsreset durch (eigentlicher P0-Beweis)", 0, wrapped.ownLength())
+        assertEquals("the wrapper passes the session reset through (the actual P0 proof)", 0, wrapped.ownLength())
         engine.nextText = "Welt"
         runBlocking { controller.feedAudio(seconds(2)) }
         assertEquals("delta", controller.writeReason)
         assertEquals("Welt", wrapped.ownText())
-        assertEquals("Wrapper zählt Commits unveraendert", 2, wrapped.commits)
+        assertEquals("wrapper counts commits unchanged", 2, wrapped.commits)
         runBlocking { controller.stop() }
     }
 }

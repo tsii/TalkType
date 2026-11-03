@@ -1,34 +1,34 @@
 package de.voicekeyboard.ime
 
 /**
- * F13c/P2-3 (docs/REVIEW_F13_STATUSBAR.md): Verdrahtungsnaht der Statuszeile.
+ * F13c/P2-3 (docs/REVIEW_F13_STATUSBAR.md): wiring seam of the status row.
  *
- * B1 („starte Aufnahme…" wurde sticky) war ein NAHTFEHLER: die falsche Stelle
- * wählte den Kanal. Diese Tabelle macht die Naht explizit und JVM-testbar
- * (StatusRoutingTest) — der Service ruft [route] an jeder betroffenen Stelle:
+ * B1 („starte Aufnahme…“ became sticky) was a SEAM FAILURE: the wrong place
+ * chose the channel. This table makes the seam explicit and JVM-testable
+ * (StatusRoutingTest) — the service calls [route] at every affected place:
  *
- *  - [StatusEvent.Starting] (Startmeldung)      → TRANSIENT (überholt bei
- *    RECORDING/FINALIZING/neuerem Fehler; darf kein stickyError setzen).
- *  - [StatusEvent.Hint] (Hinweis/Bestätigung)   → TRANSIENT (Anzeige bis zum
- *    nächsten updateStatus; drückt keine spätere Fehler-/Aufnahmemeldung).
- *  - [StatusEvent.Error] (blockierender Fehler) → STICKY (R-2: bleibt bis zur
- *    nächsten bewussten Aktion bzw. bis ein abgeschlossener Erfolg sie löst).
+ *  - [StatusEvent.Starting] (start message)     → TRANSIENT (overtaken on
+ *    RECORDING/FINALIZING/newer error; must not set a stickyError).
+ *  - [StatusEvent.Hint] (hint/confirmation)     → TRANSIENT (display until the
+ *    next updateStatus; never suppresses a later error/recording message).
+ *  - [StatusEvent.Error] (blocking error)       → STICKY (R-2: stays until
+ *    the next deliberate action or until a completed success resolves it).
  *
- * Ein Rückfall (Starttext/Hinweis wieder über den Sticky-Kanal) macht den
- * StatusRoutingTest rot, ohne dass ein Gerät laufen muss.
+ * A regression (start text/hint again via the sticky channel) turns the
+ * StatusRoutingTest red without a device having to run.
  */
 internal enum class StatusChannel { TRANSIENT, STICKY }
 
 internal sealed class StatusEvent {
     abstract val text: String
 
-    /** Transiente Startmeldung (z. B. „Starte Aufnahme…"). */
+    /** Transient start message (e. g. „Starte Aufnahme…"). */
     data class Starting(override val text: String) : StatusEvent()
 
-    /** Hinweis/Bestätigung ohne Blockadecharakter (z. B. Diagnose kopiert). */
+    /** Hint/confirmation without a blocking character (e. g. diagnosis copied). */
     data class Hint(override val text: String) : StatusEvent()
 
-    /** Blockierender Fehler (R-2): bleibt sticky bis zur nächsten Aktion. */
+    /** Blocking error (R-2): stays sticky until the next action. */
     data class Error(override val text: String) : StatusEvent()
 }
 

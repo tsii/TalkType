@@ -9,22 +9,22 @@ import android.view.View
 import org.json.JSONObject
 
 /**
- * Emoji-Panel (E9.4, M8b-2/M8b-3): Overlay ÜBER der Tastatur innerhalb des
- * IME-Fensters (kein eigenes Window — Fokus/Editor bleiben unverändert, E3).
+ * Emoji panel (E9.4, M8b-2/M8b-3): overlay ABOVE the keyboard inside the
+ * IME window (no own window — focus/editor stay unchanged, E3).
  *
  * M8b-3:
- *  - E-01: Das Panel zeichnet ZUERST einen deckenden Hintergrund über seine
- *    gesamte eigene Fläche; darunter liegende Sichten (die Tastatur) sind nie
- *    sichtbar. INVARIANTE: erst Hintergrund, dann Glyphen.
- *  - E-02: Die Panel-Höhe wird vom Container auf die Tastaturhöhe begrenzt;
- *    die Zellgröße wird aus der VERFÜGBAREN Höhe berechnet (nicht aus fester
- *    Zeilenhöhe). Passen 6 Zeilen nicht, rendert das Panel 5 Zeilen × 8 = 40
- *    pro Seite und blättert innerhalb der Kategorie — die Nav-Zeile liegt
- *    INNERHALB der Panelfläche, nichts überragt die Tastatur.
+ *  - E-01: the panel draws an opaque background FIRST over its
+ *    entire own surface; views underneath (the keyboard) are never
+ *    visible. INVARIANT: background first, then glyphs.
+ *  - E-02: the panel height is limited by the container to the keyboard height;
+ *    the cell size is computed from the AVAILABLE height (not from a fixed
+ *    row height). If 6 rows do not fit, the panel renders 5 rows × 8 = 40
+ *    per side and pages within the category — the nav row lies
+ *    WITHIN the panel surface, nothing protrudes over the keyboard.
  *
- * Einfügen ausschließlich über den bestehenden Schreibweg
+ * Insertion exclusively over the existing writing path
  * ([Listener.onEmojiSelected] → VoiceKeyboardService.onTextInput → commitText).
- * Die Seiten-/Index-Logik ist als reine JVM-Funktion in [EmojiPages] extrahiert.
+ * The page/index logic is extracted as a pure JVM function in [EmojiPages].
  */
 class EmojiPanelView @JvmOverloads constructor(
     context: Context,
@@ -38,22 +38,22 @@ class EmojiPanelView @JvmOverloads constructor(
 
     var listener: Listener? = null
 
-    /** Rohe Kategorie-Definitionen (id, labelKey, emoji-Liste) — reine Daten. */
+    /** Raw category definitions (id, labelKey, emoji list) — pure data. */
     data class EmojiCategory(val id: String, val labelKey: String, val emoji: List<String>)
 
     private val density = resources.displayMetrics.density
-    private val cellMinPx = 44f * density // Trefferhoehe >= 44dp (E9.4)
-    private val navHeightPx = 40f * density // Blätterzeile (E10.2-Hoehe)
-    private val navBottomPaddingPx = 8f * density // Abstand innerhalb der EIGENEN Flaeche (V2)
+    private val cellMinPx = 44f * density // hit height >= 44 dp (E9.4)
+    private val navHeightPx = 40f * density // paging row (E10.2 height)
+    private val navBottomPaddingPx = 8f * density // padding inside the OWN surface (V2)
 
-    // S4 — Stock-Tokens (DESIGN_STOCK_LOOK §1): dieselbe Palette wie Tastatur/Leiste,
-    // hell/dunkel nach System-Nachtmodus; keine eigenen Farbwerte mehr. Größen und
-    // Zeilenzahl des Rasters bleiben UNVERÄNDERT (nur Farben getauscht).
+    // S4 — stock tokens (DESIGN_STOCK_LOOK §1): the same palette as keyboard/bar,
+    // light/dark by system night mode; no own color values anymore. Sizes and
+    // row counts of the grid stay UNCHANGED (only colors swapped).
     private val palette = KeyboardTheme.palette(
         isDark = (resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK) ==
             android.content.res.Configuration.UI_MODE_NIGHT_YES,
     )
-    private val bgPaint = Paint().apply { color = palette.background } // deckend (E-01)
+    private val bgPaint = Paint().apply { color = palette.background } // opaque (E-01)
     private val linePaint = Paint().apply {
         color = palette.separator
         strokeWidth = 1f * density
@@ -67,9 +67,9 @@ class EmojiPanelView @JvmOverloads constructor(
 
     private var categories: List<EmojiCategory> = emptyList()
     private var categoryIndex = 0
-    private var pageInCategory = 0 // Seitencursor innerhalb der Kategorie (E-02-Fallback)
+    private var pageInCategory = 0 // page cursor within the category (E-02 fallback)
 
-    /** Aktuelle Raster-Zeilenzahl (6 oder weniger, aus der Hoehe berechnet). */
+    /** Current grid row count (6 or fewer, computed from the height). */
     private var rows = EmojiPages.ROWS_PER_PAGE
     private var pageSize = EmojiPages.PAGE_SIZE
 
@@ -85,7 +85,7 @@ class EmojiPanelView @JvmOverloads constructor(
         invalidate()
     }
 
-    /** Laedt das JSON-Asset (schemaVersion 1, categories[].{id,labelKey,emoji}). */
+    /** Loads the JSON asset (schemaVersion 1, categories[].{id,labelKey,emoji}). */
     fun loadFromJson(json: String) {
         val root = JSONObject(json)
         require(root.optInt("schemaVersion") == 1) { "Unbekannte emoji-Asset schemaVersion" }
@@ -109,10 +109,10 @@ class EmojiPanelView @JvmOverloads constructor(
 
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
         val w = MeasureSpec.getSize(widthMeasureSpec)
-        // V2: respektiert das vom Layout-Manager (LinearLayout, weight=1) uebergebene
-        // Hoehenlimit — resolveSize klemmt auf das Angebot, kein Aufblaehen darueber
-        // (ein Stack-Kind darf die IME-Root nie vergroessern). Zu wenig Flaeche
-        // reduziert die ZEILENZAHL (onSizeChanged), nie die Hoehe.
+        // V2: respects the height limit passed by the layout manager (LinearLayout,
+        // weight=1) — resolveSize clamps to the offer, no inflating beyond it
+        // (a stack child must never enlarge the IME root). Too little space
+        // reduces the ROW COUNT (onSizeChanged), never the height.
         val h = resolveSize(suggestedMinimumHeight, heightMeasureSpec)
         setMeasuredDimension(w, h)
     }
@@ -120,9 +120,9 @@ class EmojiPanelView @JvmOverloads constructor(
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         super.onSizeChanged(w, h, oldw, oldh)
         cellW = w / EmojiPages.COLUMNS.toFloat()
-        // V2: Grid-Hoehe = EIGENE (vom Layout-Manager zugewiesene) Hoehe minus
-        // Blätterzeile minus Randabstand — coerceIn: nie mehr als vorhanden;
-        // bei zu wenig Platz sinkt die Zeilenzahl auf mindestens 1, die Hoehe nie.
+        // V2: grid height = OWN height (assigned by the layout manager) minus
+        // paging row minus edge padding — coerceIn: never more than available;
+        // with too little space the row count drops to at least 1, the height never.
         val gridHeight = (h - navHeightPx - navBottomPaddingPx)
             .coerceIn(cellMinPx, h.toFloat().coerceAtLeast(cellMinPx))
         rows = EmojiPages.rowsForHeight(gridHeight, cellMinPx)
@@ -134,12 +134,12 @@ class EmojiPanelView @JvmOverloads constructor(
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
-        // E-01-INVARIANTE: Panel zeichnet ZUERST einen deckenden Hintergrund über
-        // seine gesamte eigene Fläche; darunter liegende Sichten sind nie sichtbar.
-        // (E10.1: die unterste Tastenreihe liegt AUSSERHALB dieser Fläche und bleibt
-        // sichtbar/bedienbar — die Fläche endet an der Oberkante der untersten Reihe.)
+        // E-01 INVARIANT: the panel draws an opaque background FIRST over
+        // its entire own surface; views underneath are never visible.
+        // (E10.1: the bottom key row lies OUTSIDE this surface and stays
+        // visible/operable — the surface ends at the top edge of the bottom row.)
         canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), bgPaint)
-        // feine Trennlinie oben (zur Statuszeile)
+        // thin separator line at the top (toward the status row)
         canvas.drawLine(0f, 0f, width.toFloat(), 0f, linePaint)
         if (categories.isEmpty()) return
         val page = EmojiPages.pageOf(categories[categoryIndex].emoji, pageInCategory, pageSize)
@@ -152,15 +152,15 @@ class EmojiPanelView @JvmOverloads constructor(
                 (textPaint.ascent() + textPaint.descent()) / 2f
             canvas.drawText(emoji, cx, cy, textPaint)
         }
-        // Blätterzeile INNERHALB der eigenen Flaeche (V2): Kategoriename + Seite,
-        // Anzeige immer aus dem realisierten Raster (kein fester Wert).
-        // KEIN stiltes Dismiss mehr auf der Seitenmitte — Rueckweg ist ausschließlich
-        // der native Footer-Button (V2 §3).
+        // Paging row WITHIN the own surface (V2): category name + page,
+        // display always from the realized grid (no fixed value).
+        // NO silent dismiss on the page center anymore — the way back is exclusively
+        // the native footer button (V2 §3).
         val pagesInCat = EmojiPages.pagesInCategory(
             categories[categoryIndex].emoji.size, pageSize,
         )
         uiPaint.textSize = 15f * density
-        uiPaint.color = palette.textFunctional // S4: Funktionstext (Kategorie/Seite)
+        uiPaint.color = palette.textFunctional // S4: function text (category/page)
         val navY = gridBottom + (navHeightPx - navBottomPaddingPx) / 2f -
             (uiPaint.ascent() + uiPaint.descent()) / 2f
         val catLabel = categoryLabel(categories[categoryIndex].labelKey)
@@ -172,7 +172,7 @@ class EmojiPanelView @JvmOverloads constructor(
         canvas.drawText("›", width - 30f * density, navY, uiPaint)
     }
 
-    /** Kategoriename aus der String-Ressource (E10.2); Fallback: Key ohne Praefix. */
+    /** Category name from the string resource (E10.2); fallback: key without prefix. */
     private fun categoryLabel(labelKey: String): String = try {
         resources.getString(
             resources.getIdentifier(labelKey, "string", context.packageName),
@@ -189,7 +189,7 @@ class EmojiPanelView @JvmOverloads constructor(
                 val y = event.y
                 val mid = width / 2f
                 when {
-                    y < gridBottom -> { // Raster: Emoji einfuegen (bestehender Schreibweg)
+                    y < gridBottom -> { // grid: insert emoji (existing writing path)
                         val page = EmojiPages.pageOf(
                             categories[categoryIndex].emoji, pageInCategory, pageSize,
                         )
@@ -201,11 +201,11 @@ class EmojiPanelView @JvmOverloads constructor(
                         listener?.onEmojiSelected(emoji)
                         performClick()
                     }
-                    else -> { // Nav-Zeile: NUR Blättern (V2 §3: kein stiltes Dismiss)
+                    else -> { // nav row: ONLY paging (V2 §3: no silent dismiss)
                         when {
                             x < mid - 60f * density -> prevPage()
                             x > mid + 60f * density -> nextPage()
-                            else -> Unit // Mitte = reine Kategorie-/Seitenanzeige
+                            else -> Unit // center = pure category/page display
                         }
                     }
                 }
@@ -216,11 +216,11 @@ class EmojiPanelView @JvmOverloads constructor(
     }
 
     /**
-     * E10.4: Schließen des Panels (von aussen, z. B. 😊-Toggle oder Sprachwechsel).
-     * Kategorie bleibt erhalten, Seite → 1 (Seite 0 intern). Das Panel fasst die
-     * Ebenen des KeyboardView NICHT an — E10.1 macht die unterste Reihe sichtbar,
-     * der Zustand (activeLayerName/capsLock/Shift) bleibt von allein erhalten,
-     * KEINE savedLayer-Maschinerie nötig (explizite E10.1-Vereinfachung).
+     * E10.4: closing the panel (from outside, e. g. 😊 toggle or language switch).
+     * Category is kept, page → 1 (page 0 internally). The panel does not touch
+     * the layers of the KeyboardView — E10.1 makes the bottom row visible,
+     * the state (activeLayerName/capsLock/Shift) survives on its own,
+     * NO savedLayer machinery needed (explicit E10.1 simplification).
      */
     fun closeAndResetPage() {
         pageInCategory = 0
@@ -234,7 +234,7 @@ class EmojiPanelView @JvmOverloads constructor(
         val pages = EmojiPages.pagesInCategory(categories[categoryIndex].emoji.size, pageSize)
         if (pageInCategory + 1 < pages) {
             pageInCategory++
-        } else { // Wrap: naechste Kategorie, erste Seite
+        } else { // wrap: next category, first page
             categoryIndex = (categoryIndex + 1) % categories.size
             pageInCategory = 0
         }
@@ -244,7 +244,7 @@ class EmojiPanelView @JvmOverloads constructor(
     private fun prevPage() {
         if (pageInCategory > 0) {
             pageInCategory--
-        } else { // Wrap: vorige Kategorie, letzte Seite
+        } else { // wrap: previous category, last page
             categoryIndex = (categoryIndex - 1 + categories.size) % categories.size
             pageInCategory = EmojiPages.pagesInCategory(
                 categories[categoryIndex].emoji.size, pageSize,
@@ -260,8 +260,8 @@ class EmojiPanelView @JvmOverloads constructor(
 }
 
 /**
- * Reine JVM-Logik des Emoji-Rasters (E9.4): Seitenzuordnung, Index-Berechnung,
- * Zeilen-/Seitenaufteilung, Asset-Validierung. Keine Android-Typen.
+ * Pure JVM logic of the emoji grid (E9.4): page mapping, index computation,
+ * row/page split, asset validation. No Android types.
  */
 object EmojiPages {
 
@@ -272,21 +272,21 @@ object EmojiPages {
     const val TOTAL = CATEGORIES * PAGE_SIZE // 384
 
     /**
-     * E-02: Zeilenzahl fuer die verfuegbare Grid-Hoehe — hoechstens
-     * ROWS_PER_PAGE, mindestens 1; nie mehr Zeilen als die Hoehe zulaesst.
+     * E-02: row count for the available grid height — at most
+     * ROWS_PER_PAGE, at least 1; never more rows than the height allows.
      */
     fun rowsForHeight(gridHeightPx: Float, cellMinPx: Float): Int {
         if (gridHeightPx <= 0f || cellMinPx <= 0f) return 1
         return minOf(ROWS_PER_PAGE, (gridHeightPx / cellMinPx).toInt()).coerceAtLeast(1)
     }
 
-    /** Seitenzahl einer Kategorie bei gegebener Seitengroesse. */
+    /** Page count of a category at a given page size. */
     fun pagesInCategory(categorySize: Int, pageSize: Int): Int {
         if (pageSize <= 0) return 0
         return (categorySize + pageSize - 1) / pageSize
     }
 
-    /** Seite `page` der Kategorie (Reste am Ende mitgezogen). */
+    /** Page `page` of the category (remainders at the end included). */
     fun pageOf(category: List<String>, page: Int, pageSize: Int = PAGE_SIZE): List<String> {
         if (pageSize <= 0) return emptyList()
         val from = page * pageSize
@@ -295,8 +295,8 @@ object EmojiPages {
     }
 
     /**
-     * Raster-Index fuer Touch-Koordinaten; -1 wenn ausserhalb des Rasters.
-     * Zeile/Spalte aus Zellgroesse, Index = row * columns + col.
+     * Grid index for touch coordinates; -1 if outside the grid.
+     * Row/column from cell size, index = row * columns + col.
      */
     fun indexAt(
         x: Float, y: Float, cellW: Float, cellH: Float, gridTop: Float,
@@ -309,10 +309,10 @@ object EmojiPages {
         return row * columns + col
     }
 
-    /** UTF-16-Einheiten eines Glyphen (Surrogatpaar = 2, BMP = 1). */
+    /** UTF-16 units of a glyph (surrogate pair = 2, BMP = 1). */
     fun utf16Units(emoji: String): Int = emoji.length
 
-    /** Graphem-Cluster-Anzahl (v1-Asset: jedes Emoji ist genau 1 Cluster). */
+    /** Grapheme cluster count (v1 asset: every emoji is exactly 1 cluster). */
     fun graphemeCount(emoji: String): Int =
         java.text.BreakIterator.getCharacterInstance().let {
             it.setText(emoji)
@@ -327,7 +327,7 @@ object EmojiPages {
             count
         }
 
-    /** Validiert die geladenen Kategorien gegen E9.4 (wirft bei Verstoß). */
+    /** Validates the loaded categories against E9.4 (throws on violation). */
     fun validate(categories: List<EmojiCategoryData>) {
         require(categories.size == CATEGORIES) {
             "Erwartet genau $CATEGORIES Kategorien, gefunden: ${categories.size}"
@@ -344,14 +344,14 @@ object EmojiPages {
             }
             for (e in cat.emoji) {
                 require(e.isNotEmpty()) { "Leerer Emoji-Eintrag in '${cat.id}'" }
-                // E9.4: keine Hautton-Modifier (U+1F3FB..U+1F3FF), keine Flaggen (Regional Indicators)
+                // E9.4: no skin-tone modifiers (U+1F3FB..U+1F3FF), no flags (regional indicators)
                 require(!e.any { ch -> ch.code in 0x1F3FB..0x1F3FF }) {
                     "Hautton-Modifier in '$e' (${cat.id}) verboten (E9.4)"
                 }
                 require(e.none { ch -> ch.code in 0x1F1E6..0x1F1FF }) {
                     "Flaggen (Regional Indicator) in '$e' (${cat.id}) verboten (E9.4)"
                 }
-                // kein ZWJ (U+200D) — v1-Asset hat nur Einzel-/Paar-Codepoints
+                // no ZWJ (U+200D) — the v1 asset has only single/pair code points
                 require('\u200D' !in e) { "ZWJ-Sequenz '$e' (${cat.id}) verboten (E9.4)" }
             }
             all += cat.emoji
@@ -359,6 +359,6 @@ object EmojiPages {
         require(all.size == TOTAL) { "Gesamt ${all.size} != $TOTAL" }
     }
 
-    /** Reine Datenklasse (unabhaengig von View-Innenklasse, JVM-testbar). */
+    /** Pure data class (independent of the view inner class, JVM-testable). */
     data class EmojiCategoryData(val id: String, val labelKey: String, val emoji: List<String>)
 }

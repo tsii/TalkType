@@ -1,268 +1,291 @@
-# D-LAYOUT-V2 – kleinere Tastatur, Aktionspositionen und sichere Höhenkette
+# D-LAYOUT-V2 – smaller keyboard, action positions, and a safe height chain
 
-**Status: Teilfreigabe des Entwurfs; keine uneingeschränkte Geometrie-Absegnung.**
-Die vertikale Zielgeometrie und die vier gewünschten Aktionspositionen sind entschieden.
-Die zusätzliche harte Forderung **jede Touchfläche mindestens 48 × 48 dp** ist mit
-allen bestehenden Zeichen gleichzeitig auf einer Smartphone-Hochformatseite nicht
-vereinbar. Dies wird unten ausgerechnet, nicht durch überlappende Trefferflächen
-oder erfundene Gerätebreiten kaschiert. Kein Coder soll einen solchen Widerspruch
-als „48 dp erfüllt“ ausliefern.
+**Status: partial release of the design; no unrestricted geometry sign-off.**
+The vertical target geometry and the four desired action positions are decided.
+The additional hard requirement **every touch area at least 48 × 48 dp** is not
+reconcilable with all existing characters at the same time on a smartphone
+portrait side. This is calculated below, not papered over with overlapping hit
+areas or invented device widths. No coder should deliver such a contradiction as
+"48 dp satisfied".
 
-Nur dieses Dokument wird erstellt. Kein Build, kein adb, keine Quell-/Assetänderung.
-Gelesen: PLAN_AUDIO_UND_LAYOUT §2, LAYOUT_REQUIREMENTS vollständig, DESIGN §7,
-KeyboardView, ImeRootView, KeyboardModel sowie die Struktur sämtlicher 15 JSON-Assets.
-Zeilenangaben beziehen sich auf den gelesenen Stand, nicht auf spätere Paralleländerungen.
+Only this document is being created. No build, no adb, no source/asset change.
+Read: PLAN_AUDIO_UND_LAYOUT §2, LAYOUT_REQUIREMENTS in full, DESIGN §7,
+KeyboardView, ImeRootView, KeyboardModel, plus the structure of all 15 JSON
+assets. Line numbers refer to the read state, not to later parallel changes.
 
-## 1. Abschneiden beim zweiten Öffnen: Befund statt erfundener Gewissheit
+## 1. Cut-off on the second opening: finding instead of invented certainty
 
-### Nachweisbare Höhenkette
+### Verifiable height chain
 
-| Stelle | Gelesener Befund | Konsequenz |
+| Point | Read finding | Consequence |
 |---|---|---|
-| `app/src/main/java/de/voicekeyboard/keyboard/KeyboardView.kt:135–147` | `heightMeasureSpec` wird nicht ausgewertet; Höhe immer `max(240dp, model.heightPx)`. | Die View kann mehr Höhe melden als das aktuelle IME-Fenster anbietet; unten liegende Inhalte sind dann abschneidbar. **Das ist die konkrete vertragswidrige Stelle.** |
-| `KeyboardView.kt:141,146` | Rebuild-Guard vergleicht `lastMeasuredHeight` mit dem bisherigen eigenen `measuredHeight`, nicht mit dem neu angebotenen Platz. | Ein geändertes Elternbudget beim Wiederöffnen löst darüber keinen verlässlichen Rebuild aus. |
-| `KeyboardView.kt:108–120,156–160` | Modell erhält konstante 52-dp-Tasten und 6-dp-Reihenabstand; `onSizeChanged(w,h)` baut nur mit w neu. | Auch ein erfolgter Callback passt die Geometrie nicht an ein kleineres Höhenangebot an; allein „öfter rebuilden“ reicht nicht. |
-| `app/src/main/java/de/voicekeyboard/ime/ImeRootView.kt:53,65–76,105–112` | Statusinhalt 28 dp; vertikaler Stack mit WRAP_CONTENT-Keyboard und alternativem Emoji-Block; Root ist **FrameLayout**, nicht selbst LinearLayout. | Elternbudget muss Status und aktuell sichtbaren Inhalt gemeinsam berücksichtigen; Kimi beschreibt hier den Stack, nicht exakt den Root-Typ. |
-| `ImeRootView.kt:116–120` | Navigationsinsets werden als absolutes unteres Root-Padding gesetzt. | Platzbedarf besteht zusätzlich; die gelesene Zuweisung addiert **nicht** wiederholt auf paddingBottom. Doppelberücksichtigung im Elternfenster bleibt eine zu prüfende Hypothese. |
-| `app/src/main/java/de/voicekeyboard/ime/VoiceKeyboardService.kt:240–243` | `onStartInputView` ruft nur `updateStatus()` auf. | Hier wird kein expliziter neuer Sichtbarkeits-/Platzabgleich angestoßen; normale Android-Messungen können trotzdem stattfinden. |
+| `app/src/main/java/de/voicekeyboard/keyboard/KeyboardView.kt:135–147` | `heightMeasureSpec` is not evaluated; height always `max(240dp, model.heightPx)`. | The view can report more height than the current IME window offers; content lying below is then cuttable. **That is the concrete contract-violating spot.** |
+| `KeyboardView.kt:141,146` | The rebuild guard compares `lastMeasuredHeight` with the previous own `measuredHeight`, not with the newly offered space. | A changed parent budget on reopening does not reliably trigger a rebuild through it. |
+| `KeyboardView.kt:108–120,156–160` | The model receives constant 52-dp keys and a 6-dp row gap; `onSizeChanged(w,h)` rebuilds only with w. | Even a completed callback does not adapt the geometry to a smaller height offer; "rebuilding more often" alone is not enough. |
+| `app/src/main/java/de/voicekeyboard/ime/ImeRootView.kt:53,65–76,105–112` | Status content 28 dp; vertical stack with a WRAP_CONTENT keyboard and an alternative emoji block; root is a **FrameLayout**, not itself a LinearLayout. | The parent budget must account for status and currently visible content together; Kimi describes the stack here, not exactly the root type. |
+| `ImeRootView.kt:116–120` | Navigation insets are set as absolute bottom root padding. | The space requirement exists additionally; the read assignment does **not** repeatedly add to paddingBottom. Double accounting in the parent window remains a hypothesis to be checked. |
+| `app/src/main/java/de/voicekeyboard/ime/VoiceKeyboardService.kt:240–243` | `onStartInputView` only calls `updateStatus()`. | No explicit new visibility/space reconciliation is triggered here; normal Android measurements can still take place. |
 
-**Warum erst beim zweiten Mal? ANNAHME:** Das erste sichtbare Fenster bietet ausreichend
-Platz; beim Wiederöffnen ist das verfügbare Budget oder die Inset-Verrechnung anders.
-Die View ignoriert diesen Unterschied und bleibt inhaltsgroß. Das erklärt das Muster,
-beweist ohne Messung beider Aufbauten aber weder den auslösenden Systemzustand noch
-„exakt eine halbe Reihe“. Ein gleichbleibendes Elternbudget würde durch den Guard
-allein nicht plötzlich kleiner; diese Einschränkung ist wichtig.
+**Why only the second time? ASSUMPTION:** The first visible window offers
+sufficient space; on reopening, the available budget or the inset accounting is
+different. The view ignores this difference and stays content-sized. That
+explains the pattern, but without measuring both constructions it proves neither
+the triggering system state nor "exactly half a row". An unchanged parent budget
+would not suddenly become smaller through the guard alone; this restriction is
+important.
 
-Nicht gefunden: ein `setKeyboardView`-Größensummierer, kumulatives Padding oder eine
-StatusRow-VISIBLE/GONE-Umschaltung im gelesenen Pfad. Diese Ursachen werden deshalb
-**nicht** als erwiesen behauptet. Kimi §2.1 ist eine plausible Arbeitsdiagnose,
-kein bereits erbrachter Zweitöffnungs-Messtest.
+Not found: a `setKeyboardView` size summation, cumulative padding, or a
+StatusRow VISIBLE/GONE switch in the read path. These causes are therefore
+**not** claimed as proven. Kimi §2.1 is a plausible working diagnosis, not an
+already-delivered second-opening measurement test.
 
-### Verbindliche Forderung
+### Binding requirement
 
-**„Die Höhe wird bei jedem Sichtbarwerden aus dem aktuellen Zustand neu bestimmt.“**
-Dazu gehören aktuelle verfügbare Breite/Höhe, tatsächliche Insets, Statussichtbarkeit,
-aktive Ebene/Zeilenzahl und Tastatur-/Emoji-Modus. Kein Wert vom ersten Öffnen ist
-allein gültige Quelle; kein alter Rect-Satz darf nach geändertem Angebot weiterleben.
+**"The height is redetermined from the current state every time it becomes
+visible."** This includes the current available width/height, actual insets,
+status visibility, active layer/row count, and keyboard/emoji mode. No value
+from the first opening is the solely valid source; no old rect set may survive
+after a changed offer.
 
-- Root entscheidet **einmal**, welcher Platz nach Status und korrekt berücksichtigter
-  Navigation für das sichtbare Inhaltskind verbleibt; kein doppelter Insetabzug.
-- Keyboard-Messung respektiert EXACTLY/AT_MOST; Modellhöhe, Viewhöhe und sichtbare
-  Clipgrenze werden konsistent. Nur `resolveSize` ohne passenden Modellaufbau wäre falsch.
-- Rebuild-Schlüssel sind tatsächliche Breite, Inhaltsbudget, Ebene/Rows und Dichte;
-  kein Selbstvergleich mit einer vorherigen eigenen Messung.
-- Insets, Moduswechsel, Feldwechsel und erneutes Sichtbarwerden veranlassen einen
-  neuen Layoutabgleich; keine LayoutParams-Margenrechnung in `onLayout`.
-- Reicht die Fläche nicht für die Mindestziele, ist dies ein expliziter Fit-Konflikt;
-  nicht heimlich unter 48 dp skalieren und nicht unten clippen. Kein künstliches
-  „Erfolg“-Layout, solange die letzte Taste nicht vollständig im sichtbaren Bereich liegt.
+- The root decides **once** which space remains for the visible content child
+  after status and correctly accounted navigation; no double inset deduction.
+- The keyboard measurement respects EXACTLY/AT_MOST; model height, view height,
+  and visible clip bounds become consistent. Just `resolveSize` without a
+  matching model construction would be wrong.
+- Rebuild keys are the actual width, content budget, layer/rows, and density;
+  no self-comparison with a previous own measurement.
+- Insets, mode switches, field switches, and becoming visible again trigger a
+  new layout reconciliation; no LayoutParams margin arithmetic in `onLayout`.
+- If the area does not suffice for the minimum targets, that is an explicit fit
+  conflict; do not secretly scale below 48 dp and do not clip at the bottom. No
+  artificial "success" layout as long as the last key is not completely inside
+  the visible area.
 
-## 2. Größenentscheidung: aktuelle Werte und vertikales Ziel
+## 2. Size decision: current values and vertical target
 
-Der gelesene Istwert ist **52 dp**, nicht 62 dp: `KeyboardView.kt:42–44`.
-Vier Reihen ergeben 4×52 + 3×6 = 226 dp Modellinhalt, durch das Minimum jedoch
-**240 dp Viewhöhe**; plus nominal 28 dp Status = **268 dp** ohne Systemnavigation.
-PT base/shift hat fünf Reihen: 5×52 + 4×6 = 284 dp + 28 = **312 dp**.
+The read actual value is **52 dp**, not 62 dp: `KeyboardView.kt:42–44`.
+Four rows yield 4×52 + 3×6 = 226 dp model content, but **240 dp view height**
+due to the minimum; plus nominally 28 dp status = **268 dp** without system
+navigation. PT base/shift has five rows: 5×52 + 4×6 = 284 dp + 28 = **312 dp**.
 
-**Neues Ziel:** normale Tastenhöhe **48 dp**, Fußreihe mit Mic **52 dp**,
-Reihenlücken **2 dp**, nicht-interaktive Statuszeile nominal **24 dp**.
-Touchfläche und Zeichnung behalten dieselbe Geometrie; keine 44-dp-Zeilen mit nur
-behaupteten 48-dp-Zielen. 48 dp ist die verlangte Untergrenze und das Minimum für
-Daumenbedienung; die häufig gehaltene Mic-Taste wird absichtlich etwas höher/breiter.
+**New target:** normal key height **48 dp**, footer with mic **52 dp**,
+row gaps **2 dp**, non-interactive status row nominally **24 dp**.
+Touch area and drawing keep the same geometry; no 44-dp rows with merely claimed
+48-dp targets. 48 dp is the required lower bound and the minimum for thumb
+operation; the frequently held mic key is deliberately somewhat taller/wider.
 
-| Fall | Tasteninhalt | Mit 24-dp-Status, ohne Systemnavigation | Änderung |
+| Case | Key content | With 24-dp status, without system navigation | Change |
 |---|---|---|---|
-| Vier Reihen | 3×48 + 52 + 3×2 = **202 dp** | **226 dp** | **268 → 226 dp**, 42 dp bzw. rund 16 % weniger |
-| Fünf Reihen, PT base/shift | 4×48 + 52 + 4×2 = **252 dp** | **276 dp** | **312 → 276 dp**, 36 dp bzw. rund 12 % weniger |
+| Four rows | 3×48 + 52 + 3×2 = **202 dp** | **226 dp** | **268 → 226 dp**, 42 dp or about 16 % less |
+| Five rows, PT base/shift | 4×48 + 52 + 4×2 = **252 dp** | **276 dp** | **312 → 276 dp**, 36 dp or about 12 % less |
 
-Die Navigation wird auf beiden Seiten separat mit demselben Verfahren betrachtet;
-ein weggefallenes Inset zählt nicht als Tastaturverkleinerung. Große Systemschrift
-kann die Statuszeile höher benötigen; dann tatsächliche Höhe ausweisen, nicht Text
-abschneiden. Die Zielwerte sind Designmaße, noch keine Pixel-Gerätemessung.
-KONZEPT-Treue: PTT halten/loslassen, Idempotenz und entkoppelte Aufnahme bleiben
-unverändert; die kleinere Darstellung ändert keine ASR-/Commitregel.
+Navigation is considered separately on both sides with the same method; a
+dropped inset does not count as a keyboard reduction. Large system fonts can
+make the status row need more height; then report the actual height, do not cut
+text. The target values are design measures, not yet a pixel device measurement.
+Concept fidelity: PTT hold/release, idempotency, and decoupled recording remain
+unchanged; the smaller display changes no ASR/commit rule.
 
-## 3. Reihen und Breiten – harte Machbarkeitsgrenze
+## 3. Rows and widths – hard feasibility limit
 
-W bezeichnet die **tatsächlich nutzbare Breite in dp**, nach Seiteninsets.
-Feste Ziele mindestens 48 dp breit; verbleibende Zeichentasten gleichmäßig verteilen,
-jedoch ebenfalls niemals unter 48 dp. Prozentwerte werden deshalb aus W abgeleitet,
-nicht als geratenes „width 1.5“ ohne Bezug zur Displaybreite behauptet.
+W denotes the **actually usable width in dp**, after side insets. Fixed targets
+at least 48 dp wide; remaining character keys distributed evenly, but likewise
+never below 48 dp. Percentages are therefore derived from W, not asserted as a
+guessed "width 1.5" without a relation to the display width.
 
-| Reihe | Reihenfolge / Inhalt | Breitenvorgabe in % von W | Höhe |
+| Row | Sequence / content | Width specification in % of W | Height |
 |---|---|---|---|
-| Oberste Zeichenreihe | Debug-Teilen, Schutzlücke, bisherige erste Zeichenreihe vollständig, Backspace | Teilen und Backspace je `100×48/W %`; Schutzlücke `100×8/W %`; Zeichen teilen den Rest nach den übrigen 2-dp-Lücken | 48 dp |
-| Zweite Zeichenreihe | Bisherige Zeichen vollständig, kein neuer Backspace mitten im Block | Gleichanteile des verfügbaren Zeilenrests, je mindestens `100×48/W %` | 48 dp |
-| Letzte Zeichenreihe vor Fußreihe | Shift, bisherige Zeichen, **Enter an bisheriger Backspace-Stelle** | Shift/Enter je mindestens `100×48/W %`; Zeichen teilen Rest | 48 dp |
-| Zusätzliche PT-Akzentreihe | Erhalten, einschließlich ihrer Buchstaben; Shift/Enter auf der letzten Zeichenreihe | Gleiche Mindestregel, keine Akzente entfernen | 48 dp |
-| Fußreihe | ?123/ABC, 🌐, 😊, Space, ‹, ›, **Mic ganz rechts** | Die fünf kleinen Aktionen je `100×48/W %`; Mic `100×96/W %`; Space `100×(W−348)/W %`; sechs Lücken à 2 dp | 52 dp |
+| Topmost character row | Share, protection gap, previous first character row complete, backspace | Share and backspace each `100×48/W %`; protection gap `100×8/W %`; characters divide the remainder after the other 2-dp gaps | 48 dp |
+| Second character row | Previous characters complete, no new backspace in the middle of the block | Equal shares of the available row remainder, each at least `100×48/W %` | 48 dp |
+| Last character row before the footer | Shift, previous characters, **enter at the previous backspace position** | Shift/enter each at least `100×48/W %`; characters divide the remainder | 48 dp |
+| Additional PT accent row | Preserved, including its letters; shift/enter on the last character row | Same minimum rule, remove no accents | 48 dp |
+| Footer | ?123/ABC, 🌐, 😊, space, ‹, ›, **mic at the far right** | The five small actions each `100×48/W %`; mic `100×96/W %`; space `100×(W−348)/W %`; six gaps of 2 dp each | 52 dp |
 
-Fußreihe: 5×48 + 96 + 6×2 = 348 dp ohne Space; Space erhält den Rest und benötigt
-mindestens 48 dp. **Mindestbreite Fußreihe 396 dp.** Rechenbeispiel W=411 dp:
-kleine Aktionen je 11,68 %, Mic 23,36 %, Space 15,33 %, Lücken zusammen 2,92 %.
-Damit bleibt die Space-Taste erreichbar, aber bewusst schmaler als bisher; für lange
-Wörter gilt die bestehende SPACE-Label-Kompaktregel statt abgeschnittener Beschriftung.
+Footer: 5×48 + 96 + 6×2 = 348 dp without space; space gets the remainder and
+needs at least 48 dp. **Minimum footer width 396 dp.** Worked example W=411 dp:
+small actions each 11.68 %, mic 23.36 %, space 15.33 %, gaps together 2.92 %.
+That keeps the space key reachable but deliberately narrower than before; for
+long words the existing SPACE label compaction rule applies instead of cut-off
+labeling.
 
-### Der nicht wegzuzeichnende Breitenkonflikt
+### The width conflict that cannot be drawn away
 
-Bei DE enthält die erste Reihe elf Buchstaben. Mit Teilen und Backspace sind das
-13 Ziele: **13×48 + 8 + 11×2 = 654 dp Mindestbreite** einschließlich Schutzlücke.
-CZ hat in der letzten Zeichenreihe **13 Buchstaben** plus Shift und Enter:
-**15×48 + 14×2 = 748 dp**. Dieses reale Asset ist die härteste hier betrachtete Reihe.
-Schon ohne die neuen Aktionen sind elf nebeneinanderliegende 48-dp-Ziele auf einer
-rund 411-dp-breiten Smartphone-Tafel unmöglich. Überlappende virtuelle Ziele lösen
-das nicht: Sie können nicht gleichzeitig eindeutig in ihren eigenen 48-dp-Breiten liegen.
+For DE, the first row contains eleven letters. With share and backspace, that is
+13 targets: **13×48 + 8 + 11×2 = 654 dp minimum width** including the
+protection gap. CZ has **13 letters** in the last character row plus shift and
+enter: **15×48 + 14×2 = 748 dp**. That real asset is the hardest row considered
+here. Even without the new actions, eleven adjacent 48-dp targets on a roughly
+411-dp-wide smartphone panel are impossible. Overlapping virtual targets do not
+solve that: they cannot simultaneously lie unambiguously within their own
+48-dp widths.
 
-**ANNAHME:** Das Pixel-Hochformat liegt unter diesen 748 dp Nutzbreite; seine aktuellen
-dp-Maße wurden hier nicht gemessen. Die früheren Emulatorwerte um 411 dp werden nicht
-als neue Pixel-Messung ausgegeben. Bei kleinerer Breite als dem Zeilenminimum ist
-obige Einseiten-Anordnung **nicht vollständig freigegeben**.
+**ASSUMPTION:** The Pixel portrait lies below this 748 dp usable width; its
+current dp measures were not measured here. The earlier emulator values around
+411 dp are not being reported as a new pixel measurement. If the width is smaller
+than the row minimum, the above single-side arrangement is **not fully
+released**.
 
-**Entscheidung:** Ich segne keinen scheinbar fertigen Pixel-Entwurf mit unterschrittenen
-48×48-Zielen ab. Die vertikale Korrektur kann unabhängig umgesetzt werden; vor dem
-vollständigen Reflow ist eine Produktentscheidung über **mehr Zeichen-Seiten/andere
-Zeilenverteilung** oder eine ausdrücklich gelockerte Mindestbreite nötig. Da die
-Mindestgröße hier hart ist, wird sie nicht eigenmächtig gelockert. Ebenso wird nicht
-ungefragt eine mehrseitige Buchstabentastatur als vermeintliche kleine Layoutkorrektur
-eingeführt. Keine Rückfrage in diesem Auftrag; der Konflikt ist ein dokumentierter
-Geometrie-Blocker, keine fehlende Werkzeugfreigabe.
+**Decision:** I do not sign off a seemingly finished pixel design with
+undercut 48×48 targets. The vertical correction can be implemented
+independently; before the complete reflow, a product decision on **more
+character sides/a different row distribution** or an explicitly relaxed minimum
+width is needed. Since the minimum size is hard here, it is not relaxed on my
+own authority. Likewise, a multi-page letter keyboard is not introduced
+unasked as a supposed small layout correction. No follow-up question in this
+assignment; the conflict is a documented geometry blocker, not a missing tool
+release.
 
-## 4. Vier neue Aktionspositionen und Interaktionsregeln
+## 4. Four new action positions and interaction rules
 
-- **Backspace:** äußerste rechte Taste der **ersten** Zeichenreihe, nicht „Reihe 2“
-  aus Kimis Vorschlag, wenn damit die zweite Zeichenreihe gemeint ist; Status zählt
-  nicht als Tastenreihe. Halten/Repeat und graphemsicheres Löschen erhalten.
-- **Enter:** äußerste rechte Taste der letzten Zeichenreihe vor Space; in DE/EN
-  die bisherige dritte, in PT base/shift die bisherige vierte Zeichenreihe.
-  Editoraktion/Zeilenumbruch bleibt semantisch unverändert. Kein zusätzliches Enter unten.
-- **Mic:** ganz rechts in der Fußreihe, **96×52 dp Zielmaß**, gefüllte Akzentfläche,
-  großes Mikrofon-Piktogramm; IDLE klar abgesetzt, STARTING sichtbares Warten,
-  RECORDING gefüllt plus unverwechselbare „Aufnahme“-Anzeige, FINALIZING als
-  Verarbeitung/gesperrter Neustart. Farbe allein ist kein Zustandsbeweis.
-- **Teilen:** links vor dem ersten Zeichen, bei DE/EN direkt links neben Q, bei
-  FR links neben A, RU links neben й – keine künstliche Q-Taste für andere Alphabete.
-  Icon-Idee neutrales Teilen-Symbol, deutsche Bedeutung **„Debug-Infos teilen“**;
-  kompakte sichtbare Legende **„Info“**, vollständiger Accessibility-Name.
+- **Backspace:** outermost right key of the **first** character row, not "row 2"
+  from Kimi's proposal if that means the second character row; the status does
+  not count as a key row. Hold/repeat and grapheme-safe deletion are preserved.
+- **Enter:** outermost right key of the last character row before space; in
+  DE/EN the previous third, in PT base/shift the previous fourth character row.
+  The editor action/line break remains semantically unchanged. No additional
+  enter at the bottom.
+- **Mic:** far right in the footer, **96×52 dp target size**, filled accent
+  surface, large microphone pictogram; IDLE clearly distinguished, STARTING
+  visible waiting, RECORDING filled plus an unmistakable "recording" indicator,
+  FINALIZING as processing/locked restart. Color alone is not a state proof.
+- **Share:** left before the first character, in DE/EN directly left of Q, in
+  FR left of A, RU left of й — no artificial Q key for other alphabets. Icon
+  idea: a neutral share symbol, German meaning **"share debug info"**; compact
+  visible legend **"Info"**, full accessibility name.
 
-### Genau eine PTT-Fläche
+### Exactly one PTT area
 
-Der bisherige kleine Mic-Button der Statuszeile entfällt; der alte Fußreihen-Mic wird
-an die neue ganz rechte Stelle versetzt und nicht dupliziert. Status bleibt als
-nicht-interaktiver Zustandstext, verschwindet beim Idle nicht unvorhersehbar.
+The previous small mic button in the status row is dropped; the old footer mic
+is moved to the new far-right position and not duplicated. The status remains as
+non-interactive state text and does not disappear unpredictably when idle.
 
-**Wichtiger realer Befund:** Der Status-Mic hat heute einen DOWN/UP-Touchlistener
-(`VoiceKeyboardService.kt:208ff`); der Keyboard-Mic geht dagegen über normalen
-Key-Release (`KeyboardView.kt:225ff`) zum Mic-Action-Zweig (`VoiceKeyboardService.kt:575ff`).
-Bloß das Icon umzuziehen würde PTT deshalb nicht zuverlässig umziehen.
-Die neue einzige Fläche muss DOWN→Start und UP/CANCEL→geordnetes Stop/Abort liefern;
-niemals beim Loslassen erst starten oder auf einen zweiten Toggle warten.
-Neue Gesten-/Zustandsverträge sind zu implementierende Schnittstellen, keine hier
-behaupteten vorhandenen Methoden. Main-Thread bleibt frei, kein Inferenz-Warten.
+**Important real finding:** The status mic has a DOWN/UP touch listener today
+(`VoiceKeyboardService.kt:208ff`); the keyboard mic, by contrast, goes through a
+normal key release (`KeyboardView.kt:225ff`) to the mic action branch
+(`VoiceKeyboardService.kt:575ff`). Merely moving the icon would therefore not
+reliably move PTT. The new single area must deliver DOWN→start and
+UP/CANCEL→orderly stop/abort; never start only on release or wait for a second
+toggle. New gesture/state contracts are interfaces to be implemented, not
+claimed existing methods. The main thread stays free, no waiting for inference.
 
-Emoji-V2 bleibt ein vollständiger alternativer Inhaltsmodus mit nativem Rückbutton.
-Bei offenem Emoji gibt es keine versteckte Mic-Trefferfläche der GONE-Tastatur;
-für Aufnahme zuerst „Zur Tastatur“. Kein erneuter Status-Mic als zweiter Ausgang.
+Emoji-V2 remains a complete alternative content mode with a native back button.
+When emoji is open, there is no hidden mic hit area of the GONE keyboard; for
+recording, first "back to keyboard". No second status mic as a second exit.
 
-### Teilen nicht versehentlich auslösen
+### Not accidentally triggering share
 
-48×48-dp-Ziel, **8 dp nicht interaktive Schutzlücke** zum ersten Buchstaben;
-die bestehende nächstgelegene-Taste-Logik darf diese Lücke nicht als Teilen-Hit auffüllen.
-Kurztipp zeigt nur den Hinweis „Halten Sie Info, um Debug-Infos zu teilen“;
-Langdruck ab **600 ms** öffnet die bewusste Auswahl **„Kopieren“ / „Teilen“**.
-Die nachfolgende UP-Geste darf keinen weiteren Klick/Zeicheneintrag erzeugen.
-Während Aufnahme/Finalisierung keine externe Share-Aktion, normal tippen bleibt möglich.
+48×48-dp target, **8 dp non-interactive protection gap** to the first letter;
+the existing nearest-key logic must not fill this gap as a share hit. A short
+tap only shows the hint "Hold Info to share debug info"; a long press from
+**600 ms** opens the deliberate choice **"Copy" / "Share"**. The subsequent UP
+gesture must not generate a further click/character entry. During
+recording/finalization no external share action; normal typing remains
+possible.
 
-Nur der begrenzte technische Debug-Snapshot aus PLAN §3, kein Feldtext, Audio, Logcat,
-Stacktrace, Modellpfad oder Konto-/Gerätebezeichner wie Seriennummer. Erst die gewählte
-Aktion kopiert bzw. öffnet den Android-Sharechooser; kein automatisches Clipboard.
-Ein explizites externes Teilen kann den Editorfokus ändern – anders als Emoji wird
-dafür keine unveränderte InputConnection über den Activitywechsel zugesichert.
-Die App selbst sendet dabei nichts ins Netz; Signal o. Ä. ist Nutzerentscheidung.
+Only the limited technical debug snapshot from PLAN §3; no field text, audio,
+logcat, stack trace, model path, or account/device identifiers such as a serial
+number. Only the chosen action copies or opens the Android share chooser; no
+automatic clipboard. An explicit external share can change the editor focus —
+unlike emoji, no unchanged InputConnection is guaranteed across the activity
+switch for it. The app itself sends nothing to the network; Signal or similar
+is the user's decision.
 
-## 5. Gemeinsame Definition statt 15 repetitiver Assetumbauten
+## 5. Shared definition instead of 15 repetitive asset reworks
 
-**Empfehlung: gemeinsame Aktionsrahmen-Komposition; 0 Änderungen an den 15 Sprach-JSONs.**
-Die 15 Dateien wurden gelesen; base/shift haben gleiche Struktur, PT base/shift
-haben fünf statt vier Reihen, CZ/PL/RU deutlich mehr Zeichen in einzelnen Reihen.
-Alle vier Ebenen enthalten ihren bisherigen Aktionsrahmen; diese Daten bleiben
-für den bestehenden Parser und die Sprach-/Pflichtzeichenprüfungen unangetastet.
+**Recommendation: a shared action-frame composition; 0 changes to the 15
+language JSONs.** The 15 files were read; base/shift have the same structure, PT
+base/shift have five instead of four rows, CZ/PL/RU clearly more characters in
+individual rows. All four layers contain their previous action frame; this data
+remains untouched for the existing parser and the language/mandatory-character
+checks.
 
-Eine **neu zu implementierende**, reine gemeinsame Komposition übernimmt den
-geparsten Layer: Sprachzeichen samt IDs, Reihenfolge, Alternates, Case-Metadaten und
-lokalisiertem Space-Label behalten; alte Aktionspositionen herauslösen und die
-oben beschriebene gemeinsame Aktionsanordnung genau einmal ergänzen.
-Der Renderer und die Geometrietests verwenden ausschließlich dieses Ergebnis,
-nicht einen gleichzeitig weiter wirksamen alten Aktionsrahmen. Auch `sourceKeys`,
-Touch-Dispatch und Accessibility-Knoten müssen dieselbe komponierte Quelle verwenden:
-eine nur gezeichnete Share-/Mic-Taste ohne passenden Aktionsdatensatz ist ein Fehler.
-Keine zweite gezeichnete Footer-/Mic-Schicht und keine transparenten Overlay-Touches.
+A **to-be-newly-implemented**, pure shared composition takes over the parsed
+layer: language characters including IDs, order, alternates, case metadata, and
+localized space label are preserved; old action positions are dissolved and the
+shared action arrangement described above is added exactly once. The renderer
+and geometry tests use exclusively this result, not an old action frame that is
+still in effect at the same time. `sourceKeys`, touch dispatch, and accessibility
+nodes must also use the same composed source: a merely drawn share/mic key
+without a matching action record is an error. No second drawn footer/mic layer
+and no transparent overlay touches.
 
-| Vertrag | Erhaltung / notwendige Anpassung |
+| Contract | Preservation / necessary adjustment |
 |---|---|
-| 15 Assets × 4 Ebenen | Alle **60 effektiven Ebenen** müssen neue Positionen besitzen; die Roh-JSONs bleiben bytegleich. Tests unterscheiden ausdrücklich Rohdatenvollständigkeit und komponierte Darstellung. |
-| VK-HIT | Weiter reale lokale Rects und Touchkoordinaten desselben Modells wie onDraw; zusätzlich Eltern-/sichtbare Grenzen und Aufbaunummer für den Höhenbeweis protokollieren, keine Feldinhalte. Alte Screenshots/Rects gelten nicht als V2-Beweis. |
-| Shift/Caps | Gleiche Zustandslogik, gleiche Taste/ID; kein Reset beim Relayout; Zweittipp bleibt Caps, symbols↔symbolsShift bleibt Toggle. |
-| Regel 4a / Symbole | Rohasset-Prüfung bleibt; effektive Shift-Taste sitzt weiterhin links in der letzten Zeichenreihe, **keine** neue falsche layer-base-Aktion. ABC bleibt links in der Fußreihe. Dokumentarisch feste Zeilenindizes durch semantische Position ergänzen. |
-| Zeichen-/Case-Prüfungen | Unverändert: keine Buchstaben, Ziffern oder Pflichtsymbole als Platzgewinn löschen oder in unerreichbare Alternates verschieben. |
-| Neue Aktion | `share-debug` ist **neu**; in `layouts/LayoutAsset.kt`/KeyActions-Whitelist und den Parser-Vertrag aufzunehmen, nicht als schon existierende API ausgeben. |
-| Emoji | V2-Komposition bleibt ohne Overlay; Rückkehr stellt aktuelle gemessene Tastatur vollständig wieder her, einschließlich PT-Fünfzeilenfall. |
+| 15 assets × 4 layers | All **60 effective layers** must have new positions; the raw JSONs remain byte-identical. Tests explicitly distinguish raw data completeness and composed display. |
+| VK-HIT | Continue real local rects and touch coordinates of the same model as onDraw; additionally log parent/visible bounds and a build number for the height proof, no field contents. Old screenshots/rects do not count as a V2 proof. |
+| Shift/Caps | Same state logic, same key/ID; no reset on relayout; second tap remains caps, symbols↔symbolsShift remains a toggle. |
+| Rule 4a / symbols | Raw asset check remains; the effective shift key continues to sit left in the last character row, **no** new wrong layer-base action. ABC stays left in the footer. Supplement documentarily fixed row indices with a semantic position. |
+| Character/case checks | Unchanged: delete no letters, digits, or mandatory symbols as a space gain or move them into unreachable alternates. |
+| New action | `share-debug` is **new**; to be added in `layouts/LayoutAsset.kt`/KeyActions whitelist and the parser contract, not to be presented as an already existing API. |
+| Emoji | The V2 composition remains without overlay; return fully restores the currently measured keyboard, including the PT five-row case. |
 
-Eine Forderung „Position muss wörtlich in allen 15 Roh-JSONs geändert sein“ wäre mit
-der gemeinsamen Komposition unvereinbar und unnötig. Fachlich relevant sind alle
-15 **gerenderten** Layouts. Bei Verzicht auf gemeinsame Komposition wären dagegen
-15 Assets/60 Ebenen zu ändern; beide Strategien nicht mischen.
+A demand "the position must be changed literally in all 15 raw JSONs" would be
+incompatible with the shared composition and unnecessary. What is professionally
+relevant is all 15 **rendered** layouts. If the shared composition is waived,
+15 assets/60 layers would instead have to be changed; do not mix both
+strategies.
 
-## 6. Verworfen
+## 6. Rejected
 
-- 44-dp-Zeilen aus PLAN §2.2: unterschreiten die hier harte Touch-Untergrenze.
-- `min(inhalt, Platz)` ohne neue Rects: kaschiert nur die Messung, schneidet weiter Tasten ab.
-- Den zweiten Aufbau mit immer größeren festen Höhen oder negativen Insets „reparieren“:
-  verdeckt den Messvertragsfehler und kann andere Fenster/Emoji erneut aufblasen.
-- Mic unten rechts und Enter daneben am alten Footerort behalten: widerspricht dem
-  gewünschten Enter-Umzug und nimmt der prominenten Aufnahmefläche unnötig Platz.
-- Share-Debug ohne Schutzlücke/bei Kurztipp direkt extern öffnen: zu fehleranfällig neben Q.
-- Pauschale Vier-Reihenannahme: PT und dichte CZ/PL/RU-Daten widerlegen sie.
-- 15 kopierte Aktionsrahmenänderungen: vermeidbare Drift; gemeinsame Komposition bevorzugt.
-- Unangekündigtes Paging oder Überlappen von 48-dp-Hitboxes: keine redliche Erfüllung
-  der gleichzeitig verlangten kompakten Einseiten-Tastatur.
+- 44-dp rows from PLAN §2.2: fall below the hard touch lower bound here.
+- `min(content, space)` without new rects: only papers over the measurement,
+  keeps cutting off keys.
+- "Repairing" the second construction with ever larger fixed heights or negative
+  insets: hides the measurement contract error and can inflate other
+  windows/emoji again.
+- Keeping mic bottom right and enter next to it at the old footer location:
+  contradicts the desired enter move and needlessly takes space from the
+  prominent recording area.
+- Share-debug without a protection gap/with a short tap directly opening
+  externally: too error-prone next to Q.
+- Blanket four-row assumption: PT and dense CZ/PL/RU data refute it.
+- 15 copied action frame changes: avoidable drift; shared composition preferred.
+- Unannounced paging or overlapping 48-dp hitboxes: no honest fulfillment of
+  the simultaneously demanded compact single-side keyboard.
 
-## 7. TDD-Aufträge – Reihenfolge, jeweils höchstens vier Dateien
+## 7. TDD assignments – order, at most four files each
 
-Alle neuen Dateinamen unten sind **Vorschläge**, keine behaupteten existierenden Dateien.
-Quellpfade mit Kurzpräfixen: `main` = `app/src/main/java/de/voicekeyboard/`,
-`test` = `app/src/test/java/de/voicekeyboard/`, `androidTest` analog.
-Tests zuerst; erfolgreiche JVM-Tests ersetzen keine Pixel-/Zweitöffnungsabnahme.
+All new file names below are **proposals**, not claimed existing files.
+Source paths with short prefixes: `main` = `app/src/main/java/de/voicekeyboard/`,
+`test` = `app/src/test/java/de/voicekeyboard/`, `androidTest` analogous.
+Tests first; successful JVM tests do not replace a pixel/second-opening
+acceptance.
 
-| Auftrag | Dateien, maximal 4 | Zuerst roter Test / Prüfkriterium |
+| Assignment | Files, at most 4 | First red test / check criterion |
 |---|---|---|
-| **G1 Höhenvertrag, unabhängig vom Breiten-Reflow** | `main/ime/ImeRootView.kt`; `main/keyboard/KeyboardView.kt`; `main/keyboard/KeyboardModel.kt`; **neu** `androidTest/keyboard/KeyboardFitTest.kt` | **secondShowKeepsFullFooter**: dieselbe IME-Instanz zeigen→verbergen→zeigen, aktuelles Angebot/Insets variieren; unterste Rect-Unterkante liegt vollständig in View **und** sichtbarem Parent. DE sowie PT, Status/Emoji-Wechsel mitprüfen; Pixel-Screenshots beider Aufbauten sind Pflicht. |
-| **G2 Gemeinsame Komposition und Positionen** | **neu** `main/keyboard/LayoutChrome.kt`; **neu** `test/keyboard/LayoutChromeTest.kt`; `main/layouts/LayoutAsset.kt`; `docs/LAYOUT_REQUIREMENTS.md` | **all15EffectiveLayoutsHaveNewAnchors** über alle 60 Ebenen: Share erstes Ziel, Backspace oben rechts, Enter letzte Zeichenreihe rechts, Mic Fußreihe rechts genau einmal; gleiche Zeichenmengen/Shift-Paare wie vorher. Neue share-debug-Aktion zulässig. |
-| **G3 Größen-Machbarkeit, vor Rendererfreigabe** | `main/keyboard/LayoutChrome.kt`; `main/keyboard/KeyboardModel.kt`; `test/keyboard/KeyboardModelTest.kt`; **neu** `test/keyboard/KeyboardTargetSizeTest.kt` | **everyTargetIs48By48OrReportsUnfit**: alle 60 Ebenen bei realem W prüfen; Ziele ≥48×48 und nicht überlappend, sonst explizites Unfit. Der 411-dp/CZ-Fall muss derzeit **Unfit**, nicht „grün durch kleinrechnen“ liefern. **Vor vollständigem Reflow ist die Breitenentscheidung Pflicht.** |
-| **G4 Rendering, Aktionenschutz und Zustände** | `main/keyboard/KeyboardView.kt`; `main/keyboard/LayoutChrome.kt`; `main/ime/ImeRootView.kt`; **neu** `androidTest/keyboard/KeyboardInteractionV2Test.kt` | **drawnAndHitRectsAgree** inkl. Teilen-Schutzlücke; **shiftAndSymbolRoundTripSurvivesRelayout**; **micShowsRecordingState**: Mic-Rect 96×52, Aufnahmefüllung/Status statt nur generischer Pressfarbe. Noch keine parallele zweite PTT-Fläche. |
-| **G5 Einziger echter PTT-Einstieg** | `main/keyboard/KeyboardView.kt`; `main/ime/VoiceKeyboardService.kt`; `main/ime/ImeRootView.kt`; **neu** `androidTest/keyboard/MicGestureV2Test.kt` | **holdStartsReleaseStopsOnce**: DOWN startet genau einmal, UP/CANCEL stoppt genau einmal; Repeat/Relayout/Hide ohne zweite Session; Recording/Fertigstellung unabhängig von Inferenzlast. |
-| **G6 Privater Debug-Snapshot** | **neu** `main/debug/DebugInfo.kt`; **neu** `test/debug/DebugInfoPrivacyTest.kt` | **snapshotContainsNoInput**: maximal 25 Zeilen, nur erlaubte technische Felder/Codes, kein diktierter oder getippter Inhalt, keine Rohlogs/Pfade. |
-| **G7 Bewusstes Kopieren/Teilen** | `main/ime/VoiceKeyboardService.kt`; **neu** `main/debug/DebugShare.kt`; `app/src/main/res/values/strings.xml`; **neu** `androidTest/debug/DebugShareTest.kt` | **shortTapDoesNotExport** und **confirmedShareUsesTextPlain**: kurzer Tap kein Clipboard/Chooser; Langdruck plus bewusste Auswahl erzeugt genau eine Aktion; kein Export während Diktat, kein Zeichen im Feld. |
+| **G1 height contract, independent of the width reflow** | `main/ime/ImeRootView.kt`; `main/keyboard/KeyboardView.kt`; `main/keyboard/KeyboardModel.kt`; **new** `androidTest/keyboard/KeyboardFitTest.kt` | **secondShowKeepsFullFooter**: show→hide→show the same IME instance, vary the current offer/insets; the bottom rect's lower edge lies completely inside the view **and** the visible parent. Also check DE and PT, status/emoji switches; pixel screenshots of both constructions are mandatory. |
+| **G2 shared composition and positions** | **new** `main/keyboard/LayoutChrome.kt`; **new** `test/keyboard/LayoutChromeTest.kt`; `main/layouts/LayoutAsset.kt`; `docs/LAYOUT_REQUIREMENTS.md` | **all15EffectiveLayoutsHaveNewAnchors** across all 60 layers: share as the first target, backspace top right, enter in the last character row right, mic in the footer right exactly once; same character sets/shift pairs as before. New share-debug action permissible. |
+| **G3 size feasibility, before renderer release** | `main/keyboard/LayoutChrome.kt`; `main/keyboard/KeyboardModel.kt`; `test/keyboard/KeyboardModelTest.kt`; **new** `test/keyboard/KeyboardTargetSizeTest.kt` | **everyTargetIs48By48OrReportsUnfit**: check all 60 layers at a real W; targets ≥48×48 and non-overlapping, otherwise explicit unfit. The 411-dp/CZ case must currently yield **unfit**, not "green by calculating small". **Before a complete reflow, the width decision is mandatory.** |
+| **G4 rendering, action protection, and states** | `main/keyboard/KeyboardView.kt`; `main/keyboard/LayoutChrome.kt`; `main/ime/ImeRootView.kt`; **new** `androidTest/keyboard/KeyboardInteractionV2Test.kt` | **drawnAndHitRectsAgree** including the share protection gap; **shiftAndSymbolRoundTripSurvivesRelayout**; **micShowsRecordingState**: mic rect 96×52, recording fill/status instead of only a generic press color. Still no parallel second PTT area. |
+| **G5 the only real PTT entry** | `main/keyboard/KeyboardView.kt`; `main/ime/VoiceKeyboardService.kt`; `main/ime/ImeRootView.kt`; **new** `androidTest/keyboard/MicGestureV2Test.kt` | **holdStartsReleaseStopsOnce**: DOWN starts exactly once, UP/CANCEL stops exactly once; repeat/relayout/hide without a second session; recording/completion independent of inference load. |
+| **G6 private debug snapshot** | **new** `main/debug/DebugInfo.kt`; **new** `test/debug/DebugInfoPrivacyTest.kt` | **snapshotContainsNoInput**: at most 25 lines, only permitted technical fields/codes, no dictated or typed content, no raw logs/paths. |
+| **G7 deliberate copy/share** | `main/ime/VoiceKeyboardService.kt`; **new** `main/debug/DebugShare.kt`; `app/src/main/res/values/strings.xml`; **new** `androidTest/debug/DebugShareTest.kt` | **shortTapDoesNotExport** and **confirmedShareUsesTextPlain**: short tap no clipboard/chooser; long press plus a deliberate choice generates exactly one action; no export during dictation, no character in the field. |
 
-Nach jedem integrierten Layoutstand: zweite/dritte Öffnung, Feldwechsel, Emoji-Rückkehr,
-DE/EN/RU/PT/CZ, beide Symbolebenen, Gesten-/3-Tasten-Navigation und große Schrift
-prüfen. Sichtbarkeit braucht Screenshot plus Rect-/Clipbeweis; uiautomator allein
-sieht die IME nicht zuverlässig. Keine Gerätebefehle werden in diesem Auftrag ausgeführt.
+After each integrated layout state: check second/third opening, field switch,
+emoji return, DE/EN/RU/PT/CZ, both symbol layers, gesture/3-button navigation,
+and large fonts. Visibility needs a screenshot plus a rect/clip proof;
+uiautomator alone does not see the IME reliably. No device commands are executed
+in this assignment.
 
-## 8. Absegnung und offene Grenze
+## 8. Sign-off and open limit
 
-**FERTIG:** Ursache als konkreter Messvertragsfehler lokalisiert; zweite-Öffnung-Trigger
-als Hypothese statt erfundener Messung benannt. Zielhöhe und vier Positionen entschieden,
-0 Roh-Assetänderungen durch gemeinsamen Aktionsrahmen empfohlen, TDD-Aufträge begrenzt.
+**DONE:** Cause localized as a concrete measurement contract error; the
+second-opening trigger named as a hypothesis instead of an invented measurement.
+Target height and four positions decided, 0 raw asset changes recommended
+through a shared action frame, TDD assignments limited.
 
-**ABGESEGNET:** Höhenkettenkorrektur und vertikales Ziel 268→226 dp / PT 312→276 dp;
-Backspace oben rechts, Enter am alten Backspace-Ort, Mic unten rechts, Info links vor
-Q bzw. lokalem ersten Buchstaben. Diese Teilfreigabe erlaubt keine ungeprüfte Auslieferung.
+**APPROVED:** Height chain correction and vertical target 268→226 dp / PT
+312→276 dp; backspace top right, enter at the old backspace location, mic bottom
+right, info left before Q or the local first letter. This partial release
+permits no unchecked delivery.
 
-**BLOCKER:** Eine Smartphone-Einseite mit unverändert allen Zeichen und echten
-48×48-dp-Zielen ist unterhalb der berechneten Mindestbreiten unmöglich. Keine
-Gesamtfreigabe der Pixel-Geometrie vor einer offen dokumentierten Auflösung dieses
-Produktkonflikts; die Tastatur darf nicht nur für den Test künstlich breiter werden.
+**BLOCKER:** A smartphone single side with all characters unchanged and real
+48×48-dp targets is impossible below the calculated minimum widths. No overall
+release of the pixel geometry before an openly documented resolution of this
+product conflict; the keyboard must not become artificially wider just for the
+test.
 
-**ANNAHME:** Aktuelles Pixel-Platzbudget/zweite Insets sind nicht gemessen. Neue
-Positions-/Mindestbreiten sind Designvorgaben, keine bereits getesteten Rects.
-**VERIFIKATION:** Nur lesende Prüfung und dieses neue Dokument; kein Build/adb/Commit.
+**ASSUMPTION:** The current Pixel space budget/second insets are not measured.
+New positions/minimum widths are design specifications, not already-tested
+rects.
+**VERIFICATION:** Only a reading check and this new document; no build/adb/commit.

@@ -1,8 +1,8 @@
 package de.voicekeyboard.layouts
 
 /**
- * Datenmodell für ein Tastaturlayout (JSON-Vertrag aus DESIGN.md 7.2).
- * Reine JVM-Datenklassen, kein Android-Code.
+ * Data model for a keyboard layout (JSON contract from DESIGN.md 7.2).
+ * Pure JVM data classes, no Android code.
  */
 data class LayoutLanguage(
     val tag: String,
@@ -14,23 +14,23 @@ data class LayoutLanguage(
 data class LayoutKey(
     val id: String,
     val label: String,
-    val width: Double, // relative Einheiten
+    val width: Double, // relative units
     val kind: KeyKind, // text | action | dead
-    val value: String, // Zeichen, Action-ID oder Deadkey-ID
+    val value: String, // character, action id or dead key id
     val caps: String? = null,
     val alternates: List<String> = emptyList(),
-    /** F23a1: optionales Kurz-Hint (z. B. Ziffer "1"), max 2 Zeichen; null = keins. */
+    /** F23a1: optional short hint (e.g. digit "1"), max 2 characters; null = none. */
     val hint: String? = null,
     /**
-     * F24e1: optionale Aktionsnamen fuer die Langdruck-Menuezellen, parallel zu
-     * [alternates] (gleicher Index; "" = normales Textfeld, sonst eine Aktion wie
-     * "cursor-left"). Kurzer als alternates = Rest Text; Länge wird im Parser auf
-     * alternates-Grösse gekürzt.
+     * F24e1: optional action names for the long-press menu cells, parallel to
+     * [alternates] (same index; "" = normal text cell, otherwise an action like
+     * "cursor-left"). Shorter than alternates = remainder is text; the length is
+     * trimmed to the alternates size in the parser.
      */
     val cellActions: List<String> = emptyList(),
 )
 
-enum class KeyKind { TEXT, ACTION, DEAD, /** F27a1: Randflaeche (nur Breite, kein Glyph, kein Touch). */ MARGIN }
+enum class KeyKind { TEXT, ACTION, DEAD, /** F27a1: edge surface (width only, no glyph, no touch). */ MARGIN }
 
 data class LayoutLayer(
     val name: String, // base | shift | symbols | symbolsShift
@@ -52,7 +52,7 @@ data class DeadKey(
     val compose: Map<String, String> = emptyMap(),
 )
 
-/** Erlaubte Action-Werte (Allowlist aus DESIGN.md 7.2). */
+/** Allowed action values (allowlist from DESIGN.md 7.2). */
 object KeyActions {
     const val SHIFT = "shift"
     const val CAPS = "caps"
@@ -73,7 +73,7 @@ object KeyActions {
     )
 }
 
-/** Erforderliche Ebenen je Layout. */
+/** Required layers per layout. */
 object LayoutLayers {
     val REQUIRED = listOf("base", "shift", "symbols", "symbolsShift")
 }

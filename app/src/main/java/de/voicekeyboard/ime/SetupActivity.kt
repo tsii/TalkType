@@ -23,16 +23,16 @@ import de.voicekeyboard.model.ModelStatus
 import java.io.File
 
 /**
- * Setup-Seite (M5b-2b): Modell-Download ansteuern, Berechtigungen anfordern,
- * Netzschalter-Persistenz (E2: Default an bis READY, danach automatisch aus).
+ * Setup page (M5b-2b): drive the model download, request permissions,
+ * network switch persistence (E2: default on until READY, then off automatically).
  *
- * C-3-Schreibpfad: Bei erneut abgelehnter Berechtigung wird der Marker
- * `denied_forever_<permission>` in dieselbe SharedPreferences-Datei
- * geschrieben, die [VoiceKeyboardService] liest ("vk_permissions" —
- * derselbe Name/Präfix, nichts Neues erfunden).
+ * C-3 write path: if a permission is denied again, the marker
+ * `denied_forever_<permission>` is written to the same SharedPreferences file
+ * that [VoiceKeyboardService] reads ("vk_permissions" —
+ * same name/prefix, nothing invented anew).
  *
- * E3-Regel „Tastatur blockiert nie": Ohne Modell/ohne Berechtigungen bleibt
- * die Tastatur voll nutzbar — die Setup-Seite zeigt nur Hinweise an.
+ * E3 rule "the keyboard never blocks": without model/without permissions the
+ * keyboard stays fully usable — the setup page only shows hints.
  */
 class SetupActivity : ComponentActivity() {
 
@@ -47,7 +47,7 @@ class SetupActivity : ComponentActivity() {
 
     private val prefs by lazy { getSharedPreferences(PERMISSION_PREFS, MODE_PRIVATE) }
 
-    /** E2: Netzwerk-Schalter — Default an bis Setup (READY) abgeschlossen. */
+    /** E2: network switch — default on until setup (READY) is completed. */
     private fun networkFlagKey(): String = "network_for_downloads"
 
     private val permissionLauncher = registerForActivityResult(
@@ -56,7 +56,7 @@ class SetupActivity : ComponentActivity() {
 
     private val startLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
-    ) { /* Rückkehr aus Systemeinstellungen: Zustand neu bewerten */ refreshUi() }
+    ) { /* return from system settings: re-evaluate the state */ refreshUi() }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -81,16 +81,16 @@ class SetupActivity : ComponentActivity() {
 
         buildLanguageSection()
 
-        // Beobachter NACH Layout-Anmeldung: Service informiert uns zustandsbasiert
-        // (kein Polling, kein eigener Thread); UI-Thread-Zustellung über runOnUiThread.
+        // observer AFTER layout registration: the service informs us state-based
+        // (no polling, no own thread); UI-thread delivery via runOnUiThread.
         ModelDownloadService.observer = { state -> runOnUiThread { render(state) } }
     }
 
-    // ---- Sprachauswahl (E9.1 Regel 1/2, M8b-1) ----
+    // ---- Language selection (E9.1 rule 1/2, M8b-1) ----
 
-    /** Checkboxen für alle 15 Layouts in kanonischer Reihenfolge; Auswahl in
-     *  vk_layout/active_languages (geordnet, kanonisch, komma-getrennt — kein StringSet).
-     *  Mindestens eine erzwungen: Abwahl der letzten wird verweigert. */
+    /** Checkboxes for all 15 layouts in canonical order; selection in
+     *  vk_layout/active_languages (ordered, canonical, comma-separated — no StringSet).
+     *  At least one enforced: deselecting the last one is refused. */
     private fun buildLanguageSection() {
         val layoutRoot = findViewById<TextView>(R.id.setup_title).parent as android.widget.LinearLayout
         val density = resources.displayMetrics.density
@@ -126,7 +126,7 @@ class SetupActivity : ComponentActivity() {
                 } else {
                     val remaining = savedLanguages() - id
                     if (remaining.isEmpty()) {
-                        // letzte abgewählt: verweigern, Checkbox bleibt gesetzt
+                        // last one deselected: refuse, checkbox stays set
                         box.isChecked = true
                         return@setOnCheckedChangeListener
                     }
@@ -138,13 +138,13 @@ class SetupActivity : ComponentActivity() {
             }
             container.addView(box)
         }
-        // Abschnitt hinter dem Titel (vor Modellstatus) einfügen
+        // insert the section behind the title (before the model status)
         layoutRoot.addView(container, 1)
     }
 
     override fun onResume() {
         super.onResume()
-        // Zurückgekehrter Nutzer: Netzschalter + Status frisch lesen
+        // returning user: read the network switch + status fresh
         networkSwitch.isChecked = prefs.getBoolean(networkFlagKey(), defaultNetworkEnabled())
         refreshUi()
     }
@@ -154,7 +154,7 @@ class SetupActivity : ComponentActivity() {
         super.onDestroy()
     }
 
-    // ---- Download-Startpfad (L1: FGS-Block fangen, nie Crash) ----
+    // ---- Download start path (L1: catch FGS block, never crash) ----
 
     private fun requestStartDownload() {
         val store = ModelStore(File(filesDir, MODEL_DIR_NAME))
@@ -185,7 +185,7 @@ class SetupActivity : ComponentActivity() {
         }
     }
 
-    // ---- Berechtigungen (C-3) ----
+    // ---- Permissions (C-3) ----
 
     private fun requiredPermissions(): Array<String> {
         val list = mutableListOf(Manifest.permission.RECORD_AUDIO)
@@ -206,11 +206,11 @@ class SetupActivity : ComponentActivity() {
     private fun evaluatePermissions(results: Map<String, Boolean>) {
         for ((permission, granted) in results) {
             if (granted) {
-                // erteilt: ggf. früheren Marker löschen
+                // granted: possibly delete a former marker
                 prefs.edit().remove(deniedKey(permission)).apply()
             } else if (!shouldShowRequestPermissionRationale(permission)) {
-                // erneut abgelehnt + keine Begründung mehr ⇒ dauerhaft abgelehnt:
-                // Marker in die GLEICHE Datei, die VoiceKeyboardService liest (C-3).
+                // denied again + no more rationale ⇒ permanently denied:
+                // marker into the SAME file that VoiceKeyboardService reads (C-3).
                 prefs.edit().putBoolean(deniedKey(permission), true).apply()
             }
         }
@@ -231,7 +231,7 @@ class SetupActivity : ComponentActivity() {
         )
     }
 
-    // ---- UI-Zustand ----
+    // ---- UI state ----
 
     private fun defaultNetworkEnabled(): Boolean =
         ModelStore(File(filesDir, MODEL_DIR_NAME)).status() != ModelStatus.READY
@@ -247,12 +247,12 @@ class SetupActivity : ComponentActivity() {
         }
     }
 
-    /** Rendert den Controller-Zustand (null = aus Store-Status ableiten). */
+    /** Renders the controller state (null = derive from the store status). */
     private fun render(state: DownloadController.State?) {
         when (state) {
             is DownloadController.State.Downloading -> {
                 stateView.text = getString(R.string.setup_state_downloading) +
-                    // V12 (D1-03): laufender Retry sichtbar statt stummem Warten
+                    // V12 (D1-03): running retry visible instead of silent waiting
                     if (state.attempt > 1) " — " + getString(
                         R.string.setup_state_retry_attempt, state.attempt, state.maxAttempts,
                     ) else ""
@@ -278,7 +278,7 @@ class SetupActivity : ComponentActivity() {
                 fileInfoView.visibility = android.view.View.GONE
                 startButton.visibility = android.view.View.GONE
                 cancelButton.visibility = android.view.View.GONE
-                // E2: nach READY Netz automatisch aus + Policy (d) bestätigen
+                // E2: after READY turn the network off automatically + confirm policy (d)
                 if (DownloadPolicy.shouldTurnNetworkOff(ModelStatus.READY)) {
                     prefs.edit().putBoolean(networkFlagKey(), false).apply()
                     networkSwitch.isChecked = false
@@ -290,8 +290,8 @@ class SetupActivity : ComponentActivity() {
                 cancelButton.visibility = android.view.View.GONE
             }
             is DownloadController.State.Failed -> {
-                // D1: Echte Fehler-Taxonomie + dictierbare Technik-Detailzeile
-                // (ModelError.detailForUser, Regel 9: keine URLs/Token).
+                // D1: real error taxonomy + dictable technical detail line
+                // (ModelError.detailForUser, rule 9: no URLs/tokens).
                 val message = when (DownloadPolicy.userMessageKey(state.error)) {
                     "netz" -> getString(R.string.setup_error_network)
                     "hash" -> getString(R.string.setup_error_hash)
@@ -323,14 +323,14 @@ class SetupActivity : ComponentActivity() {
         }
     }
 
-    /** Gespeicherte aktive Sprachen (kanonisch geordnet, nie leer). */
+    /** Saved active languages (canonically ordered, never empty). */
     private fun savedLanguages(): List<String> =
         de.voicekeyboard.ime.LanguageCycle.parseActive(
             getSharedPreferences(de.voicekeyboard.ime.VoiceKeyboardService.LAYOUT_PREFS, MODE_PRIVATE).getString(de.voicekeyboard.ime.VoiceKeyboardService.KEY_ACTIVE_LANGUAGES, null),
         )
 
     private companion object {
-        /** GLEICHE Datei wie VoiceKeyboardService (dort PERMISSION_PREFS). */
+        /** SAME file as VoiceKeyboardService (there PERMISSION_PREFS). */
         private const val PERMISSION_PREFS = "vk_permissions"
         private const val DENIED_FOREVER_PREFIX = "denied_forever_"
         private const val MODEL_DIR_NAME = "models"

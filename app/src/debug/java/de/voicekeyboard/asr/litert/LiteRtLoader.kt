@@ -4,32 +4,32 @@ import org.tensorflow.lite.Interpreter
 import java.io.File
 
 /**
- * V10 (L1-01-Fix): Laderoutine für LiteRT-Modelle — OHNE Heap-Kopie.
+ * V10 (L1-01-Fix): load routine for LiteRT models — WITHOUT a heap copy.
  *
- * Der Interpreter wird aus der DATEI gebaut (`Interpreter(File, Options)`),
- * damit LiteRT mmap nutzt — die 2.3.2-API bietet diesen Konstruktor
- * (Signature `Interpreter(java.io.File, Interpreter$Options)`, siehe
- * javap-Ausgabe der Klasse). Es wird KEINE Datei-in-Heap-Kopie gemacht
- * (der bisherige Weg kopierte den 648-MB-Encoder als ByteArray ins
- * Java-Heap => OOM; belegt durch den Quelltext-Test in LiteRtLoaderTest).
+ * The interpreter is built from the FILE (`Interpreter(File, Options)`),
+ * so that LiteRT uses mmap — the 2.3.2 API offers this constructor
+ * (signature `Interpreter(java.io.File, Interpreter$Options)`, see the
+ * javap output of the class). NO file-into-heap copy is made
+ * (the previous approach copied the 648 MB encoder as a ByteArray into the
+ * Java heap => OOM; proven by the source-text test in LiteRtLoaderTest).
  *
- * Größenprüfung gegen das Manifest VOR dem `open` (falsche Größe ⇒
- * typisierter Fehler mit flachem Dateinamen, kein Pfad — Regel 9).
- * `Throwable`-Grenze: auch Errors (z. B. OutOfMemoryError) laufen kontrolliert
- * in den typisierten Fehler mit eigenem, deutsch lesbarem Zweig.
+ * Size check against the manifest BEFORE `open` (wrong size ⇒ typed error
+ * with a flat file name, no path — rule 9).
+ * `Throwable` boundary: even errors (e.g. OutOfMemoryError) flow in a controlled
+ * way into the typed error with its own, German-readable branch.
  */
 object LiteRtLoader {
 
-    /** Geladenes Modell: Interpreter + flacher Dateiname (Diagnose, Regel 9). */
+    /** Loaded model: interpreter + flat file name (diagnostics, rule 9). */
     data class LoadedModel(val interpreter: Interpreter, val fileName: String)
 
-    /** Typisierter Laderfehler mit bereinigter Ursache. */
+    /** Typed load error with a scrubbed cause. */
     class LiteRtLoadException(message: String, cause: Throwable? = null) :
         IllegalStateException(message, cause)
 
     /**
-     * Öffnet [file] als LiteRT-Interpreter mit [threads] CPU-Threads.
-     * Größenprüfung gegen [expectedSizeBytes] (0 = keine Prüfung).
+     * Opens [file] as a LiteRT interpreter with [threads] CPU threads.
+     * Size check against [expectedSizeBytes] (0 = no check).
      */
     fun open(file: File, threads: Int, expectedSizeBytes: Long = 0L): LoadedModel {
         check(file.isFile) { "Modell-Datei fehlt: ${file.name}" }
@@ -42,12 +42,12 @@ object LiteRtLoader {
         return try {
             LoadedModel(Interpreter(file, opts), file.name)
         } catch (e: OutOfMemoryError) {
-            // Eigener, deutsch lesbarer Zweig (V10-2): Heap reicht nicht.
+            // Own German-readable branch (V10-2): heap is not sufficient.
             throw LiteRtLoadException(
                 "Der Arbeitsspeicher reicht für dieses Modell nicht.", e,
             )
         } catch (t: Throwable) {
-            // Throwable-Grenze: auch sonstige Errors kontrolliert typisiert
+            // Throwable boundary: other errors too, controlled and typed
             throw LiteRtLoadException(
                 "LiteRT-Modell konnte nicht geöffnet werden (${t.javaClass.simpleName}: " +
                     scrub(t.message) + ")",
@@ -56,7 +56,7 @@ object LiteRtLoader {
         }
     }
 
-    /** Regel 9: Token mit Pfadtrennern auf flachen Dateinamen kürzen, max. 120 Zeichen. */
+    /** Rule 9: trim tokens with path separators to flat file names, max. 120 characters. */
     private fun scrub(msg: String?): String {
         if (msg.isNullOrEmpty()) return "(keine Meldung)"
         val sb = StringBuilder()

@@ -1,20 +1,20 @@
-# Review vc39-Snack — KDoc-Realität + Produktions-Geometrie im Clamp-Test
-Reviewer: DeepSeek V4 Pro 0813 (sa-bae9d8e4), 2026-11-03 01:0x. Volltext im Transkript.
+# Review vc39-Snack — KDoc reality + production geometry in the clamp test
+Reviewer: DeepSeek V4 Pro 0813 (sa-bae9d8e4), 2026-11-03 01:0x. Full text in the transcript.
 
-## Verdikt: **OK — Push JA** (P0/P1 = 0; P2 a/b/c report-only)
+## Verdict: **OK — Push YES** (P0/P1 = 0; P2 a/b/c report-only)
 
-| Auflage | Status |
+| Condition | Status |
 |---|---|
-| V0137 #1 (Rechenfehler 8er-Set: 1085→1107 px) | ✅ KDoc-Formel + Mini-Test `menuWidthPx(8)=1107` |
-| V0137 #2 (MAX_CELLS=8 bei 1080 px unerreichbar) | ✅ KDoc: 1107>1080 ⇒ Guard unterdrückt, effektiv 7 (970 px) |
-| V0137 #3 (Inline-Raster-Drift im Clamp-Test) | ✅ Produktions-`KeyboardModel` + Zellen-Paritäts-Anker (108 px; Rot-Beweis KEY_GAP_DP=1 ⇒ 105,6 FAILED) |
-| V0136 #1 (Anker-Provenienz) | ✅ Provenienz-Satz (T6-Ist, echter Schutz = Skript-Assert vor==nach) |
+| V0137 #1 (arithmetic error 8-cell set: 1085→1107 px) | ✅ KDoc formula + mini test `menuWidthPx(8)=1107` |
+| V0137 #2 (MAX_CELLS=8 unreachable at 1080 px) | ✅ KDoc: 1107>1080 ⇒ guard suppresses, effectively 7 (970 px) |
+| V0137 #3 (inline grid drift in the clamp test) | ✅ Production `KeyboardModel` + cell parity anchor (108 px; red evidence KEY_GAP_DP=1 ⇒ 105.6 FAILED) |
+| V0136 #1 (anchor provenance) | ✅ Provenance statement (T6 actual, genuine protection = script assert before==after) |
 
 ## P2 (report-only)
-a) Test nutzt `keyHeightPx = POPUP_HEIGHT_DP·density` statt `desiredRowHeightPx` (nur Vertikale, harmlos).
-b) Pad-Doppeldeutung 10 (Formel-Default) vs 11 (Produktions-Rundung 10,5→11) in derselben Datei — kein Widerspruch.
-c) `horizontalPaddingPx`-Drift nicht vom Anker gedeckt (im KDoc als Annahme deklariert).
+a) Test uses `keyHeightPx = POPUP_HEIGHT_DP·density` instead of `desiredRowHeightPx` (vertical only, harmless).
+b) Pad double meaning 10 (formula default) vs 11 (production rounding 10.5→11) in the same file — no contradiction.
+c) `horizontalPaddingPx` drift not covered by the anchor (declared as an assumption in the KDoc).
 
-## Entscheidung (Orchestrator)
-Snack ist funktionsneutral (Produktion nur KDoc) → **kein eigener Bau**;vc38 bleibt dist-Stand,
-der Snack läuft im nächsten Feature-Bau (versionCode 39 / 0.1.38) mit. Tests 598/0 Debug.
+## Decision (orchestrator)
+The snack is function-neutral (production only KDoc) → **no separate build**; vc38 remains the dist state,
+the snack rides along in the next feature build (versionCode 39 / 0.1.38). Tests 598/0 debug.

@@ -12,27 +12,27 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 /**
- * S2-Instrumented-Test (DESIGN_STOCK_LOOK.md §4, Zeile S2) — läuft auf dem
- * Emulator/Gerät des Orchestrators.
+ * S2 instrumented test (DESIGN_STOCK_LOOK.md §4, row S2) — runs on the
+ * orchestrator's emulator/device.
  *
- * Pflichtfälle: zweimal dasselbe Feld öffnen, Feldwechsel, Emoji-Ebene verlassen —
- * danach müssen ALLE Tasten-IDs des aktiven Layouts
- *  (a) im Modell vorhanden sein (kein Row-Drop — S1-Vertrag),
- *  (b) mit vollem Rect innerhalb der View-Grenzen liegen (keine halb gezeichnete
- *      Taste), unterer Rand überschreitet das Budget nicht,
- *  (c) treffbar sein: Trefferermittlung am Rect-Mittelpunkt liefert dieselbe ID
- *      (derselbe Pfad wie Touch/Accessibility).
+ * Mandatory cases: open the same field twice, field change, leave the emoji layer —
+ * afterwards ALL key IDs of the active layout must
+ *  (a) be present in the model (no row drop — S1 contract),
+ *  (b) lie with a full rect inside the view bounds (no half-drawn
+ *      key), the bottom edge must not exceed the budget,
+ *  (c) be hittable: hit testing at the rect center yields the same ID
+ *      (the same path as touch/accessibility).
  *
- * Geprüft wird DE (4 Reihen) und PT (5 Reihen). Das Angebot ist hart auf 650 px
- * gesetzt (AT_MOST, wie die IME-Window-Kette) — der Test rät keine Gerätepixel,
- * er misst dieselbe Root-Kette: ImeRootView −(Nav-Padding, im Test 0) −(48-dp-
- * Statuszeile) → KeyboardView-Spec;KeyboardView skaliert ALLE Reihen hinein.
+ * Checked are DE (4 rows) and PT (5 rows). The offer is hard-set to 650 px
+ * (AT_MOST, like the IME window chain) — the test does not guess device pixels,
+ * it measures the same root chain: ImeRootView −(nav padding, 0 in the test)
+ * −(48-dp status row) → KeyboardView spec; KeyboardView scales ALL rows into it.
  */
 @RunWith(AndroidJUnit4::class)
 class StockKeyboardFitTest {
 
     private val widthPx = 1080
-    private val offeredPx = 650 // beobachtetes schwankendes Kleinstangebot
+    private val offeredPx = 650 // the smallest observed fluctuating offer
 
     private fun targetContext(): android.content.Context =
         InstrumentationRegistry.getInstrumentation().targetContext
@@ -50,7 +50,7 @@ class StockKeyboardFitTest {
         return result as T
     }
 
-    /** Öffnet die echte Root-Kette mit hartem 650-px-Angebot und legt sie aus. */
+    /** Opens the real root chain with a hard 650-px offer and lays it out. */
     private fun openRoot(asset: LayoutAsset, width: Int = widthPx): ImeRootView = onMain {
         val root = ImeRootView(targetContext())
         root.keyboardView.setLayout(asset, width)
@@ -70,23 +70,23 @@ class StockKeyboardFitTest {
         root.layout(0, 0, width, root.measuredHeight)
     }
 
-    /** (a)+(b)+(c): alle IDs vorhanden, volle Rects im Budget, Mittelpunkt trifft sich selbst. */
+    /** (a)+(b)+(c): all IDs present, full rects within the budget, the center point hits itself. */
     private fun assertAllKeysIntact(view: KeyboardView, asset: LayoutAsset, label: String) {
         val expectedIds = asset.layers.getValue(view.activeLayerName).rows.flatten()
             .map { it.id }.toSet()
         val drawn = view.drawnKeys
-        assertEquals("$label: Tasten-IDs dürfen nicht verloren gehen", expectedIds, drawn.map { it.id }.toSet())
-        assertTrue("$label: es müssen Tasten gezeichnet werden", drawn.isNotEmpty())
+        assertEquals("$label: key IDs must not get lost", expectedIds, drawn.map { it.id }.toSet())
+        assertTrue("$label: keys must be drawn", drawn.isNotEmpty())
         for (k in drawn) {
-            assertTrue("$label: Rect von '${k.id}' muss in der View liegen (top)", k.top >= -0.5f)
+            assertTrue("$label: the rect of '${k.id}' must lie inside the view (top)", k.top >= -0.5f)
             assertTrue(
-                "$label: unterer Rand von '${k.id}' überschreitet das Budget " +
+                "$label: the bottom edge of '${k.id}' exceeds the budget " +
                     "(bottom=${k.bottom}, viewHeight=${view.height})",
                 k.bottom <= view.height + 0.5f,
             )
-            assertTrue("$label: volles Rect für '${k.id}' (keine halbe Taste)", k.bottom - k.top > 0f)
+            assertTrue("$label: full rect for '${k.id}' (no half key)", k.bottom - k.top > 0f)
             assertEquals(
-                "$label: Treffer am Mittelpunkt von '${k.id}' muss die eigene ID liefern",
+                "$label: a hit at the center of '${k.id}' must yield its own ID",
                 k.id, view.keyAtPoint(k.centerX, k.centerY)?.id,
             )
         }
@@ -103,41 +103,41 @@ class StockKeyboardFitTest {
     }
 
     /**
-     * Sequenz je Layout: Öffnung 1 → Feldwechsel (Breite 1080→1440→1080, Re-Measure)
-     * → Emoji-Ebene und zurück → Öffnung 2 (NEUE Instanz: kein Fit der Öffnung 1
-     * darf weiterwirken) → additionally bare KeyboardView mit hartem 650-px-Measure.
+     * Sequence per layout: opening 1 → field change (width 1080→1440→1080, re-measure)
+     * → emoji layer and back → opening 2 (NEW instance: no fit of opening 1 may
+     * carry over) → additionally a bare KeyboardView with a hard 650-px measure.
      */
     private fun checkFullSequence(assetId: String) {
         val asset = loadAsset(assetId)
 
-        // ── Öffnung 1 ──
+        // ── opening 1 ──
         val root1 = openRoot(asset)
-        assertAllKeysIntact(root1.keyboardView, asset, "$assetId Öffnung 1")
+        assertAllKeysIntact(root1.keyboardView, asset, "$assetId opening 1")
         assertTrue(
-            "$assetId: Root-Gesamthöhe muss im 650-px-Angebot bleiben (ist ${root1.height})",
+            "$assetId: the total root height must stay within the 650-px offer (is ${root1.height})",
             root1.height <= offeredPx,
         )
 
-        // ── Feldwechsel: anderes Feld, anderes Angebot an die Root-Kette ──
+        // ── field change: different field, different offer to the root chain ──
         remeasure(root1, 1440)
-        assertAllKeysIntact(root1.keyboardView, asset, "$assetId Feldwechsel (1440)")
+        assertAllKeysIntact(root1.keyboardView, asset, "$assetId field change (1440)")
         remeasure(root1, widthPx)
-        assertAllKeysIntact(root1.keyboardView, asset, "$assetId Feldwechsel zurück")
+        assertAllKeysIntact(root1.keyboardView, asset, "$assetId field change back")
 
-        // ── Emoji-Ebene und zurück (Ebenen-Roundtrip über denselben Stack) ──
+        // ── emoji layer and back (layer round trip via the same stack) ──
         onMain {
             root1.showEmojiPanel()
-            assertTrue("Emoji-Modus muss sichtbar sein", root1.isEmojiPanelVisible)
+            assertTrue("emoji mode must be visible", root1.isEmojiPanelVisible)
             root1.hideEmojiPanel()
         }
         remeasure(root1, widthPx)
-        assertAllKeysIntact(root1.keyboardView, asset, "$assetId nach Emoji-Rückkehr")
+        assertAllKeysIntact(root1.keyboardView, asset, "$assetId after emoji return")
 
-        // ── Öffnung 2: NEUE Instanz — kein globaler/klebriger Fit erlaubt ──
+        // ── opening 2: NEW instance — no global/sticky fit allowed ──
         val root2 = openRoot(asset)
-        assertAllKeysIntact(root2.keyboardView, asset, "$assetId Öffnung 2")
+        assertAllKeysIntact(root2.keyboardView, asset, "$assetId opening 2")
 
-        // ── deterministischer Hack: nackte KeyboardView, hartes 650-px-Angebot ──
+        // ── deterministic hack: bare KeyboardView, hard 650-px offer ──
         val bare = onMain {
             val v = KeyboardView(targetContext())
             v.setLayout(asset, widthPx)

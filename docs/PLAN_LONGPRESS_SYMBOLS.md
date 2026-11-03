@@ -1,68 +1,79 @@
-# Plan v0.1.35 — Langdruck-Menüs auf Zahlen-/Symbolebene
-**Quellenlage:** Research sa-b804a (21:4x) + Orchestrator-AOSP-Nachzug 21:5x
-(`rowkeys_symbols1-3.xml` / `rowkeys_symbols_shift1-3.xml`, AOSP main 2026-11-02).
-**Wichtig:** AOSP-main referenziert `moreKeys="!text/morekeys_symbols_*"` — die
-String-Inhalte liegen in der main-Aufzweigung nicht mehr in `values/strings.xml`
-(Verifikations-Lücke, unten offen). Harte Quellen bleiben: Repo-Belege
-(`AOSP_ROWKEYS_BELEGE.md:198`, `DESIGN_DEDE_ZIELBILD.md:128`: morekeys_punctuation
-enthält ¡ ¿ für es) + Nutzer-Auftrag (¿, Klammern) + Gboard-Konventionen [C].
+# Plan v0.1.35 — long-press menus on the digits/symbols layer
+**Source situation:** research sa-b804a (21:4x) + orchestrator AOSP
+follow-up 21:5x (`rowkeys_symbols1-3.xml` / `rowkeys_symbols_shift1-3.xml`,
+AOSP main 2026-11-02).
+**Important:** AOSP main references `moreKeys="!text/morekeys_symbols_*"` —
+the string contents are no longer in `values/strings.xml` in the main branch
+(verification gap, open below). The hard sources remain: the repo evidence
+(`AOSP_ROWKEYS_BELEGE.md:198`, `DESIGN_DEDE_ZIELBILD.md:128`:
+morekeys_punctuation contains ¡ ¿ for es) + the user's task (¿, brackets) +
+Gboard conventions [C].
 
-## 1. Schema & Mechanik (belegt, kein Neubau)
-- Feld: **`alternates`** (bestehend; Allowlist `LayoutParser.kt:100`; Doku
-  `LAYOUT_SCHEMA_REF.md` „Alternates (Langdruck)": ≤8, je 1 Codepoint, NFC, nie das
-  eigene Zeichen). **KEIN neues `longpress`-Feld** (Parser weist Unbekanntes ab).
-- Menü-Bewaffnung gilt ebenenunabhängig für jede Text-Taste mit Alternates
-  (`KeyboardView.kt:856`, Inhalt `:491-493`); `sourceKeys` je Ebene neu (`:270`) ⇒
-  Symbole-Menüs leakten nicht in Basis. **Kein Code nötig**, nur Assets.
-- Auf Symbol-Tasten **kein `hint`** setzen (Zeichnet nur base/shift, `KeyboardView.kt:469`;
-  `withHint` würde es sonst als Zelle anhängen).
-- Zeile-0-Geometrie (Ziffernreihe): B1-Regel `LongPressMenu.row0MenuBelowKey` — wird
-  durch T1 (Zweizonenregel, Debugger) ersetzt; Menüs r0/r1 erscheinen OBERHALB.
+## 1. Schema & mechanics (evidenced, no new construction)
+- Field: **`alternates`** (existing; allowlist `LayoutParser.kt:100`; docs
+  `LAYOUT_SCHEMA_REF.md` "Alternates (long-press)": ≤8, 1 codepoint each,
+  NFC, never the key's own character). **NO new `longpress` field** (the
+  parser rejects unknown fields).
+- The menu arming applies layer-independently to every text key with
+  alternates (`KeyboardView.kt:856`, content `:491-493`); `sourceKeys` are
+  rebuilt per layer (`:270`) ⇒ the symbol menus did not leak into base. **No
+  code needed**, assets only.
+- Do **not** set `hint` on symbol keys (it only draws base/shift,
+  `KeyboardView.kt:469`; `withHint` would otherwise append it as a cell).
+- Row-0 geometry (digit row): B1 rule `LongPressMenu.row0MenuBelowKey` — is
+  replaced by T1 (two-zone rule, debugger); r0/r1 menus appear ABOVE.
 
-## 2. Menü-Tabellen (sprachneutral ⇒ identisch in allen 15 Assets)
-Quellen: [A] Nutzer-Auftrag · [B] AOSP-Beleg im Repo · [C] Gboard/SwiftKey-Konvention
-(AOSP-main-Verifikation offen, s. Kopf) · [D] unklar → kein Menü.
+## 2. Menu tables (language-neutral ⇒ identical in all 15 assets)
+Sources: [A] user task · [B] AOSP evidence in the repo · [C] Gboard/SwiftKey
+convention (AOSP-main verification open, see header) · [D] unclear → no menu.
 
-### symbols (Hauptebene)
-| Taste | alternates | Quelle |
+### symbols (main layer)
+| Key | alternates | Source |
 |---|---|---|
-| 1–0 | — | [D] Fraktions-Menüs (½ ⅓ ¼ ¹ ₁) bewusst raus (Z-Doppelpfad unklar) |
-| - | ["–","—"] | [C] Gedankenstriche (Direkttasten shift-Ebene = Komfort-Doppelpfad, Präzedenz DESIGN_KEY_POPUP.md:287) |
+| 1–0 | — | [D] fraction menus (½ ⅓ ¼ ¹ ₁) deliberately left out (the Z double path is unclear) |
+| - | ["–","—"] | [C] dashes (direct keys on the shift layer = comfort double path, precedence DESIGN_KEY_POPUP.md:287) |
 | / | ["\\","|"] | [C] |
 | ( | ["[","{","<"] | [A]+[C] |
 | ) | ["]","}",">"] | [A]+[C] |
-| ' | ["‘","’","‚"] | [C] dt. Typografie |
-| " | ["„","“","”","‘","’","‚"] | [A]+[C] („ zuerst) |
+| ' | ["‘","’","‚"] | [C] German typography |
+| " | ["„","“","”","‘","’","‚"] | [A]+[C] („ first) |
 | . | ["…"] | [C] |
 | ? | ["¿"] | [A]+[B] |
 | ! | ["¡"] | [A]+[B] |
 | % | ["‰"] | [C] |
 | + | ["±"] | [C] |
-| : ; & @ # = _ * | — | [D] (=/</>/~ Menüs mit ≠ ≤ ≥ ≈ brauchen Z-Erweiterung — separater Scope) |
+| : ; & @ # = _ * | — | [D] (=/</>/~ menus with ≠ ≤ ≥ ≈ need a Z extension — separate scope) |
 
 ### symbolsShift
-| Taste | alternates | Quelle |
+| Key | alternates | Source |
 |---|---|---|
-| $ | ["€","£","¥"] | [C] de-Präferenz € zuerst; € Direkttaste derselben Ebene ⇒ Doppelpfad |
-| alle übrigen | — | [D] |
+| $ | ["€","£","¥"] | [C] de preference € first; € direct key on the same layer ⇒ double path |
+| all others | — | [D] |
 
-## 3. Implementierung (Auftrag T4)
-1. `alternates` gemäß Tabellen in `symbols`/`symbolsShift` ALLER 15 `layouts/*.json`
-   (IDs parallel; Muster `FooterAcrossAssetsTest.kt:28-96`).
-2. Kein LongPressMenu/KeyboardView-Code für Menüs selbst (T1/T2 betreffen nur Geometrie/Glyphen).
-3. `LAYOUT_SCHEMA_REF.md`: Satz „Symbolebenen: gleiche Alternates-Regeln, sprachneutral
-   in allen 15 Assets" ergänzen.
+## 3. Implementation (task T4)
+1. `alternates` per the tables in `symbols`/`symbolsShift` of ALL 15
+   `layouts/*.json` (IDs in parallel; pattern
+   `FooterAcrossAssetsTest.kt:28-96`).
+2. No LongPressMenu/KeyboardView code for the menus themselves (T1/T2
+   concern geometry/glyphs only).
+3. `LAYOUT_SCHEMA_REF.md`: add the sentence "symbol layers: the same
+   alternates rules, language-neutral in all 15 assets".
 
-## 4. Tests — `SymbolLongpressAcrossAssetsTest` (neu, Muster FooterAcrossAssets)
-- 15 Assets × {symbols, symbolsShift}: Ziffern-IDs „1"…„0" alternates leer.
-- Exakte Mengen je id (question→["¿"], exclam→["¡"], paren-left/right, hyphen, slash,
-  apostrophe, dquote, dot, percent, plus, dollar).
-- Hygiene: ≤8, 1 Codepoint, NFC, ≠ eigenes Zeichen, keine Duplikate, alle in Z.
-- Parität: Mengen je id über alle 15 Assets identisch.
-- Gegenproben (rot): gelöschte alternate; `alternates` an Ziffer; `hint` auf Symbol-Taste.
+## 4. Tests — `SymbolLongpressAcrossAssetsTest` (new, pattern
+FooterAcrossAssets)
+- 15 assets × {symbols, symbolsShift}: the digit IDs "1"…"0" have empty
+  alternates.
+- Exact sets per id (question→["¿"], exclam→["¡"], paren-left/right, hyphen,
+  slash, apostrophe, dquote, dot, percent, plus, dollar).
+- Hygiene: ≤8, 1 codepoint, NFC, ≠ the key's own character, no duplicates,
+  all in Z.
+- Parity: the sets per id are identical across all 15 assets.
+- Cross-checks (red): a deleted alternate; `alternates` on a digit; `hint` on
+  a symbol key.
 
-## 5. Offene Verifikation (vor Merge nachziehbar)
-- [C]-Zeilen: AOSP main `values/strings.xml` führt morekeys_* NICHT mehr — Inhalt wo?
-  (möglicherweise onnx/overlay-Werte; Kandidat: `values-morekeys` in neueren Patches oder
-  Gboard-Firebase-Assets). Bisher: Repo-Belege + Konvention ausreichend belegt;
-  Unstimmigkeit wäre P3-Dekoration, kein Funktionsrisiko.
+## 5. Open verification (can be followed up before the merge)
+- The [C] rows: AOSP main `values/strings.xml` no longer carries morekeys_*
+  — where is the content? (possibly onnx/overlay values; candidate:
+  `values-morekeys` in newer patches or Gboard Firebase assets). So far: the
+  repo evidence + convention are sufficiently evidenced; an inconsistency
+  would be P3 decoration, not a functional risk.

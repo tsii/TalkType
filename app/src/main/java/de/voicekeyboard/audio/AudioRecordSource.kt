@@ -13,15 +13,15 @@ import java.util.concurrent.atomic.AtomicLong
 import kotlin.math.sqrt
 
 /**
- * AudioRecord-Implementierung von [AudioSource]: 16 kHz, mono, PCM16.
+ * AudioRecord implementation of [AudioSource]: 16 kHz, mono, PCM16.
  *
- * - Puffer: `getMinBufferSize * BUFFER_FACTOR` (Faktor 4 → toleranter gegen
- *   Scheduling-Jitter, DESIGN §3 „mindestens anhand getMinBufferSize").
- * - Eigener Capture-Thread mit blockierendem `read` (DESIGN §2.3-2); Main-Thread
- *   bleibt frei.
- * - Kein Resampling, kein Plattenzugriff, keine Audio-Logs (nur Dauern/Fehlercodes).
- * - Sicherheitsnetz: [maxDurationMs] — die Session endet kontrolliert, auch wenn
- *   ein Stop-Signal verloren geht (Budget: 300 s Diktatmax, DESIGN §7).
+ * - Buffer: `getMinBufferSize * BUFFER_FACTOR` (factor 4 → more tolerant of
+ *   scheduling jitter, DESIGN §3 „mindestens anhand getMinBufferSize").
+ * - Own capture thread with blocking `read` (DESIGN §2.3-2); the main thread
+ *   stays free.
+ * - No resampling, no disk access, no audio logs (durations/error codes only).
+ * - Safety net: [maxDurationMs] — the session ends in a controlled way, even if
+ *   a stop signal gets lost (budget: 300 s dictation max, DESIGN §7).
  */
 class AudioRecordSource(
     private val maxDurationMs: Long = MAX_DURATION_MS,
@@ -34,11 +34,11 @@ class AudioRecordSource(
         const val CHANNEL = AudioFormat.CHANNEL_IN_MONO
         const val ENCODING = AudioFormat.ENCODING_PCM_16BIT
         const val BUFFER_FACTOR = 4
-        const val CHUNK_MS = 20 // 320 Samples — Chunkstartwert 20–40 ms (DESIGN §3)
+        const val CHUNK_MS = 20 // 320 samples — chunk start value 20–40 ms (DESIGN §3)
         const val MAX_DURATION_MS = 300_000L // 300 s Auto-Stop (IMPLEMENTATION_PLAN M6)
-        private const val QUEUE_CAPACITY = 32 // 32 × 20 ms ≈ 640 ms Puffer vor Rückstau
+        private const val QUEUE_CAPACITY = 32 // 32 × 20 ms ≈ 640 ms buffer before backpressure
         const val ERR_INIT = "init"
-        /** Nur der Name des gewählten Eingangs für den 🐞-Export (kein Pfad, kein Inhalt). */
+        /** Only the name of the chosen input for the 🐞 export (no path, no content). */
         const val SOURCE_NAME = "VOICE_RECOGNITION"
         const val ERR_INVALID_OP = "invalidOperation"
         const val ERR_SYSTEM_STOP = "systemStop"
@@ -85,14 +85,14 @@ class AudioRecordSource(
         return true
     }
 
-    @SuppressLint("MissingPermission") // RECORD_AUDIO wird vom Aufrufer (IME/FGS) gehalten
+    @SuppressLint("MissingPermission") // RECORD_AUDIO is held by the caller (IME/FGS)
     private fun createRecord(): AudioRecord {
         minBufferBytes = AudioRecord.getMinBufferSize(SAMPLE_RATE, CHANNEL, ENCODING)
         if (minBufferBytes <= 0) {
             throw IllegalStateException("getMinBufferSize=$minBufferBytes")
         }
         return AudioRecord(
-            MediaRecorder.AudioSource.VOICE_RECOGNITION, // Diktat: AGC ja, NR je nach Gerät
+            MediaRecorder.AudioSource.VOICE_RECOGNITION, // dictation: AGC yes, NR depending on the device
             SAMPLE_RATE,
             CHANNEL,
             ENCODING,
@@ -107,7 +107,7 @@ class AudioRecordSource(
             while (!stopping.get()) {
                 if (SystemClock.elapsedRealtime() - startUptime >= maxDurationMs) {
                     errorListener?.onError(ERR_MAX_DURATION, "durationMs=$maxDurationMs")
-                    return // kontrolliertes Ende; Stop wird vom Consumer über stopAndDrain erkannt
+                    return // controlled end; the stop is detected by the consumer via stopAndDrain
                 }
                 val n = rec.read(chunk, 0, chunk.size)
                 when {
@@ -119,13 +119,13 @@ class AudioRecordSource(
                             samples = copy,
                         )
                         levelListener?.onLevel(rms(copy), block.seq)
-                        // drop-oldest statt blockieren: Rückstau verliert Altes, nie Reihenfolge
+                        // drop-oldest instead of blocking: backpressure loses old data, never order
                         while (!queue.offer(block, 50, TimeUnit.MILLISECONDS)) {
                             queue.poll()
                         }
                     }
-                    n == 0 -> Unit // kein Daten — loop
-                    else -> { // ERROR_INVALID_OPERATION o. ä. — Aufnahme vom System gestoppt
+                    n == 0 -> Unit // no data — loop
+                    else -> { // ERROR_INVALID_OPERATION or similar — recording stopped by the system
                         errorListener?.onError(
                             if (n == AudioRecord.ERROR_INVALID_OPERATION) ERR_INVALID_OP else ERR_SYSTEM_STOP,
                             "readResult=$n",
@@ -135,13 +135,13 @@ class AudioRecordSource(
                 }
             }
         } catch (_: InterruptedException) {
-            // stop(): Capture-Thread auslaufen lassen (Stopprotokoll DESIGN §3)
+            // stop(): let the capture thread run out (stop protocol DESIGN §3)
         } catch (e: Exception) {
             errorListener?.onError(ERR_SYSTEM_STOP, e.javaClass.simpleName)
         }
     }
 
-    /** RMS eines PCM16-Blocks als linearer Pegel 0..1. Reine Funktion (JVM-testbar). */
+    /** RMS of a PCM16 block as a linear level 0..1. Pure function (JVM-testable). */
     private fun rms(samples: ShortArray): Float {
         if (samples.isEmpty()) return 0f
         var sum = 0.0
@@ -178,7 +178,7 @@ class AudioRecordSource(
         record?.let { rec ->
             try {
                 if (rec.recordingState == AudioRecord.RECORDSTATE_RECORDING) rec.stop()
-            } catch (_: IllegalStateException) { /* bereits gestoppt */ }
+            } catch (_: IllegalStateException) { /* already stopped */ }
         }
         val drained = mutableListOf<PcmBlock>()
         while (true) {
@@ -191,7 +191,7 @@ class AudioRecordSource(
     private fun releaseRecord(rec: AudioRecord) {
         try {
             rec.stop()
-        } catch (_: IllegalStateException) { /* nicht gestartet */ }
+        } catch (_: IllegalStateException) { /* not started */ }
         try {
             rec.release()
         } catch (_: Exception) { /* best effort */ }

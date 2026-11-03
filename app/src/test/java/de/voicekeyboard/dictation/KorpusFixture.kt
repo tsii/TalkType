@@ -3,49 +3,50 @@ package de.voicekeyboard.dictation
 import java.io.File
 
 /**
- * F35 („Weg D", docs/KORPUS_DIKTAT_TESTPLAN.md §2): Korpus-Fixture zur LAUFZEIT —
- * KEINE neuen Binär-Assets, kein Netz. Konkateniert die vier vorhandenen
- * 16-kHz/s16/mono-Assets (de_smoke + de_part1 + de_part2 + de_pause) und
- * streckt die Folge mit 0,3-s-Nullblöcken zwischen Wiederholungen auf die
- * exakte Ziellänge (30 s / 60 s). Regel 9: Samples verlassen nie den Test —
- * Assertionen/Logs sehen nur Zähler und Dauern.
+ * F35 ("route D", docs/KORPUS_DIKTAT_TESTPLAN.md §2): corpus fixture at RUNTIME —
+ * NO new binary assets, no network. Concatenates the four existing
+ * 16 kHz/s16/mono assets (de_smoke + de_part1 + de_part2 + de_pause) and
+ * stretches the sequence with 0.3 s zero blocks between repetitions to the
+ * exact target length (30 s / 60 s). Rule 9: samples never leave the test —
+ * assertions/logs only see counters and durations.
  */
 object KorpusFixture {
     const val SAMPLE_RATE = 16_000
 
-    /** Speise-Blockgröße der Test-Quelle: 320 Samples = 20 ms (Testplan §3). */
+    /** Feed block size of the test source: 320 samples = 20 ms (test plan §3). */
     const val BLOCK_SAMPLES = 320
 
-    /** 0,3 s synthetische Stille (Nullblöcke) zwischen Wiederholungen (§2). */
+    /** 0.3 s synthetic silence (zero blocks) between repetitions (§2). */
     const val GAP_SAMPLES = 4_800
 
-    /** F43: interne Stille-Sequenzen der Korpus-Teile auf 2,0 s kürzen — der neue
-     *  Auto-Stopp (DictationCoordinator.TRAILING_SILENCE_MS = 2500 ms) beendet
-     *  sonst den Takt-Lauf mitten in der Fixture (de_pause.wav enthält 4,38 s
-     *  Stille bei 2,4 s). Nur Test-Fixture-Anpassung, kein Produktcode; Grenze
-     *  bewusst UNTER 2500 ms. Schwelle = Produktions-SILENCE_RMS (0,01). */
+    /** F43: trim the internal silence sequences of the corpus parts to 2.0 s —
+     *  otherwise the new auto-stop (DictationCoordinator.TRAILING_SILENCE_MS
+     *  = 2500 ms) would end the paced run in the middle of the fixture
+     *  (de_pause.wav contains 4.38 s of silence at 2.4 s). Test fixture
+     *  adjustment only, no product code; the limit is deliberately BELOW
+     *  2500 ms. Threshold = production SILENCE_RMS (0.01). */
     private const val MAX_SILENT_RUN_BLOCKS = 100 // 2,0 s @ 320 Samples / 16 kHz
 
     private val PART_NAMES = listOf("de_smoke.wav", "de_part1.wav", "de_part2.wav", "de_pause.wav")
 
-    /** Die vier Korpus-Teile (lazy, einmal je Test-JVM gelesen). */
+    /** The four corpus parts (lazy, read once per test JVM). */
     val parts: List<ShortArray> by lazy { PART_NAMES.map { loadWavS16Mono(resolve(it)) } }
 
-    /** Real-Dauer der Teile in s (Samples/16000) — für die Ist-Meldung. */
+    /** Real duration of the parts in s (samples/16000) — for the actual report. */
     fun partSeconds(): List<Double> = parts.map { it.size.toDouble() / SAMPLE_RATE }
 
     /**
-     * Fixture mit EXAKT [totalSamples] Samples: die vier Teile in Reihenfolge,
-     * je Zyklus 0,3 s Nullblöcke, Wiederholung, am Ziel abgeschnitten
-     * (480 000 Samples = 30,0 s / 960 000 = 60,0 s — beide durch 32 000
-     * teilbar, d. h. ohne Rest im Coordinator-Tick).
+     * Fixture with EXACTLY [totalSamples] samples: the four parts in order,
+     * 0.3 s zero blocks per cycle, repetition, cut off at the target
+     * (480,000 samples = 30.0 s / 960,000 = 60.0 s — both divisible by
+     * 32,000, i.e. no remainder in the coordinator tick).
      */
     fun build(totalSamples: Int): ShortArray {
         check(totalSamples > 0)
-        // F43: Pausen-geklammerte Kopien der Teile (Originale in [parts] bleiben
-        // für die Ist-Meldung unverändert — partSeconds() meldet die echten Dauern).
+        // F43: pause-clamped copies of the parts (the originals in [parts] stay
+        // unchanged for the actual report — partSeconds() reports the real durations).
         val src = parts.map { clampSilence(it) }
-        val units = src.size + 1 // 4 Teile + 1 Silence-Gap je Zyklus
+        val units = src.size + 1 // 4 parts + 1 silence gap per cycle
         val out = ShortArray(totalSamples)
         var pos = 0
         var idx = 0
@@ -59,9 +60,9 @@ object KorpusFixture {
         return out
     }
 
-    /** F43: kürzt Stille-Sequenzen (Block-RMS < Produktions-SILENCE_RMS) auf
-     *  [MAX_SILENT_RUN_BLOCKS] Blöcke; laut bleibt unangetastet. Reine
-     *  Fixture-Logik (kein Produktverhalten). */
+    /** F43: trims silence sequences (block RMS < production SILENCE_RMS) to
+     *  [MAX_SILENT_RUN_BLOCKS] blocks; loud stays untouched. Pure fixture
+     *  logic (no product behavior). */
     private fun clampSilence(samples: ShortArray): ShortArray {
         var run = 0
         var w = 0
@@ -73,7 +74,7 @@ object KorpusFixture {
             for (j in i until end) acc += samples[j].toLong() * samples[j]
             val silent = kotlin.math.sqrt(acc.toDouble() / (end - i)) / 32_768.0 < 0.01
             if (silent && run >= MAX_SILENT_RUN_BLOCKS) {
-                i = end // stiller Block über der Grenze: verwerfen (Pause gekürzt)
+                i = end // silent block above the limit: discard (pause trimmed)
                 continue
             }
             if (silent) run++ else run = 0
@@ -86,7 +87,7 @@ object KorpusFixture {
         return if (w == samples.size) samples else out.copyOf(w)
     }
 
-    /** Findet testdata/ vom Test-Arbeitsverzeichnis aus (walk-up, max. 6 Ebenen). */
+    /** Finds testdata/ from the test working directory (walk-up, max 6 levels). */
     private fun resolve(name: String): File {
         var dir = File(System.getProperty("user.dir") ?: ".")
         repeat(6) {
@@ -97,7 +98,7 @@ object KorpusFixture {
         throw IllegalStateException("testdata/$name nicht gefunden")
     }
 
-    /** Minimaler s16le-mono-Reader: sucht das data-Chunk (Header-Layout unabhängig). */
+    /** Minimal s16le-mono reader: finds the data chunk (independent of header layout). */
     private fun loadWavS16Mono(file: File): ShortArray {
         val b = file.readBytes()
         require(b.size > 44 && String(b, 0, 4) == "RIFF" && String(b, 8, 4) == "WAVE") {

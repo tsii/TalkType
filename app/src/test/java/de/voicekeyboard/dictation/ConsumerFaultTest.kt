@@ -21,11 +21,11 @@ import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 
 /**
- * F13d (docs/REVIEW_F14_DIKTAT_KETTE.md): P1 — stiller Consumer-Tod (Editor-
- * Sync-Timeout aus feedAudio tötete den Consumer-Job, Capture lief weiter,
- * der unbegrenzte Kanal wuchs, keine Meldung); P2-1 — onDictationStopped las
- * LIVE-Controller-Zustand, den der nächste start() nullt; P2-2 — hyp_gap_ms
- * konnte bei Rückwärts-Uhr negativ werden.
+ * F13d (docs/REVIEW_F14_DIKTAT_KETTE.md): P1 — silent consumer death (an
+ * editor-sync timeout from feedAudio killed the consumer job, capture kept
+ * running, the unbounded channel grew, no report); P2-1 — onDictationStopped
+ * read LIVE controller state that the next start() nulls; P2-2 — hyp_gap_ms
+ * could go negative with a backwards-running clock.
  */
 class ConsumerFaultTest {
 
@@ -66,11 +66,12 @@ class ConsumerFaultTest {
         override fun start(sessionId: Long): Boolean = true
         override fun read(dst: ShortArray, timeoutMs: Int): Int {
             val n = minOf(samplesPerRead, dst.size)
-            // F31: Block INHALT laut füllen (Amplitude 12000 ≈ −9 dBFS) — ohne
-            // Inhalt wäre dst (0) still und der F31-Stille-Watchdog hätte bei
-            // Last>3 s einen neuen (falschen) Abbruchpfad in diesen Test gebracht.
+            // F31: fill the block with LOUD content (amplitude 12000 ≈ −9 dBFS) —
+            // without content dst (0) would be silent and the F31 silence watchdog
+            // would have brought a new (wrong) abort path into this test under
+            // load > 3 s.
             java.util.Arrays.fill(dst, 0, n, 12_000.toShort())
-            return n // sofort lieferbar — treibt den Consumer zügig an
+            return n // immediately available — drives the consumer along briskly
         }
         override fun stopAndDrain(): List<PcmBlock> = emptyList()
         override fun release() { released.set(true) }
@@ -78,13 +79,13 @@ class ConsumerFaultTest {
 
     private fun seconds(n: Int): PcmBlock = PcmBlock(0, 0, ShortArray(n * 16_000))
 
-    // (a) P1: feedAudio wirft Editor-Sync-Timeout-IllegalStateException → der
-    //     Coordinator endet KONTROLLIERT: Fehlercode sichtbar, Capture läuft
-    //     nicht mehr (active=false), der Ausgang ist als Outcome sichtbar.
+    // (a) P1: feedAudio throws the editor-sync timeout IllegalStateException →
+    //     the coordinator ends CONTROLLED: error code visible, capture no longer
+    //     running (active=false), the outcome is visible as an Outcome.
     @Test
-    fun `Editor-Sync-Timeout toetet den Consumer nicht still - Coordinator endet kontrolliert`() = runBlocking {
+    fun `Editor-Sync-Timeout does not silently kill the consumer - coordinator ends controlled`() = runBlocking {
         val engine = FakeEngine()
-        engine.failNextWithTimeout = true // Erste Transkription (nach 2 s Audio) reißt den Sync
+        engine.failNextWithTimeout = true // the first transcription (after 2 s of audio) breaks the sync
         val sink = RecordingSink()
         val routeCalls = AtomicInteger(0)
         val scope = CoroutineScope(Dispatchers.Default)
@@ -94,9 +95,9 @@ class ConsumerFaultTest {
             engineFactory = { engine },
             sink = sink,
             tracker = OwnershipTracker(),
-            tickSamples = 4_000, // jeder Fake-Read löst sofort einen flush aus
+            tickSamples = 4_000, // every fake read triggers a flush immediately
         )
-        // routeObserver zählt mit, dass die Route nach dem kontrollierten Ende freigegeben wird
+        // routeObserver counts along that the route is released after the controlled end
         val coordWithRoute = DictationCoordinator(
             scope = scope,
             audioSourceFactory = { FakeSource() },
@@ -108,58 +109,58 @@ class ConsumerFaultTest {
         )
 
         assertTrue(coordinator.start())
-        // Warten, bis der Fehler durch die Kette gelaufen ist (bis 5 s, dann rot):
+        // wait until the error has run through the chain (up to 5 s, then red):
         withTimeout(5_000) {
             while (coordinator.isActive) kotlinx.coroutines.delay(20)
         }
-        assertFalse("Capture darf nach dem Consumer-Fehler nicht weiterlaufen", coordinator.isActive)
+        assertFalse("capture must not continue after the consumer error", coordinator.isActive)
         assertTrue(
-            "Fehlercode muss sichtbar sein (Regel: jeder gefangene Fall setzt einen Grund)",
+            "the error code must be visible (rule: every caught case sets a reason)",
             coordinator.visibleError != null,
         )
-        // Flaky-Entscheidung 2026-11-01 (BAU 23/24, F31, F31b, BAU 26): das Outcome
-        // wird Worker-seitig gesetzt und ist dem Assert um ein paar Coroutine-
-        // Dispatches hinterher — unter paralleler Suite-Last las der Sofort-Check
-        // (rot bei 0,012 s Testzeit) zu früh. Deterministisch: bis zu 2 s in
-        // 10-ms-Schritten auf das Outcome pollen. Bleibt es länger null, ist das
-        // ein ECHTER Produkt-Fehler — die Frist wird bewusst NICHT erhöht.
-        // F50 (Last-Flaky-Stabilisierung): der alte Poll pruefte auf null —
-        // lastStopOutcome traegt aber bereits ab Konstruktion den Sentinel
-        // IdleNoOp (NIE null), der Poll war ein No-Op und das Assert rannte
-        // unter Suite-Last dem NoFinal-Schreibvorgang im Consumer-Catch davon
-        // (dann las es den initialen IdleNoOp). Deterministisch: auf den
-        // ERWARTETEN Endzustand pollen (Fake-Synchronisation ueber Zustand,
-        // nicht Echtzeit-Geduld); Assertions unveraendert, Frist unveraendert
-        // (2 s — ein echter Produktfehler timeoutet weiterhin rot).
+        // Flaky decision 2026-11-01 (BAU 23/24, F31, F31b, BAU 26): the outcome
+        // is set on the worker side and lags the assert by a few coroutine
+        // dispatches — under parallel suite load the immediate check (red at
+        // 0.012 s test time) read too early. Deterministic: poll for the
+        // outcome for up to 2 s in 10 ms steps. If it stays null longer, that
+        // is a REAL product fault — the deadline is deliberately NOT raised.
+        // F50 (load flaky stabilization): the old poll checked for null — but
+        // lastStopOutcome already carries the IdleNoOp sentinel from
+        // construction on (NEVER null), the poll was a no-op and the assert
+        // raced ahead of the NoFinal write in the consumer catch under suite
+        // load (then it read the initial IdleNoOp). Deterministic: poll for the
+        // EXPECTED end state (fake synchronization via state, not real-time
+        // patience); assertions unchanged, deadline unchanged (2 s — a real
+        // product fault still times out red).
         withTimeout(2_000) {
             while (coordinator.lastStopOutcome !is StopOutcome.NoFinal) {
                 kotlinx.coroutines.delay(10)
             }
         }
-        // Der Ausgang ist als StopOutcome sichtbar — kein stummer Tod:
+        // the outcome is visible as a StopOutcome — no silent death:
         val outcome = coordinator.lastStopOutcome
-        assertTrue("Outcome muss NoFinal mit Fehlercode tragen", outcome is StopOutcome.NoFinal)
+        assertTrue("outcome must carry NoFinal with an error code", outcome is StopOutcome.NoFinal)
         assertEquals("editor_sync_timeout", (outcome as StopOutcome.NoFinal).errorCode)
-        // F56 (vc33-Gerätefund): der FEINE Drift-Code darf vom generischen
-        // consumer:<Klasse> NICHT maskiert werden — visibleError und
-        // lastAbortRule (stop_cause) tragen editor_sync_timeout (F1-Vertrag:
-        // mapVisibleError zeigt die echte Ursache; vorher Gerätelog
-        // „visibleError=consumer:IllegalStateException" → Else-Fallback).
-        assertEquals("F56: visibleError unmaskiert", "editor_sync_timeout", coordinator.visibleError)
-        assertEquals("F56: Abort-Grund fein (stop_cause-Familie)", "editor_sync_timeout", coordinator.lastAbortReason)
+        // F56 (vc33 device finding): the FINE drift code must NOT be masked by
+        // the generic consumer:<class> — visibleError and lastAbortRule
+        // (stop_cause) carry editor_sync_timeout (F1 contract: mapVisibleError
+        // shows the real cause; previously the device log showed
+        // "visibleError=consumer:IllegalStateException" → else fallback).
+        assertEquals("F56: visibleError unmasked", "editor_sync_timeout", coordinator.visibleError)
+        assertEquals("F56: abort reason fine-grained (stop_cause family)", "editor_sync_timeout", coordinator.lastAbortReason)
 
-        // Zweiter Coordinator mit routeObserver: Route wird am Ende freigegeben
+        // second coordinator with routeObserver: the route is released at the end
         assertTrue(coordWithRoute.start())
         withTimeout(5_000) { while (coordWithRoute.isActive) kotlinx.coroutines.delay(20) }
-        assertEquals("routeObserver muss nach dem kontrollierten Ende auf off stehen", 0, routeCalls.get())
+        assertEquals("routeObserver must be off after the controlled end", 0, routeCalls.get())
         coordWithRoute.shutdown()
         coordinator.shutdown()
     }
 
-    // (b) Nach dem Fehler liefert stop() ein Outcome, das den Fehler trägt —
-    //     KEIN IdleNoOp, kein stummes IDLE.
+    // (b) after the error stop() returns an Outcome that carries the error —
+    //     NO IdleNoOp, no silent IDLE.
     @Test
-    fun `stop nach Editor-Sync-Timeout liefert NoFinal mit Fehlercode`() = runBlocking {
+    fun `stop after Editor-Sync-Timeout yields NoFinal with error code`() = runBlocking {
         val f = FakeEngine().apply { failNextWithTimeout = true }
         val controller = DictationController(f, RecordingSink())
         assertTrue(controller.start())
@@ -167,22 +168,22 @@ class ConsumerFaultTest {
         try {
             controller.feedAudio(seconds(3))
         } catch (e: IllegalStateException) {
-            thrown = e // der Wurf ist Vertrag: der Coordinator kann reagieren
+            thrown = e // the throw is the contract: the coordinator can react
         }
         assertTrue(thrown != null)
         assertEquals(DictationState.IDLE, controller.state)
-        assertTrue("fail() muss den Fehler bis zur Sichtbarkeit bewahren", controller.failedThisSession)
+        assertTrue("fail() must preserve the error until it becomes visible", controller.failedThisSession)
 
-        val outcome = controller.stop() // Loslassen nach dem Fail
-        assertTrue("kein stummes No-Op", outcome !is StopOutcome.IdleNoOp)
+        val outcome = controller.stop() // release after the fail
+        assertTrue("no silent no-op", outcome !is StopOutcome.IdleNoOp)
         assertTrue(outcome is StopOutcome.NoFinal)
         assertEquals("editor_sync_timeout", (outcome as StopOutcome.NoFinal).errorCode)
     }
 
-    // (c) P2-1: Snapshot — nach stop() wird start() erneut aufgerufen (Zustand
-    //     genullt); die Beurteilung der ALTEN Sitzung bleibt im Outcome richtig.
+    // (c) P2-1: snapshot — after stop(), start() is called again (state
+    //     nulled); the verdict on the OLD session stays correct in the outcome.
     @Test
-    fun `Outcome ist ein Snapshot - neuer Start verfaelscht die alte Beurteilung nicht`() = runBlocking {
+    fun `Outcome is a snapshot - a new start does not falsify the old verdict`() = runBlocking {
         val f = FakeEngine().apply { failNextWithTimeout = true }
         val controller = DictationController(f, RecordingSink())
         assertTrue(controller.start())
@@ -191,39 +192,39 @@ class ConsumerFaultTest {
         } catch (e: IllegalStateException) {
             // Vertrag: Wurf nach oben
         }
-        val oldOutcome = controller.stop() // NoFinal mit Fehlercode (Snapshot A)
+        val oldOutcome = controller.stop() // NoFinal with error code (snapshot A)
 
-        // „Schnell loslassen, sofort neu drücken": Sitzung B startet und NULLT
-        // den Live-Zustand (failedThisSession=false, lastErrorCode=null):
+        // "release quickly, press again immediately": session B starts and NULLS
+        // the live state (failedThisSession=false, lastErrorCode=null):
         assertTrue(controller.start())
         assertFalse(controller.failedThisSession)
         assertEquals(null, controller.lastErrorCode)
 
-        // Die Beurteilung von Sitzung A bleibt korrekt — NUR der Snapshot zählt:
+        // the verdict on session A stays correct — ONLY the snapshot counts:
         assertTrue(oldOutcome is StopOutcome.NoFinal)
-        assertTrue("kein falsches Haekchen für die alte, gescheiterte Sitzung",
+        assertTrue("no false checkmark for the old, failed session",
             oldOutcome !is StopOutcome.FinalRan)
         assertEquals("editor_sync_timeout", (oldOutcome as StopOutcome.NoFinal).errorCode)
-        assertTrue("Fehler bleibt im Snapshot sichtbar", (oldOutcome as StopOutcome.NoFinal).failedWith)
+        assertTrue("error stays visible in the snapshot", (oldOutcome as StopOutcome.NoFinal).failedWith)
     }
 
-    // (d) P2-2: hyp_gap_ms wird nie negativ — injizierte rückwärtslugende Uhr.
+    // (d) P2-2: hyp_gap_ms is never negative — injected backwards-running clock.
     @Test
-    fun `hyp_gap_ms ist nie negativ auch bei rueckwaertslaufender Uhr`() = runBlocking {
+    fun `hyp_gap_ms is never negative even with a backwards-running clock`() = runBlocking {
         val ticks = AtomicInteger(0)
-        // Rückwärtsuhr: erste Messung (Hypothese) 2e9 ns, danach 1e9 ns.
+        // backwards clock: first measurement (hypothesis) 2e9 ns, then 1e9 ns.
         val backwardsClock = { if (ticks.incrementAndGet() == 1) 2_000_000_000L else 1_000_000_000L }
         val controller = DictationController(FakeEngine(), RecordingSink(), clock = backwardsClock)
         assertTrue(controller.start())
-        controller.feedAudio(seconds(3)) // erzeugt eine Hypothese → lastHypAt = 2e9
+        controller.feedAudio(seconds(3)) // produces a hypothesis → lastHypAt = 2e9
         val gap = controller.currentHypGapMs()
-        assertTrue("Diagnosewert muss plausibel sein, nie negativ (war $gap)", gap >= 0)
-        assertEquals(" coerceAtLeast(0) klemmt den Rückwärtsstand auf 0", 0L, gap)
+        assertTrue("diagnostic value must be plausible, never negative (was $gap)", gap >= 0)
+        assertEquals(" coerceAtLeast(0) clamps the backwards count to 0", 0L, gap)
     }
 
-    // (e) Normalpfad unverändert: Finale läuft, FinalRan ohne Fehler.
+    // (e) normal path unchanged: the final runs, FinalRan without an error.
     @Test
-    fun `Normalpfad unveraendert - FinalRan ohne Fehler und mit Text`() = runBlocking {
+    fun `normal path unchanged - FinalRan without error and with text`() = runBlocking {
         val sink = RecordingSink()
         val controller = DictationController(FakeEngine(), sink)
         assertTrue(controller.start())
@@ -232,23 +233,23 @@ class ConsumerFaultTest {
         assertTrue(outcome is StopOutcome.FinalRan)
         assertFalse((outcome as StopOutcome.FinalRan).failedWith)
         assertEquals(null, outcome.finalError)
-        assertTrue("Text muss geschrieben sein", sink.text.contains("hallo"))
+        assertTrue("text must have been written", sink.text.contains("hallo"))
     }
 
-    // (f) F13e: editor_sync_timeout bildet auf den NEUEN Schlüssel
-    //     dictation_error_editor_busy ab (fester Soll-Schlüssel, via R-Reflection
-    //     geprüft — JVM ohne Android-Runtime); unbekannte Codes fallen weiter
-    //     auf den generischen Fallback (mapErrorTextRes == null).
+    // (f) F13e: editor_sync_timeout maps to the NEW key
+    //     dictation_error_editor_busy (fixed target key, checked via R
+    //     reflection — JVM without Android runtime); unknown codes keep falling
+    //     through to the generic fallback (mapErrorTextRes == null).
     @Test
-    fun `editor_sync_timeout bildet auf dictation_error_editor_busy ab - Unbekannte bleiben generisch`() {
+    fun `editor_sync_timeout maps to dictation_error_editor_busy - unknowns stay generic`() {
         val res = de.voicekeyboard.ime.VoiceKeyboardService.mapErrorTextRes("editor_sync_timeout")
         assertEquals(de.voicekeyboard.R.string.dictation_error_editor_busy, res)
-        // Fester Soll-Schlüssel: der R-Konstante gehört der NAME
-        // dictation_error_editor_busy (nicht irgendein generischer Text).
+        // fixed target key: the NAME dictation_error_editor_busy belongs to the
+        // R constant (not just any generic text).
         val field = Class.forName("de.voicekeyboard.R\$string").fields
             .first { it.getInt(null) == res }
         assertEquals("dictation_error_editor_busy", field.name)
-        // Unbekannte Codes bleiben beim generischen Fallback (kein Editor-Busy):
+        // unknown codes stay with the generic fallback (no editor-busy):
         assertEquals(null, de.voicekeyboard.ime.VoiceKeyboardService.mapErrorTextRes("asr_partial_error"))
         assertEquals(null, de.voicekeyboard.ime.VoiceKeyboardService.mapErrorTextRes("unknown"))
         assertEquals(null, de.voicekeyboard.ime.VoiceKeyboardService.mapErrorTextRes("consumer=IllegalStateException"))

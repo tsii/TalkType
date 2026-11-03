@@ -8,8 +8,8 @@ import android.widget.LinearLayout
 import android.widget.TextView
 
 /**
- * Nur im Debug-Build: einfaches Textfeld, um die IME ohne fremde App zu prüfen
- * (Emulator-Verifikation, Screenshots). Nicht Teil des Release-APKs.
+ * Debug build only: simple text field to test the IME without a foreign app
+ * (emulator verification, screenshots). Not part of the release APK.
  */
 class DebugInputActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {

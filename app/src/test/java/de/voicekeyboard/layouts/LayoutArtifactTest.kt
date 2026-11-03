@@ -11,27 +11,27 @@ import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 
 /**
- * LayoutArtifactTest (LAYOUT_REQUIREMENTS §6.8, Grundregel 5a–5f Rev 3):
- * Prüft JEDE Taste JEDES Assets (roher JSON-Baum, bewusst ohne LayoutParser, damit
- * auch Verstöße erkannt werden, die der Parser durchrüsten würde):
+ * LayoutArtifactTest (LAYOUT_REQUIREMENTS §6.8, basic rules 5a–5f Rev 3):
+ * Checks EVERY key of EVERY asset (raw JSON tree, deliberately without LayoutParser,
+ * so that violations the parser would harden away are detected too):
  *
- * - 5a: bei kind=="text" gilt label == value (Codepoint-Gleichheit, nicht gefaltet).
- * - 5b: label UND value bestehen aus genau einem Codepoint (nur kind=="text").
- * - 5c: keine Artefakte "=\" (zwei Codepoints) und "⌇" (U+2307, nicht in Z);
- *       `& \ < >` sind KEINE Artefakte (Rev-3-Korrektur, §2.1.3) und erlaubt.
- * - 5d: kein Steuer-/Kombinations-/Leerraum-Zeichen im Text-Label (Cc, Cf,
+ * - 5a: for kind=="text" label == value holds (codepoint equality, not folded).
+ * - 5b: label AND value consist of exactly one codepoint (only kind=="text").
+ * - 5c: no artifacts "=\" (two codepoints) and "⌇" (U+2307, not in Z);
+ *       `& \ < >` are NOT artifacts (Rev-3 correction, §2.1.3) and are allowed.
+ * - 5d: no control/combining/whitespace character in the text label (Cc, Cf,
  *       U+0300–U+036F, Zs/Zl/Zp).
- * - 5e: keine leeren Labels/Values (alle kinds); alternates nur nicht-leere Einzelzeichen.
- * - 5f: bei kind=="action" muss value in der Action-Whitelist stehen
- *       (Whitelist hier IM TEST geführt, unabhängig vom Parser).
+ * - 5e: no empty labels/values (all kinds); alternates only non-empty single characters.
+ * - 5f: for kind=="action" the value must be in the action whitelist
+ *       (the whitelist is maintained HERE IN THE TEST, independent of the parser).
  *
- * Gegenproben: Inline-präparierte Minimal-Layouts müssen den Test ROT machen.
+ * Counter-checks: inline-prepared minimal layouts must turn the test RED.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35])
 class LayoutArtifactTest {
 
-    /** Action-Whitelist — im Test geführt (Auftrag: „Whitelist im Test"). */
+    /** Action whitelist — maintained in the test (order: „Whitelist im Test"). */
     private val actionWhitelist = setOf(
         "shift", "caps", "layer-symbols", "layer-base", "backspace", "space", "enter",
         "language", "emoji", "mic", "cursor-left", "cursor-right",
@@ -54,38 +54,38 @@ class LayoutArtifactTest {
     }
 
     private fun checkKey(key: JSONObject, layerName: String, r: Int, k: Int, source: String) {
-        val where = "$source, Ebene '$layerName' rows[$r][$k] (id='${key.optString("id")}')"
+        val where = "$source, layer '$layerName' rows[$r][$k] (id='${key.optString("id")}')"
         val kind = key.optString("kind", "")
-        // F27a1 MARGIN: Randfläche — nur Breite, kein Label/Glyphe/Touch. Leere
-        // label/value sind hier KORREKT; 5a–5f gelten nicht (der Parser prüft separat,
-        // dass MARGIN kein value/alternates trägt).
+        // F27a1 MARGIN: margin surface — only width, no label/glyph/touch. Empty
+        // label/value are CORRECT here; 5a–5f do not apply (the parser checks
+        // separately that MARGIN carries no value/alternates).
         if (kind == "margin") return
         val label = key.optString("label", "")
         val value = key.optString("value", "")
-        // 5e: keine leeren Labels/Values (alle kinds)
-        if (label.isEmpty()) fail("$where: leeres label (Regel 5e)")
-        if (value.isEmpty()) fail("$where: leeres value (Regel 5e)")
-        // 5c: verbotene Artefakte (auch auf Action-Tasten ist das ein Artefakt)
+        // 5e: no empty labels/values (all kinds)
+        if (label.isEmpty()) fail("$where: empty label (rule 5e)")
+        if (value.isEmpty()) fail("$where: empty value (rule 5e)")
+        // 5c: forbidden artifacts (on action keys too this is an artifact)
         for (bad in forbiddenArtifacts) {
             if (label.contains(bad) || value.contains(bad)) {
-                fail("$where: Artefakt '${bad}' in label/value (Regel 5c, §2.1.3)")
+                fail("$where: artifact '${bad}' in label/value (rule 5c, §2.1.3)")
             }
         }
         when (kind) {
             "text" -> {
                 // 5a: label == value
                 if (label != value) {
-                    fail("$where: label '$label' != value '$value' (Regel 5a)")
+                    fail("$where: label '$label' != value '$value' (rule 5a)")
                 }
-                // 5b: genau ein Codepoint
+                // 5b: exactly one codepoint
                 if (label.codePointCount(0, label.length) != 1 ||
                     value.codePointCount(0, value.length) != 1
                 ) {
                     val cps = label.codePoints().mapToObj { "U+%04X".format(it) }
-                        .reduce { a, b -> "$a $b" }.orElse("<leer>")
-                    fail("$where: label '$label' hat nicht genau 1 Codepoint ($cps; Regel 5b)")
+                        .reduce { a, b -> "$a $b" }.orElse("<empty>")
+                    fail("$where: label '$label' does not have exactly 1 codepoint ($cps; rule 5b)")
                 }
-                // 5d: kein Steuer-/Kombinations-/Leerraum-Zeichen
+                // 5d: no control/combining/whitespace character
                 label.codePoints().forEach { cp ->
                     val type = Character.getType(cp)
                     val combining = cp in 0x0300..0x036F
@@ -95,52 +95,52 @@ class LayoutArtifactTest {
                     if (cp < 0x20 || cp == 0x7F || combining || whitespace ||
                         type == Character.FORMAT.toInt()
                     ) {
-                        fail("$where: verbotenes Zeichen U+%04X im label '%s' (Regel 5d)".format(cp, label))
+                        fail("$where: forbidden character U+%04X in label '%s' (rule 5d)".format(cp, label))
                     }
                 }
             }
             "action" -> {
-                // 5f: erlaubte Action-Namen (Whitelist im Test)
+                // 5f: allowed action names (whitelist in the test)
                 if (value !in actionWhitelist) {
-                    fail("$where: unbekannte Action '$value' (Whitelist: " +
-                        "${actionWhitelist.sorted()}; Regel 5f)")
+                    fail("$where: unknown action '$value' (whitelist: " +
+                        "${actionWhitelist.sorted()}; rule 5f)")
                 }
             }
-            "dead" -> { /* Struktur prüft LayoutParserTest; hier nur 5e-Artefakte oben */ }
-            else -> fail("$where: unbekanntes kind '$kind'")
+            "dead" -> { /* structure is checked by LayoutParserTest; here only the 5e artifacts above */ }
+            else -> fail("$where: unknown kind '$kind'")
         }
-        // alternates: nur nicht-leere Einzelzeichen
+        // alternates: only non-empty single characters
         if (key.has("alternates")) {
             val arr = key.getJSONArray("alternates")
             for (i in 0 until arr.length()) {
                 val alt = arr.getString(i)
-                if (alt.isEmpty()) fail("$where: leeres alternates-Element (Regel 5e)")
+                if (alt.isEmpty()) fail("$where: empty alternates element (rule 5e)")
                 if (alt.codePointCount(0, alt.length) != 1) {
-                    fail("$where: alternates-Element '$alt' hat nicht genau 1 Codepoint (Regel 5b)")
+                    fail("$where: alternates element '$alt' does not have exactly 1 codepoint (rule 5b)")
                 }
                 for (bad in forbiddenArtifacts) {
-                    if (alt.contains(bad)) fail("$where: Artefakt '$bad' in alternates (Regel 5c)")
+                    if (alt.contains(bad)) fail("$where: artifact '$bad' in alternates (rule 5c)")
                 }
             }
         }
     }
 
     @Test
-    fun `keine Artefakte in irgendeinem Asset - Regel 5a bis 5f`() {
+    fun `no artifacts in any asset - rule 5a to 5f`() {
         val context = RuntimeEnvironment.getApplication()
         val files = context.assets.list("layouts")?.filter { it.endsWith(".json") }
-            ?: throw AssertionError("layouts-Verzeichnis nicht lesbar")
-        assertTrue("Keine Layout-Assets gefunden", files.isNotEmpty())
+            ?: throw AssertionError("layouts directory not readable")
+        assertTrue("no layout assets found", files.isNotEmpty())
         for (file in files) {
             val json = context.assets.open("layouts/$file").bufferedReader().use { it.readText() }
             checkNoArtifacts(json, file)
         }
-        println("LayoutArtifactTest: ${files.size} Assets geprüft (Regel 5a–5f)")
+        println("LayoutArtifactTest: ${files.size} assets checked (rules 5a–5f)")
     }
 
-    // ---------- Gegenproben (Inline-Minimal-Layouts, KEINE Asset-Änderung) ----------
+    // ---------- counter-checks (inline minimal layouts, NO asset change) ----------
 
-    /** Minimaler Layout-Rumpf für die Negativtests (nur eine Taste pro Ebene). */
+    /** Minimal layout skeleton for the negative tests (only one key per layer). */
     private fun minimalLayout(keyJson: String): String = """
         {
           "schemaVersion": 1,
@@ -162,46 +162,46 @@ class LayoutArtifactTest {
             checkNoArtifacts(json, "inline")
         } catch (e: AssertionError) {
             caught = true
-            assertTrue("$what — Meldung soll '${expectedInMessage}' enthalten: ${e.message}",
+            assertTrue("$what — message should contain '${expectedInMessage}': ${e.message}",
                 e.message?.contains(expectedInMessage) == true)
         }
-        assertTrue("$what wurde NICHT erkannt (Tautologie-Verdacht)", caught)
+        assertTrue("$what was NOT detected (tautology suspicion)", caught)
     }
 
     @Test
-    fun `negativ - label ungleich value wird erkannt 5a`() {
+    fun `negative - label not equal to value is detected 5a`() {
         val key = """{"id":"k","label":"a","width":1,"kind":"text","value":"b"}"""
-        expectCaught(minimalLayout(key), "Regel 5a", "label != value")
+        expectCaught(minimalLayout(key), "rule 5a", "label != value")
     }
 
     @Test
-    fun `negativ - zwei Codepoints im Label werden erkannt 5b`() {
+    fun `negative - two codepoints in the label are detected 5b`() {
         val key = """{"id":"k","label":"ab","width":1,"kind":"text","value":"ab"}"""
-        expectCaught(minimalLayout(key), "Regel 5b", "2 Codepoints")
+        expectCaught(minimalLayout(key), "rule 5b", "2 codepoints")
     }
 
     @Test
-    fun `negativ - Artefakt Backslash-Label wird erkannt 5c`() {
+    fun `negative - backslash-label artifact is detected 5c`() {
         val key = """{"id":"k","label":"=\\<","width":1,"kind":"text","value":"=\\<"}"""
-        expectCaught(minimalLayout(key), "Regel 5c", "Artefakt =\\>")
+        expectCaught(minimalLayout(key), "rule 5c", "artifact =\\>")
     }
 
     @Test
-    fun `negativ - Kombinationszeichen im Label wird erkannt 5d`() {
-        val combining = "\u0301" // COMBINING ACUTE ACCENT (genau 1 Codepoint, aber U+0300–U+036F)
+    fun `negative - combining character in the label is detected 5d`() {
+        val combining = "\u0301" // COMBINING ACUTE ACCENT (exactly 1 codepoint, but U+0300–U+036F)
         val key = """{"id":"k","label":"$combining","width":1,"kind":"text","value":"$combining"}"""
-        expectCaught(minimalLayout(key), "Regel 5d", "Kombinationszeichen")
+        expectCaught(minimalLayout(key), "rule 5d", "combining character")
     }
 
     @Test
-    fun `negativ - leeres Label wird erkannt 5e`() {
+    fun `negative - empty label is detected 5e`() {
         val key = """{"id":"k","label":"","width":1,"kind":"action","value":"space"}"""
-        expectCaught(minimalLayout(key), "Regel 5e", "leeres Label")
+        expectCaught(minimalLayout(key), "rule 5e", "empty label")
     }
 
     @Test
-    fun `negativ - unbekannte Action wird erkannt 5f`() {
+    fun `negative - unknown action is detected 5f`() {
         val key = """{"id":"k","label":"⚠","width":1,"kind":"action","value":"launch-missiles"}"""
-        expectCaught(minimalLayout(key), "Regel 5f", "unbekannte Action")
+        expectCaught(minimalLayout(key), "rule 5f", "unknown action")
     }
 }

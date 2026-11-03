@@ -24,17 +24,17 @@ import org.robolectric.Shadows
 import org.robolectric.annotation.Config
 
 /**
- * P0-Regression (0.1.20): die Statuszeile („Bereit"/„Diktat" + Mic + 🐞) und der
- * 48-dp-Höhenhaushalt oberhalb der q-Reihe. Der Test belegt den Grundzustand:
+ * P0 regression (0.1.20): the status row ("Bereit"/"Diktat" + mic + 🐞) and
+ * the 48-dp height budget above the q row. The test proves the basic state:
  *
- *  - Root-View enthält statusText, micButton und die (wie im Service angebauten)
- *    🐞-Debug-Taste — alle drei VISIBLE mit Höhe > 0;
- *  - Statuszeile ist EXAKT 48 dp;
- *  - die Tastatur liegt DARUNTER (top ≥ Statuszeilenhöhe) und behält ihre
- *    Reihen (S1: kein Row-Drop) — auch bei engem Fensterangebot (EXACTLY).
+ *  - the root view contains statusText, micButton and the 🐞 debug key (as
+ *    mounted in the service) — all three VISIBLE with height > 0;
+ *  - the status row is EXACTLY 48 dp;
+ *  - the keyboard sits BELOW it (top ≥ status row height) and keeps its rows
+ *    (S1: no row drop) — even with a tight window offer (EXACTLY).
  *
- * Messung wie das IME-Framework: Breite EXACTLY, Höhe UNSPECIFIED
- * (Fenster Größe = View gemessene Höhe) bzw. EXACTLY bei begrenztem Angebot.
+ * Measurement like the IME framework: width EXACTLY, height UNSPECIFIED
+ * (window size = view measured height) or EXACTLY with a limited offer.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35])
@@ -45,10 +45,10 @@ class ImeRootViewLayoutTest {
     private fun statusRowOf(view: ImeRootView): LinearLayout =
         view.micButton.parent as LinearLayout
 
-    /** T9 (v0.1.38): Injizierbare Naht = context.applicationInfo.flags — der
-     *  Konstruktor liest FLAG_DEBUGGABLE EINMAL. buildRoot() setzt das Flag
-     *  explizit: DIESE Klasse belegt den DEBUG-Bestand (P0-Regression); der
-     *  Release-Fall hat die beiden eigenen T9-Tests unten. */
+    /** T9 (v0.1.38): injectable seam = context.applicationInfo.flags — the
+     *  constructor reads FLAG_DEBUGGABLE ONCE. buildRoot() sets the flag
+     *  explicitly: THIS class proves the DEBUG stock (P0 regression); the
+     *  release case has its own two T9 tests below. */
     private fun setDebuggable(on: Boolean) {
         if (on) {
             app.applicationInfo.flags = app.applicationInfo.flags or ApplicationInfo.FLAG_DEBUGGABLE
@@ -58,8 +58,8 @@ class ImeRootViewLayoutTest {
         }
     }
 
-    /** Baut die Root wie [VoiceKeyboardService.onCreateInputView]:
-     *  Layout de-de + 🐞-Button (48 dp) an derselben Stelle (statusRow = micButton.parent). */
+    /** Builds the root like [VoiceKeyboardService.onCreateInputView]:
+     *  layout de-de + 🐞 button (48 dp) at the same spot (statusRow = micButton.parent). */
     private fun buildRoot(): ImeRootView {
         setDebuggable(true)
         val view = ImeRootView(app)
@@ -67,19 +67,19 @@ class ImeRootViewLayoutTest {
             LayoutRepository(app).loadOrFallback("de-de"),
             app.resources.displayMetrics.widthPixels,
         )
-        // P0: die 🐞-Taste kommt aus der ImeRootView selbst (view.debugButton) —
-        // das alte manuelle addView im Test hat das brüchige Service-Verhalten
-        // maskiert; es ist gelöscht.
+        // P0: the 🐞 key comes from the ImeRootView itself (view.debugButton) —
+        // the old manual addView in the test masked the brittle service
+        // behavior; it is deleted.
         return view
     }
 
     @Test
-    fun `P0 Grundzustand - Statuszeile 48dp sichtbar und Tastatur darunter`() {
+    fun `P0 basic state - status row 48dp visible and the keyboard below it`() {
         val view = buildRoot()
         val density = app.resources.displayMetrics.density
         val status48 = (48 * density).toInt()
 
-        // IME-Messung: Breite EXACTLY, Hoehe UNSPECIFIED (Fenster folgt der View).
+        // IME measurement: width EXACTLY, height UNSPECIFIED (the window follows the view).
         view.measure(
             View.MeasureSpec.makeMeasureSpec(1080, View.MeasureSpec.EXACTLY),
             View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED),
@@ -87,45 +87,45 @@ class ImeRootViewLayoutTest {
         view.layout(0, 0, view.measuredWidth, view.measuredHeight)
 
         val statusRow = statusRowOf(view)
-        assertEquals("Statuszeile VISIBLE", View.VISIBLE, statusRow.visibility)
-        assertEquals("Statuszeile hat exakt 48 dp", status48, statusRow.height)
+        assertEquals("status row VISIBLE", View.VISIBLE, statusRow.visibility)
+        assertEquals("status row exactly 48 dp", status48, statusRow.height)
 
         assertEquals("statusText VISIBLE", View.VISIBLE, view.statusText.visibility)
-        assertTrue("statusText Hoehe > 0", view.statusText.height > 0)
-        assertEquals("statusText fuellt die Zeile", status48, view.statusText.height)
+        assertTrue("statusText height > 0", view.statusText.height > 0)
+        assertEquals("statusText fills the row", status48, view.statusText.height)
 
         assertEquals("micButton VISIBLE", View.VISIBLE, view.micButton.visibility)
-        assertTrue("micButton Hoehe > 0", view.micButton.height > 0)
-        assertEquals("micButton fuellt die Zeile", status48, view.micButton.height)
+        assertTrue("micButton height > 0", view.micButton.height > 0)
+        assertEquals("micButton fills the row", status48, view.micButton.height)
 
         val debugButton = statusRow.getChildAt(statusRow.childCount - 1) as Button
-        assertEquals("🐞-Taste ist letzte Statuszeilen-Komponente", "🐞", debugButton.text.toString())
+        assertEquals("🐞 key is the last status row component", "🐞", debugButton.text.toString())
         assertEquals("🐞 VISIBLE", View.VISIBLE, debugButton.visibility)
-        assertTrue("🐞 Hoehe > 0", debugButton.height > 0)
+        assertTrue("🐞 height > 0", debugButton.height > 0)
 
         assertEquals("Tastatur VISIBLE", View.VISIBLE, view.keyboardView.visibility)
-        assertTrue("Tastatur Hoehe > 0", view.keyboardView.height > 0)
+        assertTrue("keyboard height > 0", view.keyboardView.height > 0)
         assertTrue(
-            "Tastatur liegt UNTER der Statuszeile, nicht drueber",
+            "the keyboard lies BELOW the status row, not above",
             view.keyboardView.top >= statusRow.height,
         )
     }
 
     @Test
-    fun `P0 enges Fensterangebot - Statuszeile bleibt 48dp und Tastatur skaliert statt Row-Drop`() {
+    fun `P0 tight window offer - status row stays 48dp and the keyboard scales instead of a row drop`() {
         val view = buildRoot()
         val density = app.resources.displayMetrics.density
         val status48 = (48 * density).toInt()
 
-        // Erst natuerliche Groesse bestimmen, dann ENGERS Angebot erzwingen
-        // (Fenster hoeher kappen als Inhalt + Statuszeile).
+        // First determine the natural size, then force a TIGHTER offer
+        // (cap the window lower than content + status row).
         view.measure(
             View.MeasureSpec.makeMeasureSpec(1080, View.MeasureSpec.EXACTLY),
             View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED),
         )
         val naturalH = view.measuredHeight
         val tightH = naturalH - (80 * density).toInt()
-        assertTrue("Testvoraussetzung: Angebot ist enger als Inhalt", tightH > 0)
+        assertTrue("test precondition: the offer is narrower than the content", tightH > 0)
 
         view.measure(
             View.MeasureSpec.makeMeasureSpec(1080, View.MeasureSpec.EXACTLY),
@@ -134,60 +134,60 @@ class ImeRootViewLayoutTest {
         view.layout(0, 0, view.measuredWidth, view.measuredHeight)
 
         val statusRow = statusRowOf(view)
-        assertEquals("Statuszeile bleibt VISIBLE", View.VISIBLE, statusRow.visibility)
-        assertEquals("Statuszeile bleibt exakt 48 dp", status48, statusRow.height)
-        assertTrue("statusText Hoehe > 0", view.statusText.height > 0)
-        assertTrue("micButton Hoehe > 0", view.micButton.height > 0)
+        assertEquals("status row stays VISIBLE", View.VISIBLE, statusRow.visibility)
+        assertEquals("status row stays exactly 48 dp", status48, statusRow.height)
+        assertTrue("statusText height > 0", view.statusText.height > 0)
+        assertTrue("micButton height > 0", view.micButton.height > 0)
 
-        // S1-Vertrag: alle 4 Reihen bleiben, Reihenhoehe wird gesenkt.
-        assertTrue("Tastatur bleibt sichtbar", view.keyboardView.visibility == View.VISIBLE)
+        // S1 contract: all 4 rows stay, the row height is lowered.
+        assertTrue("keyboard stays visible", view.keyboardView.visibility == View.VISIBLE)
         assertTrue(
-            "Tastatur füllt den Rest (Hoehe <= Angebot - Statuszeile)",
+            "the keyboard fills the rest (height <= offer - status row)",
             view.keyboardView.height <= tightH - status48 + 1,
         )
-        assertTrue("Tastatur Hoehe > 0 (kein leerer Kasten)", view.keyboardView.height > 0)
+        assertTrue("keyboard height > 0 (no empty box)", view.keyboardView.height > 0)
     }
 
     // ==================================================================
-    // T9 (v0.1.38): Statuszeile nur Debug — Release ⇒ statusRow GONE
-    // (Statustext + 🎤 + 🐞 komplett, KEIN Layout-Platz); Debug ⇒ Bestand.
-    // ROT-Zuerst: beide Tests liefen vor der ImeRootView-Änderung rot
-    // (Release-Test: statusRow war VISIBLE).
+    // T9 (v0.1.38): status row debug only — release ⇒ statusRow GONE
+    // (status text + 🎤 + 🐞 completely, NO layout space); debug ⇒ stock.
+    // RED-FIRST: both tests ran red before the ImeRootView change
+    // (release test: statusRow was VISIBLE).
     // ==================================================================
 
     @Test
-    fun `T9 Release - statusRow GONE in Tastatur- UND Emoji-Modus`() {
+    fun `T9 release - statusRow GONE in keyboard AND emoji mode`() {
         setDebuggable(false)
         val view = ImeRootView(app)
-        assertEquals("Release: statusRow GONE (kein Layout-Platz)", View.GONE, view.statusRow.visibility)
+        assertEquals("release: statusRow GONE (no layout space)", View.GONE, view.statusRow.visibility)
         assertFalse("Tastaturmodus aktiv", view.isEmojiPanelVisible)
 
         view.showEmojiPanel()
-        assertEquals("Release, Emoji-Modus: statusRow bleibt GONE", View.GONE, view.statusRow.visibility)
+        assertEquals("release, emoji mode: statusRow stays GONE", View.GONE, view.statusRow.visibility)
         assertTrue("Emoji-Block VISIBLE", view.isEmojiPanelVisible)
 
         view.hideEmojiPanel()
-        assertEquals("Release, zurück im Tastaturmodus: statusRow bleibt GONE",
+        assertEquals("Release, back in keyboard mode: statusRow stays GONE",
             View.GONE, view.statusRow.visibility)
     }
 
     @Test
-    fun `T9 Debug - statusRow VISIBLE (Bestand) in beiden Modi`() {
+    fun `T9 debug - statusRow VISIBLE (stock) in both modes`() {
         setDebuggable(true)
         val view = ImeRootView(app)
-        assertEquals("Debug: statusRow VISIBLE (Bestand)", View.VISIBLE, view.statusRow.visibility)
+        assertEquals("debug: statusRow VISIBLE (retained)", View.VISIBLE, view.statusRow.visibility)
 
         view.showEmojiPanel()
-        assertEquals("Debug, Emoji-Modus: statusRow bleibt VISIBLE",
+        assertEquals("debug, emoji mode: statusRow stays VISIBLE",
             View.VISIBLE, view.statusRow.visibility)
     }
 
     // ==================================================================
-    // P0-Runde 2026-11-01 (Nutzerbefund nach 0.1.24)
+    // P0 round 2026-11-01 (user finding after 0.1.24)
     // ==================================================================
 
     @Test
-    fun `P0-2 Grundzustand - Status-Text nie leer und debugButton fest in der Zeile`() {
+    fun `P0-2 basic state - status text never empty and debugButton fixed in the row`() {
         val view = buildRoot()
         val density = app.resources.displayMetrics.density
         view.measure(
@@ -196,58 +196,59 @@ class ImeRootViewLayoutTest {
         )
         view.layout(0, 0, view.measuredWidth, view.measuredHeight)
 
-        // Befund 1a: im Grundzustand (Service noch nicht gelaufen) steht ein Text.
-        assertTrue("statusText ist im Grundzustand NICHT leer", view.statusText.text.isNotEmpty())
+        // finding 1a: in the basic state (the service has not run yet) there is a text.
+        assertTrue("statusText is NOT empty in the idle state", view.statusText.text.isNotEmpty())
         assertEquals("Bereit", view.statusText.text.toString())
 
-        // Befund 1b: 🐞 ist ein View-Kind (view.debugButton), rechts (letztes
-        // Kind), 48 dp breit, sichtbar mit Hoehe > 0.
+        // finding 1b: 🐞 is a view child (view.debugButton), right (last child),
+        // 48 dp wide, visible with height > 0.
         val row = statusRowOf(view)
         val last = row.getChildAt(row.childCount - 1)
-        assertSame("debugButton ist letztes Kind der statusRow (rechts)", view.debugButton, last)
+        assertSame("debugButton is the last child of the status row (right)", view.debugButton, last)
         assertEquals("🐞 VISIBLE", View.VISIBLE, view.debugButton.visibility)
-        assertEquals("🐞 Breite 48 dp", (48 * density).toInt(), view.debugButton.width)
-        assertTrue("🐞 Hoehe > 0", view.debugButton.height > 0)
+        assertEquals("🐞 width 48 dp", (48 * density).toInt(), view.debugButton.width)
+        assertTrue("🐞 height > 0", view.debugButton.height > 0)
     }
 
-    // ---- Befund 2: Mic-Zustandsmaschine (reine Funktionen, VKS-Domain) ----
+    // ---- finding 2: mic state machine (pure functions, VKS domain) ----
 
     @Test
-    fun `Befund-2a T3 - Hold-Release im Start stoppt nach Startende - Tap-on setzt kein Flag`() {
-        assertEquals("Normalfall: Session laeuft", MicStartFinishAction.RUN, micStartFinishedAction(false, false))
-        // T3 (v0.1.35, Debugger-Design, Beweis /tmp/vk_phone_e2.log Z.74-97): wantedStop
-        // kommt NUR noch vom Hold-Release (>300 ms) waehrend des Starts — er beendet
-        // die frische Session WIRKLICH nach Startende (STOP_AFTER_START). Das blinde
-        // KEEP_RUNNING (P0-Befund2(a), Quick-Tap-Rettung) ist ersetzt: ein frischer
-        // Tap ist TOGGLE_ON (micHoldReleaseDecision) und setzt das Flag GAR NICHT.
-        assertEquals("Hold-Release im Start: Stop NACH Startende",
+    fun `finding-2a T3 - hold-release during start stops after start end - tap-on sets no flag`() {
+        assertEquals("normal case: a session is running", MicStartFinishAction.RUN, micStartFinishedAction(false, false))
+        // T3 (v0.1.35, debugger design, evidence /tmp/vk_phone_e2.log l.74-97):
+        // wantedStop now comes ONLY from the hold-release (>300 ms) during the
+        // start — it REALLY ends the fresh session after the start end
+        // (STOP_AFTER_START). The blind KEEP_RUNNING (P0 finding 2(a), quick-tap
+        // rescue) is replaced: a fresh tap is TOGGLE_ON (micHoldReleaseDecision)
+        // and does not set the flag AT ALL.
+        assertEquals("hold-release during the start: stop AFTER the start ends",
             MicStartFinishAction.STOP_AFTER_START, micStartFinishedAction(true, false))
-        // CANCEL bleibt ein Abbruch ohne Finale (D10-Rest S1).
-        assertEquals("Abort gewinnt", MicStartFinishAction.ABORT, micStartFinishedAction(true, true))
-        assertEquals("Abort ohne Stop", MicStartFinishAction.ABORT, micStartFinishedAction(false, true))
+        // CANCEL remains an abort without a final (D10 rest S1).
+        assertEquals("abort wins", MicStartFinishAction.ABORT, micStartFinishedAction(true, true))
+        assertEquals("abort without a stop", MicStartFinishAction.ABORT, micStartFinishedAction(false, true))
     }
 
     @Test
-    fun `Befund-2b - nach Stop rueckt der Mic-Zustand zurueck (IDLE ist nicht gruen)`() {
-        assertTrue("RECORDING ist gruen", micUiRecording(DictationState.RECORDING))
-        assertFalse("IDLE (nach Stop) ist NICHT gruen", micUiRecording(DictationState.IDLE))
-        assertFalse("STARTING ist NICHT gruen", micUiRecording(DictationState.STARTING))
-        assertFalse("FINALIZING ist NICHT gruen", micUiRecording(DictationState.FINALIZING))
-        assertFalse("ohne Coordinator (null) ist NICHT gruen", micUiRecording(null))
+    fun `finding-2b - after stop the mic state recedes (IDLE is not green)`() {
+        assertTrue("RECORDING is green", micUiRecording(DictationState.RECORDING))
+        assertFalse("IDLE (after stop) is NOT green", micUiRecording(DictationState.IDLE))
+        assertFalse("STARTING is NOT green", micUiRecording(DictationState.STARTING))
+        assertFalse("FINALIZING is NOT green", micUiRecording(DictationState.FINALIZING))
+        assertFalse("without a coordinator (null) NOT green", micUiRecording(null))
     }
 
     @Test
-    fun `Befund-2c - exhaustiv - es gibt keinen Zustand, der ohne Session gruen bleibt`() {
+    fun `finding-2c - exhaustive - there is no state that stays green without a session`() {
         for (s in DictationState.entries) {
-            assertEquals("Zustand $s", (s == DictationState.RECORDING), micUiRecording(s))
+            assertEquals("state $s", (s == DictationState.RECORDING), micUiRecording(s))
         }
     }
 
-    // ---- Befund 3: Action-Glyphen als Pfade (DrawOp-Historie, kein Tofu) ----
+    // ---- finding 3: action glyphs as paths (draw op history, no tofu) ----
 
-    /** Tastatur (de-de) messen/legen und auf eine Canvas zeichnen; ShadowCanvas
-     *  recordiert ALLE DrawOps (Pfade, Text, Rects) — so ist beweisbar, ob die
-     *  Glyphen aus PFAEDEN oder aus dem Font kommen. */
+    /** Measure/layout the keyboard (de-de) and draw it onto a canvas;
+     *  ShadowCanvas records ALL draw ops (paths, text, rects) — this makes it
+     *  provable whether the glyphs come from PATHS or from the font. */
     private fun recordDraw(night: Boolean): Pair<Canvas, de.voicekeyboard.keyboard.KeyboardModel> {
         if (night) {
             val cfg = Configuration(app.resources.configuration)
@@ -267,7 +268,7 @@ class ImeRootViewLayoutTest {
         return canvas to model
     }
 
-    /** Key-Rechtecke der drei Action-Glyphen. */
+    /** Key rectangles of the three action glyphs. */
     private fun glyphKeyRects(model: de.voicekeyboard.keyboard.KeyboardModel): Map<String, RectF> =
         listOf("backspace", "shift", "enter").associateWith { id ->
             val k = model.keys.first { key -> key.id == id }
@@ -275,19 +276,19 @@ class ImeRootViewLayoutTest {
         }
 
     @Test
-    fun `Befund-3 - die drei Action-Glyphen kommen aus Pfaeden, nie aus dem Font (kein Tofu)`() {
+    fun `finding-3 - the three action glyphs come from paths, never from the font (no tofu)`() {
         val (canvas, model) = recordDraw(night = false)
         val sh = Shadows.shadowOf(canvas)
-        // 1) Font-Abwesenheit: kein einziger Text-Draw mit einer der drei Glyphen
-        //    (vorher: Font-Glyphe U+232B => Tofu-Kasten auf dem Gerat).
+        // 1) font absence: not a single text draw with one of the three glyphs
+        //    (before: font glyph U+232B => tofu box on the device).
         for (i in 0 until sh.textHistoryCount) {
             val t = sh.getDrawnTextEvent(i).text
             assertFalse(
-                "Font-Glyphe '$t' statt Pfad gezeichnet (Tofu-Risiko)",
+                "font glyph '$t' drawn instead of a path (tofu risk)",
                 t in setOf("⌫", "⇧", "⏎", "⇪"),
             )
         }
-        // 2) Pfad-Vorhandensein: jedes Glyph hat >= 2 gezeichnete Pfade.
+        // 2) path presence: every glyph has >= 2 drawn paths.
         val rects = glyphKeyRects(model)
         val byKey = rects.keys.associateWith { _ -> 0 }.toMutableMap()
         for (i in 0 until sh.pathPaintHistoryCount) {
@@ -296,11 +297,11 @@ class ImeRootViewLayoutTest {
             val hit = rects.entries.firstOrNull { it.value.contains(b.centerX(), b.centerY()) }
             if (hit != null) byKey[hit.key] = byKey.getValue(hit.key) + 1
         }
-        for ((k, n) in byKey) assertTrue("$k: >= 2 Pfad-Draws (sind $n)", n >= 2)
+        for ((k, n) in byKey) assertTrue("$k: >= 2 path draws (are $n)", n >= 2)
     }
 
     @Test
-    fun `Befund-3 - identische optische Hoehe aller drei Glyphen (hell + dunkel)`() {
+    fun `finding-3 - identical optical height of all three glyphs (light + dark)`() {
         for (night in listOf(false, true)) {
             val (canvas, model) = recordDraw(night)
             val sh = Shadows.shadowOf(canvas)
@@ -318,15 +319,15 @@ class ImeRootViewLayoutTest {
                 }
                 maxY - minY
             }
-            // Alle drei identisch (Bindekiste 0,60·s), hell und dunkel; Toleranz 2 px.
-            assertTrue("night=$night: Hoehe identisch (sind $heights)",
+            // all three identical (bounding box 0.60·s), light and dark; tolerance 2 px.
+            assertTrue("night=$night: height identical (are $heights)",
                 (heights.min()..heights.max()).let { it.isEmpty() } || heights.max() - heights.min() <= 2f)
-            assertTrue("night=$night: Hoehe > 0 (sind $heights)", heights.min() > 5f)
+            assertTrue("night=$night: height > 0 (are $heights)", heights.min() > 5f)
         }
     }
 
     @Test
-    fun `Befund-3 - identische Strichstaerke in allen drei Glyphen (hell + dunkel)`() {
+    fun `finding-3 - identical stroke width in all three glyphs (light + dark)`() {
         for (night in listOf(false, true)) {
             val (canvas, model) = recordDraw(night)
             val sh = Shadows.shadowOf(canvas)
@@ -337,9 +338,9 @@ class ImeRootViewLayoutTest {
                 if (rects.values.any { it.contains(b.centerX(), b.centerY()) })
                     sh.getDrawnPathPaint(i).strokeWidth else null
             }
-            assertTrue("night=$night: Glyph-Pfade gefunden", strokes.size >= 6)
+            assertTrue("night=$night: glyph paths found", strokes.size >= 6)
             assertTrue(
-                "night=$night: Strichstaerke identisch (sind ${strokes.toSet()})",
+                "night=$night: stroke width identical (are ${strokes.toSet()})",
                 strokes.all { it == strokes.first() },
             )
         }

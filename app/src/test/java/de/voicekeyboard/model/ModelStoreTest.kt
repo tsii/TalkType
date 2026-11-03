@@ -10,16 +10,16 @@ import org.junit.rules.TemporaryFolder
 import java.io.File
 
 /**
- * Reine JVM-Tests für [ModelStore] mit temporären Verzeichnissen und einem
- * Mini-Manifest (kleine Dateien, echte SHA-256-Werte zur Laufzeit berechnet —
- * kein Netzwerk, keine echten 671 MB).
+ * Pure JVM tests for [ModelStore] with temporary directories and a
+ * mini manifest (small files, real SHA-256 values computed at runtime —
+ * no network, no real 671 MB).
  */
 class ModelStoreTest {
 
     @get:Rule
     val tmp = TemporaryFolder()
 
-    /** Mini-Manifest mit zwei kleinen Dateien; Hashes zur Laufzeit berechnet. */
+    /** Mini manifest with two small files; hashes computed at runtime. */
     private fun miniManifest(a: ByteArray, b: ByteArray): List<ModelFile> = listOf(
         ModelFile("model.bin", a.size.toLong(), Sha256.ofBytes(a)),
         ModelFile("vocab.txt", b.size.toLong(), Sha256.ofBytes(b)),
@@ -28,9 +28,9 @@ class ModelStoreTest {
     private fun write(dir: File, name: String, bytes: ByteArray): File =
         File(dir, name).apply { writeBytes(bytes) }
 
-    // ---- Status ohne alles ----
+    // ---- status without anything ----
 
-    @Test fun `leerer Store ist ABSENT ohne Reste`() {
+    @Test fun `an empty store is ABSENT without leftovers`() {
         val store = ModelStore(tmp.newFolder(), miniManifest(byteArrayOf(1), byteArrayOf(2)))
         assertEquals(ModelStatus.ABSENT, store.status())
         assertFalse(store.isPresent())
@@ -38,9 +38,9 @@ class ModelStoreTest {
         assertNull(store.activeVersion())
     }
 
-    // ---- vorhanden / fehlend / hash-falsch ----
+    // ---- present / missing / wrong hash ----
 
-    @Test fun `vollstaendige und korrekte Version ist READY`() {
+    @Test fun `a complete and correct version is READY`() {
         val a = byteArrayOf(1, 2, 3); val b = byteArrayOf(9, 8)
         val root = tmp.newFolder()
         val store = ModelStore(root, miniManifest(a, b))
@@ -53,7 +53,7 @@ class ModelStoreTest {
         assertTrue(store.verifyInstalled())
     }
 
-    @Test fun `fehlende Datei in aktiver Version ist BROKEN`() {
+    @Test fun `a missing file in the active version is BROKEN`() {
         val a = byteArrayOf(1, 2, 3); val b = byteArrayOf(9, 8)
         val root = tmp.newFolder()
         val store = ModelStore(root, miniManifest(a, b))
@@ -61,13 +61,13 @@ class ModelStoreTest {
         write(staging, "model.bin", a)
         write(staging, "vocab.txt", b)
         assertTrue(store.activate(staging))
-        // Datei nachträglich beschädigen (fehlend)
+        // damage the file afterwards (missing)
         File(store.modelDir(), "vocab.txt").delete()
         assertEquals(ModelStatus.BROKEN, store.status())
         assertFalse(store.isReady())
     }
 
-    @Test fun `veraenderte Datei (Hash falsch) ist BROKEN`() {
+    @Test fun `a changed file (wrong hash) is BROKEN`() {
         val a = byteArrayOf(1, 2, 3); val b = byteArrayOf(9, 8)
         val root = tmp.newFolder()
         val store = ModelStore(root, miniManifest(a, b))
@@ -75,7 +75,7 @@ class ModelStoreTest {
         write(staging, "model.bin", a)
         write(staging, "vocab.txt", b)
         assertTrue(store.activate(staging))
-        // Byte kippen → Hash weicht ab (ohne Längenänderung)
+        // flip a byte → the hash deviates (without a length change)
         val f = File(store.modelDir(), "vocab.txt")
         val broken = b.copyOf().also { it[0] = 7 }
         f.writeBytes(broken)
@@ -83,17 +83,17 @@ class ModelStoreTest {
         assertEquals(ModelStatus.BROKEN, store.status())
     }
 
-    // ---- .part-Rest / Download-Marker ----
+    // ---- .part leftover / download marker ----
 
-    @Test fun `part-Rest ohne Zeiger zeigt DOWNLOADING`() {
+    @Test fun `a part leftover without a pointer shows DOWNLOADING`() {
         val root = tmp.newFolder()
         val store = ModelStore(root, miniManifest(byteArrayOf(1), byteArrayOf(2)))
         store.partFile("model.bin").writeBytes(byteArrayOf(1))
         assertEquals(ModelStatus.DOWNLOADING, store.status())
-        assertEquals(ModelStatus.DOWNLOADING, store.status()) // idempotent abfragbar
+        assertEquals(ModelStatus.DOWNLOADING, store.status()) // idempotently queryable
     }
 
-    @Test fun `clearDownloads entfernt part und etag Reste`() {
+    @Test fun `clearDownloads removes part and etag leftovers`() {
         val root = tmp.newFolder()
         val store = ModelStore(root, miniManifest(byteArrayOf(1), byteArrayOf(2)))
         store.partFile("model.bin").writeBytes(byteArrayOf(1))
@@ -103,7 +103,7 @@ class ModelStoreTest {
         assertEquals(ModelStatus.ABSENT, store.status())
     }
 
-    @Test fun `marker DOWNLOADING und VERIFYING setzen sich vor ABSENT-READY`() {
+    @Test fun `the DOWNLOADING and VERIFYING markers take precedence over ABSENT-READY`() {
         val root = tmp.newFolder()
         val store = ModelStore(root, miniManifest(byteArrayOf(1), byteArrayOf(2)))
         store.markDownloading()
@@ -114,27 +114,27 @@ class ModelStoreTest {
         assertEquals(ModelStatus.ABSENT, store.status())
     }
 
-    // ---- Aktivierung: atomar, kein Mischzustand ----
+    // ---- activation: atomic, no mixed state ----
 
-    @Test fun `activate bricht ab bei unvollstaendiger Staging Version - aktive bleibt intakt`() {
+    @Test fun `activate aborts on an incomplete staging version - the active one stays intact`() {
         val a = byteArrayOf(1, 2, 3); val b = byteArrayOf(9, 8)
         val root = tmp.newFolder()
         val store = ModelStore(root, miniManifest(a, b))
-        // Version 1 aktiv
+        // version 1 active
         val v1 = store.newStagingDir()
         write(v1, "model.bin", a); write(v1, "vocab.txt", b)
         assertTrue(store.activate(v1))
-        // Version 2 unvollständig: eine Datei falsch (Hash-Mismatch in Staging)
+        // version 2 incomplete: one file wrong (hash mismatch in staging)
         val v2 = store.newStagingDir()
         write(v2, "model.bin", byteArrayOf(42)); write(v2, "vocab.txt", b)
         assertFalse(store.activate(v2))
-        // Aktive Version unverändert: READY, kein Mischzustand
+        // active version unchanged: READY, no mixed state
         assertEquals(ModelStatus.READY, store.status())
         assertEquals(a.toList(), File(store.modelDir(), "model.bin").readBytes().toList())
         assertEquals(v1.name, store.activeVersion())
     }
 
-    @Test fun `activate loescht alte Versionen - Platz zurueckgewonnen`() {
+    @Test fun `activate deletes old versions - space reclaimed`() {
         val a = byteArrayOf(1, 2, 3); val b = byteArrayOf(9, 8)
         val root = tmp.newFolder()
         val store = ModelStore(root, miniManifest(a, b))
@@ -145,12 +145,12 @@ class ModelStoreTest {
         write(v2, "model.bin", a); write(v2, "vocab.txt", b)
         assertTrue(store.activate(v2))
         assertEquals(v2.name, store.activeVersion())
-        // v1-Verzeichnis weg (nur die aktive Version bleibt)
+        // v1 directory gone (only the active version remains)
         val versions = File(root, "versions").listFiles()?.map { it.name } ?: emptyList()
         assertEquals(listOf(v2.name), versions)
     }
 
-    @Test fun `movePartToStaging verschiebt part atomar und entfernt etag`() {
+    @Test fun `movePartToStaging moves the part atomically and removes the etag`() {
         val a = byteArrayOf(1, 2, 3)
         val root = tmp.newFolder()
         val store = ModelStore(root, miniManifest(a, byteArrayOf(7)))
@@ -158,36 +158,36 @@ class ModelStoreTest {
         store.storeEtag("model.bin", "\"e1\"")
         val staging = store.newStagingDir()
         assertTrue(store.movePartToStaging("model.bin", staging))
-        assertFalse(part.isFile)                 // weg aus downloads
-        assertNull(store.etagFor("model.bin"))   // Etag mit entsorgt
+        assertFalse(part.isFile)                 // gone from downloads
+        assertNull(store.etagFor("model.bin"))   // the etag disposed of too
         assertEquals(a.toList(), File(staging, "model.bin").readBytes().toList())
     }
 
-    // ---- Pfad-Traversal-Schutz ----
+    // ---- path traversal protection ----
 
     @Test(expected = IllegalArgumentException::class)
-    fun `partFile weist unbekannten Dateinamen ab`() {
+    fun `partFile rejects an unknown file name`() {
         val store = ModelStore(tmp.newFolder(), miniManifest(byteArrayOf(1), byteArrayOf(2)))
         store.partFile("boese.bin")
     }
 
     @Test(expected = IllegalArgumentException::class)
-    fun `partFile weist Traversal ab - Slashes`() {
+    fun `partFile rejects traversal - slashes`() {
         val store = ModelStore(tmp.newFolder(), miniManifest(byteArrayOf(1), byteArrayOf(2)))
         store.partFile("../model.bin")
     }
 
     @Test(expected = IllegalArgumentException::class)
-    fun `partFile weist Punktpfad ab`() {
+    fun `partFile rejects a dot path`() {
         val store = ModelStore(tmp.newFolder(), miniManifest(byteArrayOf(1), byteArrayOf(2)))
         store.partFile("..")
     }
 
-    // ---- Manifest-Integrität (Werte aus docs/MODEL_SHA256.txt) ----
+    // ---- manifest integrity (values from docs/MODEL_SHA256.txt) ----
 
-    @Test fun `Default-Manifest enthaelt alle vier Dateien mit 671 MB Summe`() {
+    @Test fun `the default manifest contains all four files with a 671 MB sum`() {
         assertEquals(4, ModelManifest.DEFAULT.size)
-        assertEquals(670_619_706L, ModelManifest.TOTAL_BYTES) // 639,4 KiB + 671 MB int8 laut ASR_CONTRACT
+        assertEquals(670_619_706L, ModelManifest.TOTAL_BYTES) // 639.4 KiB + 671 MB int8 per ASR_CONTRACT
         assertEquals(
             "a9fde1486ebfcc08f328d75ad4610c67835fea58c73ba57e3209a6f6cf019e9f",
             ModelManifest.fileByName("nemo128.onnx")?.sha256,

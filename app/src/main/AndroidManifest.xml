@@ -2,24 +2,24 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
-    <!-- E2 (SETUP_UI_DECISIONS.md): INTERNET + ACCESS_NETWORK_STATE stehen dauerhaft
-         im Manifest — der einzige Netzwerkzugriff ist der einmalige Modelldownload
-         (ORT-AAR fügt beide ohnehin ein). Der appinterne Netzwerk-Schalter verhindert
-         Requests nach dem Setup; die Telemetry-Provider-Entfernung (unten) BLEIBT. -->
+    <!-- E2 (SETUP_UI_DECISIONS.md): INTERNET + ACCESS_NETWORK_STATE stay permanently
+         in the manifest — the only network access is the one-time model download
+         (the ORT AAR inserts both anyway). The app-internal network switch prevents
+         requests after setup; the telemetry provider removal (below) STAYS. -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
-    <!-- Audio-Erfassung (Stufe 4): RECORD_AUDIO für die Aufnahme,
-         FOREGROUND_SERVICE(_MICROPHONE) für den FGS-Typ microphone
-         (TECH_FACTS §4.1: Dicke Pflicht ab targetSdk 34),
-         POST_NOTIFICATIONS für die sichtbare Aufnahme-Indikation (API 33+). -->
+    <!-- Audio capture (stage 4): RECORD_AUDIO for the recording,
+         FOREGROUND_SERVICE(_MICROPHONE) for the FGS type microphone
+         (TECH_FACTS §4.1: hard requirement from targetSdk 34),
+         POST_NOTIFICATIONS for the visible recording indication (API 33+). -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
-    <!-- E1: dataSync-FGS für den 671-MB-Modelldownload (6-h/24-h-Limit,
-         onTimeout im Service behandelt). Nur Modelldownload, kein anderer Transfer. -->
+    <!-- E1: dataSync FGS for the 671 MB model download (6 h/24 h limit,
+         onTimeout handled in the service). Model download only, no other transfer. -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
 
     <application
@@ -28,8 +28,8 @@
         android:theme="@style/Theme.VoiceKeyboard"
         android:allowBackup="false">
 
-        <!-- SB1-07: ORT-AAR-Telemetry-Provider per Manifest-Merger entfernen
-             (TECH_FACTS.md §3 Konzept 3) — muss Kind von <application> sein. -->
+        <!-- SB1-07: remove the ORT AAR telemetry provider via manifest merger
+             (TECH_FACTS.md §3 concept 3) — must be a child of <application>. -->
         <provider
             android:name="ai.onnxruntime.TelemetryInitializer"
             tools:node="remove" />

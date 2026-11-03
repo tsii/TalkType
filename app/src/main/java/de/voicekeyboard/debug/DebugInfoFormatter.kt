@@ -1,233 +1,233 @@
 package de.voicekeyboard.debug
 
 /**
- * A14/T17: Rein JVM-Formatierer für den Debug-Info-Export (KEIN Android-Import,
- * deshalb ohne Gerät testbar — siehe DebugInfoFormatterTest).
+ * A14/T17: pure JVM formatter for the debug info export (NO Android import,
+ * hence testable without a device — see DebugInfoFormatterTest).
  *
- * Regel 9 (docs/DEBUG_INFO_FIELDS.md §2): der Export enthält NUR Zahlen,
- * Status-Codes und Versions-Kurznamen — keine Audio-/Textinhalte, keine Pfade,
- * keine URLs, kein Ziel-App-Paketname. Der Exporttext wird niemals geloggt
- * (das betrifft die aufrufende Schicht, DebugInfoCollector).
+ * Rule 9 (docs/DEBUG_INFO_FIELDS.md §2): the export contains ONLY numbers,
+ * status codes and version short names — no audio/text contents, no paths,
+ * no URLs, no target app package name. The export text is never logged
+ * (that concerns the calling layer, DebugInfoCollector).
  *
- * Format: Kopfzeile mit sichtbarer Zusicherung, danach GENAU 68 Zeilen
- * `schluessel: wert` in fester Reihenfolge (Determinismus), fehlende Werte
- * als `-`, Werte einzeilig sanitisiert (keine Umbrüche, keine Doppelpunkte).
+ * Format: header line with a visible assurance, then EXACTLY 68 lines
+ * `schluessel: wert` in fixed order (determinism), missing values
+ * as `-`, values sanitized to a single line (no line breaks, no colons).
  */
 
-/** Nur primitive Felder/Strings — die Android-Schicht (Collector) füllt sie. */
+/** Only primitive fields/strings — the Android layer (collector) fills them. */
 data class DebugSnapshot(
-    /** versionName aus PackageManager (BuildConfig existiert in diesem Modul nicht). */
+    /** versionName from PackageManager (BuildConfig does not exist in this module). */
     val versionName: String? = null,
-    /** versionCode aus PackageManager. */
+    /** versionCode from PackageManager. */
     val versionCode: Int? = null,
     /** debug/release via ApplicationInfo.FLAG_DEBUGGABLE. */
     val debugBuild: Boolean? = null,
     val apiLevel: Int? = null,
-    /** ModelStatus-Name (READY/BROKEN/ABSENT/…). */
+    /** ModelStatus name (READY/BROKEN/ABSENT/…). */
     val modelStatus: String? = null,
-    /** ModelVariant-Name (ONNX_CPU/LITERT_CPU). */
+    /** ModelVariant name (ONNX_CPU/LITERT_CPU). */
     val modelVariant: String? = null,
-    /** Versions-Kurzname (z. B. `v-1730…`) — NIE der volle Pfad (§2.1). */
+    /** Version short name (e.g. `v-1730…`) — NEVER the full path (§2.1). */
     val modelVersionShort: String? = null,
-    /** Summe der Modell-Dateien in Bytes (keine Namen, keine Pfade). */
+    /** Sum of the model files in bytes (no names, no paths). */
     val modelBytes: Long? = null,
-    /** Letzter Fehlercode (E5-Klasse, z. B. `audioInit=SecurityException`) — nie message. */
+    /** Last error code (E5 class, e.g. `audioInit=SecurityException`) — never message. */
     val lastError: String? = null,
-    /** RTF = processingMs/audioMs; null, wenn noch keine Audiodauer. */
+    /** RTF = processingMs/audioMs; null if there is no audio duration yet. */
     val rtf: Double? = null,
-    /** Erst-Hypothese-Latenz in Millisekunden; 0/null = noch keine. */
+    /** First-hypothesis latency in milliseconds; 0/null = none yet. */
     val firstHypothesisMs: Long? = null,
     val intraOpThreads: Int? = null,
     val interOpThreads: Int? = null,
     val permRecordAudio: Boolean? = null,
     val permPostNotifications: Boolean? = null,
-    /** Spitzen-Pegel 0..100 (ein Maximalwert, keine Kurve — LevelPeak). */
+    /** Peak level 0..100 (one maximum value, no curve — LevelPeak). */
     val peakPercent: Int? = null,
 
-    /** Aufnahmeweg laut AudioRouter: „intern“ / Headset / Bluetooth — nur der Kurzname. */
+    /** Recording route per AudioRouter: „intern“ / Headset / Bluetooth — only the short name. */
     val audioRoute: String? = null,
 
-    /** Verwendeter AudioRecord-Eingang (z. B. VOICE_RECOGNITION) — nur der Name, kein Pfad. */
+    /** Used AudioRecord input (e.g. VOICE_RECOGNITION) — only the name, no path. */
     val audioSource: String? = null,
 
-    /** Spitze in dBFS (<= 0). peak_pct ist bei sehr leiser Aufnahme nicht mehr auflösend. */
+    /** Peak in dBFS (<= 0). peak_pct is no longer resolvable for a very quiet recording. */
     val peakDbfs: Double? = null,
 
-    // ---- F13b2: Beweisfelder für den Langtext-Abbruch (C1) — nur Zahlen/Zustände ----
+    // ---- F13b2: evidence fields for the long-text abort (C1) — numbers/states only ----
 
-    /** Zustand des Controllers als Kurzcode (IDLE/RECORDING/FINALIZING) — der
-     *  Beweisfall: IDLE während der Nutzer noch drückt ⇒ C1 (still gescheitert). */
+    /** Controller state as a short code (IDLE/RECORDING/FINALIZING) — the
+     *  evidence case: IDLE while the user is still pressing ⇒ C1 (silently failed). */
     val ctlState: String? = null,
 
-    /** 0/1: failedThisSession (Fehler bewahrt bis zum nächsten Start). */
+    /** 0/1: failedThisSession (error preserved until the next start). */
     val ctlFailed: Boolean? = null,
 
-    /** Anzahl verworfener Audio-Blocks (nach stiller fail — F13b-Drop-Zähler). */
+    /** Number of discarded audio blocks (after a silent fail — F13b drop counter). */
     val droppedBlocks: Int? = null,
 
-    /** Anzahl erzeugter Hypothesen dieser Sitzung. */
+    /** Number of hypotheses produced in this session. */
     val hypCount: Int? = null,
 
-    /** Abstand seit der letzten Hypothese in ms; -1 wenn nie eine kam (> 4000 ms ⇒ Rückstau). */
+    /** Gap since the last hypothesis in ms; -1 if none ever came (> 4000 ms ⇒ backpressure). */
     val hypGapMs: Long? = null,
 
-    /** Bisher aufgenommenes Audio in Sekunden, 1 Nachkommastelle. */
+    /** Audio recorded so far in seconds, 1 decimal place. */
     val audioSeconds: Double? = null,
 
-    /** Dauer des letzten Starts in ms (0 = nicht gemessen). */
+    /** Duration of the last start in ms (0 = not measured). */
     val lastStartMs: Long? = null,
 
-    /** 0/1: Start läuft gerade (Watchdog-Fall: 1 mit ungewöhnlichem start_ms). */
+    /** 0/1: a start is currently running (watchdog case: 1 with an unusual start_ms). */
     val starting: Boolean? = null,
 
-    // ---- F17b/C2: Decode-Arbeitslast (C2) — nur Zahlen, keine Inhalte ----
+    // ---- F17b/C2: decode workload (C2) — numbers only, no contents ----
 
-    /** Größte Decode-Zeit je transcribe-Aufruf in ms (0 = noch nie dekodiert). */
+    /** Largest decode time per transcribe call in ms (0 = never decoded yet). */
     val decodeMsMax: Long? = null,
 
-    /** p95 der Decode-Zeiten in ms (deterministische Stichprobe des Controllers). */
+    /** p95 of the decode times in ms (deterministic sample of the controller). */
     val decodeMsP95: Long? = null,
 
-    /** Pufferlänge in Sekunden beim letzten Dekodierlauf (wächst decode_ms mit?). */
+    /** Buffer length in seconds at the last decode run (does decode_ms grow?). */
     val bufferSeconds: Double? = null,
 
-    // ---- F21: cost-aware Decode-Takt — nur Zahlen, keine Inhalte ----
+    // ---- F21: cost-aware decode pace — numbers only, no contents ----
 
-    /** Aktuell geltendes Partial-Decode-Intervall in ms (0 = Pacing aus). */
+    /** Currently effective partial-decode interval in ms (0 = pacing off). */
     val decodePaceMs: Long? = null,
 
-    /** Anzahl wegen Takt übersprungener Partial-Decodes (nie ein Fehlerzähler). */
+    /** Number of partial decodes skipped due to the pace (never an error counter). */
     val decodeSkips: Int? = null,
-    /** F28b1: empfangene Audio-Blöcke (n>0) der Session (Capture-Stall-Messung). */
+    /** F28b1: received audio blocks (n>0) of the session (capture stall measurement). */
     val capBlocks: Int? = null,
-    /** F28b1: ms seit dem letzten Audio-Block bzw. Sessionstart (0 = keine Session). */
+    /** F28b1: ms since the last audio block or the session start (0 = no session). */
     val capStallMs: Long? = null,
-    /** F26a: Grund des letzten Abbruchs/Outcomes (C2-Export: E3/E4/E5 trennen). */
+    /** F26a: reason of the last abort/outcome (C2 export: separating E3/E4/E5). */
     val abortReason: String? = null,
-    /** F26b (C2-Export): Bufferstand (s) der letzten akzeptierten Hypothese. */
+    /** F26b (C2 export): buffer level (s) of the last accepted hypothesis. */
     val hypLastBufferSeconds: Double? = null,
-    /** F28b2: letztes Session-Ende-Ereignis (kodiert + ms seit Sessionstart); "" = keines. */
+    /** F28b2: last session-end event (coded + ms since session start); "" = none. */
     val micRel: String? = null,
 
-    // AP3 (PLAN_C2_FABLE_R2 §4, Export v2 Teil 1) — Session-Forensik:
-    /** Vereinheitlichte Stopp-Ursache (stopCauseOf: holdup|up|toggle|autostop|…). */
+    // AP3 (PLAN_C2_FABLE_R2 §4, export v2 part 1) — session forensics:
+    /** Unified stop cause (stopCauseOf: holdup|up|toggle|autostop|…). */
     val stopCause: String? = null,
-    /** Start-Art (hold|toggle). */
+    /** Start kind (hold|toggle). */
     val startSrc: String? = null,
-    /** F43-Gate im Stop-Moment: 1=offen, 0=zu (gehalten), -1=kein Stopp. */
+    /** F43 gate at the stop moment: 1=open, 0=closed (held), -1=no stop. */
     val gateAtStop: Int? = null,
-    /** Besitzverlust-Moment in Session-Audio-Sekunden; -1 = nie. */
+    /** Ownership-loss moment in session audio seconds; -1 = never. */
     val ownerLostAtS: Double? = null,
-    /** Anzahl ausgeführter Segment-Mini-Finale dieser Session. */
+    /** Number of executed segment mini-finales in this session. */
     val segmentFinalizations: Int? = null,
-    /** Längste Laut-Lücke der Session in ms (Block-RMS). */
+    /** Longest loud gap of the session in ms (block RMS). */
     val maxPauseMs: Long? = null,
-    /** onStartInput(restarting=true)-Zähler. */
+    /** onStartInput(restarting=true) counter. */
     val restartInputs: Int? = null,
-    /** Unerwartete Selection-Callbacks (Besitzverlust-Familie). */
+    /** Unexpected selection callbacks (ownership-loss family). */
     val selUnexpected: Int? = null,
 
-    /** AP7-W1 (Fable §0.1.6): abgewiesene Fremd-Resets des Halte-Gates. */
+    /** AP7-W1 (Fable §0.1.6): rejected foreign resets of the hold gate. */
     val gateForeignResets: Int? = null,
 
-    /** AP7-E1 (Fable §0.2.5): Re-Baselines nach restartInput (🐞 rebases). */
+    /** AP7-E1 (Fable §0.2.5): re-baselines after restartInput (🐞 rebases). */
     val rebases: Int? = null,
-    /** F28b2: zuletzt angezeigter Statuszustand (ready|dictat|finalizing|error). */
+    /** F28b2: last displayed status state (ready|dictat|finalizing|error). */
     val statusShown: String? = null,
-    /** F52: Code/Ressourcen-Name des zuletzt gezeigten Statuszeilen-Texts
-     *  (starting|recording|finalizing|idle|hint|diag|error:<res>|raw) — nie
-     *  der Text selbst (Regel 9). */
+    /** F52: code/resource name of the last shown status row text
+     *  (starting|recording|finalizing|idle|hint|diag|error:<res>|raw) — never
+     *  the text itself (rule 9). */
     val statusRes: String? = null,
-    /** F31: Sekunden mit lautem Signal (Block-RMS ≥ Schwelle) der Session (Regel 9: Zahl). */
+    /** F31: seconds with a loud signal (block RMS ≥ threshold) of the session (rule 9: number). */
     val loudS: Double? = null,
 
-    // ---- F42 (F41-Fehlende-Messpunkte): Ausgabe-/Stille-/FGS-Forensik — nur Zahlen/Codes ----
+    // ---- F42 (F41 missing measurement points): output/silence/FGS forensics — numbers/codes only ----
 
-    /** F42 (🐞: had_output): 0/1 — mindestens ein Hypothesen-Commit dieser Sitzung
-     *  (löst die „13-Zeichen“-Ähnlichkeit auf: kam ÜBERHAUPT Text?). */
+    /** F42 (🐞: had_output): 0/1 — at least one hypothesis commit in this session
+     *  (resolves the "13 characters" similarity: did ANY text arrive?). */
     val hadOutput: Boolean? = null,
 
-    /** F42 (🐞: output_chars): Brutto-Zeichenzahl der Commits (nur die Zahl,
-     *  NIE der Text — Regel 9). */
+    /** F42 (🐞: output_chars): gross character count of the commits (the number only,
+     *  NEVER the text — rule 9). */
     val outputChars: Int? = null,
 
-    /** F42 (🐞: first_loud_ms): ms nach Sessionstart beim everLoud-Latch; -1 = nie. */
+    /** F42 (🐞: first_loud_ms): ms after session start at the everLoud latch; -1 = never. */
     val firstLoudMs: Long? = null,
 
-    /** F42 (🐞: first3s_loud_blocks): laute Blöcke in den ersten 3 s (Startfenster). */
+    /** F42 (🐞: first3s_loud_blocks): loud blocks in the first 3 s (start window). */
     val first3sLoudBlocks: Int? = null,
 
-    /** F42 (🐞: first3s_peak_dbfs): Peak-Block-RMS der ersten 3 s in dBFS;
-     *  null = kein Block im Fenster. */
+    /** F42 (🐞: first3s_peak_dbfs): peak block RMS of the first 3 s in dBFS;
+     *  null = no block in the window. */
     val first3sPeakDbfs: Double? = null,
 
-    /** F42 (🐞: fgs_stopped_by): Ursachencode des letzten Mikro-FGS-Stops (F44:
-     *  „abort:<grund>“/„stop“/„fgs-timeout“…; nur Codes, nie Inhalte — Regel 9). */
+    /** F42 (🐞: fgs_stopped_by): cause code of the last microphone FGS stop (F44:
+     *  „abort:<reason>“/„stop“/„fgs-timeout“…; codes only, never contents — rule 9). */
     val fgsStoppedBy: String? = null,
 
-    // ---- A4a (PLAN_V0133 §A4a): Decode-/Schreib-Diagnose (A2b) — nur Zahlen/Codes ----
+    // ---- A4a (PLAN_V0133 §A4a): decode/write diagnostics (A2b) — numbers/codes only ----
 
-    /** A4a (🐞: last_decode_ms): Dauer des letzten Decode-Laufs in ms (A2b-
-     *  Diagnoseobjekt; null = noch kein Fenster). */
+    /** A4a (🐞: last_decode_ms): duration of the last decode run in ms (A2b
+     *  diagnostics object; null = no window yet). */
     val lastDecodeMs: Long? = null,
 
-    /** A4a (🐞: hyp_len): Länge der letzten Hypothese in Zeichen — nie Inhalt. */
+    /** A4a (🐞: hyp_len): length of the last hypothesis in characters — never content. */
     val hypLen: Int? = null,
 
-    /** A4a (🐞: current_len): eigene Standlänge nach dem letzten Fenster. */
+    /** A4a (🐞: current_len): own text length after the last window. */
     val currentLen: Int? = null,
 
-    /** A4a (🐞: committed_len): committete Präfixlänge nach dem letzten Fenster. */
+    /** A4a (🐞: committed_len): committed prefix length after the last window. */
     val committedLen: Int? = null,
 
-    /** A4a (🐞: write_reason): letzter Schreib-Code (same|w1|w3d|delta; "-" = keiner). */
+    /** A4a (🐞: write_reason): last write code (same|w1|w3d|delta; "-" = none). */
     val writeReason: String? = null,
 
-    /** A4a (🐞: write_same): SAME-Ergebnisse dieser Session (monoton). */
+    /** A4a (🐞: write_same): SAME results in this session (monotone). */
     val writeSame: Int? = null,
 
-    /** A4a (🐞: write_w1): verweigerte Schreibabsichten. */
+    /** A4a (🐞: write_w1): refused write intentions. */
     val writeW1: Int? = null,
 
-    /** A4a (🐞: write_w3d): blockierte Rollbacks (einmalig sichtbar). */
+    /** A4a (🐞: write_w3d): blocked rollbacks (visible once). */
     val writeW3d: Int? = null,
 
-    /** A4a (🐞: write_delta): ausgeführte Schreibschritte. */
+    /** A4a (🐞: write_delta): executed write steps. */
     val writeDelta: Int? = null,
 
-    /** A4a (🐞: last_write_audio_s): Session-Audio-Sekunden des letzten DELTA;
-     *  -1 = noch kein DELTA (NIE '-' — der Wert existiert per Controller immer). */
+    /** A4a (🐞: last_write_audio_s): session audio seconds of the last DELTA;
+     *  -1 = no DELTA yet (NEVER '-' — the value always exists per the controller). */
     val lastWriteAudioS: Double? = null,
 
-    // ---- W-Paket (vc34, Debugger-Empfehlung): Engine-Warming — nur Zahlen/Codes ----
+    // ---- W package (vc34, debugger recommendation): engine warming — numbers/codes only ----
 
-    /** W1 (🐞: engine_load_ms): reine Dauer des letzten engine.load()-Laufs in ms
-     *  (0 = noch nie geladen; nur Zahl, Regel 9). */
+    /** W1 (🐞: engine_load_ms): pure duration of the last engine.load() run in ms
+     *  (0 = never loaded; number only, rule 9). */
     val engineLoadMs: Long? = null,
 
-    /** W1/W2 (🐞: engine_resident): 0/1 — Engine ist geladen und bleibt resident
-     *  bis shutdown() (bewusst KEIN Idle-Unload; Wärme für die Folgesitzung). */
+    /** W1/W2 (🐞: engine_resident): 0/1 — the engine is loaded and stays resident
+     *  until shutdown() (deliberately NO idle unload; warmth for the next session). */
     val engineResident: Boolean? = null,
 
-    /** W1 (🐞: warm_hit): 0/1 — der letzte Diktat-Start fand die Engine bereits
-     *  resident vor (Show-Preload griff; start_ms ohne Ladezeit). */
+    /** W1 (🐞: warm_hit): 0/1 — the last dictation start found the engine already
+     *  resident (show preload took effect; start_ms without load time). */
     val warmHit: Boolean? = null,
 
-    /** W1 (🐞: load_trigger): Auslöser des letzten erfolgreichen load()
-     *  (mic | ime_show; "-" = noch nie geladen). */
+    /** W1 (🐞: load_trigger): trigger of the last successful load()
+     *  (mic | ime_show; "-" = never loaded). */
     val loadTrigger: String? = null,
 
-    /** W1 (🐞: engine_loads): Anzahl ausgeführter engine.load()-Läufe (monoton
-     *  bis shutdown; nur Zahl, Regel 9). */
+    /** W1 (🐞: engine_loads): number of executed engine.load() runs (monotone
+     *  until shutdown; number only, rule 9). */
     val engineLoads: Int? = null,
 )
 
 object DebugInfoFormatter {
 
-    /** Sichtbare Regel-9-Zusicherung in der Kopfzeile. */
+    /** Visible rule-9 assurance in the header line. */
     private const val HEADER = "# VK-DEBUG v1 keine inhalte"
 
-    /** Feste Feld-Reihenfolge (F13b2: +8, F17b: +3, F21: +2, F26a/b: +2, F28b1: +2, F28b2: +2, F31: +1, F42: +6, F52: +1, AP3: +8, A4a: +10, W-vc34: +5). */
+    /** Fixed field order (F13b2: +8, F17b: +3, F21: +2, F26a/b: +2, F28b1: +2, F28b2: +2, F31: +1, F42: +6, F52: +1, AP3: +8, A4a: +10, W-vc34: +5). */
     private val KEYS = listOf(
         "app_version", "build", "api_level", "model_status", "model_variant",
         "model_version", "model_bytes", "last_error", "rtf", "first_hyp_ms",
@@ -242,16 +242,16 @@ object DebugInfoFormatter {
         "loud_s",
         "had_output", "output_chars", "first_loud_ms",
         "first3s_loud_blocks", "first3s_peak_dbfs", "fgs_stopped_by",
-        // AP3 (Export v2 Teil 1):
+        // AP3 (export v2 part 1):
         "stop_cause", "start_src", "gate_at_stop", "owner_lost_at_s",
         "segment_finalizations", "max_pause_ms", "restart_inputs", "sel_unexpected",
         "gate_foreign_resets", "rebases",
-        // A4a (PLAN_V0133 §A4a): +10 Decode-/Schreib-Diagnose — ANGEHÄNGT, die
-        // bestehenden 53 bleiben davor in Reihenfolge unverändert.
+        // A4a (PLAN_V0133 §A4a): +10 decode/write diagnostics — APPENDED, the
+        // existing 53 stay in front of it in order unchanged.
         "last_decode_ms", "hyp_len", "current_len", "committed_len", "write_reason",
         "write_same", "write_w1", "write_w3d", "write_delta", "last_write_audio_s",
-        // W-Paket (vc34, Debugger-Empfehlung): +5 Engine-Warming — ANGEHÄNGT,
-        // die Bestandsfelder bleiben davor in Reihenfolge unverändert.
+        // W package (vc34, debugger recommendation): +5 engine warming — APPENDED,
+        // the stock fields stay in front of it in order unchanged.
         "engine_load_ms", "engine_resident", "warm_hit", "load_trigger", "engine_loads",
     )
 
@@ -285,7 +285,7 @@ object DebugInfoFormatter {
         lines += "route: " + value(s.audioRoute)
         lines += "src: " + value(s.audioSource)
         lines += "peak_dbfs: " + value(s.peakDbfs?.let { "%.1f".format(it) })
-        // F13b2: Beweisfelder für den Langtext-Abbruch (C1) — Zahlen/Zustände only.
+        // F13b2: evidence fields for the long-text abort (C1) — numbers/states only.
         lines += "ctl_state: " + value(s.ctlState)
         lines += "ctl_failed: " + value(s.ctlFailed?.let { if (it) "1" else "0" })
         lines += "dropped: " + value(s.droppedBlocks?.toString())
@@ -294,34 +294,34 @@ object DebugInfoFormatter {
         lines += "audio_s: " + value(s.audioSeconds?.let { "%.1f".format(it) })
         lines += "start_ms: " + value(s.lastStartMs?.toString())
         lines += "starting: " + value(s.starting?.let { if (it) "1" else "0" })
-        // F17b/C2: Decode-Arbeitslast — Zahlen only (Regel 9).
+        // F17b/C2: decode workload — numbers only (rule 9).
         lines += "decode_ms_max: " + value(s.decodeMsMax?.toString())
         lines += "decode_ms_p95: " + value(s.decodeMsP95?.toString())
         lines += "buffer_s: " + value(s.bufferSeconds?.let { "%.1f".format(it) })
-        // F21: cost-aware Takt — Zahlen only (Regel 9).
+        // F21: cost-aware pace — numbers only (rule 9).
         lines += "decode_pace_ms: " + value(s.decodePaceMs?.toString())
         lines += "decode_skips: " + value(s.decodeSkips?.toString())
-        // F28b1: Capture-Stall-Messung — Zahlen only (Regel 9).
+        // F28b1: capture stall measurement — numbers only (rule 9).
         lines += "cap_blocks: " + value(s.capBlocks?.toString())
         lines += "cap_stall_ms: " + value(s.capStallMs?.toString())
-        // F26a: Abort-Grund (C2-Export) — kontrollierte Namen, keine Inhalte (Regel 9).
+        // F26a: abort reason (C2 export) — controlled names, no contents (rule 9).
         lines += "abort_reason: " + value(s.abortReason)
-        // F26b (C2-Export): Bufferstand der letzten Hypothese — 1 Dezimale wie buffer_s.
+        // F26b (C2 export): buffer level of the last hypothesis — 1 decimal like buffer_s.
         lines += "hyp_last_buffer_s: " + value(s.hypLastBufferSeconds?.let { "%.1f".format(it) })
-        // F28b2: Session-Ende-Diagnose — reine Codes/ms, keine Inhalte (Regel 9).
+        // F28b2: session-end diagnostics — pure codes/ms, no contents (rule 9).
         lines += "mic_rel: " + value(s.micRel)
         lines += "status_shown: " + value(s.statusShown)
         lines += "status_res: " + value(s.statusRes)
-        // F31: Stille-Erkennung — 1 Dezimale wie audio_s (Regel 9: nur Zahlen).
+        // F31: silence detection — 1 decimal like audio_s (rule 9: numbers only).
         lines += "loud_s: " + value(s.loudS?.let { "%.1f".format(it) })
-        // F42 (F41-Fehlende-Messpunkte): Ausgabe-/Stille-/FGS-Forensik — nur Zahlen/Codes.
+        // F42 (F41 missing measurement points): output/silence/FGS forensics — numbers/codes only.
         lines += "had_output: " + value(s.hadOutput?.let { if (it) "1" else "0" })
         lines += "output_chars: " + value(s.outputChars?.toString())
         lines += "first_loud_ms: " + value(s.firstLoudMs?.toString())
         lines += "first3s_loud_blocks: " + value(s.first3sLoudBlocks?.toString())
         lines += "first3s_peak_dbfs: " + value(s.first3sPeakDbfs?.let { "%.1f".format(it) })
         lines += "fgs_stopped_by: " + value(s.fgsStoppedBy)
-        // AP3 (Export v2 Teil 1): Session-Forensik — nur Codes/Zahlen (Regel 9).
+        // AP3 (export v2 part 1): session forensics — codes/numbers only (rule 9).
         lines += "stop_cause: " + value(s.stopCause)
         lines += "start_src: " + value(s.startSrc)
         lines += "gate_at_stop: " + value(s.gateAtStop?.toString())
@@ -332,15 +332,15 @@ object DebugInfoFormatter {
         lines += "max_pause_ms: " + value(s.maxPauseMs?.toString())
         lines += "restart_inputs: " + value(s.restartInputs?.toString())
         lines += "sel_unexpected: " + value(s.selUnexpected?.toString())
-        // AP7-W1: gate_foreign_resets ≥ 1 = ein Fremd-Reset traf auf und wurde
-        // abgewiesen (positiver W1b-Beweis, Fable §0.1.6).
+        // AP7-W1: gate_foreign_resets ≥ 1 = a foreign reset arrived and was
+        // rejected (positive W1b evidence, Fable §0.1.6).
         lines += "gate_foreign_resets: " + value(s.gateForeignResets?.toString())
-        // AP7-E1: rebases ≥ 1 = App-Restart wurde überlebt (Re-Baseline statt Abort).
+        // AP7-E1: rebases ≥ 1 = an app restart was survived (re-baseline instead of abort).
         lines += "rebases: " + value(s.rebases?.toString())
-        // A4a (PLAN_V0133 §A4a): Decode-/Schreib-Diagnose (A2b) — nur Zahlen/
-        // geschlossene Codes, nie Inhalte (Regel 9); Fensterwerte fehlen ohne
-        // Decode als '-', last_write_audio_s ist per Controller NIE null
-        // (-1 = noch kein DELTA).
+        // A4a (PLAN_V0133 §A4a): decode/write diagnostics (A2b) — numbers/
+        // closed codes only, never contents (rule 9); window values are missing without a
+        // decode as '-', last_write_audio_s is NEVER null per the controller
+        // (-1 = no DELTA yet).
         lines += "last_decode_ms: " + value(s.lastDecodeMs?.toString())
         lines += "hyp_len: " + value(s.hypLen?.toString())
         lines += "current_len: " + value(s.currentLen?.toString())
@@ -353,8 +353,8 @@ object DebugInfoFormatter {
         lines += "last_write_audio_s: " + value(
             s.lastWriteAudioS?.let { if (it < 0) "-1" else "%.1f".format(it) },
         )
-        // W-Paket (vc34, Debugger-Empfehlung): Engine-Warming — nur Zahlen /
-        // geschlossene Codes (mic|ime_show|"-"), nie Inhalte (Regel 9).
+        // W package (vc34, debugger recommendation): engine warming — numbers /
+        // closed codes only (mic|ime_show|"-"), never contents (rule 9).
         lines += "engine_load_ms: " + value(s.engineLoadMs?.toString())
         lines += "engine_resident: " + value(s.engineResident?.let { if (it) "1" else "0" })
         lines += "warm_hit: " + value(s.warmHit?.let { if (it) "1" else "0" })
@@ -371,10 +371,10 @@ object DebugInfoFormatter {
     }
 
     /**
-     * Sanitizing (Regel 5 der Analyse): einzeilig, keine Umbrüche, keine
-     * Doppelpunkte im Wert, mehrfache Leerzeichen kollabiert, leer/unbekannt
-     * → `-`. Doppelpunkte werden zu `=` (Fehlercodes bleiben lesbar,
-     * z. B. `audioInit=SecurityException`).
+     * Sanitizing (rule 5 of the analysis): single-line, no line breaks, no
+     * colons in the value, multiple spaces collapsed, empty/unknown
+     * → `-`. Colons become `=` (error codes stay readable,
+     * e.g. `audioInit=SecurityException`).
      */
     internal fun value(raw: String?): String {
         if (raw == null) return "-"

@@ -5,8 +5,8 @@ import org.json.JSONException
 import org.json.JSONObject
 
 /**
- * Strikte, validaingsfreie (keine zusätzlichen Felder) Validierung gemäß DESIGN.md 7.2.
- * Nutzt org.json (auf Android und via Robolectric auf der JVM verfügbar).
+ * Strict validation per DESIGN.md 7.2 (no additional fields). Uses org.json
+ * (available on Android and via Robolectric on the JVM).
  */
 object LayoutParser {
 
@@ -101,9 +101,9 @@ object LayoutParser {
         rejectUnknown(obj, allowed, path)
         for (f in listOf("id", "kind")) requireString(obj, f, path)
         val kindStr = obj.getString("kind")
-        // F27a1: MARGIN (Stock-Geometrie) — Randflaeche: nur Breite, kein Inhalt.
-        // Tolerant wie die anderen Felder: label/value fehlen oder sind leer;
-        // ein NICHT-leeres label/value wird abgelehnt (keine stille Taste).
+        // F27a1: MARGIN (stock geometry) — edge surface: width only, no content.
+        // Tolerant like the other fields: label/value missing or empty;
+        // a NON-empty label/value is rejected (no silent key).
         if (kindStr == "margin") {
             for (f in listOf("label", "value")) {
                 if (obj.has(f) && obj.getString(f).isNotBlank()) {
@@ -137,17 +137,17 @@ object LayoutParser {
             val arr = obj.getJSONArray("alternates")
             (0 until arr.length()).map { arr.getString(it) }
         } else emptyList()
-        // F23a1: optionales hint — darf NIE die Tastatur killen: fehlend/leer/
-        // Nicht-String/zu lang (> 2 Zeichen) wird zu null, keine Ausnahme.
+        // F23a1: optional hint — must NEVER kill the keyboard: missing/empty/
+        // non-string/too long (> 2 characters) becomes null, no exception.
         val hint = if (obj.has("hint")) {
             val h = obj.optString("hint", "")
             if (h.isEmpty() || h.length > 2) null else h
         } else null
-        // F24e1: cellActions — Aktionsnamen fuer Menuezellen, parallel zu alternates
-        // ("" = normales Textfeld). Tolerant wie hint: fehlend/Falschtyp -> leer,
-        // Laenge wird auf die Laenge der alternates gekuerzt; Aktionsnamen werden
-        // NICHT validiert — der Parser schweigt bewusst, der Service-Zweig
-        // entscheidet, ob eine Aktion etwas tut.
+        // F24e1: cellActions — action names for menu cells, parallel to alternates
+        // ("" = normal text cell). Tolerant like hint: missing/wrong type -> empty,
+        // length is trimmed to the length of alternates; action names are
+        // NOT validated — the parser deliberately stays silent, the service branch
+        // decides whether an action does anything.
         val cellActions = if (obj.has("cellActions")) {
             val arr = obj.optJSONArray("cellActions")
             if (arr == null) emptyList()
@@ -178,13 +178,13 @@ object LayoutParser {
     }
 
     /**
-     * Semantik: Zeilensummen über alle Ebenen identisch je Zeilenindex, und
-     * Text-Keys der base-Ebene haben Shift-Gegenstücke (gleiche ID in shift-Ebene).
+     * Semantics: row sums identical across all layers per row index, and
+     * text keys of the base layer have shift counterparts (same ID in the shift layer).
      */
     private fun validateSemantics(id: String, layers: Map<String, LayoutLayer>, deadKeys: Map<String, DeadKey>) {
-        // Zeilenanzahl und Breitensummen gelten paarweise (Schema: base/shift gleich,
-        // symbols/symbolsShift gleich — Symbolebenen dürfen eine andere Zeilenzahl und
-        // Breitenaufteilung haben als die Buchstaben, z. B. AZERTY-Varianten).
+        // Row count and width sums apply pairwise (schema: base/shift equal,
+        // symbols/symbolsShift equal — the symbol layers may have a different row count and
+        // width distribution than the letters, e.g. AZERTY variants).
         for ((a, b) in listOf("shift" to "base", "symbolsShift" to "symbols")) {
             val la = layers.getValue(a)
             val lb = layers.getValue(b)
@@ -203,14 +203,14 @@ object LayoutParser {
                 }
             }
         }
-        // Text-Keys in base brauchen Shift-Gegenstück mit gleicher ID.
+        // Text keys in base need a shift counterpart with the same ID.
         val shiftIds = layers.getValue("shift").rows.flatten().map { it.id }.toSet()
         for (key in layers.getValue("base").rows.flatten()) {
             if (key.kind == KeyKind.TEXT && key.id !in shiftIds) {
                 throw LayoutException("Text-Taste '${key.id}' in base hat kein Shift-Gegenstück in Ebene 'shift'")
             }
         }
-        // Dead-Referenzen müssen auflösbar sein.
+        // Dead references must be resolvable.
         for (layer in layers.values) {
             for (row in layer.rows) for (key in row) {
                 if (key.kind == KeyKind.DEAD && key.value !in deadKeys) {

@@ -6,10 +6,10 @@ import org.junit.Test
 import java.io.File
 
 /**
- * V10 (L1-01-Fix): Loader-Tests ohne 648 MB —
- *  (a) kaputte Mini-Datei ⇒ typisierter Fehler, keine unbehandelte Exception
- *  (b) Größenprüfung gegen das Manifest VOR dem open (flacher Name, kein Pfad)
- *  (c) Quelltext-Test: der Loader enthält KEIN readBytes (billig, unverrückbar)
+ * V10 (L1-01 fix): loader tests without 648 MB —
+ *  (a) broken mini file ⇒ typed error, no unhandled exception
+ *  (b) size check against the manifest BEFORE open (flat name, no path)
+ *  (c) source test: the loader contains NO readBytes (cheap, immovable)
  */
 class LiteRtLoaderTest {
 
@@ -20,65 +20,65 @@ class LiteRtLoaderTest {
         }
 
     @Test
-    fun `kaputte tflite liefert typisierten fehler ohne heap_blasen`() {
+    fun `broken tflite yields a typed error without heap bubbles`() {
         val f = tempFile("broken", "dies ist kein tflite-modell, nur text")
         try {
             LiteRtLoader.open(f, 1)
-            fail("LiteRtLoadException erwartet")
+            fail("LiteRtLoadException expected")
         } catch (e: LiteRtLoader.LiteRtLoadException) {
-            // typisiert, kontrolliert — Meldung enthaelt Dateinamen-Klasse/Ursache, keinen Pfad
+            // typed, controlled — the message contains the file-name class/cause, no path
             assertTrue(e.message!!.isNotEmpty())
-            assertTrue("kein Pfad in der Meldung: ${e.message}", '/' !in e.message!!)
-            assertTrue("kein Pfad in der Meldung", '\\' !in e.message!!)
+            assertTrue("no path in the message: ${e.message}", '/' !in e.message!!)
+            assertTrue("no path in the message", '\\' !in e.message!!)
         }
     }
 
     @Test
-    fun `groessenpruefung vor open meldet flachen dateinamen`() {
+    fun `size check before open reports the flat file name`() {
         val f = tempFile("wrongsize", "x")
         try {
-            // erwartete Groesse absichtlich falsch (1 statt 2 Bytes)
+            // the expected size is deliberately wrong (1 instead of 2 bytes)
             LiteRtLoader.open(f, 1, expectedSizeBytes = 2L)
-            fail("LiteRtLoadException wegen Groesse erwartet")
+            fail("LiteRtLoadException due to size expected")
         } catch (e: LiteRtLoader.LiteRtLoadException) {
-            assertTrue(e.message!!.contains(f.name)) // flacher Dateiname
-            assertTrue("kein Pfad: ${e.message}", '/' !in e.message!!.substringAfter(f.name))
+            assertTrue(e.message!!.contains(f.name)) // flat file name
+            assertTrue("no path: ${e.message}", '/' !in e.message!!.substringAfter(f.name))
             assertTrue(e.message!!.contains("Größe abweichend"))
         }
     }
 
     @Test
-    fun `fehlende datei wirft kontrolliert`() {
+    fun `missing file throws in a controlled way`() {
         val missing = File(createTempDirectory(), "gibtsnicht.tflite")
         try {
             LiteRtLoader.open(missing, 1)
-            fail("Kontrollierter Fehler erwartet")
+            fail("controlled error expected")
         } catch (e: IllegalStateException) {
             assertTrue(e.message!!.contains("fehlt"))
         }
     }
 
     /**
-     * Quelltext-Test (bewusst billig und unVERRÜCKbar): der Loader darf KEIN
-     * `readBytes` enthalten — genau das war der Blocker (648-MB-Heap-Kopie).
-     * Auch kein readAllBytes/großes ByteArray-Allokationsmuster.
+     * Source test (deliberately cheap and unmovable): the loader must NOT contain
+     * `readBytes` — exactly that was the blocker (the 648-MB heap copy).
+     * Also no readAllBytes/large ByteArray allocation pattern.
      */
     @Test
-    fun `loader_quelltext_enthält_kein_readbytes`() {
-        // V13: LiteRT-Quellen leben im DEBUG-Source-Set
+    fun `loader source contains no readbytes`() {
+        // V13: the LiteRT sources live in the DEBUG source set
         val source = File("src/debug/java/de/voicekeyboard/asr/litert/LiteRtLoader.kt")
             .readText()
-        assertTrue("Quelltext-Datei gefunden", source.contains("object LiteRtLoader"))
+        assertTrue("source file found", source.contains("object LiteRtLoader"))
         assertTrue(
-            "LiteRtLoader darf readBytes nicht enthalten (L1-01: 648-MB-Heap-Kopie)",
+            "LiteRtLoader must not contain readBytes (L1-01: 648-MB heap copy)",
             !source.contains("readBytes"),
         )
         assertTrue(
-            "LiteRtLoader darf readAllBytes nicht enthalten",
+            "LiteRtLoader must not contain readAllBytes",
             !source.contains("readAllBytes"),
         )
         assertTrue(
-            "LiteRtLoader muss Interpreter(File, ...) nutzen (mmap-Weg)",
+            "LiteRtLoader must use Interpreter(File, ...) (the mmap path)",
             source.contains("Interpreter(file, opts)"),
         )
     }

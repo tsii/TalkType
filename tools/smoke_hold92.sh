@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Kernbeweis v0.1.31: 92-s-Halte-Diktat ALS ERSTE App-Session nach Kaltstart.
+# Core proof for v0.1.31: 92-s hold dictation AS THE FIRST app session after a cold start.
 set -u
 cd <workdir>
 ADB="adb -s <device>"
@@ -7,7 +7,7 @@ export PATH=$PATH:/opt/android-sdk/platform-tools
 export XDG_RUNTIME_DIR=/run/user/$(id -u)
 LOG=/tmp/sm31_hold.log; : > "$LOG"; exec >>"$LOG" 2>&1
 ts() { date "+%H:%M:%S.%3N"; }
-echo "=== HOLD92 als Erste-Session $(ts)"
+echo "=== HOLD92 as first session $(ts)"
 $ADB shell am start -n de.voicekeyboard/.debug.DebugInputActivity >/dev/null 2>&1; sleep 3
 $ADB shell input tap 540 300; sleep 2
 echo "DOWN $(ts)"
@@ -33,8 +33,8 @@ for m in re.finditer(r'text=\"([^\"]*)\"', x):
     t=html.unescape(m.group(1))
     if 'audio_s' in t and 'cap_blocks' in t: print(html.unescape(t))
 " > /tmp/sm31_export_hold.txt
-  if [ -s /tmp/sm31_export_hold.txt ]; then echo "--- export Versuch $v ok"; break; fi
-  echo "--- Versuch $v leer"; sleep 3
+  if [ -s /tmp/sm31_export_hold.txt ]; then echo "--- export attempt $v ok"; break; fi
+  echo "--- attempt $v empty"; sleep 3
 done
 $ADB exec-out screencap -p > /tmp/sm31_kb.png 2>/dev/null
 echo "=== DONE $(ts)"

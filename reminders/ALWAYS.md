@@ -1,13 +1,13 @@
-# Immer gültige Regeln (Voice-Keyboard)
+# Always valid rules (Voice-Keyboard)
 
-1. **Rollen sind fix.** **Design/UI = `my/work-sipgate-coding-ultra`**; **Plan = `my/work-sipgate-coding-ultra`** (vom Nutzer am 2026-11-03 ausdrücklich bekräftigt); Analysen/Doku = `moonshot/kimi-k3`; **Code = `my/work-zai-org-glm-5.3-verda`**; **Review jeder Code-Arbeit = `cortecs/deepseek-v4-pro-0813`**. (Rollenwechsel 2026-11-01: Design von Sol → sipgate-coding-ultra, da Sol dauerhaft ausgefallen (Codex-Limit); Plan von Kimi → sipgate-coding-ultra; Code von cortecs/glm-5.3 → glm-5.3-verda. Design, Plan und Code via Provider `my`.) Der Orchestrator delegiert und verifiziert mechanisch — keine eigene Facharbeit, keine eigenen Reviews.
-2. **`docs/KONZEPT.md` ist verbindlich** (erprobte Erfahrung des Nutzers). Abweichungen nur mit Begründung in der „Konzept-Treue"-Tabelle bzw. als dokumentierte Präzisierung.
-3. **Kein `sleep` im Turn.** Warten = `schedule_task` (≥ 60 s) + Statuszeile an den Nutzer. Max. 2× `wait_all(60)` bei kurzen Jobs.
-4. **Auftragsgrenzen:** ≤ 4 Dateien, ≤ ~150 Zeilen, ≤ 2 Build-Läufe, Ziel ≤ 10 min. Kanarienvögel → sofort `stop` (Details `docs/CONTINGENCY_PLAN.md` §4).
-5. **Gradle = globales Mutex**, Emulator/adb exklusiv, ASR-Modelllauf nie parallel zum Emulator. `claim_files` vor jedem Multi-Datei-Auftrag.
-6. **Kein Write-only ohne Verifikation.** Bei Gradle-Blockade: Verifikation per `schedule_task` in ≤ 5 min terminieren und Auftrag als `UNVERIFIZIERT` markieren.
-7. **Nach „force-terminated / synthetic result":** nichts neu delegieren — erst `get_result`, dann Soll/Ist am Dateisystem, dann selbst verifizieren, dann übernehmen/`steer`/`stop`. `stop`/`steer` einzeln pro Tool-Block.
-8. **Slot-Budget ≤ 6 lebende Subagenten**; Recycling über `steer` auf `done`-Sessions; fertige Sessions per Dismiss freigeben.
-9. **Privacy:** keine Audio- oder Textinhalte in Logs; kein Netzwerkzugriff außer Modell-Download; keine Autokorrektur/Wörterbücher in v1.
-10. **Kein `git commit`, kein Push auf main, kein Deploy** ohne ausdrückliche Freigabe des Nutzers.
-11. **ALLE Subagenten IMMER im Hintergrund** (Nutzer-Befehl 2026-11-01): jede Delegation/Session mit `persist=true` als Hintergrund-Konversation starten, nie im eigenen Turn blockierend warten; Ergebnisse am Puls abholen (`get_result`/Datei), Wecker-Stand aktualisieren.
+1. **Roles are fixed.** **Design/UI = `my/work-sipgate-coding-ultra`**; **Plan = `my/work-sipgate-coding-ultra`** (explicitly reaffirmed by the user on 2026-11-03); analyses/docs = `moonshot/kimi-k3`; **Code = `my/work-zai-org-glm-5.3-verda`** (Nutzer-Befehl 2026-11-03: alle NEUEN Coder-Sessions verbindlich wieder über Provider `my` mit GLM-5.3-verda; laufende Saesse auslaufen lassen, Fallback coding-pro nur noch nach Rückfrage); **Review of every code task = `cortecs/deepseek-v4-pro-0813`**; **translations (DE→EN docs/comments): PREFERRED `my/qwen-38-flash-next`, fallback `my/work-sipgate-coding-pro`** (user decision 2026-11-03). (Role change 2026-11-01: design from Sol → sipgate-coding-ultra, because Sol is permanently down (Codex limit); plan from Kimi → sipgate-coding-ultra; code from cortecs/glm-5.3 → glm-5.3-verda. Design, plan and code via provider `my`.) The orchestrator delegates and verifies mechanically — no own specialist work, no own reviews.
+2. **`docs/KONZEPT.md` is binding** (the user's proven experience). Deviations only with justification in the „Konzept-Treue" table or as a documented refinement.
+3. **No `sleep` in a turn.** Waiting = `schedule_task` (≥ 60 s) + status row message to the user. Max. 2× `wait_all(60)` for short jobs.
+4. **Task limits:** ≤ 4 files, ≤ ~150 lines, ≤ 2 build runs, target ≤ 10 min. Canaries → immediately `stop` (details `docs/CONTINGENCY_PLAN.md` §4).
+5. **Gradle = global mutex**, emulator/adb exclusive, ASR model run never parallel to the emulator. `claim_files` before every multi-file task.
+6. **No write-only without verification.** On Gradle blockage: schedule verification via `schedule_task` within ≤ 5 min and mark the task as `UNVERIFIED`.
+7. **After „force-terminated / synthetic result":** do not delegate anything new — first `get_result`, then target/actual on the file system, then verify yourself, then adopt/`steer`/`stop`. `stop`/`steer` individually per tool block.
+8. **Slot budget ≤ 6 live subagents**; recycling via `steer` on `done` sessions; release finished sessions via dismiss.
+9. **Privacy:** no audio or text content in logs; no network access except the model download; no autocorrect/dictionaries in v1.
+10. **No `git commit`, no push to main, no deploy** without explicit approval by the user.
+11. **ALL subagents ALWAYS in the background** (user command 2026-11-01): start every delegation/session with `persist=true` as a background conversation, never wait blocking in your own turn; collect results at the pulse (`get_result`/file), update the alarm state.

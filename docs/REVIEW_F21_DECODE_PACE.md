@@ -1,33 +1,33 @@
-# Review F21 — cost-aware Decode-Takt (DecodePace, chunkMs 2000, Kein-Schiebefenster)
+# Review F21 — cost-aware decode pacing (DecodePace, chunkMs 2000, no sliding window)
 
-**Reviewer:** DeepSeek V4 Pro 0813 · **Datum:** 2026-10-30
-**Umfang:** `dictation/DecodePace.kt` (neu), `DictationController` (Gate + Zähler), `DictationCoordinator:130`, `AsrThreadConfig` (chunkMs 2000 + Pace-Klammern), `DebugInfoFormatter`/`Collector` (+2 Felder), Tests. Kein Build/Emulator.
+**Reviewer:** DeepSeek V4 Pro 0813 · **Date:** 2026-10-30
+**Scope:** `dictation/DecodePace.kt` (new), `DictationController` (gate + counters), `DictationCoordinator:130`, `AsrThreadConfig` (chunkMs 2000 + pace clamps), `DebugInfoFormatter`/`Collector` (+2 fields), tests. No build/emulator.
 
 ---
 
-## Befundtabelle
+## Findings table
 
-| Sev | Datei:Zeile | Befund | Minimaländerung |
+| Sev | File:Line | Finding | Minimal change |
 |---|---|---|---|
-| **P2** | `docs/DEBUG_INFO_FIELDS.md:181` (+ fehlende Zeilen) | **Katalog-Drift:** die zwei F21-Schlüssel `decode_pace_ms`/`decode_skips` fehlen; die Zählung „→ 27 Felder" (Z.181) ist veraltet — `KEYS` ist inzwischen **29** (`DebugInfoFormatter.kt:115-116`: …`decode_ms_*`,`buffer_s`,`decode_pace_ms`,`decode_skips`). | Zwei Tabellenzeilen nachtragen und Z.181 auf „→ 29 Felder" korrigieren: `decode_pace_ms` — aktuelles Partial-Intervall in ms (`decodePaceMs()`; `0` = Pacing aus) · `decode_skips` — wegen Takt übersprungene Partial-Decodes dieser Session (`decodeSkips()`). |
+| **P2** | `docs/DEBUG_INFO_FIELDS.md:181` (+ missing lines) | **Catalog drift:** the two F21 keys `decode_pace_ms`/`decode_skips` are missing; the count "→ 27 fields" (line 181) is outdated — `KEYS` is now **29** (`DebugInfoFormatter.kt:115-116`: …`decode_ms_*`,`buffer_s`,`decode_pace_ms`,`decode_skips`). | Add two table rows and fix line 181 to "→ 29 fields": `decode_pace_ms` — current partial interval in ms (`decodePaceMs()`; `0` = pacing off) · `decode_skips` — partial decodes skipped due to pacing in this session (`decodeSkips()`). |
 
 ---
 
-## Antworten A–H
+## Answers A–H
 
-- **A) Saturierung/Ränder korrekt.** `intervalMs` (`DecodePace.kt:30-34`): `base=min(base,max)` ⇒ `base>max` ergibt immer `max`; `bufferMs<base` ⇒ `base`; `doubled` saturiert (`>MAX/2 ⇒ MAX`, negatives `*2` via `coerceAtLeast(0)` ⇒ `base`), `coerceIn(base,max)`. Nachgerechnet: 0→base, 1→base, base/2→base, base→2·base, max/2→max, max→max, max·3→max, MAX→max, negativ→base. Immer in `[min(base,max), max]`, nie Überlauf, nie negativ.
-- **B) Hebel AN, Kette vollständig.** `DictationCoordinator:130` setzt `decodePacing=true`; `DictationController.PACE_BASE_MS/MAX_MS` referenzieren `AsrThreadConfig.DEFAULT.decodePaceBaseMs/MaxMs` (Z.465-466) — **eine** Quelle, kein Doppel-Hardcode. Gate `paceAllowsDecode()` (Z.256-259) ist aktiv. Kein „für die Tonne"-Zustand.
-- **C) Takt ist audio-fortschrittsbasiert (tiefschläf-sicher).** `paceAllowsDecode` nutzt `secs − lastDecodeBufferSeconds` (Pufferwachstum), **nicht** `clock()` — im Deep-Sleep wächst kein Audio ⇒ kein Decode desselben Puffers. Ein 6000-ms-Ausreißer ⇒ `2·6000 → coerceIn → 6000 ms`, d. h. nächster Partial nach 6 s neuen Audios; `maxMs=6000` ist die beabsichtigte Klammer und steht in `AsrThreadConfig.DEFAULT_DECODE_PACE_MAX_MS` + DecodePace-KDoc. ✓
-- **D) Finale unabhängig (kein P0).** Das Gate (Z.256) liegt ausschließlich im Partial-Pfad `feedAudio`; `stop()`/Finale ruft `engine.transcribe` (Z.332-333) **ohne** `paceAllowsDecode` — Textverlust ausgeschlossen.
-- **E) chunkMs 1000→2000 ohne Latenz-/Queue-Regression.** `tickSamples = chunkMs·16000/1000` = 32000 (2 s); `Channel.UNLIMITED` unverändert; `pcm` wächst frei; `dropped_blocks` hängt nicht an der Blockgröße. Erster Partial weiter bei **2,0 s** (der `minAudioSecondsForPartials=2,0 s`-Guard dominiert; mit 1-s-Tick war der 1-s-Feed ohnehin unterhalb des Guards) — keine spätere Erstausgabe.
-- **F) Testqualität gut.** `DictationControllerTest` beweist das **Überspringen** (`decodeSkips()==5`, Z.359) und `decodePaceMs()==6000` (Z.353) bei langsamer Fake-Engine sowie „Pacing aus ⇒ 0/0" (Z.382-383) — ein Rückdrehen von `decodePacing=true→false` macht diese **rot**. `DebugInfoCollectorTest` assertet zusätzlich `assertNotNull(decodePaceMs/decodeSkips)` (Z.139-140) — nur nicht den Wert (würde ein Resets nicht allein fangen, aber der Controller-Test tut es). `AsrThreadConfigTest` pinnt `chunkMs=2000` und testet die **Geometrie** weiter mit explizit `1000` — sauber getrennt (Default-Wert vs. Funktion), verschleiert nichts.
-- **G) Regel 9 sauber:** `decode_pace_ms` (0..6000) und `decode_skips` (Zähler) sind reine Zahlen, keine Inhalte/Pfade.
-- **H) Regel 2 erfüllt:** `DecodePace.kt`-KDoc benennt explizit „kein Schiebefenster, das ganze Fenster bleibt, einziger Hebel ist WANN" (Verweis auf KONZEPT §5.1) — kein Sliding-Window-Eingriff. Zusätzlich geprüft: `AsrThreadConfig.forDevice` (Z.83-90) ist **unverändert** (`min(4, cores)` für ≤8 Kerne); kein kassierter `intra=6`-Sollwert.
+- **A) Saturation/edges correct.** `intervalMs` (`DecodePace.kt:30-34`): `base=min(base,max)` ⇒ `base>max` always yields `max`; `bufferMs<base` ⇒ `base`; `doubled` saturates (`>MAX/2 ⇒ MAX`, negative `*2` via `coerceAtLeast(0)` ⇒ `base`), `coerceIn(base,max)`. Recalculated: 0→base, 1→base, base/2→base, base→2·base, max/2→max, max→max, max·3→max, MAX→max, negative→base. Always within `[min(base,max), max]`, never overflow, never negative.
+- **B) Lever ON, chain complete.** `DictationCoordinator:130` sets `decodePacing=true`; `DictationController.PACE_BASE_MS/MAX_MS` reference `AsrThreadConfig.DEFAULT.decodePaceBaseMs/MaxMs` (lines 465-466) — **one** source, no double hardcoding. Gate `paceAllowsDecode()` (lines 256-259) is active. No "into the trash" state.
+- **C) Pacing is audio-progress-based (deep-sleep-safe).** `paceAllowsDecode` uses `secs − lastDecodeBufferSeconds` (buffer growth), **not** `clock()` — during deep sleep no audio grows ⇒ no decode of the same buffer. A 6000-ms outlier ⇒ `2·6000 → coerceIn → 6000 ms`, i.e. next partial after 6 s of new audio; `maxMs=6000` is the intended clamp and lives in `AsrThreadConfig.DEFAULT_DECODE_PACE_MAX_MS` + DecodePace KDoc. ✓
+- **D) Finale independent (no P0).** The gate (line 256) lies exclusively in the partial path `feedAudio`; `stop()`/finale calls `engine.transcribe` (lines 332-333) **without** `paceAllowsDecode` — text loss ruled out.
+- **E) chunkMs 1000→2000 without latency/queue regression.** `tickSamples = chunkMs·16000/1000` = 32000 (2 s); `Channel.UNLIMITED` unchanged; `pcm` grows freely; `dropped_blocks` does not depend on block size. First partial still at **2.0 s** (the `minAudioSecondsForPartials=2.0 s` guard dominates; with a 1-s tick the 1-s feed was below the guard anyway) — no later first output.
+- **F) Test quality good.** `DictationControllerTest` proves the **skipping** (`decodeSkips()==5`, line 359) and `decodePaceMs()==6000` (line 353) with a slow fake engine, plus "pacing off ⇒ 0/0" (lines 382-383) — reverting `decodePacing=true→false` turns these **red**. `DebugInfoCollectorTest` additionally asserts `assertNotNull(decodePaceMs/decodeSkips)` (lines 139-140) — not the value (would not alone catch a reset, but the controller test does). `AsrThreadConfigTest` pins `chunkMs=2000` and continues testing the **geometry** with explicit `1000` — cleanly separated (default value vs. function), obscures nothing.
+- **G) Rule 9 clean:** `decode_pace_ms` (0..6000) and `decode_skips` (counter) are pure numbers, no content/paths.
+- **H) Rule 2 met:** the `DecodePace.kt` KDoc explicitly states "no sliding window, the whole window remains, the only lever is WHEN" (reference to KONZEPT §5.1) — no sliding-window interference. Additionally checked: `AsrThreadConfig.forDevice` (lines 83-90) is **unchanged** (`min(4, cores)` for ≤8 cores); no asserted `intra=6` target value.
 
 ---
 
-## SUMME
+## TOTAL
 
-**P0 = 0 · P1 = 0 · P2 = 1** (nur Doku-Drift in `DEBUG_INFO_FIELDS.md`: zwei fehlende Keys + veraltete „27 Felder").
+**P0 = 0 · P1 = 0 · P2 = 1** (docs drift only in `DEBUG_INFO_FIELDS.md`: two missing keys + outdated "27 fields").
 
-**Offen (zum Belegen bräuchte ich):** einen echten `./gradlew test`-Lauf (385/0 + Compile-Exit 0), den Volltext der neuen `DictationControllerTest`-Methode (per grep nur die Asserts gesehen, nicht die Fake-Engine-Taktung), und einen Gerätelauf, ob der 6 s-Partial-Takt auf langsamer Hardware subjektiv erträglich bleibt (reiner UX-Wert, kein Codefehler).
+**Open (to provide evidence I would need):** a real `./gradlew test` run (385/0 + compile exit 0), the full text of the new `DictationControllerTest` method (grep showed only the asserts, not the fake-engine timing), and a device run to check whether the 6-s partial pace remains subjectively tolerable on slow hardware (pure UX value, no code defect).

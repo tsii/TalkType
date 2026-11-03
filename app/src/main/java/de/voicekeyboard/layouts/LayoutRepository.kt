@@ -3,34 +3,34 @@ package de.voicekeyboard.layouts
 import android.content.Context
 
 /**
- * M9a R1: Label-Regel fuer die SPACE-Taste (reine JVM-Logik, testbar).
- * Asset-Label, wenn es Nicht-Whitespace enthaelt; sonst Fallback aus Ressourcen.
+ * M9a R1: label rule for the SPACE key (pure JVM logic, testable).
+ * Asset label if it contains non-whitespace; otherwise fallback from resources.
  */
 object SpaceLabelRule {
 
-    /** True, wenn das Asset-Label verwendbar ist (mind. ein Nicht-Whitespace-Zeichen). */
+    /** True if the asset label is usable (at least one non-whitespace character). */
     fun useAssetLabel(label: String): Boolean = label.any { !it.isWhitespace() }
 
-    /** Aufloesung: Asset-Label oder Fallback. Einfuege-Wert bleibt unangetastet. */
+    /** Resolution: asset label or fallback. The insert value stays untouched. */
     fun resolve(assetLabel: String, fallback: String): String =
         if (useAssetLabel(assetLabel)) assetLabel else fallback
 }
 
 /**
- * Lädt Layout-JSONs aus assets/layouts/. Fällt bei Fehlern auf das
- * eingebaute de-DE-Layout zurück; defekte Layouts werden isoliert.
+ * Loads layout JSONs from assets/layouts/. Falls back to the built-in de-DE
+ * layout on errors; broken layouts are isolated.
  */
 class LayoutRepository(private val context: Context) {
 
     /**
-     * L3/R1: Verfügbare Layout-IDs aus dem Asset-Verzeichnis scannen — kein Hardcode.
-     * Normalisierung: `.json`-Endung weg, Kleinschreibung, Duplikate weg.
-     * Reihenfolge: kanonische Sprachreihenfolge zuerst, danach alle weiteren Funde
-     * alphabetisch. `de-de` ist immer enthalten (Fallback), auch wenn der Scan fehlschlägt.
+     * L3/R1: scan the available layout IDs from the asset directory — no hardcoding.
+     * Normalization: strip the `.json` suffix, lowercase, remove duplicates.
+     * Order: canonical language order first, then all other findings
+     * alphabetically. `de-de` is always included (fallback), even if the scan fails.
      */
     fun availableIds(): List<String> {
-        // M9c: EINE Quelle — die kanonische Reihenfolge lebt in LanguageCycle
-        // (Paket ime/, E9.1 Regel 3). Keine lokale Duplikatliste mehr.
+        // M9c: ONE source — the canonical order lives in LanguageCycle
+        // (package ime/, E9.1 rule 3). No local duplicate list anymore.
         val canonical = de.voicekeyboard.ime.LanguageCycle.CANONICAL
         val scanned = try {
             context.assets.list("layouts")
@@ -42,7 +42,7 @@ class LayoutRepository(private val context: Context) {
         } catch (e: Exception) {
             emptySet()
         }
-        val ids = scanned + "de-de" // de-de immer vorhanden (Fallback-Garantie)
+        val ids = scanned + "de-de" // de-de always present (fallback guarantee)
         return canonical.filter { it in ids } + (ids - canonical.toSet()).sorted()
     }
 
@@ -64,7 +64,7 @@ class LayoutRepository(private val context: Context) {
         return null
     }
 
-    /** Lädt das Layout; bei Fehlern Rückfall auf de-DE, dann EN-US. */
+    /** Loads the layout; on errors fallback to de-DE, then EN-US. */
     fun loadOrFallback(id: String): LayoutAsset {
         load(id)?.let { return it }
         load("de-de")?.let { return it }

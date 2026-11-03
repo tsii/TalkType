@@ -3,33 +3,33 @@ package de.voicekeyboard.ime
 import de.voicekeyboard.dictation.DictationState
 
 /**
- * D10 §2 + F9 d: Was ein Tap auf die Fußreihen-Mikrofon-Taste in welchem
- * Zustand auslöst — als reine Funktion, damit die Zustandsmaschine ohne
- * IME-Lebenszyklus bewiesen werden kann.
+ * D10 §2 + F9 d: what a tap on the foot-row microphone key triggers in which
+ * state — as a pure function, so the state machine can be proven without an
+ * IME lifecycle.
  *
- * - IDLE (oder noch kein Coordinator): START — Aufnahme beginnen.
- * - RECORDING: STOP — Aufnahme beenden und final dekodieren (Sonst ist die
- *   Taste ein Start-only-Schalter und eine laufende Aufnahme nicht mehr zu
- *   beenden, F8 Q6 = P1).
- * - STARTING / FINALIZING (und jeder künftige Zwischenzustand): IGNORE —
- *   ein Tap darf hier keinen Neustart auslösen, weil onMicDown dann an
- *   coordinator.start() scheitert und „Start fehlgeschlagen“ zeigt (F9 d = P2).
+ * - IDLE (or no coordinator yet): START — begin recording.
+ * - RECORDING: STOP — end the recording and decode finally (otherwise the
+ *   key is a start-only switch and a running recording can no longer be
+ *   ended, F8 Q6 = P1).
+ * - STARTING / FINALIZING (and any future intermediate state): IGNORE —
+ *   a tap must not trigger a restart here, because onMicDown would then fail
+ *   at coordinator.start() and show „Start fehlgeschlagen“ (F9 d = P2).
  */
 enum class MicToggleAction { START, STOP, IGNORE }
 
 /**
- * D10-Rest §1 („Daten und PTT“) — Ereignisse der Fussreihen-HALTEGESTE:
- * DOWN startet, UP beendet (mit Finale), CANCEL bricht ab (abort, KEIN
- * Final-Decode). Reine Funktion, damit die Geste ohne IME-Lebenszyklus
- * beweisbar ist (siehe MicToggleTest).
+ * D10-rest §1 („Daten und PTT“) — events of the foot-row HOLD GESTURE:
+ * DOWN starts, UP ends (with finale), CANCEL aborts (abort, NO final
+ * decode). Pure function, so the gesture is provable without an IME
+ * lifecycle (see MicToggleTest).
  */
 enum class MicHoldAction { START, STOP, ABORT, IGNORE }
 
 /**
- * DOWN auf dem Fussreihen-Mikrofon: NUR aus IDLE (oder ohne Coordinator)
- * starten — in RECORDING/STARTING/FINALIZING ist ein DOWN ein bewusstes
- * Nichtstun (kein Toggle-Stop über die Press-Ebene; das Stoppen kommt
- * ausschließlich über das Loslassen, D10 §1).
+ * DOWN on the foot-row microphone: start ONLY from IDLE (or without a
+ * coordinator) — in RECORDING/STARTING/FINALIZING a DOWN is a deliberate
+ * no-op (no toggle stop via the press level; stopping comes exclusively via
+ * the release, D10 §1).
  */
 fun micHoldPressAction(state: DictationState?): MicHoldAction = when (state) {
     null, DictationState.IDLE -> MicHoldAction.START
@@ -37,12 +37,12 @@ fun micHoldPressAction(state: DictationState?): MicHoldAction = when (state) {
 }
 
 /**
- * Loslassen des Fussreihen-Mikrofons:
- * - normal (Finger UP): RECORDING/STARTING → STOP (Final-Decode); sonst IGNORE
- *   (z. B. nie gestartet, weil Berechtigung/Modell fehlten).
- * - CANCEL (System/Geste stiehlt den Pointer): RECORDING/STARTING → ABORT —
- *   sicherer Abbruch OHNE Final-Decode (kein Nachfahren eines Decodes in
- *   einen Editor, in den der Nutzer nicht mehr schaut).
+ * Releasing the foot-row microphone:
+ * - normal (finger UP): RECORDING/STARTING → STOP (final decode); otherwise IGNORE
+ *   (e. g. never started, because permission/model were missing).
+ * - CANCEL (system/gesture steals the pointer): RECORDING/STARTING → ABORT —
+ *   safe abort WITHOUT final decode (no chasing of a decode into an editor
+ *   the user no longer looks at).
  */
 fun micHoldReleaseAction(state: DictationState?, cancelled: Boolean): MicHoldAction =
     if (cancelled) {
@@ -57,38 +57,41 @@ fun micHoldReleaseAction(state: DictationState?, cancelled: Boolean): MicHoldAct
         }
     }
 
-// ---- T3 (v0.1.35, Debugger-Design, Beweis /tmp/vk_phone_e2.log Z.74-97): Tap/Hold-Klassifikation ----
+// ---- T3 (v0.1.35, debugger design, evidence /tmp/vk_phone_e2.log lines 74-97): tap/hold classification ----
 
 /**
- * T3: maximale DOWN→UP-Dauer in ms, die noch als **TAP** gilt — darunter ist die
- * Fußzeilen-Mikro-Geste ein SCHALTER (Toggle), darüber ein echter Hold-Release
- * (PTT). Beweisbild: vier Sessions starben 10–90 ms nach `start_ok` über das
- * EIGENE Loslassen (mic_down → start_ok+105 ms → holdup → stopped ok=0/audio_s=0),
- * weil `micHoldReleaseAction` bei RECORDING/STARTING + UP pauschal STOP lieferte.
+ * T3: maximum DOWN→UP duration in ms that still counts as a **TAP** — below it
+ * the foot-row mic gesture is a SWITCH (toggle), above it a real hold-release
+ * (PTT). Evidence: four sessions died 10–90 ms after `start_ok` via their OWN
+ * release (mic_down → start_ok+105 ms → holdup → stopped ok=0/audio_s=0),
+ * because `micHoldReleaseAction` returned STOP indiscriminately on
+ * RECORDING/STARTING + UP.
  */
 const val MIC_TAP_MAX_MS = 300L
 
 /**
- * T3: Entscheidung beim Loslassen der Fußzeilen-Mikro-Geste — reine Funktion
- * über den Coordinator-Zustand BEIM DOWN ([stateAtDown]: frisch vs. Session/Start
- * bereits aktiv), die DOWN→UP-Dauer ([holdDurationMs], im KeyboardView aus
- * `event.eventTime` gemessen) und den Zustand beim Release:
+ * T3: decision on releasing the foot-row mic gesture — pure function over the
+ * coordinator state AT DOWN ([stateAtDown]: fresh vs. session/start already
+ * active), the DOWN→UP duration ([holdDurationMs], measured in KeyboardView from
+ * `event.eventTime`) and the state at release:
  *
- *  - **frischer Tap** (DOWN ohne Session, ≤ [MIC_TAP_MAX_MS]) ⇒ [TOGGLE_ON] — die
- *    Session läuft weiter, EGAL ob das UP vor oder nach `start_ok` kam (Kern des
- *    Befunds: Kalt verlor das UP an startingUp/KEEP_RUNNING, Warm an start_ok);
- *  - **Tap auf laufende/startende Session** (DOWN mit aktiver Session) ⇒
- *    [TOGGLE_OFF] — regulär stoppen (der zweite Tap schaltet aus, Gegenprobe);
- *  - **> [MIC_TAP_MAX_MS]** ⇒ echter Hold-Release ⇒ Stop ([HOLD_STOP]); läuft
- *    der Start noch ([startingUp]/STARTING) ⇒ [HOLD_STOP_PENDING] — Stop greift
- *    NACH Startende (micStartFinishedAction: STOP_AFTER_START, nicht blind
- *    KEEP_RUNNING — der frische Tap setzt das Flag GAR NICHT erst);
- *  - **CANCEL** unverändert ⇒ Abbruch ohne Finale (nur aus laufender/startender
- *    Aufnahme).
+ *  - **fresh tap** (DOWN without session, ≤ [MIC_TAP_MAX_MS]) ⇒ [TOGGLE_ON] — the
+ *    session keeps running, REGARDLESS of whether the UP came before or after
+ *    `start_ok` (core of the finding: cold lost the UP to startingUp/KEEP_RUNNING,
+ *    warm to start_ok);
+ *  - **tap onto a running/starting session** (DOWN with an active session) ⇒
+ *    [TOGGLE_OFF] — stop regularly (the second tap switches off, counter-check);
+ *  - **> [MIC_TAP_MAX_MS]** ⇒ real hold-release ⇒ stop ([HOLD_STOP]); if the
+ *    start is still running ([startingUp]/STARTING) ⇒ [HOLD_STOP_PENDING] — the
+ *    stop takes effect AFTER the start ends (micStartFinishedAction:
+ *    STOP_AFTER_START, not blindly KEEP_RUNNING — the fresh tap does not set
+ *    the flag at all);
+ *  - **CANCEL** unchanged ⇒ abort without finale (only from a running/starting
+ *    recording).
  */
 enum class MicReleaseDecision { TOGGLE_ON, TOGGLE_OFF, HOLD_STOP, HOLD_STOP_PENDING, ABORT, IGNORE }
 
-/** T3: die Release-Entscheidung (reine Naht, JVM-testbar — Muster MicToggleTest). */
+/** T3: the release decision (pure seam, JVM-testable — pattern MicToggleTest). */
 fun micHoldReleaseDecision(
     stateAtDown: DictationState?,
     stateAtRelease: DictationState?,
@@ -96,25 +99,25 @@ fun micHoldReleaseDecision(
     cancelled: Boolean,
     startingUp: Boolean,
 ): MicReleaseDecision = when {
-    // CANCEL unverändert: sicherer Abbruch ohne Finale — nur aus laufender/startender Aufnahme.
+    // CANCEL unchanged: safe abort without finale — only from a running/starting recording.
     cancelled -> when (stateAtRelease) {
         DictationState.RECORDING, DictationState.STARTING -> MicReleaseDecision.ABORT
         else -> MicReleaseDecision.IGNORE
     }
-    // Echter Hold-Release: Stop mit Finale; Start läuft noch ⇒ pending nach Startende.
+    // Real hold-release: stop with finale; start still running ⇒ pending after the start ends.
     holdDurationMs > MIC_TAP_MAX_MS -> when (stateAtRelease) {
         DictationState.RECORDING ->
             if (startingUp) MicReleaseDecision.HOLD_STOP_PENDING else MicReleaseDecision.HOLD_STOP
         DictationState.STARTING -> MicReleaseDecision.HOLD_STOP_PENDING
-        else -> MicReleaseDecision.IGNORE // nie gestartet (Berechtigung/Modell/Start scheiterte)
+        else -> MicReleaseDecision.IGNORE // never started (permission/model/start failed)
     }
-    // Tap ≤ 300 ms: DOWN ohne Session ⇒ TOGGLE_ON — nichts stoppen, egal ob
-    // das UP vor oder nach start_ok kam (das war der session-toetende Fall).
+    // Tap ≤ 300 ms: DOWN without session ⇒ TOGGLE_ON — nothing to stop, regardless
+    // of whether the UP came before or after start_ok (that was the session-killing case).
     stateAtDown == null || stateAtDown == DictationState.IDLE -> MicReleaseDecision.TOGGLE_ON
-    // Tap auf laufende/startende Session ⇒ regulär ausschalten (Gegenprobe).
+    // Tap onto a running/starting session ⇒ switch off regularly (counter-check).
     else -> when (stateAtRelease) {
         DictationState.RECORDING, DictationState.STARTING -> MicReleaseDecision.TOGGLE_OFF
-        else -> MicReleaseDecision.IGNORE // Session endete zwischen DOWN und UP
+        else -> MicReleaseDecision.IGNORE // session ended between DOWN and UP
     }
 }
 

@@ -1,229 +1,232 @@
-# A19 (Rev 2) — Tasten-Multiplex: Deutsch = Nutzerwunsch, alle anderen = AOSP-Stock
+# A19 (Rev 2) — key multiplexing: German = user's wish, all others = AOSP stock
 
-**Stand:** 2026-10-30, 20:4x · **Rolle:** Beratung/Doku — kein Code, kein Build.
-**Entscheidung des Nutzers (20:30, zwischenzeitlich):**
-- **Deutsch:** exakt seine Wunschliste — `.` statt `‹ ›` in der Fußzeile, Ziffern auf der
-  oberen Buchstabenreihe, `.` trägt `, ! ?`, Umlaute/ß **keine** eigenen Tasten (hinter
-  a/o/u/s), Rückentaste oben rechts neben `P`.
-- **Alle anderen 14 Sprachen:** exakt das, was Stock Android macht.
-- **„Stock" = AOSP LatinIME** (`com.android.inputmethod.latin`), **nicht Gboard**. Rev 1
-  leitete teils aus Gboard-Gedächtnis ab — Rev 2 ersetzt das durch Belege.
+**Status:** 2026-10-30, 20:4x · **Role:** consultation/documentation — no code, no build.
+**User's decision (20:30, in the meantime):**
+- **German:** exactly his wish list — `.` instead of `‹ ›` in the footer, digits on the
+  top letter row, `.` carries `, ! ?`, umlauts/ß **no** dedicated keys (behind
+  a/o/u/s), backspace top right next to `P`.
+- **All other 14 languages:** exactly what stock Android does.
+- **"Stock" = AOSP LatinIME** (`com.android.inputmethod.latin`), **not Gboard**. Rev 1
+  derived partly from Gboard memory — Rev 2 replaces that with evidence.
 
-**Belegquelle AOSP:** shallow clone `platform/packages/inputmethods/LatinIME`,
-HEAD `127336e` (2025-02-26, Zweig `main`). Alle Zitate: `java/res/xml/…`,
-`java/res/values/…`, `java/src/…`. Eigene Layouts: `app/src/main/assets/layouts/*.json`.
-Regel 9: keine Inhalte, keine Pfade außer Projekt-/Quelldateinamen.
+**AOSP evidence source:** shallow clone `platform/packages/inputmethods/LatinIME`,
+HEAD `127336e` (2025-02-26, branch `main`). All quotes: `java/res/xml/…`,
+`java/res/values/…`, `java/src/…`. Our layouts: `app/src/main/assets/layouts/*.json`.
+Rule 9: no contents, no paths except project/source file names.
 
 ---
 
-## 1. Stock-Vorlage = AOSP LatinIME (belegt, Datei für Datei)
+## 1. Stock template = AOSP LatinIME (evidenced, file by file)
 
-**1.1 Ziffern sind bei Stock IMMER auf der oberen Reihe — als `keyHintLabel`.**
-`rowkeys_qwertz1.xml`: die zehn Tasten q..p tragen `keyHintLabel="1"…"0"`
-(q=1 w=2 e=3 r=4 t=5 z=6 u=7 i=8 o=9 p=0). Dasselbe gilt qwerty
+**1.1 Digits are ALWAYS on the top row in stock — as `keyHintLabel`.**
+`rowkeys_qwertz1.xml`: the ten keys q..p carry `keyHintLabel="1"…"0"`
+(q=1 w=2 e=3 r=4 t=5 z=6 u=7 i=8 o=9 p=0). The same applies to qwerty
 (`rowkeys_qwerty1_left5/_right5`: hints 1..0), azerty
-(`rowkeys_azerty1`: a z e r t y u i o p mit 1..0), east_slavic
-(`rowkeys_east_slavic1`: hints 1..0) und greek (`rowkeys_greek1`).
-**Korrektur am Auftragstext:** `moreKeys`-Referenzen in `rowkeys_qwertz1.xml` sind es
-**acht** (w e r t **z** u i o → `!text/morekeys_*`), q und p tragen keine — der
-Orchestrator zählte z nicht.
+(`rowkeys_azerty1`: a z e r t y u i o p with 1..0), east_slavic
+(`rowkeys_east_slavic1`: hints 1..0) and greek (`rowkeys_greek1`).
+**Correction to the task text:** the `moreKeys` references in `rowkeys_qwertz1.xml`
+number **eight** (w e r t **z** u i o → `!text/morekeys_*`), q and p carry none —
+the orchestrator did not count z.
 
-**1.2 `keyHintLabel` ≠ `moreKeys` — zwei verschiedene Dinge, zusammen = der Nutzerwunsch.**
-- `keyHintLabel` = die **kleine Ziffer, die permanent auf der Taste steht** (Sichtbarkeit:
-  „hier wohnt die 3").
-- `moreKeys` = **Inhalt des Langdruck-Streifens** (`!text/morekeys_X`). Der Streifen selbst
-  ist ein eigenes Mini-Layout: `kbd_more_keys_keyboard_template.xml` (+
-  `key_styles_navigate_more_keys.xml` fürs Ziehen/Draufloslassen).
-- Zusammenspiel (sichtbares Verhalten): Taste zeigt Buchstabe groß + Ziffer klein; Langdruck
-  öffnet den Streifen; Ziffer und Alternates sind darin erreichbar; Loslassen auf der
-  Grundtaste = Grundzeichen. Die genaue Sortierung hint-vs-moreKeys im Streifen ist im
-  Code (`MoreKeysList`-Aufbau) und wird erst im Implementierungsauftrag Zeile für Zeile
-  belegt — hier nicht behauptet.
+**1.2 `keyHintLabel` ≠ `moreKeys` — two different things, together = the user's wish.**
+- `keyHintLabel` = the **small digit permanently displayed on the key** (visibility:
+  "the 3 lives here").
+- `moreKeys` = **content of the long-press strip** (`!text/morekeys_X`). The strip itself
+  is its own mini layout: `kbd_more_keys_keyboard_template.xml` (+
+  `key_styles_navigate_more_keys.xml` for dragging/release).
+- Interaction (visible behavior): the key shows the letter large + the digit small;
+  long-press opens the strip; the digit and alternates are reachable in it; releasing
+  on the base key = the base character. The exact ordering of hint vs. moreKeys in the
+  strip is in the code (`MoreKeysList` construction) and will be evidenced line by line
+  only in the implementation assignment — not asserted here.
 
-**1.3 Der Popup-Inhalt wohnt NICHT in strings-Dateien.** `values-de/strings.xml` (23 KB,
-geprüft) enthält nur Settings-Texte. Die `!text/morekeys_*`-Auflösung ist eine Java-Tabelle:
-**`java/src/com/android/inputmethod/keyboard/internal/KeyboardTextsTable.java`** —
-`TEXTS_DEFAULT` plus je Sprache ein `TEXTS_<locale>`-Feld; `null`/leer = „kein Popup".
-Die **echten deutschen Listen** (`TEXTS_de`, Zeilen 1048-1101):
+**1.3 The popup content does NOT live in strings files.** `values-de/strings.xml`
+(23 KB, checked) contains only settings texts. The `!text/morekeys_*` resolution is a
+Java table: **`java/src/com/android/inputmethod/keyboard/internal/KeyboardTextsTable.java`**
+— `TEXTS_DEFAULT` plus one `TEXTS_<locale>` field per language; `null`/empty = "no
+popup". The **actual German lists** (`TEXTS_de`, lines 1048-1101):
 
-| Taste | moreKeys (echt, TEXTS_de) | Hinweis |
+| Key | moreKeys (actual, TEXTS_de) | Note |
 |---|---|---|
-| a | **ä** % â à á æ ã å ā | ä steht bei Stock **an Position 1** — genau der Nutzerwunsch |
-| o | **ö** % ô ò ó õ œ ø ō | ö an 1 |
-| e | é è ê ë ė | **kein ę, kein €** (unsere de-de.json hat ę € — Abweichung UNSERSEITS) |
-| u | **ü** % û ù ú ū | ü an 1 |
-| s | **ß** ś š | ß an 1 |
+| a | **ä** % â à á æ ã å ā | ä sits at stock **position 1** — exactly the user's wish |
+| o | **ö** % ô ò ó õ œ ø ō | ö at 1 |
+| e | é è ê ë ė | **no ę, no €** (our de-de.json has ę € — deviation on OUR side) |
+| u | **ü** % û ù ú ū | ü at 1 |
+| s | **ß** ś š | ß at 1 |
 | n | ñ ń | |
-| i, c, r, t, w, z, y | (null → Default EMPTY) | bei Stock-de ohne Popup |
+| i, c, r, t, w, z, y | (null → default EMPTY) | no popup in stock-de |
 
-Das `%` in a/o/u ist ein echtes Prozentzeichen als Popup-Eintrag.
-Vergleich en (`TEXTS_en`): mehrkeys_s = „ß" (auch Englisch trägt ß im s-Popup).
-Fußzeile: `morekeys_period` (Default) = `, ? ! # ) ( / ; ' @ : - " + % &` — die
-**Punkt-Taste trägt bei Stock an 1/2/3 exakt `, ? !`** — der Nutzerwunsch
-(„Punkt trägt Komma/Ausrufezeichen/Fragezeichen") ist wörtlich Stock-Verhalten.
+The `%` in a/o/u is a real percent sign as a popup entry.
+Comparison en (`TEXTS_en`): morekeys_s = "ß" (English also carries ß in the s popup).
+Footer: `morekeys_period` (default) = `, ? ! # ) ( / ; ' @ : - " + % &` — the **period
+key carries exactly `, ? !` at stock positions 1/2/3** — the user's wish
+("period carries comma/exclamation mark/question mark") is literally stock behavior.
 
-**1.4 QWERTZ hat keine ä/ö/ü/ß-Tasten.** `rows_qwertz.xml` = `rowkeys_qwertz1` (10 Tasten,
-hints) + `rowkeys_qwerty2` (a..l, 9 Tasten) + `rowkeys_qwertz3` (⇧ 15%p, y x c v b n m,
-⌫ `fillRight`) + `row_qwerty4`. Zeilen `keyWidth 10%p`. **Unsere de-de.json mit ihren vier
-Sondertasten ist die Abweichung von Stock, nicht umgekehrt.**
+**1.4 QWERTZ has no ä/ö/ü/ß keys.** `rows_qwertz.xml` = `rowkeys_qwertz1` (10 keys,
+hints) + `rowkeys_qwerty2` (a..l, 9 keys) + `rowkeys_qwertz3` (⇧ 15%p, y x c v b n m,
+⌫ `fillRight`) + `row_qwerty4`. Rows `keyWidth 10%p`. **Our de-de.json with its four
+special keys is the deviation from stock, not the other way around.**
 
-**1.5 Stock-Fußzeile ohne Pfeiltasten.** `row_qwerty4.xml` baut aus
-`key_comma + key_space_5kw + key_period` (+ Shift-/Enter-Endstücke): Komma und Punkt sind
-bei Stock **eigene Fußzeilentasten neben der Leertaste**, Cursor-`‹ ›` gibt es nicht.
-Der Nutzerwunsch (Punkt in die Fußzeile, keine Pfeile) ist ebenfalls Stock-Form.
+**1.5 Stock footer without arrow keys.** `row_qwerty4.xml` builds from
+`key_comma + key_space_5kw + key_period` (+ shift-/enter end pieces): comma and period
+are, in stock, **their own footer keys next to the space key**; cursor `‹ ›` does not
+exist. The user's wish (period into the footer, no arrows) is also stock form.
 
-**1.6 Was wir davon 1:1 nachbauen können.** Das Datenmodell: `alternates` (unser Pendant zu
-moreKeys) existiert in Schema+Parser bereits, hat aber **keinen Verbraucher**; ein
-`hintLabel`-Pendant existiert **nicht** — für die sichtbare kleine Ziffer braucht unser
-Schema ein neues Feld (z. B. `hint`) in der Parser-Allowlist
-(`layouts/LayoutParser.kt:100` = `id,label,width,kind,value,caps,alternates`) plus Audit-
-Regeln. Der Langdruck-Code (Timer + Streifen + Ziehen) ist neu (§5e). **Nicht** nachbauen:
-Wort-Gleiteingabe (eigene Schicht, nicht gewünscht).
+**1.6 What we can replicate 1:1.** The data model: `alternates` (our counterpart to
+moreKeys) already exists in schema+parser, but has **no consumer**; a `hintLabel`
+counterpart does **not** exist — for the visible small digit, our schema needs a new
+field (e.g. `hint`) in the parser allowlist
+(`layouts/LayoutParser.kt:100` = `id,label,width,kind,value,caps,alternates`) plus audit
+rules. The long-press code (timer + strip + dragging) is new (§5e). Do **not**
+replicate: word glide typing (its own layer, not desired).
 
 ---
 
-## 2. Zeilen-Bild Vor/Nach — de-de (unverändert aus Rev 1; Σ je Zeile gemessen)
+## 2. Row picture BEFORE/AFTER — de-de (unchanged from Rev 1; Σ per row measured)
 
-IST (`de-de.json layers.base`, Σ 11/11/11/13; shift identisch):
+ACTUAL (`de-de.json layers.base`, Σ 11/11/11/13; shift identical):
 
 ```
 r0 |q|w|e|r|t|z|u|i|o|p|ü|                         Σ 11
 r1  |a|s|d|f|g|h|j|k|l|ö|ä|                        Σ 11
 r2  |⇧1.5|y|x|c|v|b|n|m|ß|⌫1.5|                    Σ 11
-r3    |?123 1.5|🌐|😊|  Leer 5  |‹|›|🎤|⏎1.5|       Σ 13
+r3    |?123 1.5|🌐|😊|  space 5  |‹|›|🎤|⏎1.5|       Σ 13
 ```
 
-SOLL (Nutzerwunsch; ⌫ dorthin, wo heute `ü` steht — Begründung §6):
+TARGET (user's wish; ⌫ to where `ü` is today — rationale in §6):
 
 ```
 r0 |q|w|e|r|t|z|u|i|o|p|⌫1.5|                      Σ 11.5
 r1  |a|s|d|f|g|h|j|k|l|                            Σ 9
 r2  |⇧2|y|x|c|v|b|n|m|                              Σ 9
-r3    |?123 1.5|🌐|😊|  Leer 5  |.|🎤|⏎1.5|         Σ 12
+r3    |?123 1.5|🌐|😊|  space 5  |.|🎤|⏎1.5|         Σ 12
 ```
 
-Parser-Geometrie vergleicht **nur paarweise base↔shift / symbols↔symbolsShift**
-(`docs/LAYOUT_SCHEMA_REF.md` „Zeilen-Geometrie"); Zeilen-Σ 9…13 koexistieren bereits.
-`?123`-Seite bleibt unangetastet (LAYOUT_REQUIREMENTS **Regel 9**: Ziffern und
-Pflichtzeichen `. , ? ! …` bleiben dort eigene Tasten; Multiplex ist Zusatz).
+The parser geometry compares **only pairwise** base↔shift / symbols↔symbolsShift
+(`docs/LAYOUT_SCHEMA_REF.md` "row geometry"); row Σ 9…13 already coexist.
+The `?123` side remains untouched (LAYOUT_REQUIREMENTS **rule 9**: digits and
+mandatory characters `. , ? ! …` remain their own keys there; multiplexing is an
+addition).
 
 ---
 
-## 3. de-de Multibelegungs-Matrix (de-de.json als Basis, Stock-Reihenfolge als Vorbild)
+## 3. de-de multiplexing matrix (de-de.json as the base, stock order as the model)
 
-Popup-Reihenfolge wie bei Stock: **Grundzeichen vorausgewählt links, sprachnahe Alternates
-direkt dahinter (Stock setzt ä/ö/ü/ß auf Platz 1 der moreKeys-Liste), Ziffer am Ende.**
+Popup order as in stock: **base character preselected on the left, language-close
+alternates directly behind it (stock puts ä/ö/ü/ß at slot 1 of the moreKeys list),
+digit at the end.**
 
-| Taste | hint (neu) | alternates SOLL (de-de.json Basis + Ziffer) |
+| Key | hint (new) | alternates TARGET (de-de.json base + digit) |
 |---|---|---|
-| q w e r t z u i o p | 1 2 3 4 5 6 7 8 9 0 | wie heute + Ziffer rechts; **e**: é è ê ë ę € **3** (unsere Asset-Liste bleibt — Abweichung von Stock-de `ė` ist dokumentiert) |
-| u | 7 | u ú ù û **+ ü** (an 1, nach Stock) **7** |
-| o | 9 | o ó ò ô **+ ö** (an 1) **9** |
-| a | 1 | a **+ ä** (an 1) à á â ã å **1** |
-| s | — | s **+ ß** (an 1) ś š |
-| . (neu, Fußzeile) | — | . **,** **!** **?** (Stock-Reihenfolge `morekeys_period`: `, ? !` — wir nehmen `, ! ?` wie vom Nutzer genannt) |
-| entfallene Tasten | — | ü(r0) ä(r1) ö(r1) ß(r2) — alle vier nur noch als Alternates |
+| q w e r t z u i o p | 1 2 3 4 5 6 7 8 9 0 | as today + digit on the right; **e**: é è ê ë ę € **3** (our asset list stays — the deviation from stock-de `ė` is documented) |
+| u | 7 | u ú ù û **+ ü** (at 1, per stock) **7** |
+| o | 9 | o ó ò ô **+ ö** (at 1) **9** |
+| a | 1 | a **+ ä** (at 1) à á â ã å **1** |
+| s | — | s **+ ß** (at 1) ś š |
+| . (new, footer) | — | . **,** **!** **?** (stock order `morekeys_period`: `, ? !` — we take `, ! ?` as named by the user) |
+| dropped keys | — | ü(r0) ä(r1) ö(r1) ß(r2) — all four only as alternates anymore |
 
-Konvention Caps: Popup-Einträge per NFC-Großform ableiten (Ä, ẞ …), nicht in Assets
-duplizieren (Regel 7 NFC; Regel 8 doppelte Labels vermeiden).
+Caps convention: derive popup entries via the NFC uppercase form (Ä, ẞ …), do not
+duplicate them in assets (rule 7 NFC; rule 8 avoid duplicate labels).
 
 ---
 
-## 4. Die anderen 14 Sprachen = „was Stock macht" — mit AOSP-Referenz je Zeile
+## 4. The other 14 languages = "what stock does" — with an AOSP reference per line
 
-**Sprache → Layout-Set** ist belegt durch `java/res/values/donottranslate.xml`
-(string-array `locale_and_extra_value_to_keyboard_layout_set_map`, Zeile 81 ff.) und
-`java/res/xml/method.xml` (ExtraValue `KeyboardLayoutSet=` je Subtyp). **Real gelesene
-Dateien** stehen in der rechten Spalte.
+**Language → layout set** is evidenced by `java/res/values/donottranslate.xml`
+(string-array `locale_and_extra_value_to_keyboard_layout_set_map`, line 81 ff.) and
+`java/res/xml/method.xml` (ExtraValue `KeyboardLayoutSet=` per subtype). The **files
+actually read** are in the right column.
 
-| Unsere Sprache | AOSP-Set (belegt) | AOSP-Realbau (gelesene rowkeys-Dateien) | Was unsere JSON anders macht → Folge |
+| Our language | AOSP set (evidenced) | AOSP actual construction (read rowkeys files) | What our JSON does differently → consequence |
 |---|---|---|---|
-| en-us | qwerty (donottranslate) | `rowkeys_qwerty1_left5/_right5` + `_2` + `_3`; hints 1..0 | unsere r0 = 10 Tasten = identisch; **Änderung: hints + Ziffern, ⌫→r0, Punkt-Fußzeile** |
-| de-de | qwertz | §1.4 | §2/§3 (Nutzerwunsch, selbst Stock-nah) |
-| cs-cz | **qwertz** (donottranslate: `cs:…qwertz`) | QWERTZ-Schirm **ohne** eigene Sonderzeichen; ě š á í č é ú ů ý ř ž + ň ť ď **alle als moreKeys** (`TEXTS_cs`: e→é ě è ê ë ę ė ē, s→š ß ś, z→ž ź ż, r→ř, d→ď, t→ť, n→ň ñ ń, y→ý ÿ, u→ú ů û ü ù ū) | unsere cs hat 13 eigene Tasten (Σ16-r2!) → **alle entfernen**, alternates auf TEXTS_cs-Stand ziehen. Größter Umbau, größter Zugewinn |
-| pl-pl | qwerty | QWERTY + moreKeys (`TEXTS_pl`: a→ą…, e→ę…, n→ń, c→ć, s→ś, z→ż ź… — **ń ź ć ś** sind first-position-Einträge), eigene Tasten: keine | unsere 8 eigenen Tasten (r0 ą ę, r1 ł ń ó, r2 ż ź ć ś) entfernen; **unsere alternates sind leer** → vor dem Entfernen auf TEXTS_pl ziehen, sonst Funktionsverlust |
-| es-es | **spanish** (donottranslate) | `rowkeys_spanish2` = qwerty2 + **eine** Extrataste `keyspec_spanish_row2_10` = ñ (Texttabelle); r1 endet auf ñ | unsere r1 endet auf ñ = **identisch zu Stock**; nichts zu entfernen (ñ bleibt eigene Taste — Stock tut es auch!) |
-| pt-pt | **qwerty** (method.xml ExtraValue) | reiner QWERTY-Schirm; á ã à õ ç é ê í ó ô ú **alle als moreKeys** (`TEXTS_pt`) | unsere 5-Zeilen-Exotik (12 eigene Tasten) → auf QWERTY + moreKeys zurückbauen; der 5-Zeilen-Sonderbau löst sich damit auf |
-| it-it | qwerty (donottranslate) | QWERTY; è é ù à ì ò nur als moreKeys (`TEXTS_it`) | unsere 6 eigenen Tasten entfernen |
-| nl-nl | qwerty | QWERTY; moreKeys `TEXTS_nl` (u→ü…, y→ĳ) | keine eigenen Tasten heute → nur hints + Fußzeile |
-| fr-fr | **azerty** (donottranslate) | `rowkeys_azerty1..3`; keine Accento-Tasten; à â è é ù ç… alle moreKeys (`TEXTS_fr`: a→à â %…, e→é è ê ë %…, c→ç %…) | unsere 6 eigenen Accento-Tasten (é ê è ù à ç) entfernen — azerty-Basis bleibt |
-| ru-ru | **east_slavic** | `rowkeys_east_slavic1..3` (11/12/10er-Joystick-Zeilen, hints 1..0 auf r1); **ё hat keine eigene Taste** — sie ist `morekeys_cyrillic_ie` = „ё" (TEXTS_ru:1030); ь mit moreKeys; harte Zeilen 11/12 | unsere Zeilen 11/12/12(⇧+10+**ё**)→ ё-Taste entfernen, ins е-Popup; Zeilenfolge an east_slavic angleichen |
-| el-gr | **greek** (method.xml ExtraValue) | `rowkeys_greek1..3`; r1 **9 Tasten** mit hints [1][1][2][2][3]… (Doppelbelegung ;, und :, siehe Dump); Akzente als große moreKeys-Listen (z. B. έ-Zeile mit 8-16 Entry) | unsere r0 hat 9 Tasten = strukturell deckungsgleich; Änderung: hints + Fußzeile, Akzent-alternates bleiben |
-| sv-se | **nordic** | `rowkeys_nordic1` = qwerty1 + 11. Taste `keyspec_nordic_row1_11`=**å**; `rowkeys_nordic2` mit `nordic_row2_10`=**ö**, `_11`=**ä** (+moreKeys ø/æ) — TEXTS_sv | unsere å ö ä stehen genau da, wo Stock sie hat → **Struktur bleibt**, nur hints + Fußzeile |
-| da-dk | nordic | dito; TEXTS_da: row1_11=**å**, row2_10=**æ**, row2_11=**ø** | unsere å æ ø = Stock-Positionen → Struktur bleibt |
-| fi-fi | nordic | dito; TEXTS_fi: å / ö / ä + moreKeys ø, æ | wie sv |
-| tr-tr | **qwerty** (donottranslate: `tr:…qwerty`) | reiner QWERTY-Schirm; ğ ş ö ç ü ı **alle moreKeys** (`TEXTS_tr`: i→**ı** î ï…, s→**ş** ß, c→ç, o→ö, u→ü, a→â); **ein `rowkeys_turkish_q*` existiert im HEAD 127336e nicht** (Korrektur am Auftragstext — nur `serbian_qwertz*` als Sonderfall) | unsere 8 eigenen Tasten (ğ ü ı ş ö ç + das i/ı-Paar) → nach Stock alles Popups; **der i/ı-Streit aus Rev 1 ist damit entscheiden: Stock macht ı zum ersten i-Alternate** |
+| en-us | qwerty (donottranslate) | `rowkeys_qwerty1_left5/_right5` + `_2` + `_3`; hints 1..0 | our r0 = 10 keys = identical; **change: hints + digits, ⌫→r0, period footer** |
+| de-de | qwertz | §1.4 | §2/§3 (user's wish, itself stock-close) |
+| cs-cz | **qwertz** (donottranslate: `cs:…qwertz`) | QWERTZ screen **without** its own special characters; ě š á í č é ú ů ý ř ž + ň ť ď **all as moreKeys** (`TEXTS_cs`: e→é ě è ê ë ę ė ē, s→š ß ś, z→ž ź ż, r→ř, d→ď, t→ť, n→ň ñ ń, y→ý ÿ, u→ú ů û ü ù ū) | our cs has 13 of its own keys (Σ16-r2!) → **remove all**, pull alternates to the TEXTS_cs level. Biggest rework, biggest gain |
+| pl-pl | qwerty | QWERTY + moreKeys (`TEXTS_pl`: a→ą…, e→ę…, n→ń, c→ć, s→ś, z→ż ź… — **ń ź ć ś** are first-position entries), own keys: none | remove our 8 own keys (r0 ą ę, r1 ł ń ó, r2 ż ź ć ś); **our alternates are empty** → pull them to TEXTS_pl before removing, otherwise loss of function |
+| es-es | **spanish** (donottranslate) | `rowkeys_spanish2` = qwerty2 + **one** extra key `keyspec_spanish_row2_10` = ñ (text table); r1 ends on ñ | our r1 ends on ñ = **identical to stock**; nothing to remove (ñ stays its own key — stock does it too!) |
+| pt-pt | **qwerty** (method.xml ExtraValue) | pure QWERTY screen; á ã à õ ç é ê í ó ô ú **all as moreKeys** (`TEXTS_pt`) | our 5-row exotic build (12 own keys) → rebuild to QWERTY + moreKeys; the 5-row special construction dissolves with that |
+| it-it | qwerty (donottranslate) | QWERTY; è é ù à ì ò only as moreKeys (`TEXTS_it`) | remove our 6 own keys |
+| nl-nl | qwerty | QWERTY; moreKeys `TEXTS_nl` (u→ü…, y→ĳ) | no own keys today → only hints + footer |
+| fr-fr | **azerty** (donottranslate) | `rowkeys_azerty1..3`; no accent keys; à â è é ù ç… all moreKeys (`TEXTS_fr`: a→à â %…, e→é è ê ë %…, c→ç %…) | remove our 6 own accent keys (é ê è ù à ç) — the azerty base stays |
+| ru-ru | **east_slavic** | `rowkeys_east_slavic1..3` (11/12/10-key joystick rows, hints 1..0 on r1); **ё has no own key** — it is `morekeys_cyrillic_ie` = "ё" (TEXTS_ru:1030); ь with moreKeys; hard rows 11/12 | our rows 11/12/12(⇧+10+**ё**)→ remove the ё key, into the е popup; align the row sequence with east_slavic |
+| el-gr | **greek** (method.xml ExtraValue) | `rowkeys_greek1..3`; r1 **9 keys** with hints [1][1][2][2][3]… (double assignment ;, and :, see dump); accents as large moreKeys lists (e.g. the έ row with an 8-16 entry) | our r0 has 9 keys = structurally congruent; change: hints + footer, accent alternates remain |
+| sv-se | **nordic** | `rowkeys_nordic1` = qwerty1 + 11th key `keyspec_nordic_row1_11`=**å**; `rowkeys_nordic2` with `nordic_row2_10`=**ö**, `_11`=**ä** (+moreKeys ø/æ) — TEXTS_sv | our å ö ä sit exactly where stock has them → **structure remains**, only hints + footer |
+| da-dk | nordic | ditto; TEXTS_da: row1_11=**å**, row2_10=**æ**, row2_11=**ø** | our å æ ø = stock positions → structure remains |
+| fi-fi | nordic | ditto; TEXTS_fi: å / ö / ä + moreKeys ø, æ | like sv |
+| tr-tr | **qwerty** (donottranslate: `tr:…qwerty`) | pure QWERTY screen; ğ ş ö ç ü ı **all moreKeys** (`TEXTS_tr`: i→**ı** î ï…, s→**ş** ß, c→ç, o→ö, u→ü, a→â); **no `rowkeys_turkish_q*` exists in HEAD 127336e** (correction to the task text — only `serbian_qwertz*` as a special case) | our 8 own keys (ğ ü ı ş ö ç + the i/ı pair) → everything is popups per stock; **the i/ı dispute from Rev 1 is thus decided: stock makes ı the first i alternate** |
 
-**Kernsatz:** In AOSP gibt es außerhalb von QWERTZ/Nordic/Spanisch-QWERTY/Serbian **praktisch
-keine sprach-spezifischen Sondertasten im Buchstabenschirm** — fast alles läuft über
-`keyHintLabel` + `moreKeys` + `keyspec_<region>_rowN_M`. „Andere Sprachen = Stock" heißt für
-uns: **eigene Sondertasten fast überall löschen, Alternates aus `TEXTS_<locale>` übernehmen**
-— und genau deshalb dürfen die Alternates **vor** dem Löschen eingetragen werden (kein
-Funktionsverlust).
+**Key sentence:** Outside QWERTZ/Nordic/Spanish-QWERTY/Serbian, AOSP has **practically
+no language-specific special keys in the letter screen** — almost everything runs via
+`keyHintLabel` + `moreKeys` + `keyspec_<region>_rowN_M`. "Other languages = stock"
+means for us: **delete our own special keys almost everywhere, adopt alternates from
+`TEXTS_<locale>`** — and precisely because of that, the alternates may be entered
+**before** deleting (no loss of function).
 
-**Ausnahmen, die Stock selbst stehen lässt:** es-es `ñ` (eigene r1-Taste), nordic å/ä/ö/æ/ø
-(eigene Tasten), el-gr Struktur. Diese lassen wir stehen.
-
----
-
-## 5. Risiken + Grenzen (Rev-1-Kern, verkürzt; neu: f/g)
-
-a) **48-dp:** Der Umbau vergrößert Zellen (weniger Tasten pro Zeile;
-`docs/DESIGN_STOCK_LOOK.md:72-74` erlaubt schmale Buchstabenzellen, 48-dp-Oberleiste
-unberührt). Popup-Zellen bewusst größer als Tasten (Stock-Template).
-b) **Caps-Alternates:** NFC-Großform zur Laufzeit, nicht in Assets (Regel 7/8).
-c) **Ziffern-Zugang:** kein Verlust — `?123` behält alle Ziffern (Regel 9 erzwingt es sogar);
-Stock selbst zeigt uns, dass hint+Langdruck der vorgesehene Weg ist.
-d) **`‹ ›`-Wegfall:** verliert direktes Cursor-Schieben; billige Notausgänge (nur genannt):
-Leertaste wischen, Wort-Doppeltipp. Editor-Longpress bleibt.
-e) **Neue Interaktion:** Popup-Code berührt `KeyboardView` + ggf. Fensterhöhe (Streifen über
-r0); Micro-Auftrag ≤ 4 Dateien, test-first, Logik rein JVM-tauglich.
-f) **Schema-Lücke `hint`:** unser `parseKey`-Allowlist kennt kein Hinweis-Feld →
-Parser + Audit (`LayoutArtifactTest`) + Schema-Doku müssen mitziehen (Regel 4/4a:
-Assets und Parser zusammen ändern).
-g) **Reihenfolge im Daten-umbau:** erst `alternates` ergänzen (aus TEXTS_<locale>), dann
-Sondertasten entfernen — niemals umgekehrt.
+**Exceptions stock itself leaves standing:** es-es `ñ` (own r1 key), nordic å/ä/ö/æ/ø
+(own keys), el-gr structure. We leave those standing.
 
 ---
 
-## 6. Umsetzung des Nutzerentscheids (Rev-1-Varianten A/B/C sind damit überholt)
+## 5. Risks + limits (Rev-1 core, abridged; new: f/g)
 
-Der Nutzer hat entschieden: **Deutsch = Wunschliste, alle anderen = AOSP-Stock.**
-Die Rev-1-Frage „Popup vs. Mini-Ziffernreihe" stellt sich nicht mehr: AOSP beantwortet sie
-mit **keyHintLabel + Langdruck** (§1.1) — genau das bauen wir nach. Offene Restpunkte, die
-der Nutzer/Orchestrator noch bestätigen sollte:
-
-1. **⌫ neben P (Deutsch, Abweichung von Stock):** bei Stock sitzt ⌫ am Ende von r2
-   (`fillRight`); der Nutzer will ihn oben rechts. **Geometrisch wird der Platz frei, weil
-   in unserer de-de.json `ü` die letzte Taste von r0 ist (`layers.base.rows[0]`, 11. Taste)
-   und `ü` per Wunsch 4 ins u-Popup wandert** — der frei werdende r0-Endplatz nimmt ⌫
-   (width 1.5, Σ r0 → 11.5) auf; base↔shift-Gleichheit bleibt gewahrt, shift verliert Ü
-   analog. Dieselbe Mechanik gilt sinngemäß für jede Sprache, deren r0 mit einer
-   Sondertaste endet (cs? — nein: cs r0 endet nach Umbau auf p, weil ě š wegfallen; tr ğ/ü,
-   fr ê … analog — nach TEXTS-Umzug immer der freie Endplatz).
-2. **de-Alternates: unsere Liste oder TEXTS_de?** Unsere `de-de.json` weicht in Details ab
-   (e trägt ę €, Stock-de trägt ė; unsere a-Liste hat kein %). Vorschlag: **unsere Liste
-   behalten, ä/ö/ü/ß nach Stock-Position vorn einfügen** — der Nutzerwunsch nennt nur die
-   vier Umbauten, keinen Austausch der Fremd-Akzente.
-3. **el-gr Doppel-hints** ([1] auf zwei benachbarten Tasten usw., §4) 1:1 übernehmen oder
-   vereinheitlichen — Detailentscheid im Implementierungsauftrag.
-
-**Empfehlung der Reihenfolge:** (1) Schema `hint` + Popup-Verbraucher (JVM-Tests),
-(2) de-de-Asset auf Zielbild §2/§3, (3) die 14 Sprachen in zwei Batches
-(qwerty-Familie, dann azerty/east_slavic/greek/nordic) — jeder Batch ≤ 4 Dateien,
-Audit-Tests (Regel 8/9, Σ-Geometrie) als Gate.
+a) **48-dp:** The rework enlarges cells (fewer keys per row;
+`docs/DESIGN_STOCK_LOOK.md:72-74` permits narrow letter cells, the 48-dp top row
+unaffected). Popup cells deliberately larger than keys (stock template).
+b) **Caps alternates:** NFC uppercase form at runtime, not in assets (rule 7/8).
+c) **Digit access:** no loss — `?123` keeps all digits (rule 9 even enforces it);
+stock itself shows us that hint + long-press is the intended path.
+d) **`‹ ›` removal:** loses direct cursor pushing; cheap fallbacks (only named):
+swipe on the space key, double-tap a word. Editor long-press remains.
+e) **New interaction:** popup code touches `KeyboardView` + possibly the window
+height (strip above r0); micro assignment ≤ 4 files, test-first, logic purely
+JVM-capable.
+f) **Schema gap `hint`:** our `parseKey` allowlist knows no hint field → parser +
+audit (`LayoutArtifactTest`) + schema documentation must follow (rule 4/4a: change
+assets and parser together).
+g) **Order in the data rework:** first extend `alternates` (from TEXTS_<locale>),
+then remove special keys — never the other way around.
 
 ---
 
-## ANNAHME/Zweifel-Zeilen
+## 6. Implementing the user's decision (Rev-1 variants A/B/C are thereby obsolete)
 
-- `BELEGT: clone-HEAD 127336e (2025-02-26). Der Orchestrator-listete rowkeys_turkish_q1..3
-  — diese Dateien existieren in diesem HEAD nicht (ls java/res/xml | grep -i turk = 0);
-  123 rowkeys-Dateien stimmen überein.`
-- `BELEGT: mehrKeys-Referenzen qwertz1 = 8 (w e r t z u i o), nicht 7.`
-- `ANNAHME: AOSP-Streifen-Sortierung (hint relativ zu moreKeys) folgt aus
-  KeyboardTextsTable + kbd_more_keys-Template; exakte Reihenfolge vor Implementierung im
-  Code belegen, nicht hier.`
-- `ZWEIFEL (klein): pt-pt auf nackten QWERTY + moreKeys = Rückbau unserer 5-Zeilen-Exotik;
-  Nutzerentscheid „Stock" deckt das ab, aber es ist der größte Einzelumbau — eigener
-  Micro-Auftrag.`
+The user has decided: **German = wish list, all others = AOSP stock.**
+The Rev-1 question "popup vs. mini digit row" no longer arises: AOSP answers it with
+**keyHintLabel + long-press** (§1.1) — exactly what we are replicating. Remaining open
+points that the user/orchestrator should still confirm:
+
+1. **⌫ next to P (German, deviation from stock):** in stock, ⌫ sits at the end of r2
+   (`fillRight`); the user wants it top right. **Geometrically the space becomes free
+   because in our de-de.json `ü` is the last key of r0 (`layers.base.rows[0]`, 11th key)
+   and `ü` moves into the u popup per wish 4** — the freed r0 end slot takes ⌫
+   (width 1.5, Σ r0 → 11.5); base↔shift equality is preserved, shift loses Ü
+   analogously. The same mechanics apply mutatis mutandis to any language whose r0
+   ends with a special key (cs? — no: cs r0 ends on p after the rework because ě š are
+   dropped; tr ğ/ü, fr ê … analogous — after the TEXTS move, always the free end slot).
+2. **de alternates: our list or TEXTS_de?** Our `de-de.json` deviates in details
+   (e carries ę €, stock-de carries ė; our a list has no %). Proposal: **keep our list,
+   insert ä/ö/ü/ß at the stock position at the front** — the user's wish names only
+   the four reworks, not an exchange of the foreign accents.
+3. **el-gr double hints** ([1] on two adjacent keys etc., §4) adopt 1:1 or unify —
+   detail decision in the implementation assignment.
+
+**Recommended order:** (1) schema `hint` + popup consumer (JVM tests),
+(2) de-de asset to the target design §2/§3, (3) the 14 languages in two batches
+(qwerty family, then azerty/east_slavic/greek/nordic) — each batch ≤ 4 files,
+audit tests (rule 8/9, Σ geometry) as the gate.
+
+---
+
+## ASSUMPTION/DOUBT lines
+
+- `EVIDENCED: clone HEAD 127336e (2025-02-26). The orchestrator listed
+  rowkeys_turkish_q1..3 — these files do not exist in this HEAD (ls java/res/xml |
+  grep -i turk = 0); 123 rowkeys files match.`
+- `EVIDENCED: moreKeys references qwertz1 = 8 (w e r t z u i o), not 7.`
+- `ASSUMPTION: the AOSP strip sorting (hint relative to moreKeys) follows from
+  KeyboardTextsTable + the kbd_more_keys template; evidence the exact order in the
+  code before implementing, not here.`
+- `DOUBT (small): pt-pt on bare QWERTY + moreKeys = a rollback of our 5-row exotic
+  build; the user's "stock" decision covers it, but it is the biggest single rework —
+  its own micro assignment.`

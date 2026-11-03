@@ -14,11 +14,11 @@ import org.junit.Test
 import java.io.File
 
 /**
- * F13b (docs/STREAMING_FREEZE_ANALYSE.md, C1): Ein Fehler während der Aufnahme
- * darf NIE folgenlos bleiben. stop() meldet ausdrücklich, ob ein Finale gelaufen
- * ist ([StopOutcome]); fail() bewahrt den Fehlerzustand bis zum nächsten Start
- * ([DictationController.failedThisSession]); verworfene Blocks werden gezählt
- * ([DictationController.droppedBlocks]).
+ * F13b (docs/STREAMING_FREEZE_ANALYSE.md, C1): an error during recording
+ * must NEVER pass without consequences. stop() explicitly reports whether a
+ * final ran ([StopOutcome]); fail() preserves the error state until the next
+ * start ([DictationController.failedThisSession]); discarded blocks are
+ * counted ([DictationController.droppedBlocks]).
  */
 class StopOutcomeTest {
 
@@ -67,54 +67,55 @@ class StopOutcomeTest {
 
     private fun seconds(n: Int): PcmBlock = PcmBlock(0, 0, ShortArray(n * 16_000))
 
-    // (a) Partials-Ausnahme -> state IDLE, stop() meldet „kein Finale",
-    //     Fehlercode bleibt sichtbar (failedThisSession).
+    // (a) partial exception -> state IDLE, stop() reports "no final",
+    //     the error code stays visible (failedThisSession).
     @Test
-    fun `Partials-Ausnahme fuehrt zu NoFinal und sichtbarem Fehlercode`() = runBlocking {
+    fun `partial exception leads to NoFinal and a visible error code`() = runBlocking {
         val f = Fixture()
         assertTrue(f.controller.start())
         f.engine.failNextPartials = true
-        f.controller.feedAudio(seconds(3)) // löst fail(ASR_PARTIAL_ERROR) aus
+        f.controller.feedAudio(seconds(3)) // triggers fail(ASR_PARTIAL_ERROR)
         assertEquals(DictationState.IDLE, f.controller.state)
-        assertTrue("Fehler muss bis zur Sichtbarkeit bewahrt werden", f.controller.failedThisSession)
+        assertTrue("the error must be preserved until it becomes visible", f.controller.failedThisSession)
         assertEquals("asr_partial_error", f.controller.lastErrorCode)
 
-        val outcome = f.controller.stop() // Loslassen nach dem stillen Fail
-        assertTrue("stop() muss dem Aufrufer „kein Finale“ melden", outcome is StopOutcome.NoFinal)
+        val outcome = f.controller.stop() // release after the silent fail
+        assertTrue("stop() must report 'no final' to the caller", outcome is StopOutcome.NoFinal)
         assertEquals("asr_partial_error", (outcome as StopOutcome.NoFinal).errorCode)
         assertEquals(DictationState.IDLE, f.controller.state)
     }
 
-    // (b) Nach dem Fehler eingehende Blocks erhöhen den Drop-Zähler (kein stilles Nichts).
+    // (b) blocks arriving after the error increment the drop counter (no silent nothing).
     @Test
-    fun `Blocks nach dem Fehler werden gezaehlt verworfen`() = runBlocking {
+    fun `blocks after the error are counted as discarded`() = runBlocking {
         val f = Fixture()
         assertTrue(f.controller.start())
         f.engine.failNextPartials = true
-        f.controller.feedAudio(seconds(3)) // Fehler → IDLE
+        f.controller.feedAudio(seconds(3)) // error → IDLE
         assertEquals(0, f.controller.droppedBlocks)
-        repeat(4) { f.controller.feedAudio(seconds(1)) } // alle verworfen
-        assertEquals("verworfene Blocks müssen zählbar sein", 4, f.controller.droppedBlocks)
+        repeat(4) { f.controller.feedAudio(seconds(1)) } // all discarded
+        assertEquals("dropped blocks must be countable", 4, f.controller.droppedBlocks)
         assertEquals(DictationState.IDLE, f.controller.state)
     }
 
-    // (c) Neuer Start löscht Fehler und Zähler (Kurz-Diktat danach funktioniert).
+    // (c) a new start clears the error and the counters (a short dictation
+    //     afterwards works).
     @Test
-    fun `Neuer Start loescht Fehlerzustand und Zaehler`() = runBlocking {
+    fun `a new start clears the error state and counters`() = runBlocking {
         val f = Fixture()
         assertTrue(f.controller.start())
         f.engine.failNextPartials = true
-        f.controller.feedAudio(seconds(3)) // Fehler
-        f.controller.feedAudio(seconds(1)) // 1 verworfen
+        f.controller.feedAudio(seconds(3)) // error
+        f.controller.feedAudio(seconds(1)) // 1 discarded
         assertTrue(f.controller.failedThisSession)
         assertEquals(1, f.controller.droppedBlocks)
 
-        // Nutzer drückt Mic erneut: alles sauber
+        // user presses mic again: everything clean
         assertTrue(f.controller.start())
         assertFalse(f.controller.failedThisSession)
         assertNull(f.controller.lastErrorCode)
         assertEquals(0, f.controller.droppedBlocks)
-        f.controller.feedAudio(seconds(3)) // läuft wieder normal
+        f.controller.feedAudio(seconds(3)) // runs normally again
         assertEquals(DictationState.RECORDING, f.controller.state)
         val outcome = f.controller.stop()
         assertTrue(outcome is StopOutcome.FinalRan)
@@ -122,9 +123,9 @@ class StopOutcomeTest {
         assertTrue(f.sink.text.contains("hallo"))
     }
 
-    // (d) Normaler Ablauf unverändert: Finale läuft, keine Fehlermeldung, Text bleibt.
+    // (d) normal flow unchanged: the final runs, no error message, text stays.
     @Test
-    fun `Normaler Ablauf bleibt unveraendert - FinalRan ohne Fehler`() = runBlocking {
+    fun `normal flow stays unchanged - FinalRan without error`() = runBlocking {
         val f = Fixture()
         assertTrue(f.controller.start())
         f.controller.feedAudio(seconds(3))
@@ -137,9 +138,9 @@ class StopOutcomeTest {
         assertTrue(f.sink.text.isNotEmpty())
     }
 
-    // (e) stop() ohne vorherige Aufnahme bleibt No-Op (kein Fake-Fehler).
+    // (e) stop() without a prior recording stays a no-op (no fake error).
     @Test
-    fun `stop ohne Aufnahme bleibt NoOp ohne Fake-Fehler`() = runBlocking {
+    fun `stop without a recording stays a NoOp without a fake error`() = runBlocking {
         val f = Fixture()
         val outcome = f.controller.stop()
         assertTrue(outcome is StopOutcome.IdleNoOp)

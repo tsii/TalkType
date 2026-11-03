@@ -1,207 +1,207 @@
 package de.voicekeyboard.keyboard
 
 /**
- * S3 — Stock-Look-Tokens (docs/DESIGN_STOCK_LOOK.md §1 „Konkrete Geometrie und
- * Typografie" + „Farben – ARGB, Hell/Dunkel"). Reine JVM-Werte, kein Android-
- * Import, damit die Token-Matrix als Zahlen getestet ist (KeyboardThemeTest).
+ * S3 — stock-look tokens (docs/DESIGN_STOCK_LOOK.md §1 „Konkrete Geometrie und
+ * Typografie“ + „Farben – ARGB, Hell/Dunkel“). Pure JVM values, no Android
+ * import, so that the token matrix is tested as numbers (KeyboardThemeTest).
  *
- * FARBTABELLE — Quelle: AOSP LatinIME (android16-release, java/res/values/
+ * COLOR TABLE — source: AOSP LatinIME (android16-release, java/res/values/
  * colors.xml:43–78, themes-lxx-light.xml:45–55, themes-lxx-dark.xml:45–55):
  *
- *  | Token                    | Hell      | Dunkel    | Herkunft                       |
+ *  | Token                    | Light     | Dark      | Origin                         |
  *  |--------------------------|-----------|-----------|--------------------------------|
- *  | Hintergrund / Taste norm.| #FFECEFF1 | #FF263238 | AOSP key_background_lxx_*      |
- *  | Gedrückt (Overlay)       | #2637474F | #19FFFFFF | AOSP key_background_pressed_*  |
- *  | Buchstaben-/Zifferntext   | #FF37474F | #CCFFFFFF | AOSP key_text_color_lxx_*      |
- *  | Funktionstext             | #CC37474F | #CCFFFFFF | AOSP functional                |
- *  | Sekundär/Space            | #B337474F | #B3FFFFFF | AOSP sekundäre Space-Farben    |
- *  | Akzent                    | #FF4DB6AC | #FF80CBC4 | AOSP highlight_color_lxx_*     |
- *  | Trennlinie                | #2637474F | #26FFFFFF | eigener 1-dp-Separator         |
- *  | Fehlerstatus              | #FFB3261E | #FFFFB4AB | eigene Fehlerfarbe             |
- *  | Toggle-Glyphe (Shift/Caps)| #FF00796B | #FF80CBC4 | eigene lesbare Hell-Variante   |
+ *  | background / key normal  | #FFECEFF1 | #FF263238 | AOSP key_background_lxx_*      |
+ *  | pressed (overlay)        | #2637474F | #19FFFFFF | AOSP key_background_pressed_*  |
+ *  | letter/digit text        | #FF37474F | #CCFFFFFF | AOSP key_text_color_lxx_*      |
+ *  | function text            | #CC37474F | #CCFFFFFF | AOSP functional                |
+ *  | secondary/space          | #B337474F | #B3FFFFFF | AOSP secondary space colors     |
+ *  | accent                   | #FF4DB6AC | #FF80CBC4 | AOSP highlight_color_lxx_*     |
+ *  | separator                | #2637474F | #26FFFFFF | own 1-dp separator             |
+ *  | error state              | #FFB3261E | #FFFFB4AB | own error color                 |
+ *  | toggle glyph (Shift/Caps)| #FF00796B | #FF80CBC4 | own readable light variant      |
  *
- * Gedrückt ist ein ALPHA-OVERLAY über der vorher gefüllten Tastaturfläche
- * ([compose], SrcOver) — kein alleiniger transparenter Fensterfarbton; die
- * gedrückte Fläche ist deckend (Alpha 0xFF nach der Komposition).
- * Normale Tasten sind IDENTISCH zum Hintergrund (flache Fläche, keine
- * Einzelkarten, Radius 0).
+ * Pressed is an ALPHA OVERLAY over the previously filled keyboard surface
+ * ([compose], SrcOver) — not a lone transparent window tint; the
+ * pressed surface is opaque (alpha 0xFF after the composition).
+ * Normal keys are IDENTICAL to the background (flat surface, no
+ * individual cards, radius 0).
  *
- * TYPOGRAFIE (Sol §1, T2/vc36): Buchstaben 26 sp, Ziffern 24 sp, Funktion 14 sp,
- * Space/Status 12 sp — als sp mit gleichem Nennwert bei fontScale=1.
+ * TYPOGRAPHY (spec §1, T2/vc36): letters 26 sp, digits 24 sp, function 14 sp,
+ * space/status 12 sp — as sp with the same nominal value at fontScale=1.
  *
- * GEOMETRIE (Sol §1, „Delta"-Zeile keyHeight/rowGap): 55 dp je Reihe bei
- * vier Reihen (220 dp zusammen), 44 dp je Reihe bei fünf (PT, 220 dp);
- * Reihenlücke 0 dp, Tastenlücke 0 dp, Eckenradius 0 dp.
+ * GEOMETRY (spec §1, "Delta" row keyHeight/rowGap): 55 dp per row with
+ * four rows (220 dp total), 44 dp per row with five (PT, 220 dp);
+ * row gap 0 dp, key gap 0 dp, corner radius 0 dp.
  */
 data class KeyboardPalette(
-    /** Root-/Tastatur-Hintergrund (deckend). */
+    /** Root/keyboard background (opaque). */
     val background: Int,
-    /** Fläche einer normalen Taste — identisch zum Hintergrund (keine Kartenoptik). */
+    /** Surface of a normal key — identical to the background (no card look). */
     val keyNormal: Int,
-    /** Komponierte Pressfläche: Overlay über [background] (deckend). */
+    /** Composed press surface: overlay over [background] (opaque). */
     val keyPressed: Int,
-    /** Glyphe im Toggle-Zustand (Shift/Caps aktiv) — KEINE gefärbte ganze Taste. */
+    /** Glyph in the toggle state (Shift/Caps active) — NOT a colored whole key. */
     val keyToggledGlyph: Int,
-    /** Buchstaben-/Zifferntext. */
+    /** Letter/digit text. */
     val textPrimary: Int,
-    /** Funktionstext (?123/ABC, Backspace, Enter, …). */
+    /** Function text (?123/ABC, backspace, enter, …). */
     val textFunctional: Int,
-    /** Sekundärer Text (Space-Wort, Status). */
+    /** Secondary text (space word, status). */
     val textSecondary: Int,
-    /** Dezenter 1-dp-Separator (unter der Statuszeile). */
+    /** Subtle 1-dp separator (below the status row). */
     val separator: Int,
-    /** Akzent (Aufnahme-Indikator, Hervorhebung). */
+    /** Accent (recording indicator, highlight). */
     val accent: Int,
     /**
-     * Glyph auf der Aufnahme-Flaeche (Mic-Symbol waehrend der Aufnahme).
-     * D10 §2: bewusst NICHT [textPrimary] — im Dunkelmodus waere das
-     * `#CCFFFFFF` auf der hellen Akzentflaeche `#80CBC4` (Kontrast ~1,4:1).
+     * Glyph on the recording surface (Mic symbol while recording).
+     * D10 §2: deliberately NOT [textPrimary] — in dark mode that would be
+     * `#CCFFFFFF` on the light accent surface `#80CBC4` (contrast ~1.4:1).
      */
     val micRecordingGlyph: Int,
-    /** Fehlerstatus-Farbe. */
+    /** Error state color. */
     val error: Int,
 )
 
 object KeyboardTheme {
 
-    // ---- Schrift-Hierarchie (sp, Sol §1) ----
-    /** T2 (v0.1.35, Nutzerwunsch vc34 „~8–10 % größer"): Hauptzeichen-Buchstabe
-     *  24 → 26 sp (+8,3 %). NUR Hauptzeichen — Footer-/Funktions- und Sekundär-
-     *  Labels, Space, Hint-Legende (F23a2-Deckel) und Popup-Zellen bleiben
-     *  unskaliert. Raster-Fit: 26 sp ≈ 68 px @ Referenzdichte 2,625 — frei von
-     *  der 1u=108-px-Zelle und den 2-px-Fugen (T2-Test). */
+    // ---- type hierarchy (sp, spec §1) ----
+    /** T2 (v0.1.35, user request vc34 "~8–10 % larger"): main-character letter
+     *  24 → 26 sp (+8.3 %). ONLY the main character — footer/function and secondary
+     *  labels, space, hint legend (F23a2 cap) and popup cells stay
+     *  unscaled. Grid fit: 26 sp ≈ 68 px @ reference density 2.625 — free of
+     *  the 1u=108-px cell and the 2-px gaps (T2 test). */
     const val SP_LETTER_SP = 26f
 
-    /** T2 (v0.1.35): Ziffern 22 → 24 sp (+9,1 %) — Hauptzeichen-Rolle wie Buchstaben. */
+    /** T2 (v0.1.35): digits 22 → 24 sp (+9.1 %) — main-character role like letters. */
     const val SP_DIGIT_SP = 24f
 
     const val SP_FUNCTION_SP = 14f
     const val SP_SECONDARY_SP = 12f
-    /** F23a2 Hint-Legende: 0,5 x SP_LETTER_SP (docs/DESIGN_KEY_POPUP.md §7.1) —
-     *  T2: bleibt 12 sp (Deckel wirkt: 0,5 × 26 = 13 > 12). */
+    /** F23a2 hint legend: 0.5 × SP_LETTER_SP (docs/DESIGN_KEY_POPUP.md §7.1) —
+     *  T2: stays 12 sp (cap applies: 0.5 × 26 = 13 > 12). */
     const val SP_KEY_HINT_SP = 12f
 
-    // ---- Geometrie-Nennwerte (Sol §1: 268 dp = 48 + 220) ----
+    // ---- geometry nominal values (spec §1: 268 dp = 48 + 220) ----
     const val ROW_HEIGHT_4_ROWS_DP = 55
     const val ROW_HEIGHT_5_ROWS_DP = 44
     const val ROW_GAP_DP = 0
     const val KEY_GAP_DP = 0
-    /** F36/V2 (docs/DESIGN_TASTATUR_V2.md §7): Eckenradius 10 px @ Referenzdichte
-     *  2,625 → dp-Nennwert (skaliert auf anderen Dichten mit). */
+    /** F36/V2 (docs/DESIGN_TASTATUR_V2.md §7): corner radius 10 px @ reference density
+     *  2.625 → dp nominal value (scales along on other densities). */
     const val KEY_RADIUS_DP = 10f / 2.625f
-    /** F36/V2 §7: Tastenfläche = Vollrechteck minus 2 px Fuge JE SEITE (Fuge zeigt
-     *  den Hintergrund; 2 px je Seite ⇒ 4 px sichtbare Fuge zwischen Tasten —
-     *  einzige Tastenabgrenzung, keine eigenen Trennlinien). */
+    /** F36/V2 §7: key surface = full rectangle minus 2 px gap PER SIDE (the gap shows
+     *  the background; 2 px per side ⇒ 4 px visible gap between keys —
+     *  the only key delimitation, no separate separator lines). */
     const val KEY_FUGE_DP = 2f / 2.625f
 
-    // ---- F22 D12: Langdruckmenü-Maße (docs/DESIGN_KEY_POPUP.md §1) — benannte
-    // Designwerte, KEINE neuen Farben (Fläche palette.keyPressed, Zeichen
-    // palette.textPrimary, Auswahl palette.accent/micRecordingGlyph) ----
-    /** Zelle 48×48 dp (nicht Grundtastenbreite); Höhe des Menüs 56 dp. */
+    // ---- F22 D12: long-press menu dimensions (docs/DESIGN_KEY_POPUP.md §1) — named
+    // design values, NO new colors (surface palette.keyPressed, glyph
+    // palette.textPrimary, selection palette.accent/micRecordingGlyph) ----
+    /** Cell 48×48 dp (not the base key width); menu height 56 dp. */
     const val POPUP_CELL_DP = 48f
     const val POPUP_HEIGHT_DP = 56f
-    /** Innen-/Zwischenpolster 4 dp; Abstand zur Grundtaste und zum Rand 8 dp. */
+    /** Inner/between padding 4 dp; distance to the base key and to the edge 8 dp. */
     const val POPUP_PAD_DP = 4f
     const val POPUP_GAP_DP = 8f
-    /** Außenradius 4 dp, nur Menü-Außenkante; kein Rahmen/Schatten/Zeigerspitze. */
+    /** Outer radius 4 dp, menu outer edge only; no border/shadow/pointer tip. */
     const val POPUP_RADIUS_DP = 4f
-    /** Zeichengröße 24 sp, normaler Typeface (§1). */
+    /** Glyph size 24 sp, normal typeface (§1). */
     const val POPUP_GLYPH_SP = 24f
-    /** Bewegung > 8 dp vom DOWN bricht das Bewaffnen endgültig ab (§2). */
+    /** Movement > 8 dp from DOWN definitively aborts the arming (§2). */
     const val POPUP_MOVE_CANCEL_DP = 8f
-    /** Langdruck-Schwelle 450 ms (§2-Tabelle Z. 94); DOUBLE_TAP_MS=350 bleibt unberührt. */
+    /** Long-press threshold 450 ms (§2 table line 94); DOUBLE_TAP_MS=350 stays untouched. */
     const val LONG_PRESS_MS = 450L
 
-    /** F27b: Shift/Backspace/Enter-Icons größer — 24 dp (≈1.3× der 14-sp-Funktionsgröße),
-     *  wie das 26-dp-Mic in dp (density, kein scaledDensity). */
+    /** F27b: Shift/Backspace/Enter icons larger — 24 dp (≈1.3× the 14 sp function size),
+     *  like the 26-dp Mic in dp (density, not scaledDensity). */
     const val ACTION_GLYPH_DP = 24f
 
-    /** F29: Strichstärke der drei Action-Glyphen (⇧/⌫/⏎) — IDENTISCH für alle drei,
-     *  als Canvas-Pfade gezeichnet (Font-Glyphen zeichnen pro Zeichen unterschiedlich
-     *  dicke Linien; Nutzerwunsch: gleiche Strichstärke).
-     *  F39 (Nutzer-Feedback v0.1.27): deutlich dünner — Glyphen dürfen NICHT dicker
-     *  wirken als die Buchstaben (24-sp-Buchstabenstrich als Maßstab): 3,5 → 2,0 dp. */
+    /** F29: stroke width of the three action glyphs (⇧/⌫/⏎) — IDENTICAL for all three,
+     *  drawn as canvas paths (font glyphs draw lines of differing thickness per
+     *  character; user request: equal stroke width).
+     *  F39 (user feedback v0.1.27): clearly thinner — glyphs must NOT look thicker
+     *  than the letters (24 sp letter stroke as the yardstick): 3.5 → 2.0 dp. */
     const val ACTION_GLYPH_STROKE_DP = 2.0f
 
-    /** F28a: Höhe der Status-/Info-Leiste (ImeRootView statusRow, 48 dp) — Massstab für
-     *  das Langdruckmenü der obersten Zeile: die Palette beginnt bei Root-y=0 (also
-     *  -STATUS_LINE_DP im KeyboardView-Koordinatensystem), d. h. direkt unterhalb der
-     *  Statusleiste. Gleicher Wert wie die 48-dp-Statuszeile in ImeRootView. */
+    /** F28a: height of the status/info bar (ImeRootView statusRow, 48 dp) — reference for
+     *  the long-press menu of the top row: the palette starts at root y=0 (i. e.
+     *  -STATUS_LINE_DP in the KeyboardView coordinate system), i. e. directly below the
+     *  status bar. Same value as the 48-dp status row in ImeRootView. */
     const val STATUS_LINE_DP = 48f
 
     /**
-     * T2 (v0.1.35, Nutzerbefund Pixel/vc34): reine Geometrie der ⇧-Glyphe als
-     * Anteile der Bindekiste s — der Pfeil (Kopf + Balken) ist von der
-     * horizontalen SOCKELLEISTE abgesetzt, in EXAKTER Korrespondenz zum ⌫, wo
-     * der Kopf 0,18·s vom vertikalen Sockel abgesetzt gezeichnet ist
-     * ([BACKSPACE_HEAD_SOCKEL_GAP_RATIO]). Vorher stand der Schaft nur 0,07·s
-     * über der Linie — mit dem 2-dp-Strich (runde Enden, ±0,083·s) verschmolzen:
-     * „Pfeil steht auf der Linie auf". Nur die Shift-Glyphe — ⌫/⏎ unangetastet.
-     * Das 0,60·s-Optikhöhe-Gate (F29/P0) bleibt: Sockelleiste = Box-Unterkante,
-     * Pfeilspitze = Box-Oberkante; nur der Pfeilfuß rückt hoch.
+     * T2 (v0.1.35, user finding Pixel/vc34): pure geometry of the ⇧ glyph as
+     * fractions of the bounding box s — the arrow (head + bar) is offset from the
+     * horizontal BASE BAR, in EXACT correspondence to ⌫, where
+     * the head is drawn offset 0.18·s from the vertical base
+     * ([BACKSPACE_HEAD_SOCKEL_GAP_RATIO]). Previously the shaft stood only 0.07·s
+     * above the line — merged with the 2-dp stroke (round caps, ±0.083·s):
+     * "arrow stands on the line". Only the shift glyph — ⌫/⏎ untouched.
+     * The 0.60·s optical-height gate (F29/P0) stays: base bar = box bottom edge,
+     * arrow tip = box top edge; only the arrow foot moves up.
      */
     object ShiftGlyph {
 
-        /** Sockelleiste (horizontale Linie) — y-Anteil der Box-Unterkante (0,60·s). */
+        /** Base bar (horizontal line) — y fraction of the box bottom edge (0.60·s). */
         const val BASE_LINE_RATIO = 0.30f
 
-        /** T2: Abstand Pfeilfuß ↔ Sockelleiste — identisch zum ⌫-Kopf↔Sockel-Abstand. */
+        /** T2: distance arrow foot ↔ base bar — identical to the ⌫ head↔base distance. */
         const val BASE_GAP_RATIO = 0.18f
 
-        /** ⌫-Kopf↔Sockel-Abstand (0,465 − 0,285) — Quelle der Korrespondenz (F36/V2 §8). */
+        /** ⌫ head↔base distance (0.465 − 0.285) — source of the correspondence (F36/V2 §8). */
         const val BACKSPACE_HEAD_SOCKEL_GAP_RATIO = 0.465f - 0.285f
 
-        /** T2: Pfeilfuß (Schaft-Unterkante) im Bindekisten-Maß —
-         *  shift-kopf-y = linien-y − offset, offset > 0: 0,30 − 0,18 = 0,12
-         *  (vorher 0,23 — verschmolzen, siehe KDoc). Reine Funktion, JVM-testbar. */
+        /** T2: arrow foot (shaft bottom edge) in bounding-box units —
+         *  shift-head-y = line-y − offset, offset > 0: 0.30 − 0.18 = 0.12
+         *  (previously 0.23 — merged, see KDoc). Pure function, JVM-testable. */
         fun arrowBottomRatio(): Float = BASE_LINE_RATIO - BASE_GAP_RATIO
     }
 
-    /** Sol §1: 55 dp bei bis zu vier Reihen, 44 dp ab fünf (PT bleibt fünfzeilig). */
+    /** Spec §1: 55 dp with up to four rows, 44 dp from five (PT stays five-row). */
     fun rowHeightDp(rows: Int): Int = if (rows >= 5) ROW_HEIGHT_5_ROWS_DP else ROW_HEIGHT_4_ROWS_DP
 
-    /** F36/V2 (§7 „Farben", normativ): helle Palette — Taste HELLER als der
-     *  Hintergrund (Kartenoptik, sichtbar durch die 4-px-Fuge), gedrückt als
-     *  DIREKTE Spec-Farbe (kein Overlay mehr), Text/Akzent nach der V2-Tabelle
-     *  (Text/Taste 17,09:1 → WCAG AAA). Nicht in V2 definiert: textFunctional,
-     *  textSecondary, error — behalten ihre AOSP-Nennwerte. */
+    /** F36/V2 (§7 "Farben", normative): light palette — key LIGHTER than the
+     *  background (card look, visible through the 4-px gap), pressed as a
+     *  DIRECT spec color (no overlay anymore), text/accent per the V2 table
+     *  (text/key 17.09:1 → WCAG AAA). Not defined in V2: textFunctional,
+     *  textSecondary, error — they keep their AOSP nominal values. */
     val LIGHT = KeyboardPalette(
         background = 0xFFF2F3F5.toInt(),
         keyNormal = 0xFFFFFFFF.toInt(),
-        keyPressed = 0xFFDCE7E6.toInt(), // V2 §7 direkt — keine compose()-Überlagerung
-        keyToggledGlyph = 0xFF2E7D74.toInt(), // V2 §7 Akzent (Icon ⇧/⌫/⏎, Shift-aktiv)
+        keyPressed = 0xFFDCE7E6.toInt(), // V2 §7 direct — no compose() overlay
+        keyToggledGlyph = 0xFF2E7D74.toInt(), // V2 §7 accent (icon ⇧/⌫/⏎, shift active)
         textPrimary = 0xFF1A1C1E.toInt(),
         textFunctional = 0xCC37474F.toInt(),
         textSecondary = 0xB337474F.toInt(),
-        separator = 0xFFE0E2E5.toInt(), // V2 §7 Trennlinie (1 px unter der Statusleiste)
+        separator = 0xFFE0E2E5.toInt(), // V2 §7 separator (1 px below the status bar)
         accent = 0xFF2E7D74.toInt(),
-        micRecordingGlyph = 0xFFFFFFFF.toInt(), // Gegenfarbe auf Akzent #2E7D74 (≈ 4,6:1)
+        micRecordingGlyph = 0xFFFFFFFF.toInt(), // contrary color on accent #2E7D74 (≈ 4.6:1)
         error = 0xFFB3261E.toInt(),
     )
 
-    /** F36/V2 (§7): dunkle Palette — gleiche Rollen wie hell (s. d.). */
+    /** F36/V2 (§7): dark palette — same roles as light (see there). */
     val DARK = KeyboardPalette(
         background = 0xFF202124.toInt(),
         keyNormal = 0xFF2B2D31.toInt(),
-        keyPressed = 0xFF3A4543.toInt(), // V2 §7 direkt
+        keyPressed = 0xFF3A4543.toInt(), // V2 §7 direct
         keyToggledGlyph = 0xFF80CBC4.toInt(),
         textPrimary = 0xFFE8EAED.toInt(),
         textFunctional = 0xCCFFFFFF.toInt(),
         textSecondary = 0xB3FFFFFF.toInt(),
         separator = 0xFF3C3F44.toInt(),
         accent = 0xFF80CBC4.toInt(),
-        micRecordingGlyph = 0xFF263238.toInt(), // Gegenfarbe auf Akzent #80CBC4 (≈ 7,4:1)
+        micRecordingGlyph = 0xFF263238.toInt(), // contrary color on accent #80CBC4 (≈ 7.4:1)
         error = 0xFFFFB4AB.toInt(),
     )
 
-    /** System Hell/Dunkel entscheidet die Palette (kein Ziel-App-Theme-Raten). */
+    /** System light/dark decides the palette (no target-app-theme guessing). */
     fun palette(isDark: Boolean): KeyboardPalette = if (isDark) DARK else LIGHT
 
     /**
-     * Overlay-Komposition (SrcOver, reine JVM-Logik): [overlay] liegt über der
-     * vorher gefüllten Fläche [base] — Ergebnis deckend, Kanäle geblendet.
-     * Grundlage der Presszustände: „keine alleinige transparente Fensterfarbe;
-     * dadurch scheint kein Ziel-App-Inhalt durch" (Sol §1).
+     * Overlay composition (SrcOver, pure JVM logic): [overlay] lies over the
+     * previously filled surface [base] — result opaque, channels blended.
+     * Basis of the press states: "no lone transparent window color;
+     * this way no target-app content shines through" (spec §1).
      */
     fun compose(base: Int, overlay: Int): Int {
         val bA = (base ushr 24) and 0xFF

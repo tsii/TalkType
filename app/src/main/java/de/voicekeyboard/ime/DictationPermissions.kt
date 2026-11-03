@@ -1,68 +1,70 @@
 package de.voicekeyboard.ime
 
 /**
- * Reine Entscheidungslogik für Diktat-Berechtigungen (frameworkfrei, JVM-testbar):
- * welche Berechtigungen fehlen, in welcher Reihenfolge gefragt wird und was bei
- * dauerhaft abgelehnter Berechtigung zu tun ist ("nicht erneut fragen").
+ * Pure decision logic for dictation permissions (framework-free, JVM-testable):
+ * which permissions are missing, in which order they are asked for and what to do
+ * on permanently denied permission ("do not ask again").
  *
- * Android-Dünnschicht: [androidRequester] startet die Systemdialoge — im
- * Produktionscode per ActivityStarter/PendingIntent (hier Lambda, damit die
- * Logik ohne Robolectric prüfbar ist).
+ * Android thin layer: [androidRequester] starts the system dialogs — in
+ * production code via activity starter/PendingIntent (here a lambda, so the
+ * logic is testable without Robolectric).
  */
 object DictationPermissions {
 
     /**
-     * Kern-Berechtigung für Diktat (V16a): NUR das Mikrofon.
-     * POST_NOTIFICATIONS sperrte bisher fälschlich das Diktat (Live-Fehler:
-     * FGS läuft laut CaptureForegroundService auch ohne sie — Notification
-     * nur unsichtbar). Die Anzeige-Frage gehört in die Setup-Seite.
+     * Core permission for dictation (V16a): ONLY the microphone.
+     * POST_NOTIFICATIONS previously blocked the dictation wrongly (live defect:
+     * the FGS runs without it according to CaptureForegroundService — the
+     * notification just stays invisible). The display question belongs on the
+     * setup page.
      */
     val REQUIRED_IN_ORDER = listOf(
         android.Manifest.permission.RECORD_AUDIO,
     )
 
     /**
-     * Optionale Berechtigungen (V16a): einmalig in der SetupActivity fragen.
-     * F28c: ab api 33 ist POST_NOTIFICATIONS KEINE reine Anzeigeberechtung mehr:
-     * ohne sie kann das System den FGS-Typ microphone stumm stoppen (Export #2:
-     * api 37, notif=no, Aufnahme nach 1,0 s tot) — daher in [requiredForApi].
+     * Optional permissions (V16a): ask once in the SetupActivity.
+     * F28c: from api 33 POST_NOTIFICATIONS is NO longer a pure display permission:
+     * without it the system can silently stop the FGS type microphone
+     * (export #2: api 37, notif=no, recording dead after 1.0 s) — hence in
+     * [requiredForApi].
      */
     val OPTIONAL_IN_ORDER = listOf(
         android.Manifest.permission.POST_NOTIFICATIONS,
     )
 
-    /** Api-Level, ab dem der FGS-Typ microphone die Notification-Berechtigung
-     *  zur Diktat-Bedingung macht (F28c; POST_NOTIFICATIONS gibt es ab 33). */
+    /** Api level from which the FGS type microphone makes the notification
+     *  permission a dictation condition (F28c; POST_NOTIFICATIONS exists from 33). */
     const val NOTIF_REQUIRED_SINCE_API = 33
 
-    /** F28c: Diktat-Bedingungen als Funktion des Api-Levels — unter 33 nur das
-     *  Mikrofon (V16a), ab 33 zusätzlich die Notification-Berechtigung. */
+    /** F28c: dictation conditions as a function of the api level — below 33 only
+     *  the microphone (V16a), from 33 additionally the notification permission. */
     fun requiredForApi(apiLevel: Int): List<String> =
         if (apiLevel >= NOTIF_REQUIRED_SINCE_API) REQUIRED_IN_ORDER + OPTIONAL_IN_ORDER
         else REQUIRED_IN_ORDER
 
     sealed class Decision {
-        /** Alles vorhanden — Diktat darf starten. */
+        /** Everything present — the dictation may start. */
         data object Ready : Decision()
 
-        /** Diese Berechtigung fehlt und muss (noch) gefragt werden. */
+        /** This permission is missing and must (still) be asked for. */
         data class Ask(val permission: String) : Decision()
 
-        /** Dauerhaft abgelehnt: Systemdialog würde nicht mehr kommen — Nutzer
-         *  muss in die App-Einstellungen; Diktat bleibt gesperrt. */
+        /** Permanently denied: the system dialog would not come anymore — the
+         *  user must go to the app settings; dictation stays blocked. */
         data class PermanentlyDenied(val permission: String) : Decision()
     }
 
     /**
-     * Entscheidet den nächsten Schritt. Parameter sind bewusst injizierte
-     * Fakten (kein Framework):
+     * Decides the next step. Parameters are deliberately injected facts
+     * (no framework):
      *
-     * @param granted     aktuell erteilte Berechtigungen (Menge)
-     * @param permanentlyDenied Berechtigungen, die der Nutzer "nie wieder" abgelehnt hat
-     * @param apiLevel    Device-Api-Level; Default 29 = V16a-Semantik (Anzeige
-     *                    blockiert nie). Ab [NOTIF_REQUIRED_SINCE_API] wird
-     *                    POST_NOTIFICATIONS zur Diktat-Bedingung (F28c).
-     * @return nächster Schritt in der Reihenfolge von [requiredForApi]
+     * @param granted     currently granted permissions (set)
+     * @param permanentlyDenied permissions the user has denied "never again"
+     * @param apiLevel    device api level; default 29 = V16a semantics (display
+     *                    never blocks). From [NOTIF_REQUIRED_SINCE_API],
+     *                    POST_NOTIFICATIONS becomes a dictation condition (F28c).
+     * @return next step in the order of [requiredForApi]
      */
     fun nextStep(
         granted: Set<String>,
@@ -80,24 +82,24 @@ object DictationPermissions {
         return Decision.Ready
     }
 
-    /** Kurzform: ist Diktat ohne weitere Dialoge möglich? (F28c: api-Levelabhängig.) */
+    /** Short form: is dictation possible without further dialogs? (F28c: depends on the api level.) */
     fun isReady(granted: Set<String>, permanentlyDenied: Set<String> = emptySet(), apiLevel: Int = 29): Boolean =
         nextStep(granted, permanentlyDenied, apiLevel) is Decision.Ready
 }
 
-/** Android-Dünnschicht: löst die Anfrage im Namen der sichtbaren Activity/IME aus. */
+/** Android thin layer: issues the request on behalf of the visible activity/IME. */
 class AndroidPermissionsRequester(
     private val checkPermission: (String) -> Boolean,
     private val shouldShowRationale: (String) -> Boolean,
 ) {
     /**
-     * Berechnet die Fakten für die reine Logik:
-     * Nach einer Ablehnung meldet `shouldShowRequestPermissionRationale` false,
-     * wenn der Nutzer "nicht erneut fragen" gewählt hat (oder die Policy es
-     * verweigert) — dann führt kein Weg an den App-Einstellungen vorbei.
-     * F28c: NUN alle bekannten Diktat-Berechtigungen (inkl. POST_NOTIFICATIONS)
-     * — vorher nur REQUIRED_IN_ORDER, wodurch das 🐞-Feld `permPostNotifications`
-     * strukturell immer false war (Export #2: notif=no trotz möglicher Erteilung).
+     * Computes the facts for the pure logic:
+     * after a denial, `shouldShowRequestPermissionRationale` reports false
+     * if the user chose "do not ask again" (or the policy refuses it) —
+     * then there is no way around the app settings.
+     * F28c: NOW all known dictation permissions (incl. POST_NOTIFICATIONS)
+     * — previously only REQUIRED_IN_ORDER, which made the 🐞 field `permPostNotifications`
+     * structurally always false (export #2: notif=no despite possible grant).
      */
     fun grantedSet(): Set<String> =
         (DictationPermissions.REQUIRED_IN_ORDER + DictationPermissions.OPTIONAL_IN_ORDER)

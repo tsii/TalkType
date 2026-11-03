@@ -1,92 +1,94 @@
-# Messwerte-Vergleich — Änderung → Gewinn (nur belegte Zahlen)
+# Measurement comparison — change → gain (measured numbers only)
 
-**Zweck:** am Ende vergleichbar machen, welche Änderung welchen Gewinn gebracht hat.
-**Disziplin:** ausschließlich die gelieferten, belegten Messwerte; nichts erraten, nichts
-schätzen — wo keine Messung existiert, steht **nicht gemessen** / **nicht erhoben**.
-REGEL 9: nur Zahlen, Tasten, Geometrie, Pfade — keine Inhalte.
+**Purpose:** make it comparable in the end which change brought which gain.
+**Discipline:** exclusively the delivered, evidenced measurements; no guessing,
+no estimating — where no measurement exists, it says **not measured** / **not
+collected**. RULE 9: numbers, keys, geometry, paths only — no content.
 
-**Versionen/Kontext:** 0.1.14 = Bau 15, 0.1.15 = Bau 16, 0.1.16 = Bau 17,
-0.1.17 = Bau 18 (`app/build.gradle.kts:14-15`). Emulator = <device> (API 36-AVD),
-Telefon = Nutzer-Gerät api 37.
+**Versions/context:** 0.1.14 = build 15, 0.1.15 = build 16, 0.1.16 = build
+17, 0.1.17 = build 18 (`app/build.gradle.kts:14-15`). Emulator = <device>
+(API 36 AVD), phone = the user's device, api 37.
 
 ---
 
-## A) C2-Diktat (Nutzer-Telefon, 🐞-Exporte)
+## A) C2 dictation (user's phone, 🐞 exports)
 
-| Änderung | vorher (0.1.14-Ära) | nachher (0.1.15, mit F21) | Gewinn | Belegquelle |
+| Change | before (0.1.14 era) | after (0.1.15, with F21) | Gain | Evidence source |
 |---|---|---|---|---|
-| F21 cost-aware Decode-Takt | rtf **0,44**; erste Hypothese nach **5 339 ms** | rtf **0,15**; decode_ms_max **583**; decode_ms_p95 **583**; buffer_s = audio_s = **11,9** | rtf ≈ **−66 %** (0,44 → 0,15) | 🐞-Export 0.1.14-Ära (HANDOFF „C2") / 🐞-Export #1 0.1.30 (docs/C2_EXPORT_AUSWERTUNG.md §0) |
-| F21-Milderung, Auswirkung im Export #1 | — | hyp_count **6**; hyp_gap_ms **7 323**; ctl_failed **0**; dropped **0**; Zustand **IDLE** | **kein messbarer C2-Gewinn im Abbruchzelfall**: Bruch bei 11,9 s **ohne Finale und ohne Fehlerflagge** (Abort-Pfad, nicht C2) | 🐞-Export #1; Auswertung docs/C2_EXPORT_AUSWERTUNG.md §1/§2 |
-| F21-Taktwerte `decode_pace_ms` / `decode_skips` | — | Felder im Export #1 **vorhanden**, Werte **nicht einzeln ausgewertet** | nicht einzeln ausgewertet | 🐞-Export #1 (Feldliste docs/DEBUG_INFO_FIELDS.md) |
-| Quadratische Ursache `window()` (DictationController.kt:416) | sichtbar als 5 339 ms Erst-Hypothese | 583 ms bei 11,9 s Puffer (≈ 49 ms pro Audio-Second) — Wachstum noch **unter Schwelle** | **Gewinn nicht gemessen** (Abbruch lag davor); Fix-Kandidat unverändert offen | Auswertung §1 |
+| F21 cost-aware decode cadence | rtf **0.44**; first hypothesis after **5,339 ms** | rtf **0.15**; decode_ms_max **583**; decode_ms_p95 **583**; buffer_s = audio_s = **11.9** | rtf ≈ **−66 %** (0.44 → 0.15) | 🐞 export 0.1.14 era (HANDOFF "C2") / 🐞 export #1 0.1.30 (docs/C2_EXPORT_AUSWERTUNG.md §0) |
+| F21 mitigation, effect in export #1 | — | hyp_count **6**; hyp_gap_ms **7,323**; ctl_failed **0**; dropped **0**; state **IDLE** | **no measurable C2 gain in the abort case**: break at 11.9 s **without finale and without an error flag** (abort path, not C2) | 🐞 export #1; analysis docs/C2_EXPORT_AUSWERTUNG.md §1/§2 |
+| F21 cadence values `decode_pace_ms` / `decode_skips` | — | fields **present** in export #1, values **not individually evaluated** | not individually evaluated | 🐞 export #1 (field list docs/DEBUG_INFO_FIELDS.md) |
+| Quadratic cause `window()` (DictationController.kt:416) | visible as 5,339 ms first hypothesis | 583 ms at 11.9 s buffer (≈ 49 ms per audio second) — growth still **below threshold** | **gain not measured** (the abort came first); fix candidate still open | analysis §1 |
 
-## B) Optik gedrückte Taste (D11/F15, Emulator, Kanal-Delta von 255)
+## B) Optics of a pressed key (D11/F15, emulator, channel delta of 255)
 
-| Änderung | vorher | nachher | Gewinn | Belegquelle |
+| Change | before | after | Gain | Evidence source |
 |---|---|---|---|---|
-| Tastendruck-Fläche (gedrückte Taste) | hell **27** / dunkel **21** | hell **73** / dunkel **65** | Delta ≈ **×2,7** (hell 27→73), ≈ **×3,1** (dunkel 21→65) | Orchestrator-Emulator-Messung (docs/DESIGN_STOCK_LOOK.md, Log in HANDOFF „D11/F15") |
-| CapsLock-Akzent-Fläche | — | `#4DB6AC` (hell) / `#80CBC4` (dunkel), Abweichung **0** | Sollwert exakt erreicht | dito |
+| Key press surface (pressed key) | light **27** / dark **21** | light **73** / dark **65** | delta ≈ **×2.7** (light 27→73), ≈ **×3.1** (dark 21→65) | orchestrator emulator measurement (docs/DESIGN_STOCK_LOOK.md, log in HANDOFF "D11/F15") |
+| CapsLock accent surface | — | `#4DB6AC` (light) / `#80CBC4` (dark), deviation **0** | target value exactly met | ditto |
 
-## C) Mikrofon (Nutzer-Telefon)
+## C) Microphone (user's phone)
 
-| Änderung | Wert | Interpretation | Belegquelle |
+| Change | Value | Interpretation | Evidence source |
 |---|---|---|---|
-| Pegel/Routing (keine Änderung seit F13) | peak_dbfs **−22,0**; peak_pct **7**; route **intern**; src **VOICE_RECOGNITION** | **in Ordnung** — Mikro-Pegel ist kein Verdacht mehr (AudioSource-Experiment hinfällig) | 🐞-Export (Nutzer-Telefon); „Geklärt" in HANDOFF |
+| Level/routing (no change since F13) | peak_dbfs **−22.0**; peak_pct **7**; route **internal**; src **VOICE_RECOGNITION** | **in order** — mic level is no longer a suspect (AudioSource experiment dropped) | 🐞 export (user's phone); "clarified" in HANDOFF |
 
-## D) Fußzeile F24e (Emulator, de-de, 0.1.16)
+## D) Footer F24e (emulator, de-de, 0.1.16)
 
-| Änderung | vorher | nachher | Gewinn | Belegquelle |
+| Change | before | after | Gain | Evidence source |
 |---|---|---|---|---|
-| Vereinheitlichte Fußzeile + Punkt-Menü | 14 Layouts mit `‹ ›`-Cursortasten, de-de ohne (Übergangs-Inkonsistenz, Review-Note) | View 1080×576; Tastatur-Oberkante y=1698; Fußzeile y=2202; **period-Rect <706,432,789,576>** (Mitte 747, Breite 83 px); popup-open **cells=5** left=384 top=264; Zellmitten 468/594/720/846/972; popup-zone left=384 w=696 | 15/15 Layouts einheitlich (Σ 13), Cursor-Aktionen als Menüzellen 4/5 statt Direkttasten | Orchestrator-Emulator-Messung 0.1.16; Zielbild docs/LAYOUT_REQUIREMENTS.md §2.3 |
+| Unified footer + period menu | 14 layouts with `‹ ›` cursor keys, de-de without them (transitional inconsistency, review note) | view 1080×576; keyboard top edge y=1698; footer y=2202; **period rect <706,432,789,576>** (center 747, width 83 px); popup-open **cells=5** left=384 top=264; cell centers 468/594/720/846/972; popup zone left=384 w=696 | 15/15 layouts uniform (Σ 13), cursor actions as menu cells 4/5 instead of direct keys | orchestrator emulator measurement 0.1.16; target design docs/LAYOUT_REQUIREMENTS.md §2.3 |
 
-## E) F27 Stock-Geometrie (Emulator, de-de, 0.1.17-Debug, 16:44–16:45)
+## E) F27 stock geometry (emulator, de-de, 0.1.17 debug, 16:44–16:45)
 
-| Änderung | vorher (0.1.16) | nachher (0.1.17) | Gewinn | Belegquelle |
+| Change | before (0.1.16) | after (0.1.17) | Gain | Evidence source |
 |---|---|---|---|---|
-| Zeilenraster Buchstabenreihen | r0 **93,9 px** (1080/11,5); r1/r2 **120 px** (1080/9) — **uneinheitlich** | alle drei Reihen **exakt 90 px** (VK-HIT: z <450,0,540,144>, a <135,144,225,288> mit 1,5u Rand links, b <585,288,675,432>) | einheitliches Stock-90-px-Raster (Vorher/Nachher-Geometrie-Abgleich) | Orchestrator-Emulator-Messung 16:44–16:45 |
-| Leertaste | **498 px** (6u) | **582 px** (7u): Rect <290,432,872,576> | **+84 px / +16,9 %** Fläche | dito |
-| Punkt + Mikrofon | Punkt **166 px**, Mikrofon **166 px** (D10-Umbau) | Punkt **83 px** (1u: 872–955), Mikrofon **125 px** (1,5u: 955–1080) direkt daneben | Punkt schmal (1u), Mikrofon direkt rechts — Stock-Zuschnitt | dito |
-| Popup-Flip | (vorherige Popups-Position nicht separat vermessen) | r1-Taste (a): popup-open **cells=6** left=0 **top=0** (Klemmung an Oberkante), zone left=0 w=833; Row-0-Tasten öffnen **unterhalb** (Flip) | Flip verhalten gemessen; quantitative Zeilensparnis **nicht gemessen** | dito |
+| Row grid of the letter rows | r0 **93.9 px** (1080/11.5); r1/r2 **120 px** (1080/9) — **non-uniform** | all three rows **exactly 90 px** (VK-HIT: z <450,0,540,144>, a <135,144,225,288> with a 1.5u margin left, b <585,288,675,432>) | uniform stock 90-px grid (before/after geometry cross-check) | orchestrator emulator measurement 16:44–16:45 |
+| Space key | **498 px** (6u) | **582 px** (7u): rect <290,432,872,576> | **+84 px / +16.9 %** area | ditto |
+| Period + mic | period **166 px**, mic **166 px** (D10 rework) | period **83 px** (1u: 872–955), mic **125 px** (1.5u: 955–1080) directly beside it | narrow period (1u), mic directly to the right — stock cut | ditto |
+| Popup flip | (previous popup position not measured separately) | r1 key (a): popup-open **cells=6** left=0 **top=0** (clamped at the top edge), zone left=0 w=833; row-0 keys open **below** (flip) | flip behavior measured; quantitative row saving **not measured** | ditto |
 
-## F) Testbestand (Unit)
+## F) Test inventory (unit)
 
-| Änderung | vorher | nachher | Gewinn | Belegquelle |
+| Change | before | after | Gain | Evidence source |
 |---|---|---|---|---|
-| F24e–F27-Auftragskette (Debug-Suite) | **419/0** (0.1.14) → 425/0 → 427/0 → 429/0 → 430/0 → 431/0 → 432/0 (F26a+b) → 437/0 (F27a1/a2/b) → **440/0** (F27d, 16:34) | **440/0** (Bau 18, LAUF 1, 2026-10-31 16:48) | **+21 Tests** gegenüber 0.1.14, durchweg 0 Fehler | /tmp/vk_tests.txt; app/build/test-results/testDebugUnitTest |
-| Release-Suite | 399/0 (0.1.15) | **420/0** (50 Dateien), 2026-10-31 16:48 | +21 gegenüber 0.1.15 | /tmp/vk_tests.txt (LAUF 1) |
-| Latenz-/Qualitäts-Gewinne der Engine | — | — | **nicht gemessen** (s. H) | — |
+| F24e–F27 task chain (debug suite) | **419/0** (0.1.14) → 425/0 → 427/0 → 429/0 → 430/0 → 431/0 → 432/0 (F26a+b) → 437/0 (F27a1/a2/b) → **440/0** (F27d, 16:34) | **440/0** (build 18, RUN 1, 2026-10-31 16:48) | **+21 tests** vs. 0.1.14, consistently 0 failures | /tmp/vk_tests.txt; app/build/test-results/testDebugUnitTest |
+| Release suite | 399/0 (0.1.15) | **420/0** (50 files), 2026-10-31 16:48 | +21 vs. 0.1.15 | /tmp/vk_tests.txt (RUN 1) |
+| Engine latency/quality gains | — | — | **not measured** (see H) | — |
 
-## G) APK-Größen (Byte, Release / diag-debug)
+## G) APK sizes (bytes, release / diag-debug)
 
-| Build | Release | diag-debug | Zuwachs je Shape | Belegquelle |
+| Build | Release | diag-debug | Growth per shape | Evidence source |
 |---|---|---|---|---|
-| 0.1.15 | 40 343 852 | 102 386 730 | — | dist-Liste (HANDOFF/PROJECT_STATE) |
-| 0.1.16 | 40 345 748 | 102 388 918 | Release **+1 896**; Diag **+2 188** | dist-Messung (Orchestrator) |
-| 0.1.17 | 40 346 420 | 102 390 034 | Release **+672** (vs. 0.1.16); Diag **+1 116** (vs. 0.1.16) | dist-Messung (Orchestrator) |
+| 0.1.15 | 40,343,852 | 102,386,730 | — | dist list (HANDOFF/PROJECT_STATE) |
+| 0.1.16 | 40,345,748 | 102,388,918 | release **+1,896**; diag **+2,188** | dist measurement (orchestrator) |
+| 0.1.17 | 40,346,420 | 102,390,034 | release **+672** (vs. 0.1.16); diag **+1,116** (vs. 0.1.16) | dist measurement (orchestrator) |
 
-## H) Nicht messbar (dokumentiert, nicht beschönigt)
+## H) Not measurable (documented, not glossed over)
 
-| Thema | Status | Grund |
+| Topic | Status | Reason |
 |---|---|---|
-| Engine-/Diktatlauf auf Emulator-5560 | **nicht validierbar** | SIGSEGV in `libonnxruntime.so` beim Laden (dlopen/call_constructors) → Latenz- und Qualitäts-Gewinne der Engine **nur über Telefon-Exporte** (A) belegbar; alle Emulator-Zahlen hier (B/D/E) sind Tastatur-/Geometrie- und Optik-Ebene |
-| C2-Gewinn auf längeren (> 20 s) Sessions | **nicht gemessen** | Export #1 brach bei 11,9 s ab (Abort-Pfad, docs/C2_EXPORT_AUSWERTUNG.md); Folgemessung mit `abort_reason`/`hyp_last_buffer_s` ausstehend |
-| Diktat-Abbruchgrund | **offen (3 Kandidaten)** | Mic-CANCEL / Editor-Wechsel / Audio-Systemstopp — Abgrenzung erst über `last_error` + neue Felder (docs/C2_EXPORT_AUSWERTUNG.md §2/§5) |
+| Engine/dictation run on <device> | **not verifiable** | SIGSEGV in `libonnxruntime.so` at load time (dlopen/call_constructors) → engine latency and quality gains provable **only via phone exports** (A); all emulator numbers here (B/D/E) are at the keyboard/geometry and optics level |
+| C2 gain on longer (> 20 s) sessions | **not measured** | export #1 broke off at 11.9 s (abort path, docs/C2_EXPORT_AUSWERTUNG.md); follow-up measurement with `abort_reason`/`hyp_last_buffer_s` pending |
+| Dictation abort cause | **open (3 candidates)** | mic CANCEL / editor switch / audio system stop — differentiation only via `last_error` + new fields (docs/C2_EXPORT_AUSWERTUNG.md §2/§5) |
 
 ---
-**Belegquellen gesamt:** 🐞-Exporte (0.1.14-Ära, Export #1 vom 30.10.), Orchestrator-
-Emulator-Messungen (D11/F15, F24e 0.1.16, F27 0.1.17 16:44–16:45), `/tmp/vk_tests.txt`
-(LAUF 1, 31.10. 16:48), `app/build/test-results/`, `app/build.gradle.kts:14-15`,
-`docs/C2_EXPORT_AUSWERTUNG.md`, `docs/LAYOUT_REQUIREMENTS.md` §2.3, dist-Liste.
+**Evidence sources overall:** 🐞 exports (0.1.14 era, export #1 from 30.10.),
+orchestrator emulator measurements (D11/F15, F24e 0.1.16, F27 0.1.17
+16:44–16:45), `/tmp/vk_tests.txt` (RUN 1, 31.10. 16:48),
+`app/build/test-results/`, `app/build.gradle.kts:14-15`,
+`docs/C2_EXPORT_AUSWERTUNG.md`, `docs/LAYOUT_REQUIREMENTS.md` §2.3, dist
+list.
 
-## I) Diktat-Härtung (F28–F31b, 0.1.18 → 0.1.24)
+## I) Dictation hardening (F28–F31b, 0.1.18 → 0.1.24)
 
-| Änderung | Wirkung (nur belegte Werte) | Beleg |
+| Change | Effect (measured values only) | Evidence |
 |---|---|---|
-| F28b1 **Stall-Watchdog**: keine Capture-Blöcke > **3000 ms** → Fehler `stall` (statt Endlos-„Diktat") | Schwellwert 3000 ms; Trigger verifiziert in Testfall b (Stille ab Start) und c (Aussetzer 3,5 s → genau ein Fehler) | `ime/DictationCoordinator.kt:73` (`STALL_LIMIT_MS`), `app/src/testDebug/…/ime/FakeAudioScenarioTest.kt` (Fälle b/c) |
-| F31 **Stille-Erkennung**: Blöcke laufen, aber > 3000 ms kein lauter Block → Fehler `silence` + neue Meldung + 🐞-Feld **`loud_s`** | Laut-Schwelle **`SILENCE_RMS = 0,01` (≈ −40 dBFS)**; Trennung „keine Blöcke → `stall`“ vs. „Blöcke ohne Signal → `silence`“ verifiziert (Fälle e/g) | `ime/DictationCoordinator.kt:100/337-338`, `debug/DebugInfoFormatter.kt:134/194`, `res/values/strings.xml:57` (`dictation_error_no_signal`) |
-| F31b **`everLoud`-Latch**: `silence` feuert nur, solange noch nie ein lauter Block kam — **keine Fehlabbrüche bei Sprechpausen** (Review-P1) | Latch-Setz-/Gate verifiziert in Testfall f (still→laut, kein Fehler); P1 dadurch geschlossen | `ime/DictationCoordinator.kt:218/300/330-332`; `docs/REVIEW_F28_F31.md` (P1 → geschlossen) |
-| F31b **`FGS_READY_TIMEOUT_MS` 2 s → 4 s** (Kaltstart-Frist für FGS-Handshake) | Konstante **4000 ms** | `ime/VoiceKeyboardService.kt:149` |
-| F31b **Layout-Gates auf Einzelwerte** (space 6,5 / mic 2 / period 1, genau ein „@“ je Ebene, ru-ru ohne @-Taste, r2[0] shift = 1) | **3 neue Tests** (im 464/0-Lauf) | `FooterAcrossAssetsTest` / `LayoutCompletenessTest` (Orchestrator-Angabe) |
-| Testbestand über die Härtung (0.1.15 → 0.1.24) | Debug **419 → 464**, Release **399 → 433**, durchweg **0 Fehler** (gesamt 818 → 897) | `app/build/test-results/` (Summe der Ergebnis-XMLs, Stand 0.1.24); F27/Vorlauf s. Abschnitt F |
-| Review **F28–F31** | ursprünglich **P0=0/P1=1/P2=3** → nach F31b **P0=0 · P1=0 · P2=1** (offen: Popup-Clip/`isFooterRow`-Randfall); Urteil **push-fähig: JA** | `docs/REVIEW_F28_F31.md` (inkl. „Nachtrag F31b") |
-| Emulator-Engine (Rahmenbedingung für alle Diktat-Tests auf 5560) | **nicht gemessen/behebbar**: SIGSEGV in `libonnxruntime.so` blockiert echte Decode-Läufe; Fake-Engine-Tests laufen davon unabhängig | `docs/PROJECT_STATE.md` „Umgebung“, `docs/EMULATOR_DIKTAT_HARNESS.md` §1 |
+| F28b1 **stall watchdog**: no capture blocks for > **3000 ms** → error `stall` (instead of an endless "dictation") | threshold 3000 ms; trigger verified in test case b (silence from the start) and c (dropouts 3.5 s → exactly one error) | `ime/DictationCoordinator.kt:73` (`STALL_LIMIT_MS`), `app/src/testDebug/…/ime/FakeAudioScenarioTest.kt` (cases b/c) |
+| F31 **silence detection**: blocks keep flowing, but no loud block for > 3000 ms → error `silence` + new message + 🐞 field **`loud_s`** | loud threshold **`SILENCE_RMS = 0.01` (≈ −40 dBFS)**; the separation "no blocks → `stall`" vs. "blocks without signal → `silence`" verified (cases e/g) | `ime/DictationCoordinator.kt:100/337-338`, `debug/DebugInfoFormatter.kt:134/194`, `res/values/strings.xml:57` (`dictation_error_no_signal`) |
+| F31b **`everLoud` latch**: `silence` fires only as long as no loud block ever arrived — **no false aborts on speech pauses** (review P1) | latch set/gate verified in test case f (silent→loud, no error); P1 thereby closed | `ime/DictationCoordinator.kt:218/300/330-332`; `docs/REVIEW_F28_F31.md` (P1 → closed) |
+| F31b **`FGS_READY_TIMEOUT_MS` 2 s → 4 s** (cold-start deadline for the FGS handshake) | constant **4000 ms** | `ime/VoiceKeyboardService.kt:149` |
+| F31b **layout gates on individual values** (space 6.5 / mic 2 / period 1, exactly one "@" per layer, ru-ru without an @ key, r2[0] shift = 1) | **3 new tests** (in the 464/0 run) | `FooterAcrossAssetsTest` / `LayoutCompletenessTest` (orchestrator statement) |
+| Test inventory across the hardening (0.1.15 → 0.1.24) | debug **419 → 464**, release **399 → 433**, consistently **0 failures** (total 818 → 897) | `app/build/test-results/` (sum of the result XMLs, status 0.1.24); for F27/lead-in see section F |
+| Review **F28–F31** | originally **P0=0/P1=1/P2=3** → after F31b **P0=0 · P1=0 · P2=1** (open: popup clip/`isFooterRow` edge case); verdict **pushable: YES** | `docs/REVIEW_F28_F31.md` (incl. "addendum F31b") |
+| Emulator engine (a framework condition for all dictation tests on 5560) | **not measured/fixable**: SIGSEGV in `libonnxruntime.so` blocks real decode runs; fake-engine tests run independently of it | `docs/PROJECT_STATE.md` "environment", `docs/EMULATOR_DIKTAT_HARNESS.md` §1 |

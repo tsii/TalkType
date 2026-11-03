@@ -1,114 +1,120 @@
-# A15 — Warum „Audio-Start fehlgeschlagen" **erst beim Loslassen** erscheint
+# A15 — Why "Audio start failed" appears **only on release**
 
-**Stand:** 2026-10-28 · **Rolle:** Analyse (rein lesend, keine Code-Änderung)
-**Symptom:** Statuszeile „Bereit" → Nutzer hält Mic, spricht, **lässt los** → erst jetzt
-„Audio-Start fehlgeschlagen – erneut versuchen". Start war also erfolgreich.
+**Status:** 2026-10-28 · **Role:** analysis (purely read-only, no code change)
+**Symptom:** status row "Ready" → user holds the mic, speaks, **releases** → only
+now "Audio start failed – try again". The start was therefore successful.
 
-**Kernbefund in einem Satz:** Der Text `dictation_error_audio_start` ist der
-**Fallback-Zweig** von `mapVisibleError` (`VoiceKeyboardService.kt:543`); **jeder**
-Fehlercode, der nach dem Start entsteht — insbesondere der des **finalen Decodes**
-(`DictationController.kt:164/166` → `lastErrorCode = "asr_final_error"`, Konstante
-`:268`) — fällt dort hinein und wird als *Start*fehler ausgegeben.
+**Core finding in one sentence:** the text `dictation_error_audio_start` is the
+**fallback branch** of `mapVisibleError` (`VoiceKeyboardService.kt:543`);
+**every** error code that arises after the start — in particular that of the
+**final decode** (`DictationController.kt:164/166` → `lastErrorCode =
+"asr_final_error"`, constant `:268`) — falls into it and is displayed as a
+*start* error.
 
-## 1. Alle Rohcodes, die `dictation_error_audio_start` auslösen
+## 1. All raw codes that trigger `dictation_error_audio_start`
 
-| Code | Entstehung | Phase | Wahrscheinlichkeit für „erst beim Loslassen" |
+| Code | Origin | Phase | Probability for "only on release" |
 |---|---|---|---|
-| *(Start-Rückgabe `false`)* | `VoiceKeyboardService.kt:317-322` (Start-Pfad) | **Start** | **0** — wäre sofort sichtbar (Nutzer sah „bereit") |
-| `asr_final_error` | `DictationController.kt:164` (ISync) / `:166` (Exception) → `fail()` `:212-216` | **Stop/Final** | **hoch — passt exakt** |
-| `asr_partial_error` | `DictationController.kt:117/119` (während RECORDING) | Lauf | niedrig (Meldung käme mitten im Diktat) |
-| `invalidOperation:…` | `AudioRecordSource.kt:127-128` (`read()` liefert `ERROR_INVALID_OPERATION` nach `stop()`) | **Stop** | **hoch — genau im Loslass-Moment** |
-| `systemStop:…` | `AudioRecordSource.kt:138` (Exception im Read-Thread) | Lauf/Stop | mittel |
-| `maxDuration:durationMs=300000` | `AudioRecordSource.kt:107` (Auto-Stop nach 300 s) | Lauf | niedrig (braucht 5 min) |
-| `model:…` | `DictationCoordinator.kt:165` (Engine-Load **im Start**) | Start | 0 |
-| `audioInit:…` | `DictationCoordinator.kt:174` (Source-Factory/Start) | Start | 0 |
+| *(start return `false`)* | `VoiceKeyboardService.kt:317-322` (start path) | **Start** | **0** — would be visible immediately (user saw "ready") |
+| `asr_final_error` | `DictationController.kt:164` (ISync) / `:166` (exception) → `fail()` `:212-216` | **Stop/final** | **high — fits exactly** |
+| `asr_partial_error` | `DictationController.kt:117/119` (during RECORDING) | Run | low (message would come mid-dictation) |
+| `invalidOperation:…` | `AudioRecordSource.kt:127-128` (`read()` returns `ERROR_INVALID_OPERATION` after `stop()`) | **Stop** | **high — exactly at the moment of release** |
+| `systemStop:…` | `AudioRecordSource.kt:138` (exception in the read thread) | Run/stop | medium |
+| `maxDuration:durationMs=300000` | `AudioRecordSource.kt:107` (auto-stop after 300 s) | Run | low (needs 5 min) |
+| `model:…` | `DictationCoordinator.kt:165` (engine load **at start**) | Start | 0 |
+| `audioInit:…` | `DictationCoordinator.kt:174` (source factory/start) | Start | 0 |
 | `startFailed` | `DictationCoordinator.kt:185` (`src.start()` false) | Start | 0 |
-| `aborted` | `DictationController.kt:178` (`abort()`, u. a. Editor-Drift) | Stop | mittel |
-| `oom:…` | `DictationCoordinator.kt:270/314` | Lauf/Stop | niedrig (eigener Text) |
+| `aborted` | `DictationController.kt:178` (`abort()`, among others editor drift) | Stop | medium |
+| `oom:…` | `DictationCoordinator.kt:270/314` | Run/stop | low (own text) |
 
-**Mapping-Lücke (die eigentliche Ursache):** `mapVisibleError` (`:521-543`) kennt nur
+**Mapping gap (the actual cause):** `mapVisibleError` (`:521-543`) knows only
 `audioInit:SecurityException`, `permission`, `model:`, `btLost`/`route:bluetooth`,
-`noMic`/`audioInit:noInputDevice`, `alloc|bad_alloc|oom`, `unknown|internal` — **kein**
-`asr_final_error`, **kein** `asr_partial_error`, **kein** `invalidOperation`, **kein**
-`systemStop`, **kein** `maxDuration`, **kein** `aborted`. Alles davon landet in
+`noMic`/`audioInit:noInputDevice`, `alloc|bad_alloc|oom`, `unknown|internal` —
+**no** `asr_final_error`, **no** `asr_partial_error`, **no** `invalidOperation`,
+**no** `systemStop`, **no** `maxDuration`, **no** `aborted`. All of those land in
 `else -> dictation_error_audio_start` (`:543`).
 
-## 2. Stop-Pfad Strang für Strang (was nach dem Loslassen noch werfen kann)
+## 2. The stop path, strand by strand (what can still throw after release)
 
-1. **`VoiceKeyboardService.onMicUp`** (`:334-336`) → `stopDictationIfRunning()` → `updateStatus()`.
+1. **`VoiceKeyboardService.onMicUp`** (`:334-336`) → `stopDictationIfRunning()` →
+   `updateStatus()`.
 2. **`DictationCoordinator.stop()`** (`:299-330`): `active=false`, **`src.stopAndDrain()`**
-   (`:305`) — hier wird `AudioRecord.stop()` gerufen, **während der Reader-Thread in
-   `read()` blockiert** ⇒ `read()` liefert `ERROR_INVALID_OPERATION` → `errorListener`
-   mit `invalidOperation` (`AudioRecordSource.kt:127-128`). Kein Wurf, sondern ein
-   **Fehlercode** → landet im `else`-Zweig.
-3. **Final-Decode in `scope.launch`** (`:313-330`): `controller.stop()` → `engine.transcribe(window(),…)`.
-   Mögliche Würfe: **ORT-Exception** (jede `Exception`) → `fail(ASR_FINAL_ERROR)`;
-   **`IllegalStateException`** aus dem Editor-Sink (`InputConnectionSink`) → wenn
-   `isEditorSyncTimeout` (`DictationController.kt:209-210`) → `abort()` + **rethrow**
-   (`:158-162`); **`OutOfMemoryError`** → eigener Text.
-   ⚠️ Der `try` in `:316-320` fängt **nur** `OutOfMemoryError` — ein rethrown
-   `IllegalStateException` **entkommt** in die Coroutine. `lastErrorCode` steht dann auf
-   `"aborted"` (`:178`) → `else` → **audio_start**.
-4. **`src.release()`** (`:322`) → `AudioRecord.stop()/release()`, `IllegalStateException`
-   wird geschluckt (`AudioRecordSource.kt:179/192`) → **kein** Code. Gut.
-5. **`maxDurationMs`** (`AudioRecordSource.kt:27/38`): nach 300 s meldet die Quelle
-   `maxDuration` und beendet den Reader → `stopAndDrain` liefert Reste; der Code
-   bleibt an `lastError` hängen (`DictationCoordinator.kt:137`) → `else` → audio_start.
-6. **`InterruptedException`** (`AudioRecordSource.kt:135`, `:157`, `:172`) wird
-   geschluckt — kein Nutzertext. Gut.
-7. **Commit/`DeltaTyper`**: `InputConnectionSink` wirft nur `IllegalStateException`
-   (Timeout) bzw. `EditorUnavailableException` — beide laufen in den Final-Pfad (3.).
+   (`:305`) — `AudioRecord.stop()` is called here **while the reader thread is
+   blocked in `read()`** ⇒ `read()` returns `ERROR_INVALID_OPERATION` →
+   `errorListener` with `invalidOperation` (`AudioRecordSource.kt:127-128`). No
+   throw, but an **error code** → lands in the `else` branch.
+3. **Final decode in `scope.launch`** (`:313-330`): `controller.stop()` →
+   `engine.transcribe(window(),…)`. Possible throws: **ORT exception** (any
+   `Exception`) → `fail(ASR_FINAL_ERROR)`; **`IllegalStateException`** from the
+   editor sink (`InputConnectionSink`) → if `isEditorSyncTimeout`
+   (`DictationController.kt:209-210`) → `abort()` + **rethrow** (`:158-162`);
+   **`OutOfMemoryError`** → own text.
+   ⚠️ The `try` in `:316-320` catches **only** `OutOfMemoryError` — a rethrown
+   `IllegalStateException` **escapes** into the coroutine. `lastErrorCode` then
+   stands at `"aborted"` (`:178`) → `else` → **audio_start**.
+4. **`src.release()`** (`:322`) → `AudioRecord.stop()/release()`,
+   `IllegalStateException` is swallowed (`AudioRecordSource.kt:179/192`) → **no**
+   code. Good.
+5. **`maxDurationMs`** (`AudioRecordSource.kt:27/38`): after 300 s the source
+   reports `maxDuration` and ends the reader → `stopAndDrain` delivers the
+   remainder; the code sticks to `lastError` (`DictationCoordinator.kt:137`) →
+   `else` → audio_start.
+6. **`InterruptedException`** (`AudioRecordSource.kt:135`, `:157`, `:172`) is
+   swallowed — no user text. Good.
+7. **Commit/`DeltaTyper`:** `InputConnectionSink` throws only
+   `IllegalStateException` (timeout) or `EditorUnavailableException` — both run
+   into the final path (3.).
 
-## 3. Rangfolge der Erklärungen (begründet, nicht geraten)
+## 3. Ranking of explanations (reasoned, not guessed)
 
-1. **Final-Decode scheitert → `asr_final_error` → Fallback-Text.** Beleg:
-   `DictationController.kt:164/166` setzt den Code, `:268` definiert ihn,
-   `visibleError` (`DictationCoordinator.kt:116`) reicht ihn hoch, `:543` macht daraus
-   „Audio-Start fehlgeschlagen". **Passt exakt**: Meldung erst nach dem Loslassen,
-   Vorlauf lief.
-2. **Read-Race beim Stop → `invalidOperation`/`systemStop` → Fallback-Text.** Beleg:
-   `stopAndDrain()` beendet die Aufnahme, während `read()` läuft
-   (`AudioRecordSource.kt:127-128`; `DictationCoordinator.kt:305`). Ebenfalls exakt
-   im Loslass-Moment — und *zusätzlich* zum Final-Decode möglich.
-3. **Editor-Drift im Finale → `abort()` + rethrow → `aborted` → Fallback-Text.**
-   Beleg: `:157-162` (rethrow) + `:316-320` (nur OOM gefangen) + `:178` (`aborted`).
-   Wahrscheinlich, wenn der Nutzer in eine App diktiert, die den Kontext ändert
-   (Autokorrektur/Composing).
+1. **Final decode fails → `asr_final_error` → fallback text.** Evidence:
+   `DictationController.kt:164/166` sets the code, `:268` defines it,
+   `visibleError` (`DictationCoordinator.kt:116`) passes it up, `:543` turns it
+   into "Audio start failed". **Fits exactly:** message only after release, the
+   run-up worked.
+2. **Read race at stop → `invalidOperation`/`systemStop` → fallback text.**
+   Evidence: `stopAndDrain()` ends the recording while `read()` is running
+   (`AudioRecordSource.kt:127-128`; `DictationCoordinator.kt:305`). Also exactly
+   at the moment of release — and possible *in addition* to the final decode.
+3. **Editor drift in the finale → `abort()` + rethrow → `aborted` → fallback
+   text.** Evidence: `:157-162` (rethrow) + `:316-320` (only OOM caught) + `:178`
+   (`aborted`). Probable if the user dictates into an app that changes the
+   context (autocorrect/composing).
 
-**Ausgeschlossen:** Startpfad (`:317-322`) — dann hätte die Meldung **sofort** kommen
-müssen; und `model:`/`audioInit:` ebenso (Startphase).
+**Ruled out:** the start path (`:317-322`) — the message would have had to come
+**immediately**; and `model:`/`audioInit:` likewise (start phase).
 
-## 4. Billigste Nachweisstelle (eine Zeile)
+## 4. Cheapest point of proof (one line)
 
-**Den Rohcode in den Debug-Snapshot aufnehmen** (A14-Feld `last_error`):
-`DebugInfo`/`diagnosticsLine` bekommt `last_error=<raw>` statt nur des gemappten Texts.
-Der Rohcode existiert bereits und wird heute **nur** geloggt
-(`VoiceKeyboardService.kt:517` `Log.w(TAG, "visibleError=$raw")`). Ein Feld, keine
-Logcat, keine Inhalte (Regel 9: Code, kein Klartext) → der Nutzerfall ist in 10 s
-entscheidbar: `asr_final_error` vs. `invalidOperation` vs. `aborted` vs. `maxDuration`.
+**Include the raw code in the debug snapshot** (A14 field `last_error`):
+`DebugInfo`/`diagnosticsLine` gets `last_error=<raw>` instead of only the mapped
+text. The raw code already exists and today is **only** logged
+(`VoiceKeyboardService.kt:517` `Log.w(TAG, "visibleError=$raw")`). One field, no
+logcat, no content (rule 9: code, no plaintext) → the user's case is decidable in
+10 s: `asr_final_error` vs. `invalidOperation` vs. `aborted` vs. `maxDuration`.
 
-## 5. Entscheidungsklausel für die Nutzertexte (E5-Fortschreibung)
+## 5. Decision clause for the user texts (E5 continuation)
 
-**Regel:** Der Text muss die **Phase** widerspiegeln; „Audio-Start" ist ausschließlich
-für die Startphase zulässig. Neue/erweiterte Strings (alle ≤ 45 Zeichen):
+**Rule:** the text must reflect the **phase**; "Audio start" is permissible
+exclusively for the start phase. New/extended strings (all ≤ 45 characters):
 
-| Rohcode | Nutzertext | Länge |
+| Raw code | User text | Length |
 |---|---|---|
 | `asr_final_error` | `Text nicht übernommen – erneut versuchen` | 40 |
 | `asr_partial_error` | `Erkennung fehlgeschlagen – weiter sprechen` | 42 |
 | `invalidOperation:*`, `systemStop:*` | `Aufnahme gestoppt – erneut versuchen` | 36 |
 | `maxDuration:*` | `Aufnahme-Limit 5 Minuten erreicht` | 33 |
-| `aborted` (Editor-Drift) | `Editor geändert – Diktat verworfen` | 34 |
-| alles Übrige (Startphase) | `Diktat-Start fehlgeschlagen` | 27 |
+| `aborted` (editor drift) | `Editor geändert – Diktat verworfen` | 34 |
+| everything else (start phase) | `Diktat-Start fehlgeschlagen` | 27 |
 
-Damit bleibt Regel 9 unberührt (nur Codes, keine Inhalte), die 45-Zeichen-Grenze ist
-eingehalten, und der Fehlklassifikations-Fall („Startfehler" nach dem Loslassen)
-verschwindet — der `else`-Zweig zeigt künftig `Diktat-Start fehlgeschlagen`
-**nur** im Startpfad, weil die Phase im Code steckt.
+This leaves rule 9 untouched (only codes, no content), the 45-character limit is
+respected, and the misclassification case ("start error" after release)
+disappears — the `else` branch will in future show `Diktat-Start fehlgeschlagen`
+**only** in the start path, because the phase lives in the code.
 
-## ANNAHME-Zeilen
+## ASSUMPTION lines
 
-- `ANNAHME: Der beobachtete Fall ist (1) oder (2); ohne den Rohcode im Snapshot ist`
-  `die Entscheidung nicht möglich — deshalb §4 als erster Schritt.`
-- `ANNAHME: Ein Editor-Drift (3) ist bei den Ziel-Apps des Nutzers möglich, aber`
-  `seltener als ein ORT-Fehler im Final-Decode.`
+- `ASSUMPTION: The observed case is (1) or (2); without the raw code in the snapshot`
+  `the decision is impossible — therefore §4 as the first step.`
+- `ASSUMPTION: Editor drift (3) is possible with the user's target apps, but`
+  `rarer than an ORT failure in the final decode.`

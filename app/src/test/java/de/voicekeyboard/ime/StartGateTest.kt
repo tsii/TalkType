@@ -4,100 +4,100 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 
 /**
- * F50/F50a (PLAN_V0130 §1 A2): reine Start-Gate-Entscheidungen der IME —
- * JVM-testbar ohne Robolectric (Muster `MicToggleTest` für die anderen
- * extrahierten Funktionen des Service).
+ * F50/F50a (PLAN_V0130 §1 A2): pure start gate decisions of the IME —
+ * JVM-testable without Robolectric (pattern `MicToggleTest` for the other
+ * extracted functions of the service).
  *
- *  - [micStartGate]: Start-Serialisierung (V4-Race). Invariante: zu jedem
- *    Zeitpunkt läuft höchstens EINE Start-Coroutine; eine abgelaufene wird
- *    abgebrochen oder ihr Ergebnis verworfen (kein Zombie-Diktat, kein
- *    Doppelstart, kein Überschreiben von `lastStartMs`).
- *  - [micUpDuringStart]: UP im STARTING-Fenster = nachgereichter Stop mit
- *    transientem Hint (F50a) — beseitigt das stille Flag (C2-Symptom 1),
- *    ohne das KEEP_RUNNING-Design (P0-Befund2(a)) zu ändern.
+ *  - [micStartGate]: start serialization (V4 race). Invariant: at any time
+ *    at most ONE start coroutine runs; an expired one is aborted or its
+ *    result discarded (no zombie dictation, no double start, no overwriting
+ *    of `lastStartMs`).
+ *  - [micUpDuringStart]: UP in the STARTING window = pending stop with a
+ *    transient hint (F50a) — removes the silent flag (C2 symptom 1),
+ *    without changing the KEEP_RUNNING design (P0 finding 2(a)).
  */
 class StartGateTest {
 
-    // ---- F50: zweiter DOWN vor Frist (Start läuft) → IGNORE ----
+    // ---- F50: second DOWN before the deadline (start running) → IGNORE ----
 
     @Test
-    fun `zweiter DOWN vor Frist - Start laeuft noch - wird ignoriert`() {
-        // F11 P1: Der Start lädt den ~652-MB-Encoder — ein zweiter Mic-Druck
-        // während startingUp darf KEINEN Zweittermin erzeugen.
+    fun `second DOWN before the deadline - start still running - is ignored`() {
+        // F11 P1: the start loads the ~652 MB encoder — a second mic press
+        // during startingUp must NOT create a second appointment.
         assertEquals(
             MicStartGateAction.IGNORE,
             micStartGate(startingUp = true, sessionRecording = false, oldStartJobActive = true),
         )
-        // Auch ohne aktiven Job-Handle gilt: startingUp dichtet die Geste ab.
+        // Even without an active job handle: startingUp seals off the gesture.
         assertEquals(
             MicStartGateAction.IGNORE,
             micStartGate(startingUp = true, sessionRecording = false, oldStartJobActive = false),
         )
     }
 
-    // ---- F50: Frist abgelaufen, alter Job läuft noch → SUPERSEDE ----
+    // ---- F50: deadline expired, old job still running → SUPERSEDE ----
 
     @Test
-    fun `Frist abgelaufen - alter Start-Job laeuft noch - Supersede-Pfad`() {
-        // Die 15-s-Frist hat startingUp freigegeben, die alte Start-Coroutine
-        // hängt aber noch (natives engine.load) → der zweite DOWN löst sie ab:
-        // cancel + abort("start_superseded") + stopFgs("superseded"), dann ein
-        // frischer Start mit NEUEM Coordinator (kein Zombie-Diktat, V4).
+    fun `deadline expired - old start job still running - supersede path`() {
+        // the 15-s deadline has released startingUp, but the old start
+        // coroutine still hangs (native engine.load) → the second DOWN
+        // supersedes it: cancel + abort("start_superseded") + stopFgs("superseded"),
+        // then a fresh start with a NEW coordinator (no zombie dictation, V4).
         assertEquals(
             MicStartGateAction.SUPERSEDE,
             micStartGate(startingUp = false, sessionRecording = false, oldStartJobActive = true),
         )
     }
 
-    // ---- F50: laufende Diktat-Session → IGNORE (kein Neustart über DOWN) ----
+    // ---- F50: running dictation session → IGNORE (no restart via DOWN) ----
 
     @Test
-    fun `laufende Session - DOWN ist kein Neustart - IGNORE`() {
+    fun `running session - DOWN is no restart - IGNORE`() {
         assertEquals(
             MicStartGateAction.IGNORE,
             micStartGate(startingUp = false, sessionRecording = true, oldStartJobActive = false),
         )
-        // Even mit hängendem Rest-Job: die laufende Aufnahme gewinnt.
+        // even with a hanging leftover job: the running recording wins.
         assertEquals(
             MicStartGateAction.IGNORE,
             micStartGate(startingUp = false, sessionRecording = true, oldStartJobActive = true),
         )
     }
 
-    // ---- F50: normaler Fall → FRESH_START ----
+    // ---- F50: normal case → FRESH_START ----
 
     @Test
-    fun `kein Start aktiv - frischer Start`() {
+    fun `no start active - fresh start`() {
         assertEquals(
             MicStartGateAction.FRESH_START,
             micStartGate(startingUp = false, sessionRecording = false, oldStartJobActive = false),
         )
     }
 
-    // ---- B2 (PLAN §6.2 Option A): Hold startet mit 900-s-Grenze ----
+    // ---- B2 (PLAN §6.2 option A): hold starts with the 900-s limit ----
 
     @Test
-    fun `B2 Hold und Toggle starten mit 900-s-Obergrenze`() {
-        // Die reine Entscheidung [sessionMaxDurationMs] steuert die Quelle
-        // (AudioRecordSource-Parameter, Quellen-Code unangetastet): 15 min
-        // statt der 300-s-Quellen-Default — für Halte- UND Toggle-Sessions
-        // (Toggle praktisch irrelevant: F43 stoppt an der ersten Pause).
+    fun `B2 hold and toggle start with the 900-s upper limit`() {
+        // The pure decision [sessionMaxDurationMs] controls the source
+        // (AudioRecordSource parameter, source code untouched): 15 min
+        // instead of the 300-s source default — for hold AND toggle sessions
+        // (toggle practically irrelevant: F43 stops at the first pause).
         assertEquals("Hold: 900 s", 900_000L, sessionMaxDurationMs(holdGesture = true))
-        assertEquals("Toggle: derselbe Wert", 900_000L, sessionMaxDurationMs(holdGesture = false))
+        assertEquals("toggle: the same value", 900_000L, sessionMaxDurationMs(holdGesture = false))
     }
 
-    // ---- F50a: UP während STARTING → pending-stop + Hint ----
+    // ---- F50a: UP during STARTING → pending stop + hint ----
 
     @Test
-    fun `UP waehrend STARTING - pending-stop-Flag mit Hint, sonst regulärer Stopp`() {
-        // UP im (Kalt-)Start-Fenster: Stop wird nachgereicht (cancelStartRequested)
-        // PLUS transienter Hint „Loslassen vorgemerkt — Aufnahme endet gleich"
-        // — das bisher stille Flag war der Verwirrungspunkt (C2-Symptom 1).
+    fun `UP during STARTING - pending-stop flag with hint, otherwise a regular stop`() {
+        // UP in the (cold) start window: the stop is applied later (cancelStartRequested)
+        // PLUS a transient hint „Loslassen vorgemerkt — Aufnahme endet gleich”
+        // — the previously silent flag was the point of confusion (C2 symptom 1).
         assertEquals(
             MicUpDuringStartAction.PENDING_STOP_HINT,
             micUpDuringStart(startingUp = true),
         )
-        // Kein Start im Gange → das Loslassen ist der reguläre Stopp.
+        // no start in progress → the release is the regular stop.
         assertEquals(
             MicUpDuringStartAction.REGULAR_STOP,
             micUpDuringStart(startingUp = false),

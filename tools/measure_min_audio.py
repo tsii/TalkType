@@ -1,27 +1,28 @@
 #!/usr/bin/env python3
-"""Messreihe fuer `min_audio_s` mit dem KORRIGIERTEN Referenzdecoder.
+"""Measurement series for `min_audio_s` with the CORRECTED reference decoder.
 
-Aufruf:  .venv-asr/bin/python tools/measure_min_audio.py [--json OUT] [--markdown]
+Usage:  .venv-asr/bin/python tools/measure_min_audio.py [--json OUT] [--markdown]
 
-Vergleicht jedes Fixture aus `testdata/cut/` (erzeugt von `tools/make_cut_windows.py`)
-gegen den Gesamtkontext-Text der jeweiligen Quelldatei und gibt eine
-Markdown-Tabelle aus, die direkt in `docs/ASR_CONTRACT.md` §4.4 verwendet wird.
+Compares each fixture from `testdata/cut/` (created by `tools/make_cut_windows.py`)
+against the full-context text of the respective source file and prints a
+Markdown table that is used directly in `docs/ASR_CONTRACT.md` §4.4.
 
-Kennzahlen je Fenster
----------------------
-`tok`        Anzahl emittierter Tokens (ohne Sondertokens, ohne <blk>)
-`tok/s`      Emissionsrate — relevant fuer das Token-Budget (§6)
-`Praefix`    Anzahl fuehrender Token-IDs, die exakt mit dem Gesamtkontext
-             uebereinstimmen (Kopf-Fenster: "sauberer Anfang" vs. Muell)
-`Aehnl.`     Zeichenaehnlichkeit = 1 - Levenshtein(text, gesamt) / max(len)
-             1,00 = identisch; bei Kopf-Fenstern ist der Erwartungswert < 1,
-             weil nur ein Teil des Satzes im Fenster liegt
-`im Text`    Anteil der Fensterzeichen, die als zusammenhaengender Block auch im
-             Gesamttext vorkommen (difflib-Blöcke). Fuer Fenster, die mitten im
-             Material beginnen, ist das das aussagekraeftige Mass: 1,00 = das
-             Fenster liefert nur Woerter aus dem Gesamttext, kein Muell.
-             Leerer Text wird als `— (leer)` ausgewiesen (Totalausfall, nicht 1,00).
-`exakt`      Token-IDs des Fensters sind ein exaktes Praefix der Gesamt-IDs
+Metrics per window
+------------------
+`tok`        number of emitted tokens (without special tokens, without <blk>)
+`tok/s`      emission rate — relevant for the token budget (§6)
+`prefix`     number of leading token IDs that exactly match the full context
+             (head windows: "clean start" vs. garbage)
+`sim.`       character similarity = 1 - Levenshtein(text, full) / max(len)
+             1.00 = identical; for head windows the expected value is < 1,
+             because only part of the sentence lies in the window
+`in text`    fraction of window characters that also occur as a contiguous
+             block in the full text (difflib blocks). For windows that start
+             in the middle of the material this is the meaningful metric:
+             1.00 = the window delivers only words from the full text, no
+             garbage. Empty text is reported as `— (empty)` (total failure,
+             not 1.00).
+`exact`      the window's token IDs are an exact prefix of the full IDs
 """
 from __future__ import annotations
 
@@ -35,7 +36,7 @@ TOOLS = Path(__file__).resolve().parent
 ROOT = TOOLS.parent
 sys.path.insert(0, str(TOOLS))
 
-import reference_decode as rd  # Pfad-abhaengiger Import (nach sys.path.insert)
+import reference_decode as rd  # path-dependent import (after sys.path.insert)
 
 CUT = ROOT / "testdata" / "cut"
 FULL = {"de_smoke": ROOT / "testdata" / "de_smoke.wav",
@@ -83,7 +84,7 @@ def main(argv: list[str]) -> int:
     p.add_argument("--models", default=str(ROOT / ".models"))
     p.add_argument("--threads", type=int, default=4)
     p.add_argument("--json", default=str(CUT / "min_audio_measurements.json"))
-    p.add_argument("--markdown", action="store_true", help="nur Markdown-Tabellen")
+    p.add_argument("--markdown", action="store_true", help="Markdown tables only")
     args = p.parse_args(argv)
 
     engine = rd.TdtReference(Path(args.models), args.threads)
@@ -120,59 +121,59 @@ def main(argv: list[str]) -> int:
             row["empty"] = not res["text"].strip()
             row["hallucination"] = None
         else:
-            # Stille/Rauschen: jeder Text ist per Definition erfunden.
+            # silence/noise: any text is invented by definition.
             row["hallucination"] = bool(res["text"].strip())
             row["similarity"] = None
             row["in_text"] = None
         rows.append(row)
 
-    out = {"models": str(args.models), "decoder": "tools/reference_decode.py (korrigiert, Rev 2)",
+    out = {"models": str(args.models), "decoder": "tools/reference_decode.py (corrected, rev 2)",
            "full_context": {k: {"seconds": round(v["seconds"], 3), "text": v["text"],
                                 "tokens": len(v["tokens"])} for k, v in full.items()},
            "rows": rows}
     Path(args.json).write_text(json.dumps(out, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
     if args.markdown:
-        print("#### Gesamtkontext (Referenz)")
+        print("#### Full context (reference)")
         print()
-        print("| Datei | Dauer | Tokens | Text |")
+        print("| File | Duration | Tokens | Text |")
         print("|---|---|---|---|")
         for k, v in full.items():
             print(f"| `{k}.wav` | {v['seconds']:.2f} s | {len(v['tokens'])} | `{v['text']}` |")
         print()
-        print("#### Kopffenster (Schnitt ab 0 s)")
+        print("#### Head windows (cut from 0 s)")
         print()
-        print("| Fenster | Dauer | Tokens | tok/s | Präfix-Tokens | exakt | Ähnl. | im Text | Text |")
+        print("| Window | Duration | Tokens | tok/s | Prefix tokens | exact | sim. | in text | Text |")
         print("|---|---|---|---|---|---|---|---|---|")
         for r in rows:
             if r["kind"] != "head":
                 continue
             print(f"| `{r['file']}` | {r['seconds']:.1f} s | {r['tokens']} | {r['tokens_per_s']} | "
                   f"{r['prefix_tokens']}/{len(full[r['source']]['tokens'])} | "
-                  f"{'ja' if r['exact_prefix'] else 'nein'} | {r['similarity']:.2f} | "
-                  f"{'— (leer)' if r['empty'] else format(r['in_text'], '.2f')} | `{r['text']}` |")
+                  f"{'yes' if r['exact_prefix'] else 'no'} | {r['similarity']:.2f} | "
+                  f"{'— (empty)' if r['empty'] else format(r['in_text'], '.2f')} | `{r['text']}` |")
         print()
-        print("#### Fenster mitten im Material")
+        print("#### Windows starting in the middle of the material")
         print()
-        print("| Fenster | Dauer | Tokens | tok/s | Präfix | exakt | Ähnl. | im Text | Text |")
+        print("| Window | Duration | Tokens | tok/s | Prefix | exact | sim. | in text | Text |")
         print("|---|---|---|---|---|---|---|---|---|")
         for r in rows:
             if r["kind"] != "mid":
                 continue
             print(f"| `{r['file']}` | {r['seconds']:.1f} s | {r['tokens']} | {r['tokens_per_s']} | "
-                  f"{r['prefix_tokens']} | {'ja' if r['exact_prefix'] else 'nein'} | "
-                  f"{r['similarity']:.2f} | {'— (leer)' if r['empty'] else format(r['in_text'], '.2f')} | "
+                  f"{r['prefix_tokens']} | {'yes' if r['exact_prefix'] else 'no'} | "
+                  f"{r['similarity']:.2f} | {'— (empty)' if r['empty'] else format(r['in_text'], '.2f')} | "
                   f"`{r['text']}` |")
         print()
-        print("#### Stille / Rauschen (Halluzinationstest)")
+        print("#### Silence / noise (hallucination test)")
         print()
-        print("| Probe | Dauer | frames | Tokens | Halluzination | Text |")
+        print("| Sample | Duration | frames | Tokens | Hallucination | Text |")
         print("|---|---|---|---|---|---|")
         for r in rows:
             if r["kind"] not in ("silence", "noise"):
                 continue
             print(f"| `{r['file']}` | {r['seconds']:.1f} s | {r['frames']} | {r['tokens']} | "
-                  f"{'JA' if r['hallucination'] else 'nein'} | `{r['text']}` |")
+                  f"{'YES' if r['hallucination'] else 'no'} | `{r['text']}` |")
     else:
         for r in rows:
             extra = ""

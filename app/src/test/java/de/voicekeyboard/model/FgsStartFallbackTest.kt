@@ -6,9 +6,9 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * E7-Fallback-Kaskade als reine JVM-Tests (kein Robolectric, keine
- * Android-Simulation): Modus-Sequenz TYPED → UNTYPED → ABORT und das
- * „beide Versuche fehlgeschlagen → abbrechen"-Verhalten.
+ * E7 fallback cascade as pure JVM tests (no Robolectric, no Android
+ * simulation): mode sequence TYPED → UNTYPED → ABORT and the
+ * "both attempts failed → abort" behavior.
  */
 class FgsStartFallbackTest {
 
@@ -55,7 +55,7 @@ class FgsStartFallbackTest {
     }
 
     @Test fun abortIsTerminal() {
-        // Nach ABORT gibt es keinen weiteren Versuch — isAbort bleibt true
+        // after ABORT there is no further attempt — isAbort stays true
         val abort = ForegroundStartPolicy.nextAfter(ForegroundStartPolicy.Mode.UNTYPED)
         assertTrue(ForegroundStartPolicy.isAbort(abort))
         assertFalse(ForegroundStartPolicy.isAbort(ForegroundStartPolicy.Mode.TYPED))

@@ -1,10 +1,10 @@
 package de.voicekeyboard.model
 
 /**
- * V0/V1 (MODEL_VARIANT_SWITCH_MEMO Stufe 1): Modell-Varianten.
- * A = ONNX_CPU (heutige Pipeline, unangetastet), B = LITERT_CPU
+ * V0/V1 (MODEL_VARIANT_SWITCH_MEMO stage 1): model variants.
+ * A = ONNX_CPU (today's pipeline, untouched), B = LITERT_CPU
  * (Arm/parakeet-tdt-0-6b-v3-int8-litert, cached streaming).
- * Variante C (litert-community, NPU) wird NICHT ausgeliefert.
+ * Variant C (litert-community, NPU) is NOT shipped.
  */
 enum class ModelVariant(val id: String, val label: String) {
     ONNX_CPU("onnx-cpu", "ONNX (CPU)"),
@@ -13,13 +13,13 @@ enum class ModelVariant(val id: String, val label: String) {
     companion object {
         const val PREFS_KEY = "model_variant"
 
-        /** Persistenz-Schlüssel-Name in der vk_layout-Prefs (wie current_language). */
+        /** Persistence key name in the vk_layout prefs (like current_language). */
         const val PREFS_FILE = "vk_layout"
 
-        /** Default = heutige Variante A — Verhalten unverändert. */
+        /** Default = today's variant A — behavior unchanged. */
         val DEFAULT = ONNX_CPU
 
-        /** Unbekannter/null-Wert ⇒ Fallback A (nie unbenannte Variante aktiv). */
+        /** Unknown/null value ⇒ fallback A (never an unnamed variant active). */
         fun fromId(raw: String?): ModelVariant =
             entries.firstOrNull { it.id == raw } ?: DEFAULT
     }

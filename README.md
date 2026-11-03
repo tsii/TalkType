@@ -34,6 +34,7 @@ included.
 
 ## Status
 
-Early stage (0.1.x), development verified on a real device. Dictation works
-in German; other languages need their own recognition models. See `docs/` for
+Early stage (0.1.x), development verified on a real device. Dictation is tested and works
+in **German and English** (golden tests + corpus harness); other languages need their own
+recognition models. See `docs/` for
 concept, layout requirements and the ASR contract.

@@ -89,10 +89,12 @@ src: VOICE_RECOGNITION
 peak_dbfs: -34.0
 ```
 
-**Ist-Format = 17 Zeilen** (1 Kopfzeile + **16** Felder). Die Reihenfolge ist fest und
+**Ist-Format = 43 Zeilen** (1 Kopfzeile + **42** Felder; Stand F42 — davor 30 = 1+29
+(F21-Ära), 29 = 1+28 (F28b), 31 = 1+30 (F31 `loud_s`), 35 = 1+34 (F26a/b + F28
+`mic_rel`/`status_shown`), jetzt **43 = 1+42** (F42: +6 Felder). Die Reihenfolge ist fest und
 wird von `format()` per `check(lines.size == KEYS.size + 1)` erzwungen.
-Regeln: ASCII, `key: value`, feste Reihenfolge (deterministisch), **17 Zeilen**
-(1 Kopf + 16 Felder; die frühere Obergrenze „≤ 20" ist damit eingehalten), unbekannte
+Regeln: ASCII, `key: value`, feste Reihenfolge (deterministisch), **43 Zeilen**
+(1 Kopf + 29 Felder; die frühere Obergrenze „≤ 20" ist mit F13b2/F17b entfallen), unbekannte
 Werte `-`, **keine** Zeilenumbrüche in Werten (Sanitizing), Kopfzeile mit
 `keine inhalte` als sichtbare Zusage. Sanitizing ersetzt `:` in Werten durch `=`
 (deshalb `last_error: audioInit=SecurityException`).
@@ -154,17 +156,59 @@ nicht der Wunschkatalog aus §1.
 (≈ 10 dB) bis ≈ 30 in der Leistung** — zu viel für „leise gesprochen", plausibel für
 eine gedämpfte Aufnahmekette (`src`/`route`).
 
-## 7. Abgleich `KEYS` ↔ Doku (Ist-Stand, 16 Felder / 17 Zeilen)
+## 6a. Decode-Pfad: C2-Arbeitslast + F21-Takt (5 Felder; nachtrag D20/D22)
+
+**Zweck:** diese drei Felder belegen die **C2-Vermutung** — beim Teil-Dekodieren wird
+pro Ticker das **gesamte bisherige Audio** neu dekodiert
+(`dictation/DictationController.kt` `window()` = `PcmWindow(pcm.copyOf(totalSamples), …)`),
+die Arbeit je Ticker wächst daher mit der Aufnahmedauer. Signatur im Export:
+`buffer_s` steigt zusammen mit `decode_ms_max`/`decode_ms_p95`. **REGEL 9:** nur Zahlen
+und Schlüsselnamen — keine Audio-/Textinhalte, keine Nutzerpfade/URLs.
+
+| Feld | Bedeutung | Einheit | Sonderwerte |
+|---|---|---|---|
+| `decode_ms_max` | größte Decode-Laufzeit eines `transcribe`-Aufrufs bisher (`decodeMsMax()`) | ms (ganzzahlig) | `0` = nie dekodiert |
+| `decode_ms_p95` | p95 der letzten ≤ 64 Decode-Läufe — Ring-Stichprobe, **nicht** die ganze Sitzung (`decodeMsP95()`: sortierte Stichprobe, Index `ceil(0.95·n)−1`) | ms (ganzzahlig) | `0` = nie dekodiert; ein Lauf ⇒ max == p95 |
+| `buffer_s` | Pufferlänge beim **letzten** Dekodierlauf — nicht die aktuelle Aufnahmedauer (`bufferSeconds()`); korreliert direkt mit `decode_ms_*` | Sekunden, 1 Nachkommastelle | `0,0` = nie dekodiert |
+| `decode_pace_ms` | aktuell geltendes Minimal-Intervall zwischen zwei Partial-Dekoden (`decodePaceMs()`; Regel in `dictation/DecodePace.kt`: Doppelte der letzten Decode-Zeit, geklemmt an `AsrThreadConfig.decodePaceBaseMs`/`MaxMs` = 2000/6000 ms) | ms (ganzzahlig) | `0` = Takt aus (Pacing deaktiviert) |
+| `decode_skips` | Anzahl Partial-Läufe, die wegen dieses Takts übersprungen wurden — **kein Fehler, kein `fail()`** (`decodeSkips()`; Reset bei jedem Start) | Anzahl (ganzzahlig) | `0` = nie übersprungen oder Takt aus; wächst nur während Aufnahme |
+
+**Zweck F21:** diese beiden Felder zusammen zeigen, ob die C2-Milderung wirkt — viele
+`decode_skips` bei großem `decode_pace_ms` (nahe der Obergrenze 6000) bedeutet: die Engine
+kann mit dem wachsenden Puffer nicht mithalten und wird durch den Takt gebremst.
+
+## 7. Abgleich `KEYS` ↔ Doku (Ist-Stand, 42 Felder / 43 Zeilen)
 
 `DebugInfoFormatter.KEYS` (Reihenfolge = Ausgabereihenfolge):
 
 ```
 app_version, build, api_level, model_status, model_variant, model_version,
 model_bytes, last_error, rtf, first_hyp_ms, threads, permissions,
-peak_pct, route, src, peak_dbfs          → 16 Felder
+peak_pct, route, src, peak_dbfs,
+ctl_state, ctl_failed, dropped, hyp_count, hyp_gap_ms, audio_s, start_ms,
+starting, decode_ms_max, decode_ms_p95, buffer_s,
+decode_pace_ms, decode_skips, cap_blocks, cap_stall_ms,
+abort_reason, hyp_last_buffer_s, mic_rel, status_shown, loud_s,
+had_output, output_chars, first_loud_ms,           → 42 Felder (F42-Zubehör unten)
+first3s_loud_blocks, first3s_peak_dbfs, fgs_stopped_by
 ```
 
-`format()` liefert `HEADER + 16` = **17 Zeilen** (per `check(lines.size == KEYS.size + 1)`
+### F42 — 6 neue Felder (Stand 0.1.28+, `DebugInfoFormatter.kt:159-160`,
+`DebugInfoCollector.kt:44` u. a.; alle nur Zahlen/Codes, Regel 9)
+| Feld | Bedeutung |
+|---|---|
+| `had_output` | 0/1 — mindestens ein Hypothesen-Commit dieser Sitzung (`DebugInfoFormatter.kt:118`) |
+| `output_chars` | Brutto-Zeichenzahl der Commits (nur die Zahl, `:122`) |
+| `first_loud_ms` | ms nach Sessionstart beim `everLoud`-Latch; `-1` = nie laut (`:126`) |
+| `first3s_loud_blocks` | laute Blöcke (RMS ≥ `SILENCE_RMS`) in den ersten 3 s — Startfenster (`:129`) |
+| `first3s_peak_dbfs` | Peak-Block-RMS der ersten 3 s in dBFS (`:132-134`) |
+| `fgs_stopped_by` | Ursachencode des letzten Mikro-FGS-Stops (F44, `:136`; Werte u. a. `autostop`/`micup`/`hidden`) |
+
+**Sanitizer:** Werte-Zeilen wandern `:`→`=` (`DebugInfoFormatter.kt:250`) — der erste
+`: ` nach dem Schlüssel bleibt, spätere Doppelpunkte in Werten (z. B. `mic_rel =
+up:1234`) werden zu `=`.
+
+`format()` liefert `HEADER + 42` = **43 Zeilen** (per `check(lines.size == KEYS.size + 1)`
 erzwungen; `DebugInfoFormatterTest` prüft ≤ 20).
 
 ### Abweichungen, die ich in der Implementierung gefunden habe

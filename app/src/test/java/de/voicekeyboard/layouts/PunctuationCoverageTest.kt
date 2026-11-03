@@ -205,6 +205,13 @@ class PunctuationCoverageTest {
         findKeyById(root, "symbolsShift", "question")?.apply {
             put("label", "¿"); put("value", "¿")
         } ?: throw AssertionError("Taste 'question' nicht gefunden")
+        // T4 (v0.1.35, PLAN_LONGPRESS_SYMBOLS §2): ” ist jetzt ZUSÄTZLICH Alternate an
+        // der dquote-Taste (symbols) — SZ gilt per Definition (Kopf) auch über
+        // Alternates; der Rückbau muss daher BEIDE Vorkommen entfernen, sonst
+        // bliebe ” erreichbar und die Gegenprobe wäre zur Tautologie geworden.
+        findKeyById(root, "symbols", "dquote")?.apply {
+            put("alternates", JSONArray(listOf("„", "“", "‘", "’", "‚")))
+        } ?: throw AssertionError("Taste 'dquote' nicht gefunden")
         var caught = false
         try {
             checkSzCoverage(root.toString(), "pl-pl")
@@ -225,6 +232,11 @@ class PunctuationCoverageTest {
         findKeyById(root, "symbolsShift", "9")?.apply {
             put("label", "µ"); put("value", "µ") // Fix rückbauen
         } ?: throw AssertionError("Taste '9' nicht gefunden")
+        // T4 (v0.1.35): – ist jetzt ZUSÄTZLICH Alternate an der hyphen-Taste (symbols)
+        // — SZ gilt auch über Alternates, der Rückbau entfernt daher BEIDE Vorkommen.
+        findKeyById(root, "symbols", "hyphen")?.apply {
+            put("alternates", JSONArray(listOf("—")))
+        } ?: throw AssertionError("Taste 'hyphen' nicht gefunden")
         var caught = false
         try {
             checkSzCoverage(root.toString(), "de-de")

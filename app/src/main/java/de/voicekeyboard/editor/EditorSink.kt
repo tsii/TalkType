@@ -35,4 +35,28 @@ interface EditorSink {
      * unbekannt. Dient der Besitzprüfung (erwartete Länge vs. Ist-Länge).
      */
     fun ownLength(): Int
+
+    /**
+     * AP7-E1c (vc33-Abnahme, P0-Blocker): der eigene, eingefügte Text —
+     * synchron zum Schreibvorgang aktuell (der Sink führt Edits auf dem
+     * Editor-Thread aus; ein `restartInput` der App feuert INNERHALB unserer
+     * commitText-Runde, bevor der Worker seine Tracker-Erwartung aktualisieren
+     * kann — diese Quelle ist dann dem Worker-Blick voraus).
+     * Default leer: Implementierungen ohne eigene Textführung degradiert auf
+     * die Tracker-Erwartung.
+     */
+    fun ownText(): String = ""
+
+    /**
+     * A5 (v0.1.34): Sitzungswechsel — die eigene Spanne der VORHERIGEN
+     * Diktation-Sitzung ist im neuen Sitzungskontakt nicht mehr bewiesen
+     * (Besitz vererbt sich NICHT über die Sitzungsgrenze; die Sink-Instanz
+     * selbst wird wiederverwendet). Implementierungen mit eigener Textführung
+     * verwerfen sie hier. Default-No-op: frameworkfreie Fakes/Tests bleiben
+     * unverändert.
+     * Aufrufer: `DictationController.start()` (dieselbe Stelle wie der
+     * Typer-/Tracker-Reset); NICHT bei apply-Fehlpfaden — ein fehlgeschlagener
+     * Edit gilt als nicht ausgeführt, die Spanne bleibt dann unverändert.
+     */
+    fun resetSession() {}
 }

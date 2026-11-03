@@ -17,7 +17,8 @@ package de.voicekeyboard.editor
  *   keine Satzterminator-/Umbruch-Überschreitung, keine ownStart-Überschreitung
  *   → in EINER atomaren Revision löschen + `target[common:]` tippen;
  *   **W3d** Grenze verletzt → KEIN Live-Rollback: committedLength bleibt,
- *   `divergent=true`, Text stehen lassen (Finaldecode korrigiert).
+ *   `divergent=true`, Text stehen lassen — A2a: EINMALIG sichtbar; der
+ *   nächste besitzgesicherte Aufruf revisions die eigene Spanne GESAMT.
  * - **W4** inkonsistenter Zustand (Divergenz vor ownStart) → wie W1.
  *
  * Commit ≠ Write (D3 behoben): `commitUpTo` ist NUR eine Markierung des
@@ -26,6 +27,35 @@ package de.voicekeyboard.editor
  * Grenzen: Löschumfang in **UTF-16-Einheiten** an den Sink, Grenzwert 60
  * **Codepoints**; Surrogatpaare werden nie getrennt.
  */
+
+/** A2a (PLAN_V0133 §1 A2a): geschlossene Ergebnisarten von [DeltaTyper.reviseOutcome]. */
+enum class ReviseKind {
+    /** Identischer Stand — kein Sink-Aufruf (auch: Einfrieren ohne Schreibschritt). */
+    SAME,
+
+    /** Besitz nicht bewiesen — NICHTS geschrieben, Fremdtext unangetastet. */
+    W1,
+
+    /** Rollback-Grenze verletzt — kein Live-Rollback, einmalig sichtbar. */
+    W3d,
+
+    /** Geschrieben — [ReviseOutcome.delta] ist genau EIN Sink-Schritt. */
+    DELTA,
+}
+
+/**
+ * A2a (PLAN_V0133 §1 A2a): Grundrückgabe des Typer-Produktionspfads — [kind]
+ * ist IMMER gesetzt (keine Null-Mehrdeutigkeit wie beim früheren `TextDelta?`);
+ * [delta] ist nur bei [ReviseKind.DELTA] gesetzt (genau ein Sink-Schritt).
+ * SAME/W1/W3d schreiben NICHTS.
+ */
+data class ReviseOutcome(val kind: ReviseKind, val delta: TextDelta?) {
+    companion object {
+        val SAME = ReviseOutcome(ReviseKind.SAME, null)
+        val W1 = ReviseOutcome(ReviseKind.W1, null)
+        val W3d = ReviseOutcome(ReviseKind.W3d, null)
+    }
+}
 class DeltaTyper(
     private val sink: EditorSink,
     private val maxRevisionChars: Int = MAX_REVISION_CHARS,
@@ -43,11 +73,20 @@ class DeltaTyper(
     var divergent: Boolean = false
         private set
 
+    /**
+     * A2a (PLAN_V0133 §1 A2a): Eine W3d-Sperre ist EINMALIG sichtbar (kein
+     * dauerhafter Stillstand): der NÄCHSTE besitzgesicherte Aufruf löst sie
+     * durch eine atomare Gesamtrevision der eigenen Spanne auf. true = der
+     * letzte Aufruf meldete W3d und wurde noch nicht aufgelöst.
+     */
+    private var w3dPending = false
+
     /** Neue Sitzung: Zustand zurücksetzen (Editor-Wechsel / Diktat-Neustart). */
     fun reset() {
         currentText = ""
         committedLength = 0
         divergent = false
+        w3dPending = false
     }
 
     /**
@@ -60,22 +99,40 @@ class DeltaTyper(
     }
 
     /**
-     * Revidiert auf die neue Hypothese [target] mit minimalem Delta (E8.1).
+     * A2a (PLAN_V0133 §1 A2a): Grundrückgabe des PRODUKTIONSPFADS — geschlossene
+     * Ergebnisse statt Null-Mehrdeutigkeit:
+     *  - [ReviseKind.SAME] identischer Stand — KEIN Sink-Aufruf (Idempotenz);
+     *  - [ReviseKind.W1]   Besitz nicht bewiesen — NICHTS geschrieben;
+     *  - [ReviseKind.W3d]  Rollback-Grenze verletzt — KEIN Live-Rollback,
+     *      EINMALIG sichtbar (kein dauerhafter Stillstand);
+     *  - [ReviseKind.DELTA] geschrieben — [ReviseOutcome.delta] ist genau EIN
+     *      Sink-Schritt (auch im Rollback-Fall W3c atomar).
      *
-     * Rückgabe: [TextDelta] der angewandten Änderung — auch im Rollback-Fall
-     * (W3c) genau EIN Delta (atomar: Löschen + Neuschreiben in einer Revision).
-     * `null` nur bei: identischem Stand (Idempotenz), W1 (Besitz nicht bewiesen,
-     * ohne Löschen/Anhängen) oder W3d (Rollback-Grenze verletzt, Text bleibt).
+     * W3d-Auflösung: der NÄCHSTE besitzgesicherte Aufruf revisions die eigene
+     * Spanne GESAMT und atomar (60-Codepoint-Grenze einmalig überschritten;
+     * Fremdtextgrenze bleibt — replaceLength ≤ eigene Länge) und meldet DELTA.
+     * `committedLength` schrumpft dabei auf den gemeinsamen Präfix (W3a-Analog).
      *
-     * Wirft, wenn der [EditorSink] wirft — Zustand bleibt dann unverändert.
+     * Wirft, wenn der [EditorSink] wirft — Zustand bleibt dann unverändert
+     * (die Sperre ist erneut versuchbar).
      */
-    fun revise(target: String): TextDelta? {
+    fun reviseOutcome(target: String): ReviseOutcome {
         divergent = false // pro Hypothese neu bewerten
         if (!ownershipVerified()) { // W1: Besitz nicht bewiesen
             divergent = true
-            return null
+            return ReviseOutcome.W1
         }
-
+        if (w3dPending) { // A2a: Sperre auflösen — atomare Gesamtrevision der eigenen Spanne
+            if (target == currentText) {
+                w3dPending = false
+                return ReviseOutcome.SAME
+            }
+            val common = commonPrefixLength(currentText, target)
+            val delta = apply(TextDelta(currentText.length, target), target)
+            w3dPending = false
+            committedLength = common
+            return ReviseOutcome(ReviseKind.DELTA, delta)
+        }
         val common = commonPrefixLength(currentText, target)
 
         if (common >= committedLength) {
@@ -86,9 +143,10 @@ class DeltaTyper(
         // W3: Divergenz im eigenen Bereich — unser früherer Fehler (Fall c).
         val toRemoveCodepoints = currentText.codePointCount(common, currentText.length)
         if (!rollbackAllowed(common, toRemoveCodepoints)) {
-            // W3d: keine Live-Korrektur — Text stehen lassen
+            // W3d: keine Live-Korrektur — Text stehen lassen, EINMALIG sichtbar
             divergent = true
-            return null
+            w3dPending = true
+            return ReviseOutcome.W3d
         }
         // W3a/W3c: committedLength schrumpft auf den gemeinsamen Präfix,
         // dann EINE atomare Revision (Löschen UTF-16-gerecht + Neuschreiben).
@@ -97,13 +155,74 @@ class DeltaTyper(
         val toAdd = target.substring(common)
         if (removeUtf16 == 0 && toAdd.isEmpty()) {
             currentText = target
-            return null
+            return ReviseOutcome.SAME
         }
-        return apply(TextDelta(removeUtf16, toAdd), target)
+        return ReviseOutcome(ReviseKind.DELTA, apply(TextDelta(removeUtf16, toAdd), target))
     }
 
+    /**
+     * A2a/A2b (PLAN_V0133 §A2b): besitzgesichertes FINALE — prüft Besitz zuerst
+     *  (W1 ohne Schreibversuch) und kann NICHT blockiert werden (§3.3: „finale
+     *  W3d-Sperre ausgeschlossen", keine alte Teilhypothese bleibt stehen):
+     *  - identischer Stand ⇒ SAME (kein Duplikat, kein Sink-Aufruf);
+     *  - normaler Fall ⇒ MINIMALES Delta (W2-Tail bzw. W3c-Rollback — die
+     *    Bestandserwartung „Finale ersetzt den Partial-Schwanz minimal" bleibt);
+     *  - Rollback-Grenzen verletzt (W3d-Fall) ODER Einfrier-Fall (> 60 im Tail)
+     *    ⇒ atomare GESAMTREVISION der eigenen Spanne in genau EINEM Sink-Schritt
+     *    (60-Grenze einmalig überschritten; Fremdtextgrenze bleibt — der
+     *    Besitzbeweis verhindert jeden Fremdtext-Zugriff).
+     * Löst eine bestehende W3d-Sperre auf; committedLength schrumpft im
+     * Gesamt-/Rollback-Fall auf den gemeinsamen Präfix (W3a-Analog). Wirft,
+     * wenn der [EditorSink] wirft — Zustand bleibt dann unverändert.
+     */
+    fun reviseFinal(target: String): ReviseOutcome {
+        divergent = false
+        if (!ownershipVerified()) { // Besitz zuerst — ohne Beweis kein Finale
+            divergent = true
+            return ReviseOutcome.W1
+        }
+        w3dPending = false
+        if (target == currentText) return ReviseOutcome.SAME
+        val common = commonPrefixLength(currentText, target)
+        if (common >= committedLength) {
+            // W2: minimales Delta im Tail (wie reviseOutcome) — AUSNAHME:
+            // Einfrier-Fall wird zur Gesamtrevision (Finale lässt nichts Altes stehen).
+            val oldTail = currentText.substring(committedLength)
+            val newTail = target.substring(committedLength)
+            val tailCommon = commonPrefixLength(oldTail, newTail)
+            val toRemove = oldTail.length - tailCommon
+            val toAdd = newTail.substring(tailCommon)
+            if (toRemove == 0 && toAdd.isEmpty()) {
+                currentText = target
+                return ReviseOutcome.SAME
+            }
+            if (toRemove <= maxRevisionChars) {
+                return ReviseOutcome(ReviseKind.DELTA, apply(TextDelta(toRemove, toAdd), target))
+            }
+        } else if (rollbackAllowed(common, currentText.codePointCount(common, currentText.length))) {
+            // W3c: zulässiger Rollback — minimale atomare Revision (Bestandsverhalten).
+            committedLength = common
+            val removeUtf16 = currentText.length - common
+            val toAdd = target.substring(common)
+            if (removeUtf16 == 0 && toAdd.isEmpty()) {
+                currentText = target
+                return ReviseOutcome.SAME
+            }
+            return ReviseOutcome(ReviseKind.DELTA, apply(TextDelta(removeUtf16, toAdd), target))
+        }
+        // W3d-/Einfrier-Fall: Finale darf NIE blockiert sein — atomare
+        // GESAMTREVISION der eigenen Spanne in genau EINEM Sink-Schritt.
+        val delta = apply(TextDelta(currentText.length, target), target)
+        committedLength = common
+        return ReviseOutcome(ReviseKind.DELTA, delta)
+    }
+
+    // A2a/A2b (PLAN_V0133): der Controller ruft ausschließlich
+    // reviseOutcome/reviseFinal — die frühere Null-Kompatibilitätsbrücke
+    // (`revise(): TextDelta?`) ist ENTFERNT (kein Kompatibilitäts-Null-Pfad).
+
     /** W2-Pfad: minimales Delta ab [common] (bestehende Logik). */
-    private fun reviseTail(target: String, common: Int): TextDelta? {
+    private fun reviseTail(target: String, common: Int): ReviseOutcome {
         val oldTail = currentText.substring(committedLength)
         val newTail = target.substring(committedLength)
         val tailCommon = commonPrefixLength(oldTail, newTail)
@@ -112,21 +231,21 @@ class DeltaTyper(
 
         if (toRemove == 0 && toAdd.isEmpty()) {
             currentText = target
-            return null // identischer Stand: kein Delta, kein Sink-Aufruf
+            return ReviseOutcome.SAME // identischer Stand: kein Delta, kein Sink-Aufruf
         }
 
         if (toRemove > maxRevisionChars) {
             // > maxRevisionChars zurücknehmen committen (einfrieren) und anhängen
             if (toAdd.isEmpty()) {
                 committedLength = currentText.length
-                return null
+                return ReviseOutcome.SAME // Einfrieren ohne Schreibschritt
             }
             val frozenLength = currentText.length
             val delta = apply(TextDelta(0, toAdd), currentText + toAdd)
             committedLength = frozenLength
-            return delta
+            return ReviseOutcome(ReviseKind.DELTA, delta)
         }
-        return apply(TextDelta(toRemove, toAdd), target)
+        return ReviseOutcome(ReviseKind.DELTA, apply(TextDelta(toRemove, toAdd), target))
     }
 
     /**

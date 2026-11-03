@@ -97,18 +97,36 @@ object LayoutParser {
     }
 
     private fun parseKey(path: String, obj: JSONObject): LayoutKey {
-        val allowed = setOf("id", "label", "width", "kind", "value", "caps", "alternates")
+        val allowed = setOf("id", "label", "width", "kind", "value", "caps", "alternates", "hint", "cellActions")
         rejectUnknown(obj, allowed, path)
-        for (f in listOf("id", "label", "kind", "value")) requireString(obj, f, path)
+        for (f in listOf("id", "kind")) requireString(obj, f, path)
+        val kindStr = obj.getString("kind")
+        // F27a1: MARGIN (Stock-Geometrie) — Randflaeche: nur Breite, kein Inhalt.
+        // Tolerant wie die anderen Felder: label/value fehlen oder sind leer;
+        // ein NICHT-leeres label/value wird abgelehnt (keine stille Taste).
+        if (kindStr == "margin") {
+            for (f in listOf("label", "value")) {
+                if (obj.has(f) && obj.getString(f).isNotBlank()) {
+                    throw LayoutException("$path: MARGIN-Taste darf kein $f tragen")
+                }
+            }
+            if (obj.has("alternates") && obj.getJSONArray("alternates").length() > 0) {
+                throw LayoutException("$path: MARGIN-Taste darf keine alternates tragen")
+            }
+            if (!obj.has("width")) throw LayoutException("$path.width fehlt")
+            val mWidth = obj.getDouble("width")
+            if (mWidth <= 0.0) throw LayoutException("$path.width muss > 0 sein (ist $mWidth)")
+            return LayoutKey(obj.getString("id"), "", mWidth, KeyKind.MARGIN, "", null, emptyList(), null, emptyList())
+        }
+        for (f in listOf("label", "value")) requireString(obj, f, path)
         if (!obj.has("width")) throw LayoutException("$path.width fehlt")
         val width = obj.getDouble("width")
         if (width <= 0.0) throw LayoutException("$path.width muss > 0 sein (ist $width)")
-        val kindStr = obj.getString("kind")
         val kind = when (kindStr) {
             "text" -> KeyKind.TEXT
             "action" -> KeyKind.ACTION
             "dead" -> KeyKind.DEAD
-            else -> throw LayoutException("$path.kind '$kindStr' ist unbekannt (text/action/dead)")
+            else -> throw LayoutException("$path.kind '$kindStr' ist unbekannt (text/action/dead/margin)")
         }
         val value = obj.getString("value")
         if (kind == KeyKind.ACTION && value !in KeyActions.ALL) {
@@ -119,7 +137,23 @@ object LayoutParser {
             val arr = obj.getJSONArray("alternates")
             (0 until arr.length()).map { arr.getString(it) }
         } else emptyList()
-        return LayoutKey(obj.getString("id"), obj.getString("label"), width, kind, value, caps, alternates)
+        // F23a1: optionales hint — darf NIE die Tastatur killen: fehlend/leer/
+        // Nicht-String/zu lang (> 2 Zeichen) wird zu null, keine Ausnahme.
+        val hint = if (obj.has("hint")) {
+            val h = obj.optString("hint", "")
+            if (h.isEmpty() || h.length > 2) null else h
+        } else null
+        // F24e1: cellActions — Aktionsnamen fuer Menuezellen, parallel zu alternates
+        // ("" = normales Textfeld). Tolerant wie hint: fehlend/Falschtyp -> leer,
+        // Laenge wird auf die Laenge der alternates gekuerzt; Aktionsnamen werden
+        // NICHT validiert — der Parser schweigt bewusst, der Service-Zweig
+        // entscheidet, ob eine Aktion etwas tut.
+        val cellActions = if (obj.has("cellActions")) {
+            val arr = obj.optJSONArray("cellActions")
+            if (arr == null) emptyList()
+            else (0 until minOf(arr.length(), alternates.size)).map { arr.optString(it, "") }
+        } else emptyList()
+        return LayoutKey(obj.getString("id"), obj.getString("label"), width, kind, value, caps, alternates, hint, cellActions)
     }
 
     private fun parseDeadKeys(obj: JSONObject): Map<String, DeadKey> {

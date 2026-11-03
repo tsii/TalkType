@@ -10,16 +10,21 @@ package de.voicekeyboard.asr
  * Hebel 2 (Streaming-Takt): chunkMs (Audio-Aggregation je Transkriptionslauf)
  * und hypothesisMinIntervalMs (Mindestabstand sichtbarer Hypothesen).
  *
- * [DEFAULT] = exakt die heutigen Ist-Werte, damit das Standardverhalten
- * identisch bleibt: intra = min(4, cores) → 4 auf üblichen Geräten, inter = 1,
- * chunkMs = 1000 (Coordinator-Tick TICK_SAMPLES_1S), hypothesisMinIntervalMs =
- * 2000 (MIN_AUDIO_SECONDS_PARTIALS).
+ * [DEFAULT] = die bewussten Standardwerte: intra = min(4, cores) → 4 auf üblichen
+ * Geräten, inter = 1, chunkMs = 2000 (F21: halbierter Coordinator-Takt wegen
+ * quadratischem Neudekodieren des ganzen Puffers — Nutzerfreigabe 2026-10-30),
+ * hypothesisMinIntervalMs = 2000 (MIN_AUDIO_SECONDS_PARTIALS),
+ * decodePaceBaseMs/MaxMs = Klammern des cost-aware Partial-Takts (F21/DecodePace).
  */
 data class AsrThreadConfig(
     val intraOpThreads: Int,
     val interOpThreads: Int,
     val chunkMs: Int = DEFAULT_CHUNK_MS,
     val hypothesisMinIntervalMs: Int = DEFAULT_HYPOTHESIS_MIN_INTERVAL_MS,
+    /** F21: untere Klammer des cost-aware Partial-Takts (DecodePace.intervalMs). */
+    val decodePaceBaseMs: Long = DEFAULT_DECODE_PACE_BASE_MS,
+    /** F21: obere Klammer des cost-aware Partial-Takts — Takt wächst nie darüber. */
+    val decodePaceMaxMs: Long = DEFAULT_DECODE_PACE_MAX_MS,
 ) {
 
     /** Schnittstelle, auf die die Thread-Optionen gesetzt werden (Produktion: ORT). */
@@ -58,8 +63,14 @@ data class AsrThreadConfig(
     }
 
     companion object {
-        const val DEFAULT_CHUNK_MS = 1000
+        // F21 (Nutzerfreigabe 2026-10-30): 1000 -> 2000. Grund: jeder Partial dekodiert
+        // den ganzen Puffer (KONZEPT §5.1, kein Schiebefenster) — die Arbeit je Lauf
+        // wächst linear mit der Dauer, gesamt quadratisch. Halber Takt = halbe Läufe.
+        const val DEFAULT_CHUNK_MS = 2000
         const val DEFAULT_HYPOTHESIS_MIN_INTERVAL_MS = 2000
+        /** F21: Takt-Klammern des cost-aware Decode-Takts (nur WANN, nie WAS). */
+        const val DEFAULT_DECODE_PACE_BASE_MS = 2000L
+        const val DEFAULT_DECODE_PACE_MAX_MS = 6000L
         private const val MIN_THREADS = 2
         private const val MAX_THREADS = 6
 

@@ -2,11 +2,10 @@ package de.voicekeyboard.commit
 
 import de.voicekeyboard.editor.DeltaTyper
 import de.voicekeyboard.editor.EditorSink
+import de.voicekeyboard.editor.ReviseKind
 import de.voicekeyboard.editor.TextDelta
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNotNull
-import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -45,7 +44,7 @@ class CommitE8Test {
             audioSamples += advanceMs
             val committed = policy.onHypothesis(text, audioSamples, typer.committedLength, budgetExceeded)
             typer.commitUpTo(committed)
-            typer.revise(text)
+            typer.reviseOutcome(text)
         }
     }
 
@@ -75,12 +74,12 @@ class CommitE8Test {
     @Test fun t1_rollbackIsAtomicAndAllowsShrinking() {
         val sink = FakeSink()
         val typer = DeltaTyper(sink)
-        typer.revise("ob die Vikti-Funktion")
+        typer.reviseOutcome("ob die Vikti-Funktion")
         typer.commitUpTo("ob die Vikti-".length) // Fehlcommit (D2/Schumpfen nötig)
         assertTrue(typer.committedLength > 0)
         // korrekte Hypothese divergiert im committeten Bereich:
-        val delta = typer.revise("ob die Dikti-Funktion")
-        assertNotNull("W3c: Rollback muss liefern, nicht null (kein Stau)", delta)
+        val outcome = typer.reviseOutcome("ob die Dikti-Funktion")
+        assertEquals("W3c: Rollback schreibt (kein Stau)", ReviseKind.DELTA, outcome.kind)
         assertEquals("ob die Dikti-Funktion", sink.text)
         assertEquals(7, typer.committedLength) // W3a: geschrumpft auf common=7
         assertFalse(typer.divergent)
@@ -96,10 +95,10 @@ class CommitE8Test {
             override fun ownLength(): Int = if (lost) 0 else text.length
         }
         val typer = DeltaTyper(sink)
-        typer.revise("So, jetzt bin")
+        typer.reviseOutcome("So, jetzt bin")
         val callsBefore = sink.calls.size
         sink.lost = true // Fremdtext: Besitz weg
-        assertNull(typer.revise("So, jetzt bin ich"))
+        assertEquals(ReviseKind.W1, typer.reviseOutcome("So, jetzt bin ich").kind)
         assertEquals(callsBefore, sink.calls.size) // nichts geschrieben
         assertTrue(typer.divergent)
         assertEquals("So, jetzt bin", sink.text) // unverändert
@@ -109,9 +108,9 @@ class CommitE8Test {
     @Test fun t3_tooLargeDivergenceLeavesText() {
         val sink = FakeSink()
         val typer = DeltaTyper(sink)
-        typer.revise("a".repeat(75))
+        typer.reviseOutcome("a".repeat(75))
         typer.commitUpTo(70)
-        assertNull("W3d: 70 > 60 ⇒ kein Rollback", typer.revise("b".repeat(75)))
+        assertEquals("W3d: 70 > 60 ⇒ kein Rollback", ReviseKind.W3d, typer.reviseOutcome("b".repeat(75)).kind)
         assertTrue(typer.divergent)
         assertEquals("a".repeat(75), sink.text) // Text bleibt
     }
@@ -151,12 +150,13 @@ class CommitE8Test {
     @Test fun t6_noRollbackAcrossSentenceTerminator() {
         val sink = FakeSink()
         val typer = DeltaTyper(sink)
-        typer.revise("Das ist der erste Teil. Und noch")
+        typer.reviseOutcome("Das ist der erste Teil. Und noch")
         typer.commitUpTo("Das ist der erste Teil. Un".length) // Fehlcommit MIT Punkt
         // korrekte Hypothese divergiert VOR dem Satzpunkt (common < committed):
-        assertNull(
+        assertEquals(
             "Satzpunkt im Löschbereich ⇒ W3d",
-            typer.revise("Das ist der erste Teil! Und noch mehr"),
+            ReviseKind.W3d,
+            typer.reviseOutcome("Das ist der erste Teil! Und noch mehr").kind,
         )
         assertTrue(typer.divergent)
         assertEquals("Das ist der erste Teil. Und noch", sink.text) // bleibt
@@ -169,12 +169,12 @@ class CommitE8Test {
         val typer = DeltaTyper(sink)
         val emoji = "\uD83D\uDE00" // 😀 = 2 UTF-16
         val own = emoji.repeat(15) + "a".repeat(45) // 60 Codepoints, 75 UTF-16
-        typer.revise(own)
+        typer.reviseOutcome(own)
         typer.commitUpTo(own.length) // alles committet
         val target = "b" + own.substring(1) // Divergenz am Anfang
-        val delta = typer.revise(target)
-        assertNotNull("60 Codepoints <= 60 ⇒ W3c erlaubt", delta)
-        assertEquals(75, delta!!.replaceLength) // UTF-16-Einheiten, nicht Codepoints
+        val outcome = typer.reviseOutcome(target)
+        assertEquals("60 Codepoints <= 60 ⇒ W3c erlaubt", ReviseKind.DELTA, outcome.kind)
+        assertEquals(75, outcome.delta!!.replaceLength) // UTF-16-Einheiten, nicht Codepoints
         assertEquals(target, sink.text)
     }
 
@@ -206,16 +206,16 @@ class CommitE8Test {
     @Test fun t9_rollbackDeletesOnlyOwnChars() {
         val sink = ForeignPrefixSink()
         val typer = DeltaTyper(sink)
-        typer.revise("Vikti-Funktion") // eigener Bereich
+        typer.reviseOutcome("Vikti-Funktion") // eigener Bereich
         typer.commitUpTo("Vikti-".length)
         sink.foreign = "Hallo " // Nutzer tippt LINKS davor — ownStart verschiebt sich
         // Besitz bleibt gültig: ownLength == own.length, Kontext-Suffix passt
-        val delta = typer.revise("Dikti-Funktion")
-        assertNotNull("W3c trotz Fremdtext davor", delta)
+        val outcome = typer.reviseOutcome("Dikti-Funktion")
+        assertEquals("W3c trotz Fremdtext davor", ReviseKind.DELTA, outcome.kind)
         assertEquals("Hallo Dikti-Funktion", sink.foreign + sink.own)
         // Rollback hat ausschließlich eigene Zeichen gelöscht:
         assertEquals("Hallo ", sink.foreign)
         assertEquals("Dikti-Funktion", sink.own)
-        assertEquals("Vikti-Funktion".length, delta!!.replaceLength)
+        assertEquals("Vikti-Funktion".length, outcome.delta!!.replaceLength)
     }
 }

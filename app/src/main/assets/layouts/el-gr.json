@@ -13,18 +13,28 @@
       "rows": [
         [
           {
+            "id": "semicolon",
+            "label": ";",
+            "width": 1.0,
+            "kind": "text",
+            "value": ";",
+            "hint": "1"
+          },
+          {
             "id": "final-sigma",
             "label": "ς",
-            "width": 1,
+            "width": 1.0,
             "kind": "text",
-            "value": "ς"
+            "value": "ς",
+            "hint": "2"
           },
           {
             "id": "ε",
             "label": "ε",
-            "width": 1,
+            "width": 1.0,
             "kind": "text",
             "value": "ε",
+            "hint": "3",
             "alternates": [
               "έ"
             ]
@@ -32,23 +42,26 @@
           {
             "id": "ρ",
             "label": "ρ",
-            "width": 1,
+            "width": 1.0,
             "kind": "text",
-            "value": "ρ"
+            "value": "ρ",
+            "hint": "4"
           },
           {
             "id": "τ",
             "label": "τ",
-            "width": 1,
+            "width": 1.0,
             "kind": "text",
-            "value": "τ"
+            "value": "τ",
+            "hint": "5"
           },
           {
             "id": "υ",
             "label": "υ",
-            "width": 1,
+            "width": 1.0,
             "kind": "text",
             "value": "υ",
+            "hint": "6",
             "alternates": [
               "ύ",
               "ϋ",
@@ -58,16 +71,18 @@
           {
             "id": "θ",
             "label": "θ",
-            "width": 1,
+            "width": 1.0,
             "kind": "text",
-            "value": "θ"
+            "value": "θ",
+            "hint": "7"
           },
           {
             "id": "ι",
             "label": "ι",
-            "width": 1,
+            "width": 1.0,
             "kind": "text",
             "value": "ι",
+            "hint": "8",
             "alternates": [
               "ί",
               "ϊ",
@@ -77,9 +92,10 @@
           {
             "id": "ο",
             "label": "ο",
-            "width": 1,
+            "width": 1.0,
             "kind": "text",
             "value": "ο",
+            "hint": "9",
             "alternates": [
               "ό"
             ]
@@ -87,16 +103,22 @@
           {
             "id": "π",
             "label": "π",
-            "width": 1,
+            "width": 1.0,
             "kind": "text",
-            "value": "π"
+            "value": "π",
+            "hint": "0"
           }
         ],
         [
           {
+            "id": "m-left",
+            "kind": "margin",
+            "width": 0.5
+          },
+          {
             "id": "α",
             "label": "α",
-            "width": 1,
+            "width": 0.94444,
             "kind": "text",
             "value": "α",
             "alternates": [
@@ -106,35 +128,35 @@
           {
             "id": "σ",
             "label": "σ",
-            "width": 1,
+            "width": 0.94444,
             "kind": "text",
             "value": "σ"
           },
           {
             "id": "δ",
             "label": "δ",
-            "width": 1,
+            "width": 0.94444,
             "kind": "text",
             "value": "δ"
           },
           {
             "id": "φ",
             "label": "φ",
-            "width": 1,
+            "width": 0.94444,
             "kind": "text",
             "value": "φ"
           },
           {
             "id": "γ",
             "label": "γ",
-            "width": 1,
+            "width": 0.94444,
             "kind": "text",
             "value": "γ"
           },
           {
             "id": "η",
             "label": "η",
-            "width": 1,
+            "width": 0.94444,
             "kind": "text",
             "value": "η",
             "alternates": [
@@ -144,58 +166,65 @@
           {
             "id": "ξ",
             "label": "ξ",
-            "width": 1,
+            "width": 0.94444,
             "kind": "text",
             "value": "ξ"
           },
           {
             "id": "κ",
             "label": "κ",
-            "width": 1,
+            "width": 0.94444,
             "kind": "text",
             "value": "κ"
           },
           {
             "id": "λ",
             "label": "λ",
-            "width": 1,
+            "width": 0.94444,
             "kind": "text",
             "value": "λ"
+          },
+          {
+            "id": "backspace",
+            "label": "⌫",
+            "width": 1.0,
+            "kind": "action",
+            "value": "backspace"
           }
         ],
         [
           {
             "id": "shift",
             "label": "⇧",
-            "width": 1.5,
+            "width": 0.89352,
             "kind": "action",
             "value": "shift"
           },
           {
             "id": "ζ",
             "label": "ζ",
-            "width": 1,
+            "width": 1.10185,
             "kind": "text",
             "value": "ζ"
           },
           {
             "id": "χ",
             "label": "χ",
-            "width": 1,
+            "width": 1.10185,
             "kind": "text",
             "value": "χ"
           },
           {
             "id": "ψ",
             "label": "ψ",
-            "width": 1,
+            "width": 1.10185,
             "kind": "text",
             "value": "ψ"
           },
           {
             "id": "ω",
             "label": "ω",
-            "width": 1,
+            "width": 1.10185,
             "kind": "text",
             "value": "ω",
             "alternates": [
@@ -205,30 +234,33 @@
           {
             "id": "β",
             "label": "β",
-            "width": 1,
+            "width": 1.10185,
             "kind": "text",
             "value": "β"
           },
           {
             "id": "ν",
             "label": "ν",
-            "width": 1,
+            "width": 1.10185,
             "kind": "text",
             "value": "ν"
           },
           {
             "id": "μ",
             "label": "μ",
-            "width": 1,
+            "width": 1.10185,
             "kind": "text",
-            "value": "μ"
+            "value": "μ",
+            "alternates": [
+              "@"
+            ]
           },
           {
-            "id": "backspace",
-            "label": "⌫",
-            "width": 1.5,
+            "id": "enter",
+            "label": "⏎",
+            "width": 1.39352,
             "kind": "action",
-            "value": "backspace"
+            "value": "enter"
           }
         ],
         [
@@ -256,37 +288,32 @@
           {
             "id": "space",
             "label": "Διάστημα",
-            "width": 5,
+            "width": 6.5,
             "kind": "action",
             "value": "space"
           },
           {
-            "id": "cursor-left",
-            "label": "‹",
+            "id": "period",
+            "label": ".",
             "width": 1,
-            "kind": "action",
-            "value": "cursor-left"
-          },
-          {
-            "id": "cursor-right",
-            "label": "›",
-            "width": 1,
-            "kind": "action",
-            "value": "cursor-right"
+            "kind": "text",
+            "value": ".",
+            "alternates": [
+              ",",
+              "!",
+              "?",
+              ":",
+              ";",
+              "(",
+              ")"
+            ]
           },
           {
             "id": "mic",
             "label": "🎤",
-            "width": 1,
+            "width": 2,
             "kind": "action",
             "value": "mic"
-          },
-          {
-            "id": "enter",
-            "label": "⏎",
-            "width": 1.5,
-            "kind": "action",
-            "value": "enter"
           }
         ]
       ]
@@ -295,18 +322,28 @@
       "rows": [
         [
           {
+            "id": "semicolon",
+            "label": ":",
+            "width": 1.0,
+            "kind": "text",
+            "value": ":",
+            "hint": "1"
+          },
+          {
             "id": "final-sigma",
             "label": "Σ",
-            "width": 1,
+            "width": 1.0,
             "kind": "text",
-            "value": "Σ"
+            "value": "Σ",
+            "hint": "2"
           },
           {
             "id": "ε",
             "label": "Ε",
-            "width": 1,
+            "width": 1.0,
             "kind": "text",
             "value": "Ε",
+            "hint": "3",
             "alternates": [
               "Έ"
             ]
@@ -314,23 +351,26 @@
           {
             "id": "ρ",
             "label": "Ρ",
-            "width": 1,
+            "width": 1.0,
             "kind": "text",
-            "value": "Ρ"
+            "value": "Ρ",
+            "hint": "4"
           },
           {
             "id": "τ",
             "label": "Τ",
-            "width": 1,
+            "width": 1.0,
             "kind": "text",
-            "value": "Τ"
+            "value": "Τ",
+            "hint": "5"
           },
           {
             "id": "υ",
             "label": "Υ",
-            "width": 1,
+            "width": 1.0,
             "kind": "text",
             "value": "Υ",
+            "hint": "6",
             "alternates": [
               "Ύ",
               "Ϋ",
@@ -340,16 +380,18 @@
           {
             "id": "θ",
             "label": "Θ",
-            "width": 1,
+            "width": 1.0,
             "kind": "text",
-            "value": "Θ"
+            "value": "Θ",
+            "hint": "7"
           },
           {
             "id": "ι",
             "label": "Ι",
-            "width": 1,
+            "width": 1.0,
             "kind": "text",
             "value": "Ι",
+            "hint": "8",
             "alternates": [
               "Ί",
               "Ϊ",
@@ -359,9 +401,10 @@
           {
             "id": "ο",
             "label": "Ο",
-            "width": 1,
+            "width": 1.0,
             "kind": "text",
             "value": "Ο",
+            "hint": "9",
             "alternates": [
               "Ό"
             ]
@@ -369,16 +412,22 @@
           {
             "id": "π",
             "label": "Π",
-            "width": 1,
+            "width": 1.0,
             "kind": "text",
-            "value": "Π"
+            "value": "Π",
+            "hint": "0"
           }
         ],
         [
           {
+            "id": "m-left",
+            "kind": "margin",
+            "width": 0.5
+          },
+          {
             "id": "α",
             "label": "Α",
-            "width": 1,
+            "width": 0.94444,
             "kind": "text",
             "value": "Α",
             "alternates": [
@@ -388,35 +437,35 @@
           {
             "id": "σ",
             "label": "Σ",
-            "width": 1,
+            "width": 0.94444,
             "kind": "text",
             "value": "Σ"
           },
           {
             "id": "δ",
             "label": "Δ",
-            "width": 1,
+            "width": 0.94444,
             "kind": "text",
             "value": "Δ"
           },
           {
             "id": "φ",
             "label": "Φ",
-            "width": 1,
+            "width": 0.94444,
             "kind": "text",
             "value": "Φ"
           },
           {
             "id": "γ",
             "label": "Γ",
-            "width": 1,
+            "width": 0.94444,
             "kind": "text",
             "value": "Γ"
           },
           {
             "id": "η",
             "label": "Η",
-            "width": 1,
+            "width": 0.94444,
             "kind": "text",
             "value": "Η",
             "alternates": [
@@ -426,58 +475,65 @@
           {
             "id": "ξ",
             "label": "Ξ",
-            "width": 1,
+            "width": 0.94444,
             "kind": "text",
             "value": "Ξ"
           },
           {
             "id": "κ",
             "label": "Κ",
-            "width": 1,
+            "width": 0.94444,
             "kind": "text",
             "value": "Κ"
           },
           {
             "id": "λ",
             "label": "Λ",
-            "width": 1,
+            "width": 0.94444,
             "kind": "text",
             "value": "Λ"
+          },
+          {
+            "id": "backspace",
+            "label": "⌫",
+            "width": 1.0,
+            "kind": "action",
+            "value": "backspace"
           }
         ],
         [
           {
             "id": "shift",
             "label": "⇧",
-            "width": 1.5,
+            "width": 0.89352,
             "kind": "action",
             "value": "shift"
           },
           {
             "id": "ζ",
             "label": "Ζ",
-            "width": 1,
+            "width": 1.10185,
             "kind": "text",
             "value": "Ζ"
           },
           {
             "id": "χ",
             "label": "Χ",
-            "width": 1,
+            "width": 1.10185,
             "kind": "text",
             "value": "Χ"
           },
           {
             "id": "ψ",
             "label": "Ψ",
-            "width": 1,
+            "width": 1.10185,
             "kind": "text",
             "value": "Ψ"
           },
           {
             "id": "ω",
             "label": "Ω",
-            "width": 1,
+            "width": 1.10185,
             "kind": "text",
             "value": "Ω",
             "alternates": [
@@ -487,30 +543,33 @@
           {
             "id": "β",
             "label": "Β",
-            "width": 1,
+            "width": 1.10185,
             "kind": "text",
             "value": "Β"
           },
           {
             "id": "ν",
             "label": "Ν",
-            "width": 1,
+            "width": 1.10185,
             "kind": "text",
             "value": "Ν"
           },
           {
             "id": "μ",
             "label": "Μ",
-            "width": 1,
+            "width": 1.10185,
             "kind": "text",
-            "value": "Μ"
+            "value": "Μ",
+            "alternates": [
+              "@"
+            ]
           },
           {
-            "id": "backspace",
-            "label": "⌫",
-            "width": 1.5,
+            "id": "enter",
+            "label": "⏎",
+            "width": 1.39352,
             "kind": "action",
-            "value": "backspace"
+            "value": "enter"
           }
         ],
         [
@@ -538,37 +597,32 @@
           {
             "id": "space",
             "label": "Διάστημα",
-            "width": 5,
+            "width": 6.5,
             "kind": "action",
             "value": "space"
           },
           {
-            "id": "cursor-left",
-            "label": "‹",
+            "id": "period",
+            "label": ".",
             "width": 1,
-            "kind": "action",
-            "value": "cursor-left"
-          },
-          {
-            "id": "cursor-right",
-            "label": "›",
-            "width": 1,
-            "kind": "action",
-            "value": "cursor-right"
+            "kind": "text",
+            "value": ".",
+            "alternates": [
+              ",",
+              "!",
+              "?",
+              ":",
+              ";",
+              "(",
+              ")"
+            ]
           },
           {
             "id": "mic",
             "label": "🎤",
-            "width": 1,
+            "width": 2,
             "kind": "action",
             "value": "mic"
-          },
-          {
-            "id": "enter",
-            "label": "⏎",
-            "width": 1.5,
-            "kind": "action",
-            "value": "enter"
           }
         ]
       ]
@@ -645,41 +699,42 @@
             "width": 1,
             "kind": "text",
             "value": "0"
-          },
-          {
-            "id": "euro",
-            "label": "€",
-            "width": 1,
-            "kind": "text",
-            "value": "€"
           }
         ],
         [
           {
             "id": "hyphen",
             "label": "-",
-            "width": 1,
+            "width": 0.9,
             "kind": "text",
-            "value": "-"
+            "value": "-",
+            "alternates": [
+              "–",
+              "—"
+            ]
           },
           {
             "id": "slash",
             "label": "/",
-            "width": 1,
+            "width": 0.9,
             "kind": "text",
-            "value": "/"
+            "value": "/",
+            "alternates": [
+              "\\",
+              "|"
+            ]
           },
           {
             "id": "colon",
             "label": ":",
-            "width": 1,
+            "width": 0.9,
             "kind": "text",
             "value": ":"
           },
           {
             "id": "semicolon",
             "label": ";",
-            "width": 1,
+            "width": 0.9,
             "kind": "text",
             "value": ";",
             "alternates": [
@@ -689,51 +744,61 @@
           {
             "id": "paren-left",
             "label": "(",
-            "width": 1,
+            "width": 0.9,
             "kind": "text",
-            "value": "("
+            "value": "(",
+            "alternates": [
+              "[",
+              "{",
+              "<"
+            ]
           },
           {
             "id": "paren-right",
             "label": ")",
-            "width": 1,
+            "width": 0.9,
             "kind": "text",
-            "value": ")"
+            "value": ")",
+            "alternates": [
+              "]",
+              "}",
+              ">"
+            ]
           },
           {
             "id": "amp",
             "label": "&",
-            "width": 1,
+            "width": 0.9,
             "kind": "text",
             "value": "&"
           },
           {
             "id": "at",
             "label": "@",
-            "width": 1,
+            "width": 0.9,
             "kind": "text",
             "value": "@"
           },
           {
-            "id": "dquote",
-            "label": "\"",
-            "width": 1,
-            "kind": "text",
-            "value": "\""
-          },
-          {
-            "id": "apostrophe",
-            "label": "'",
-            "width": 1,
-            "kind": "text",
-            "value": "'"
-          },
-          {
             "id": "equals",
             "label": "=",
-            "width": 1,
+            "width": 0.9,
             "kind": "text",
             "value": "="
+          },
+          {
+            "id": "hash",
+            "label": "#",
+            "width": 0.9,
+            "kind": "text",
+            "value": "#"
+          },
+          {
+            "id": "backspace",
+            "label": "⌫",
+            "width": 1,
+            "kind": "action",
+            "value": "backspace"
           }
         ],
         [
@@ -747,72 +812,107 @@
           {
             "id": "dot",
             "label": ".",
-            "width": 1,
+            "width": 0.75,
             "kind": "text",
-            "value": "."
+            "value": ".",
+            "alternates": [
+              "…"
+            ]
           },
           {
             "id": "comma",
             "label": ",",
-            "width": 1,
+            "width": 0.75,
             "kind": "text",
             "value": ","
           },
           {
             "id": "question",
             "label": "?",
-            "width": 1,
+            "width": 0.75,
             "kind": "text",
-            "value": "?"
+            "value": "?",
+            "alternates": [
+              "¿"
+            ]
           },
           {
             "id": "exclam",
             "label": "!",
-            "width": 1,
+            "width": 0.75,
             "kind": "text",
-            "value": "!"
+            "value": "!",
+            "alternates": [
+              "¡"
+            ]
+          },
+          {
+            "id": "apostrophe",
+            "label": "'",
+            "width": 0.75,
+            "kind": "text",
+            "value": "'",
+            "alternates": [
+              "‘",
+              "’",
+              "‚"
+            ]
+          },
+          {
+            "id": "dquote",
+            "label": "\"",
+            "width": 0.75,
+            "kind": "text",
+            "value": "\"",
+            "alternates": [
+              "„",
+              "“",
+              "”",
+              "‘",
+              "’",
+              "‚"
+            ]
           },
           {
             "id": "percent",
             "label": "%",
-            "width": 1,
+            "width": 0.75,
             "kind": "text",
-            "value": "%"
+            "value": "%",
+            "alternates": [
+              "‰"
+            ]
           },
           {
             "id": "plus",
             "label": "+",
-            "width": 1,
+            "width": 0.75,
             "kind": "text",
-            "value": "+"
-          },
-          {
-            "id": "hash",
-            "label": "#",
-            "width": 1,
-            "kind": "text",
-            "value": "#"
+            "value": "+",
+            "alternates": [
+              "±"
+            ]
           },
           {
             "id": "underscore",
             "label": "_",
-            "width": 1,
+            "width": 0.75,
             "kind": "text",
             "value": "_"
           },
           {
             "id": "asterisk",
             "label": "*",
-            "width": 1,
+            "width": 0.75,
             "kind": "text",
             "value": "*"
           },
           {
-            "id": "backspace",
-            "label": "⌫",
-            "width": 1.5,
+            "id": "enter",
+            "label": "⏎",
+            "width": 1,
             "kind": "action",
-            "value": "backspace"
+            "value": "enter"
           }
         ],
         [
@@ -840,37 +940,16 @@
           {
             "id": "space",
             "label": "Διάστημα",
-            "width": 5,
+            "width": 7.5,
             "kind": "action",
             "value": "space"
           },
           {
-            "id": "cursor-left",
-            "label": "‹",
-            "width": 1,
-            "kind": "action",
-            "value": "cursor-left"
-          },
-          {
-            "id": "cursor-right",
-            "label": "›",
-            "width": 1,
-            "kind": "action",
-            "value": "cursor-right"
-          },
-          {
             "id": "mic",
             "label": "🎤",
-            "width": 1,
+            "width": 2,
             "kind": "action",
             "value": "mic"
-          },
-          {
-            "id": "enter",
-            "label": "⏎",
-            "width": 1.5,
-            "kind": "action",
-            "value": "enter"
           }
         ]
       ]
@@ -947,92 +1026,85 @@
             "width": 1,
             "kind": "text",
             "value": "<"
-          },
-          {
-            "id": "euro",
-            "label": ">",
-            "width": 1,
-            "kind": "text",
-            "value": ">"
           }
         ],
         [
           {
+            "id": "euro",
+            "label": "€",
+            "width": 0.9,
+            "kind": "text",
+            "value": "€"
+          },
+          {
+            "id": "greater",
+            "label": ">",
+            "width": 0.9,
+            "kind": "text",
+            "value": ">"
+          },
+          {
             "id": "hyphen",
             "label": "[",
-            "width": 1,
+            "width": 0.9,
             "kind": "text",
             "value": "["
           },
           {
             "id": "slash",
             "label": "]",
-            "width": 1,
+            "width": 0.9,
             "kind": "text",
             "value": "]"
           },
           {
             "id": "colon",
             "label": "{",
-            "width": 1,
+            "width": 0.9,
             "kind": "text",
             "value": "{"
           },
           {
             "id": "semicolon",
             "label": "}",
-            "width": 1,
+            "width": 0.9,
             "kind": "text",
             "value": "}"
           },
           {
             "id": "paren-left",
             "label": "$",
-            "width": 1,
+            "width": 0.9,
             "kind": "text",
             "value": "$"
           },
           {
             "id": "paren-right",
             "label": "§",
-            "width": 1,
+            "width": 0.9,
             "kind": "text",
             "value": "§"
           },
           {
             "id": "amp",
             "label": "°",
-            "width": 1,
+            "width": 0.9,
             "kind": "text",
             "value": "°"
           },
           {
             "id": "at",
             "label": "«",
-            "width": 1,
+            "width": 0.9,
             "kind": "text",
             "value": "«"
           },
           {
-            "id": "dquote",
-            "label": "»",
+            "id": "backspace",
+            "label": "⌫",
             "width": 1,
-            "kind": "text",
-            "value": "»"
-          },
-          {
-            "id": "apostrophe",
-            "label": "–",
-            "width": 1,
-            "kind": "text",
-            "value": "–"
-          },
-          {
-            "id": "equals",
-            "label": "…",
-            "width": 1,
-            "kind": "text",
-            "value": "…"
+            "kind": "action",
+            "value": "backspace"
           }
         ],
         [
@@ -1046,72 +1118,79 @@
           {
             "id": "dot",
             "label": "¿",
-            "width": 1,
+            "width": 0.75,
             "kind": "text",
             "value": "¿"
           },
           {
             "id": "comma",
             "label": "¡",
-            "width": 1,
+            "width": 0.75,
             "kind": "text",
             "value": "¡"
           },
           {
             "id": "question",
             "label": "·",
-            "width": 1,
+            "width": 0.75,
             "kind": "text",
             "value": "·"
           },
           {
             "id": "exclam",
             "label": "£",
-            "width": 1,
+            "width": 0.75,
             "kind": "text",
             "value": "£"
           },
           {
             "id": "percent",
             "label": "•",
-            "width": 1,
+            "width": 0.75,
             "kind": "text",
             "value": "•"
           },
           {
             "id": "plus",
             "label": "‰",
-            "width": 1,
+            "width": 0.75,
             "kind": "text",
             "value": "‰"
           },
           {
             "id": "hash",
             "label": "†",
-            "width": 1,
+            "width": 0.75,
             "kind": "text",
             "value": "†"
           },
           {
             "id": "underscore",
             "label": "‡",
-            "width": 1,
+            "width": 0.75,
             "kind": "text",
             "value": "‡"
           },
           {
             "id": "asterisk",
             "label": "±",
-            "width": 1,
+            "width": 0.75,
             "kind": "text",
             "value": "±"
           },
           {
-            "id": "backspace",
-            "label": "⌫",
-            "width": 1.5,
+            "id": "dquote",
+            "label": "»",
+            "width": 0.75,
+            "kind": "text",
+            "value": "»"
+          },
+          {
+            "id": "enter",
+            "label": "⏎",
+            "width": 1,
             "kind": "action",
-            "value": "backspace"
+            "value": "enter"
           }
         ],
         [
@@ -1139,40 +1218,20 @@
           {
             "id": "space",
             "label": "Διάστημα",
-            "width": 5,
+            "width": 7.5,
             "kind": "action",
             "value": "space"
           },
           {
-            "id": "cursor-left",
-            "label": "‹",
-            "width": 1,
-            "kind": "action",
-            "value": "cursor-left"
-          },
-          {
-            "id": "cursor-right",
-            "label": "›",
-            "width": 1,
-            "kind": "action",
-            "value": "cursor-right"
-          },
-          {
             "id": "mic",
             "label": "🎤",
-            "width": 1,
+            "width": 2,
             "kind": "action",
             "value": "mic"
-          },
-          {
-            "id": "enter",
-            "label": "⏎",
-            "width": 1.5,
-            "kind": "action",
-            "value": "enter"
           }
         ]
       ]
     }
   }
 }
+

@@ -13,167 +13,200 @@
       "rows": [
         [
           {
+            "id": "m0-left",
+            "kind": "margin",
+            "width": 0.11111
+          },
+          {
             "id": "i-short",
             "label": "й",
-            "width": 1,
+            "width": 0.88889,
             "kind": "text",
-            "value": "й"
+            "value": "й",
+            "hint": "1"
           },
           {
             "id": "tse",
             "label": "ц",
-            "width": 1,
+            "width": 0.88889,
             "kind": "text",
-            "value": "ц"
+            "value": "ц",
+            "hint": "2"
           },
           {
             "id": "u-cyr",
             "label": "у",
-            "width": 1,
+            "width": 0.88889,
             "kind": "text",
-            "value": "у"
+            "value": "у",
+            "hint": "3"
           },
           {
             "id": "ka",
             "label": "к",
-            "width": 1,
+            "width": 0.88889,
             "kind": "text",
-            "value": "к"
+            "value": "к",
+            "hint": "4"
           },
           {
             "id": "e-cyr",
             "label": "е",
-            "width": 1,
+            "width": 0.88889,
             "kind": "text",
-            "value": "е"
+            "value": "е",
+            "hint": "5",
+            "alternates": [
+              "ё"
+            ]
           },
           {
             "id": "en",
             "label": "н",
-            "width": 1,
+            "width": 0.88889,
             "kind": "text",
-            "value": "н"
+            "value": "н",
+            "hint": "6"
           },
           {
             "id": "ge",
             "label": "г",
-            "width": 1,
+            "width": 0.88889,
             "kind": "text",
-            "value": "г"
+            "value": "г",
+            "hint": "7"
           },
           {
             "id": "sha",
             "label": "ш",
-            "width": 1,
+            "width": 0.88889,
             "kind": "text",
-            "value": "ш"
+            "value": "ш",
+            "hint": "8"
           },
           {
             "id": "shcha",
             "label": "щ",
-            "width": 1,
+            "width": 0.88889,
             "kind": "text",
-            "value": "щ"
+            "value": "щ",
+            "hint": "9"
           },
           {
             "id": "ze",
             "label": "з",
-            "width": 1,
+            "width": 0.88889,
             "kind": "text",
-            "value": "з"
+            "value": "з",
+            "hint": "0"
           },
           {
             "id": "kha",
             "label": "х",
-            "width": 1,
+            "width": 0.88889,
             "kind": "text",
             "value": "х"
+          },
+          {
+            "id": "m0-right",
+            "kind": "margin",
+            "width": 0.11111
           }
         ],
         [
           {
+            "id": "m-left",
+            "kind": "margin",
+            "width": 0.11111
+          },
+          {
             "id": "hard-sign",
             "label": "ъ",
-            "width": 1,
+            "width": 0.88889,
             "kind": "text",
             "value": "ъ"
           },
           {
             "id": "ef",
             "label": "ф",
-            "width": 1,
+            "width": 0.88889,
             "kind": "text",
             "value": "ф"
           },
           {
             "id": "yeru",
             "label": "ы",
-            "width": 1,
+            "width": 0.88889,
             "kind": "text",
             "value": "ы"
           },
           {
             "id": "ve",
             "label": "в",
-            "width": 1,
+            "width": 0.88889,
             "kind": "text",
             "value": "в"
           },
           {
             "id": "a-cyr",
             "label": "а",
-            "width": 1,
+            "width": 0.88889,
             "kind": "text",
             "value": "а"
           },
           {
             "id": "pe",
             "label": "п",
-            "width": 1,
+            "width": 0.88889,
             "kind": "text",
             "value": "п"
           },
           {
             "id": "er",
             "label": "р",
-            "width": 1,
+            "width": 0.88889,
             "kind": "text",
             "value": "р"
           },
           {
             "id": "o-cyr",
             "label": "о",
-            "width": 1,
+            "width": 0.88889,
             "kind": "text",
             "value": "о"
           },
           {
             "id": "el",
             "label": "л",
-            "width": 1,
+            "width": 0.88889,
             "kind": "text",
             "value": "л"
           },
           {
             "id": "de",
             "label": "д",
-            "width": 1,
+            "width": 0.88889,
             "kind": "text",
             "value": "д"
           },
           {
             "id": "zhe",
             "label": "ж",
-            "width": 1,
+            "width": 0.88889,
             "kind": "text",
             "value": "ж"
+          },
+          {
+            "id": "m-right",
+            "kind": "margin",
+            "width": 0.11111
           }
         ],
         [
           {
             "id": "shift",
             "label": "⇧",
-            "width": 1.5,
+            "width": 1,
             "kind": "action",
             "value": "shift"
           },
@@ -248,18 +281,11 @@
             "value": "ю"
           },
           {
-            "id": "yo",
-            "label": "ё",
+            "id": "enter",
+            "label": "⏎",
             "width": 1,
-            "kind": "text",
-            "value": "ё"
-          },
-          {
-            "id": "backspace",
-            "label": "⌫",
-            "width": 1.5,
             "kind": "action",
-            "value": "backspace"
+            "value": "enter"
           }
         ],
         [
@@ -287,37 +313,26 @@
           {
             "id": "space",
             "label": "Пробел",
-            "width": 5,
+            "width": 6.5,
             "kind": "action",
             "value": "space"
           },
           {
-            "id": "cursor-left",
-            "label": "‹",
+            "id": "period",
+            "label": ".",
             "width": 1,
-            "kind": "action",
-            "value": "cursor-left"
-          },
-          {
-            "id": "cursor-right",
-            "label": "›",
-            "width": 1,
-            "kind": "action",
-            "value": "cursor-right"
+            "kind": "text",
+            "value": ".",
+            "alternates": [
+              "@", ",", "!", "?", ":", ";", "(", ")"
+            ]
           },
           {
             "id": "mic",
             "label": "🎤",
-            "width": 1,
+            "width": 2,
             "kind": "action",
             "value": "mic"
-          },
-          {
-            "id": "enter",
-            "label": "⏎",
-            "width": 1.5,
-            "kind": "action",
-            "value": "enter"
           }
         ]
       ]
@@ -326,167 +341,200 @@
       "rows": [
         [
           {
+            "id": "m0-left",
+            "kind": "margin",
+            "width": 0.11111
+          },
+          {
             "id": "i-short",
             "label": "Й",
-            "width": 1,
+            "width": 0.88889,
             "kind": "text",
-            "value": "Й"
+            "value": "Й",
+            "hint": "1"
           },
           {
             "id": "tse",
             "label": "Ц",
-            "width": 1,
+            "width": 0.88889,
             "kind": "text",
-            "value": "Ц"
+            "value": "Ц",
+            "hint": "2"
           },
           {
             "id": "u-cyr",
             "label": "У",
-            "width": 1,
+            "width": 0.88889,
             "kind": "text",
-            "value": "У"
+            "value": "У",
+            "hint": "3"
           },
           {
             "id": "ka",
             "label": "К",
-            "width": 1,
+            "width": 0.88889,
             "kind": "text",
-            "value": "К"
+            "value": "К",
+            "hint": "4"
           },
           {
             "id": "e-cyr",
             "label": "Е",
-            "width": 1,
+            "width": 0.88889,
             "kind": "text",
-            "value": "Е"
+            "value": "Е",
+            "hint": "5",
+            "alternates": [
+              "Ё"
+            ]
           },
           {
             "id": "en",
             "label": "Н",
-            "width": 1,
+            "width": 0.88889,
             "kind": "text",
-            "value": "Н"
+            "value": "Н",
+            "hint": "6"
           },
           {
             "id": "ge",
             "label": "Г",
-            "width": 1,
+            "width": 0.88889,
             "kind": "text",
-            "value": "Г"
+            "value": "Г",
+            "hint": "7"
           },
           {
             "id": "sha",
             "label": "Ш",
-            "width": 1,
+            "width": 0.88889,
             "kind": "text",
-            "value": "Ш"
+            "value": "Ш",
+            "hint": "8"
           },
           {
             "id": "shcha",
             "label": "Щ",
-            "width": 1,
+            "width": 0.88889,
             "kind": "text",
-            "value": "Щ"
+            "value": "Щ",
+            "hint": "9"
           },
           {
             "id": "ze",
             "label": "З",
-            "width": 1,
+            "width": 0.88889,
             "kind": "text",
-            "value": "З"
+            "value": "З",
+            "hint": "0"
           },
           {
             "id": "kha",
             "label": "Х",
-            "width": 1,
+            "width": 0.88889,
             "kind": "text",
             "value": "Х"
+          },
+          {
+            "id": "m0-right",
+            "kind": "margin",
+            "width": 0.11111
           }
         ],
         [
           {
+            "id": "m-left",
+            "kind": "margin",
+            "width": 0.11111
+          },
+          {
             "id": "hard-sign",
             "label": "Ъ",
-            "width": 1,
+            "width": 0.88889,
             "kind": "text",
             "value": "Ъ"
           },
           {
             "id": "ef",
             "label": "Ф",
-            "width": 1,
+            "width": 0.88889,
             "kind": "text",
             "value": "Ф"
           },
           {
             "id": "yeru",
             "label": "Ы",
-            "width": 1,
+            "width": 0.88889,
             "kind": "text",
             "value": "Ы"
           },
           {
             "id": "ve",
             "label": "В",
-            "width": 1,
+            "width": 0.88889,
             "kind": "text",
             "value": "В"
           },
           {
             "id": "a-cyr",
             "label": "А",
-            "width": 1,
+            "width": 0.88889,
             "kind": "text",
             "value": "А"
           },
           {
             "id": "pe",
             "label": "П",
-            "width": 1,
+            "width": 0.88889,
             "kind": "text",
             "value": "П"
           },
           {
             "id": "er",
             "label": "Р",
-            "width": 1,
+            "width": 0.88889,
             "kind": "text",
             "value": "Р"
           },
           {
             "id": "o-cyr",
             "label": "О",
-            "width": 1,
+            "width": 0.88889,
             "kind": "text",
             "value": "О"
           },
           {
             "id": "el",
             "label": "Л",
-            "width": 1,
+            "width": 0.88889,
             "kind": "text",
             "value": "Л"
           },
           {
             "id": "de",
             "label": "Д",
-            "width": 1,
+            "width": 0.88889,
             "kind": "text",
             "value": "Д"
           },
           {
             "id": "zhe",
             "label": "Ж",
-            "width": 1,
+            "width": 0.88889,
             "kind": "text",
             "value": "Ж"
+          },
+          {
+            "id": "m-right",
+            "kind": "margin",
+            "width": 0.11111
           }
         ],
         [
           {
             "id": "shift",
             "label": "⇧",
-            "width": 1.5,
+            "width": 1,
             "kind": "action",
             "value": "shift"
           },
@@ -561,18 +609,11 @@
             "value": "Ю"
           },
           {
-            "id": "yo",
-            "label": "Ё",
+            "id": "enter",
+            "label": "⏎",
             "width": 1,
-            "kind": "text",
-            "value": "Ё"
-          },
-          {
-            "id": "backspace",
-            "label": "⌫",
-            "width": 1.5,
             "kind": "action",
-            "value": "backspace"
+            "value": "enter"
           }
         ],
         [
@@ -600,37 +641,26 @@
           {
             "id": "space",
             "label": "Пробел",
-            "width": 5,
+            "width": 6.5,
             "kind": "action",
             "value": "space"
           },
           {
-            "id": "cursor-left",
-            "label": "‹",
+            "id": "period",
+            "label": ".",
             "width": 1,
-            "kind": "action",
-            "value": "cursor-left"
-          },
-          {
-            "id": "cursor-right",
-            "label": "›",
-            "width": 1,
-            "kind": "action",
-            "value": "cursor-right"
+            "kind": "text",
+            "value": ".",
+            "alternates": [
+              "@", ",", "!", "?", ":", ";", "(", ")"
+            ]
           },
           {
             "id": "mic",
             "label": "🎤",
-            "width": 1,
+            "width": 2,
             "kind": "action",
             "value": "mic"
-          },
-          {
-            "id": "enter",
-            "label": "⏎",
-            "width": 1.5,
-            "kind": "action",
-            "value": "enter"
           }
         ]
       ]
@@ -707,92 +737,103 @@
             "width": 1,
             "kind": "text",
             "value": "0"
-          },
-          {
-            "id": "hyphen",
-            "label": "-",
-            "width": 1,
-            "kind": "text",
-            "value": "-"
           }
         ],
         [
           {
+            "id": "hyphen",
+            "label": "-",
+            "width": 0.9,
+            "kind": "text",
+            "value": "-",
+            "alternates": [
+              "–",
+              "—"
+            ]
+          },
+          {
             "id": "slash",
             "label": "/",
-            "width": 1,
+            "width": 0.9,
             "kind": "text",
-            "value": "/"
+            "value": "/",
+            "alternates": [
+              "\\",
+              "|"
+            ]
           },
           {
             "id": "colon",
             "label": ":",
-            "width": 1,
+            "width": 0.9,
             "kind": "text",
             "value": ":"
           },
           {
             "id": "semicolon",
             "label": ";",
-            "width": 1,
+            "width": 0.9,
             "kind": "text",
             "value": ";"
           },
           {
             "id": "paren-left",
             "label": "(",
-            "width": 1,
+            "width": 0.9,
             "kind": "text",
-            "value": "("
+            "value": "(",
+            "alternates": [
+              "[",
+              "{",
+              "<"
+            ]
           },
           {
             "id": "paren-right",
             "label": ")",
-            "width": 1,
+            "width": 0.9,
             "kind": "text",
-            "value": ")"
-          },
-          {
-            "id": "at",
-            "label": "@",
-            "width": 1,
-            "kind": "text",
-            "value": "@"
+            "value": ")",
+            "alternates": [
+              "]",
+              "}",
+              ">"
+            ]
           },
           {
             "id": "amp",
             "label": "&",
-            "width": 1,
+            "width": 0.9,
             "kind": "text",
             "value": "&"
           },
           {
-            "id": "percent",
-            "label": "%",
-            "width": 1,
+            "id": "at",
+            "label": "@",
+            "width": 0.9,
             "kind": "text",
-            "value": "%"
-          },
-          {
-            "id": "plus",
-            "label": "+",
-            "width": 1,
-            "kind": "text",
-            "value": "+"
+            "value": "@"
           },
           {
             "id": "equals",
             "label": "=",
-            "width": 1,
+            "width": 0.9,
             "kind": "text",
             "value": "="
           },
           {
             "id": "hash",
             "label": "#",
-            "width": 1,
+            "width": 0.9,
             "kind": "text",
             "value": "#"
+          },
+          {
+            "id": "backspace",
+            "label": "⌫",
+            "width": 1,
+            "kind": "action",
+            "value": "backspace"
           }
         ],
         [
@@ -804,67 +845,109 @@
             "value": "shift"
           },
           {
-            "id": "asterisk",
-            "label": "*",
-            "width": 1,
-            "kind": "text",
-            "value": "*"
-          },
-          {
-            "id": "underscore",
-            "label": "_",
-            "width": 1,
-            "kind": "text",
-            "value": "_"
-          },
-          {
-            "id": "apostrophe",
-            "label": "'",
-            "width": 1,
-            "kind": "text",
-            "value": "'"
-          },
-          {
-            "id": "dquote",
-            "label": "\"",
-            "width": 1,
-            "kind": "text",
-            "value": "\""
-          },
-          {
             "id": "dot",
             "label": ".",
-            "width": 1,
+            "width": 0.75,
             "kind": "text",
-            "value": "."
+            "value": ".",
+            "alternates": [
+              "…"
+            ]
           },
           {
             "id": "comma",
             "label": ",",
-            "width": 1,
+            "width": 0.75,
             "kind": "text",
             "value": ","
           },
           {
             "id": "question",
             "label": "?",
-            "width": 1,
+            "width": 0.75,
             "kind": "text",
-            "value": "?"
+            "value": "?",
+            "alternates": [
+              "¿"
+            ]
           },
           {
             "id": "exclam",
             "label": "!",
-            "width": 1,
+            "width": 0.75,
             "kind": "text",
-            "value": "!"
+            "value": "!",
+            "alternates": [
+              "¡"
+            ]
           },
           {
-            "id": "backspace",
-            "label": "⌫",
-            "width": 1.5,
+            "id": "apostrophe",
+            "label": "'",
+            "width": 0.75,
+            "kind": "text",
+            "value": "'",
+            "alternates": [
+              "‘",
+              "’",
+              "‚"
+            ]
+          },
+          {
+            "id": "dquote",
+            "label": "\"",
+            "width": 0.75,
+            "kind": "text",
+            "value": "\"",
+            "alternates": [
+              "„",
+              "“",
+              "”",
+              "‘",
+              "’",
+              "‚"
+            ]
+          },
+          {
+            "id": "percent",
+            "label": "%",
+            "width": 0.75,
+            "kind": "text",
+            "value": "%",
+            "alternates": [
+              "‰"
+            ]
+          },
+          {
+            "id": "plus",
+            "label": "+",
+            "width": 0.75,
+            "kind": "text",
+            "value": "+",
+            "alternates": [
+              "±"
+            ]
+          },
+          {
+            "id": "underscore",
+            "label": "_",
+            "width": 0.75,
+            "kind": "text",
+            "value": "_"
+          },
+          {
+            "id": "asterisk",
+            "label": "*",
+            "width": 0.75,
+            "kind": "text",
+            "value": "*"
+          },
+          {
+            "id": "enter",
+            "label": "⏎",
+            "width": 1,
             "kind": "action",
-            "value": "backspace"
+            "value": "enter"
           }
         ],
         [
@@ -892,37 +975,16 @@
           {
             "id": "space",
             "label": "Пробел",
-            "width": 5,
+            "width": 7.5,
             "kind": "action",
             "value": "space"
           },
           {
-            "id": "cursor-left",
-            "label": "‹",
-            "width": 1,
-            "kind": "action",
-            "value": "cursor-left"
-          },
-          {
-            "id": "cursor-right",
-            "label": "›",
-            "width": 1,
-            "kind": "action",
-            "value": "cursor-right"
-          },
-          {
             "id": "mic",
             "label": "🎤",
-            "width": 1,
+            "width": 2,
             "kind": "action",
             "value": "mic"
-          },
-          {
-            "id": "enter",
-            "label": "⏎",
-            "width": 1.5,
-            "kind": "action",
-            "value": "enter"
           }
         ]
       ]
@@ -999,92 +1061,85 @@
             "width": 1,
             "kind": "text",
             "value": "{"
-          },
-          {
-            "id": "hyphen",
-            "label": "_",
-            "width": 1,
-            "kind": "text",
-            "value": "_"
           }
         ],
         [
           {
+            "id": "hyphen",
+            "label": "_",
+            "width": 0.9,
+            "kind": "text",
+            "value": "_"
+          },
+          {
             "id": "slash",
             "label": "|",
-            "width": 1,
+            "width": 0.9,
             "kind": "text",
             "value": "|"
           },
           {
             "id": "colon",
             "label": "°",
-            "width": 1,
+            "width": 0.9,
             "kind": "text",
             "value": "°"
           },
           {
             "id": "semicolon",
             "label": "§",
-            "width": 1,
+            "width": 0.9,
             "kind": "text",
             "value": "§"
           },
           {
             "id": "paren-left",
             "label": "<",
-            "width": 1,
+            "width": 0.9,
             "kind": "text",
             "value": "<"
           },
           {
             "id": "paren-right",
             "label": ">",
-            "width": 1,
+            "width": 0.9,
             "kind": "text",
             "value": ">"
           },
           {
             "id": "at",
             "label": "€",
-            "width": 1,
+            "width": 0.9,
             "kind": "text",
             "value": "€"
           },
           {
             "id": "amp",
             "label": "$",
-            "width": 1,
+            "width": 0.9,
             "kind": "text",
             "value": "$"
           },
           {
             "id": "percent",
             "label": "‰",
-            "width": 1,
+            "width": 0.9,
             "kind": "text",
             "value": "‰"
           },
           {
             "id": "plus",
             "label": "±",
-            "width": 1,
+            "width": 0.9,
             "kind": "text",
             "value": "±"
           },
           {
-            "id": "equals",
-            "label": "×",
+            "id": "backspace",
+            "label": "⌫",
             "width": 1,
-            "kind": "text",
-            "value": "×"
-          },
-          {
-            "id": "hash",
-            "label": "£",
-            "width": 1,
-            "kind": "text",
-            "value": "£"
+            "kind": "action",
+            "value": "backspace"
           }
         ],
         [
@@ -1098,65 +1153,79 @@
           {
             "id": "asterisk",
             "label": "~",
-            "width": 1,
+            "width": 0.75,
             "kind": "text",
             "value": "~"
           },
           {
             "id": "underscore",
             "label": "}",
-            "width": 1,
+            "width": 0.75,
             "kind": "text",
             "value": "}"
           },
           {
             "id": "apostrophe",
             "label": "«",
-            "width": 1,
+            "width": 0.75,
             "kind": "text",
             "value": "«"
           },
           {
             "id": "dquote",
             "label": "»",
-            "width": 1,
+            "width": 0.75,
             "kind": "text",
             "value": "»"
           },
           {
             "id": "dot",
             "label": "…",
-            "width": 1,
+            "width": 0.75,
             "kind": "text",
             "value": "…"
           },
           {
             "id": "comma",
             "label": "№",
-            "width": 1,
+            "width": 0.75,
             "kind": "text",
             "value": "№"
           },
           {
             "id": "question",
             "label": "¿",
-            "width": 1,
+            "width": 0.75,
             "kind": "text",
             "value": "¿"
           },
           {
             "id": "exclam",
             "label": "–",
-            "width": 1,
+            "width": 0.75,
             "kind": "text",
             "value": "–"
           },
           {
-            "id": "backspace",
-            "label": "⌫",
-            "width": 1.5,
+            "id": "equals",
+            "label": "×",
+            "width": 0.75,
+            "kind": "text",
+            "value": "×"
+          },
+          {
+            "id": "hash",
+            "label": "£",
+            "width": 0.75,
+            "kind": "text",
+            "value": "£"
+          },
+          {
+            "id": "enter",
+            "label": "⏎",
+            "width": 1,
             "kind": "action",
-            "value": "backspace"
+            "value": "enter"
           }
         ],
         [
@@ -1184,40 +1253,20 @@
           {
             "id": "space",
             "label": "Пробел",
-            "width": 5,
+            "width": 7.5,
             "kind": "action",
             "value": "space"
           },
           {
-            "id": "cursor-left",
-            "label": "‹",
-            "width": 1,
-            "kind": "action",
-            "value": "cursor-left"
-          },
-          {
-            "id": "cursor-right",
-            "label": "›",
-            "width": 1,
-            "kind": "action",
-            "value": "cursor-right"
-          },
-          {
             "id": "mic",
             "label": "🎤",
-            "width": 1,
+            "width": 2,
             "kind": "action",
             "value": "mic"
-          },
-          {
-            "id": "enter",
-            "label": "⏎",
-            "width": 1.5,
-            "kind": "action",
-            "value": "enter"
           }
         ]
       ]
     }
   }
 }
+

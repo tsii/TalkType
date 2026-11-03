@@ -23,6 +23,7 @@ import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicLong
 
 /** Fake: spielt vorab definierte Blöcke asynchron ab; optional mit Fehler. */
 private class FakeAudioSource(
@@ -121,6 +122,95 @@ private class FakeSink : EditorSink {
     override fun ownLength(): Int = 0
 }
 
+/** F28b1-Fake: jede read verschiebt eine virtuelle Uhr um [stepMs]; liefert
+ *  optional pro read einen Block (Takt-Fall) oder dauerhaft 0 (Stall-Fall). */
+private class StallTestSource(
+    private val deliver: Boolean,
+    private val stepMs: Long,
+    private val advance: (Long) -> Unit,
+    private val silent: Boolean = false, // F34: stille Blöcke (RMS 0 < SILENCE_RMS)
+) : AudioSource {
+    val reads = AtomicInteger(0)
+    // F31: Block-Lautstärke über der SILENCE-Schwelle (0,01) — dieser Test prüft
+    // den Takt (Stall), nicht die Stille; stille Blöcke würden jetzt den
+    // F31-Stille-Abbruch auslösen und den Takt-Fall untestbar machen.
+    // F34: silent=true liefert Nullen (RMS 0) für den ERR_SILENT-Fall.
+    private val data: ShortArray =
+        if (silent) ShortArray(1600) { 0 } else ShortArray(1600) { 12_000 }
+
+    override fun start(sessionId: Long): Boolean = true
+
+    override fun read(dst: ShortArray, timeoutMs: Int): Int {
+        reads.incrementAndGet()
+        advance(stepMs)
+        if (!deliver) return 0 // Timeout/keine Daten (Stall-Fall)
+        val n = minOf(dst.size, data.size)
+        System.arraycopy(data, 0, dst, 0, n)
+        Thread.sleep(2)
+        return n
+    }
+
+    override fun stopAndDrain(): List<PcmBlock> = emptyList()
+    override fun release() {}
+}
+
+/** A1 (PLAN_V0133 §1): Kaltstart-Fake-Quelle — read #0 liefert KEINEN Block
+ *  (Startlatenz [firstStepMs] nach src.start()); danach liefern die nächsten
+ *  [deliverReads] reads je einen LAUTEN Block (RMS > SILENCE_RMS) im
+ *  [stepMs]-Takt; deliverReads <= 0 = endlos. Nach der Lieferphase kehrt die
+ *  Quelle dauerhaft 0 zurück (Quelltod) — JEDE read schiebt die injizierte
+ *  Uhr, auch im Tod (Watchdog-Fenster läuft virtuell). */
+private class ColdStartSource(
+    private val firstStepMs: Long,
+    private val stepMs: Long,
+    private val deliverReads: Int,
+    private val advance: (Long) -> Unit,
+) : AudioSource {
+    private val index = AtomicInteger(0)
+    private val data = ShortArray(1600) { 12_000 } // laut: RMS ≈ 0,37 > SILENCE_RMS
+
+    override fun start(sessionId: Long): Boolean = true
+
+    override fun read(dst: ShortArray, timeoutMs: Int): Int {
+        val i = index.getAndIncrement()
+        advance(if (i == 0) firstStepMs else stepMs)
+        val deliver = i >= 1 && (deliverReads <= 0 || i < 1 + deliverReads)
+        if (!deliver) {
+            Thread.sleep(2)
+            return 0 // Timeout/keine Daten (Startlatenz bzw. Quelltod)
+        }
+        val n = minOf(dst.size, data.size)
+        System.arraycopy(data, 0, dst, 0, n)
+        Thread.sleep(2)
+        return n
+    }
+
+    override fun stopAndDrain(): List<PcmBlock> = emptyList()
+    override fun release() {}
+}
+
+/** A1 (PLAN_V0133 §1): Fake-Engine, deren load() die injizierte Uhr um
+ *  [loadMs] schiebt — modelliert den Kaltstart (Modell-Load ~4,5 s) auf der
+ *  Watchdog-Uhr. transcribe/close wie FakeAsrEngine (nur Längen, Regel 9). */
+private class SlowLoadEngine(
+    private val loadMs: Long,
+    private val advance: (Long) -> Unit,
+) : AsrEngine {
+    override fun load(modelDir: File) {
+        advance(loadMs)
+    }
+
+    override suspend fun transcribe(window: PcmWindow, sessionId: Long, runId: Long): Hypothesis {
+        val text = "x".repeat((window.audioSeconds * 3).toInt().coerceAtLeast(1))
+        return Hypothesis(
+            IntArray(1), text, IntArray(1), sessionId, runId,
+            window.samples.size, incomplete = false,
+        )
+    }
+
+    override fun close() {}
+}
+
 class DictationCoordinatorTest {
 
     private fun newScope() = kotlinx.coroutines.CoroutineScope(
@@ -152,6 +242,21 @@ class DictationCoordinatorTest {
         c.stop()
         assertEquals(DictationState.IDLE, c.state)
         assertNull(c.lastError)
+    }
+
+    // (F26a) abort-Grund wird gemerkt; ein spaeteres Stop ueberschreibt ihn NICHT
+    @Test fun `abort-Grund wird gemerkt und vom Stop nicht ueberschrieben`() {
+        val scope = newScope()
+        val c = DictationCoordinator(scope, { FakeAudioSource(listOf(ShortArray(16000))) }, { FakeAsrEngine() }, FakeSink())
+        assertEquals("-", c.lastAbortReason)
+        assertTrue(c.start())
+        assertEquals("start() setzt auf -", "-", c.lastAbortReason)
+        c.abort("editor_change")
+        assertEquals("editor_change", c.lastAbortReason)
+        c.stop() // active=false — darf den Abort-Grund nicht drueberschreiben
+        assertEquals("editor_change", c.lastAbortReason)
+        awaitIdle(c)
+        shutdown(scope)
     }
 
     /** Wartet (nur im Test!) bis der asynchrone stop()-Worker fertig ist. */
@@ -306,5 +411,210 @@ class DictationCoordinatorTest {
             // belegt: replaceBeforeCursor wurde ueber den Executor ausgefuehrt
             org.junit.Assert.assertNotNull("Executor muss gelaufen sein", executorThread.get())
         }
+    }
+
+    // F28b1 (a): keine Blöcke > 3000 ms → stall-Fehler GENAU EINMAL + sauberes
+    // Session-Ende. (Genau-einmal strukturell: Single-Thread-Loop, return nach
+    // dem Feuer — der Read-Zähler belegt, dass die Loop beendet ist und kein
+    // zweiter Fehler mehr entstehen kann.)
+    @Test fun `F28b1 ohne Bloecke ueber 3000 ms loest genau einen stall-Aus`() {
+        // Virtuelle Uhr startet bei 1 000 000 (NICHT 0 — 0 ist das
+        // "nie gestartet"-Sentinel von lastBlockAtMs; die Produktionsuhr
+        // (nanoTime/1e6) liefert nie 0).
+        val base = 1_000_000L
+        val now = AtomicLong(base)
+        val src = StallTestSource(deliver = false, stepMs = 1000, advance = { now.addAndGet(it) })
+        val scope = newScope()
+        val c = DictationCoordinator(scope, { src }, { FakeAsrEngine() }, FakeSink(), nowMs = { now.get() })
+        assertTrue(c.start())
+        val deadline = System.currentTimeMillis() + 3000
+        while (c.lastAbortReason != "audio_error:stall" && System.currentTimeMillis() < deadline) {
+            Thread.sleep(5)
+        }
+        assertEquals("Stall muss die Session abbrechen", "audio_error:stall", c.lastAbortReason)
+        assertEquals("kontrollierter Fehlercode, keine Audio-Inhalte", "stall:no_audio", c.lastError)
+        // abort() setzt den Grund BEVOR controller.abort() IDLE macht — kurz warten.
+        val deadline2 = System.currentTimeMillis() + 3000
+        while (c.state != DictationState.IDLE && System.currentTimeMillis() < deadline2) {
+            Thread.sleep(5)
+        }
+        assertEquals(DictationState.IDLE, c.state)
+        assertFalse("Session muss beendet sein", c.isActive)
+        assertTrue("Stall-Dauer nach Abbruch lesbar (Export)", c.capStallMs() >= 3000)
+        assertEquals("keine Blöcke in dieser Session", 0, c.capBlocks())
+        val readsAtAbort = src.reads.get()
+        Thread.sleep(50)
+        assertEquals("Capture-Loop beendet — kein wiederholter Fehler", readsAtAbort, src.reads.get())
+        shutdown(scope)
+    }
+
+    // F28b1 (b): Blöcke im 500-ms-Takt → Stall-Uhr wird ständig zurückgesetzt,
+    // kein stall-Fehler, die Session übersteht virtual weit mehr als 3000 ms.
+    @Test fun `F28b1 Blöcke im 500 ms Takt loesen keinen stall`() {
+        // Virtuelle Uhr startet bei 1 000 000 (s. Test a) — 0 ist reserviert.
+        val base = 1_000_000L
+        val now = AtomicLong(base)
+        val src = StallTestSource(deliver = true, stepMs = 500, advance = { now.addAndGet(it) })
+        val scope = newScope()
+        val c = DictationCoordinator(scope, { src }, { FakeAsrEngine() }, FakeSink(), nowMs = { now.get() })
+        assertTrue(c.start())
+        val deadline = System.currentTimeMillis() + 3000
+        while (now.get() < base + 10_000 && System.currentTimeMillis() < deadline) Thread.sleep(10)
+        assertTrue("virtuelle Zeit muss 3 s weit uebertreffen", now.get() >= base + 10_000)
+        assertFalse("kein stall-Abbruch", c.lastAbortReason == "audio_error:stall")
+        assertNull("kein Fehlercode", c.lastError)
+        assertTrue("Session läuft weiter", c.isActive)
+        assertTrue("Stall bleibt unter der Grenze (500-ms-Takt)", c.capStallMs() <= 1000)
+        assertTrue("Blöcke werden gezählt", c.capBlocks() >= 15)
+        c.stop()
+        awaitIdle(c)
+        shutdown(scope)
+    }
+
+    // F28b2 (a): start() setzt die Session-Ende-Diagnose frisch — der Export
+    // zeigt nie Ereignisse/Zustände der VORHERIGEN Session.
+    @Test fun `F28b2 start loescht mic_rel und setzt status_shown auf ready`() {
+        val scope = newScope()
+        val c = DictationCoordinator(scope, { FakeAudioSource(listOf(ShortArray(16000))) }, { FakeAsrEngine() }, FakeSink())
+        // alte Werte simulieren (z. B. ueberlebte Felder aus der letzten Session)
+        c.setMicRel("holdcancel:999")
+        c.setStatusShown("error")
+        assertTrue(c.start())
+        assertEquals("mic_rel wird bei start() geleert", "", c.micRel())
+        assertEquals("status_shown wird bei start() auf ready gesetzt", "ready", c.statusShown())
+        c.stop()
+        awaitIdle(c)
+        shutdown(scope)
+    }
+
+    // F28b2 (b): Setter/Getter-Runde — die kontrollierten Codes kommen
+    // unverändert im Export an (Regel 9: nur Codes/ms, keine Inhalte).
+    @Test fun `F28b2 Setter-Getter-Runde liefert die Codes unveraendert`() {
+        val c = DictationCoordinator(newScope(), { FakeAudioSource(emptyList()) }, { FakeAsrEngine() }, FakeSink())
+        c.setMicRel("up:1234")
+        assertEquals("up:1234", c.micRel())
+        c.setMicRel("holdcancel:5000")
+        assertEquals("holdcancel:5000", c.micRel())
+        for (code in listOf("ready", "dictat", "finalizing", "error")) {
+            c.setStatusShown(code)
+            assertEquals(code, c.statusShown())
+        }
+        // sessionStartedAtMs: 0 ohne Session, > 0 nach start()
+        assertEquals(0L, c.sessionStartedAtMs)
+    }
+
+    // F34/P2-1 (REVIEW_F29_F33, Nutzer-Bug „grün hängt“): ein Watchdog-Abbruch
+    // (ERR_STALL) muss den Service-Observer (onAborted) feuern — der setzt die
+    // Mic-View auf neutral. Testet den Coordinator-Grenzübergang: Observer
+    // feuert genau einmal mit dem Grund, danach ist die Session IDLE, und die
+    // View-Ableitung (micUiRecording — was VKS syncMicUi liest) ist neutral.
+    @Test fun `F34 ERR_STALL-Abbruch feuert onAborted und der Mic-Zustand ist neutral`() {
+        val base = 1_000_000L
+        val now = AtomicLong(base)
+        val src = StallTestSource(deliver = false, stepMs = 1000, advance = { now.addAndGet(it) })
+        val scope = newScope()
+        val c = DictationCoordinator(scope, { src }, { FakeAsrEngine() }, FakeSink(), nowMs = { now.get() })
+        val aborts = java.util.concurrent.CopyOnWriteArrayList<String>()
+        c.onAborted = { aborts.add(it) }
+        assertTrue(c.start())
+        val deadline = System.currentTimeMillis() + 3000
+        while (c.lastAbortReason != "audio_error:stall" && System.currentTimeMillis() < deadline) {
+            Thread.sleep(5)
+        }
+        assertEquals("Stall muss die Session abbrechen", "audio_error:stall", c.lastAbortReason)
+        assertEquals("onAborted feuert genau einmal mit dem Grund", listOf("audio_error:stall"), aborts)
+        assertEquals("Session ist IDLE", DictationState.IDLE, c.state)
+        assertFalse("Mic-View-Ableitung nach Watchdog-Abbruch ist neutral", micUiRecording(c.state))
+        shutdown(scope)
+    }
+
+    // F34/P2-1 (b): ERR_SILENT (Session war nie laut, Blöcke laufen) — gleicher
+    // Endpfad wie ERR_STALL: Observer feuert, View-Ableitung wird neutral.
+    // (Blöcke sind laut geliefert, aber alle unter der SILENCE-Schwelle.)
+    @Test fun `F34 ERR_SILENT-Abbruch (nie laut) feuert onAborted und der Mic-Zustand ist neutral`() {
+        val base = 1_000_000L
+        val now = AtomicLong(base)
+        val src = StallTestSource(deliver = true, stepMs = 500, silent = true, advance = { now.addAndGet(it) })
+        val scope = newScope()
+        val c = DictationCoordinator(scope, { src }, { FakeAsrEngine() }, FakeSink(), nowMs = { now.get() })
+        val aborts = java.util.concurrent.CopyOnWriteArrayList<String>()
+        c.onAborted = { aborts.add(it) }
+        assertTrue(c.start())
+        val deadline = System.currentTimeMillis() + 3000
+        while (c.lastAbortReason != "audio_error:silence" && System.currentTimeMillis() < deadline) {
+            Thread.sleep(5)
+        }
+        assertEquals("Silence muss die Session abbrechen", "audio_error:silence", c.lastAbortReason)
+        assertTrue("Blöcke liefen (also Silence, kein Stall)", c.capBlocks() >= 5)
+        assertEquals("onAborted feuert genau einmal mit dem Grund", listOf("audio_error:silence"), aborts)
+        assertEquals("Session ist IDLE", DictationState.IDLE, c.state)
+        assertFalse("Mic-View-Ableitung nach Stille-Abbruch ist neutral", micUiRecording(c.state))
+        shutdown(scope)
+    }
+
+    // A1 (PLAN_V0133 §1, Rote-Test 1): Kaltstart — engine.load() schiebt die
+    // injizierte Uhr um 4 500 ms (Modell-Load), src.start() ist erfolgreich,
+    // der erste PCM-Puffer kommt erst 100 ms später. Die Watchdog-Baselines
+    // müssen am ECHTEN Capture-Start hängen: isActive=true, lastError=null,
+    // KEIN audio_error:stall und KEIN audio_error:silence (vor dem Fix:
+    // ERR_STALL im ersten leeren Poll, weil die Uhren vor engine.load()
+    // genullt wurden).
+    @Test fun `A1 Kaltstart mit 4500ms load und 100ms Startlatenz bleibt aktiv ohne stall und silence`() {
+        val base = 1_000_000L // NICHT 0 — 0 ist lastBlockAtMs-Sentinel "nie gestartet"
+        val now = AtomicLong(base)
+        val src = ColdStartSource(firstStepMs = 100, stepMs = 500, deliverReads = 0, advance = { now.addAndGet(it) })
+        val engine = SlowLoadEngine(loadMs = 4500, advance = { now.addAndGet(it) })
+        val scope = newScope()
+        val c = DictationCoordinator(
+            scope, { src }, { engine }, FakeSink(),
+            modelDir = File("vk-test-model"), // Fake-Engine ignoriert das Verzeichnis
+            nowMs = { now.get() },
+        )
+        assertTrue(c.start())
+        // virtuell > 4 s über den Capture-Start hinaus laufen lassen — jenseits
+        // der 3-s-Stall- UND 3-s-Stille-Fenster (real durch Deadline begrenzt)
+        val deadline = System.currentTimeMillis() + 3000
+        while (now.get() < base + 4500 + 4000 && System.currentTimeMillis() < deadline) Thread.sleep(10)
+        assertTrue("virtuelle Zeit muss den Capture-Start um >3 s uebertreffen", now.get() >= base + 4500 + 4000)
+        assertTrue("Session muss nach Kaltstart aktiv sein", c.isActive)
+        assertNull("kein Fehlercode nach Startlatenz", c.lastError)
+        assertEquals("kein Abort-Grund — weder stall noch silence", "-", c.lastAbortReason)
+        assertTrue("erster PCM-Puffer muss angekommen sein", c.capBlocks() >= 1)
+        c.stop()
+        awaitIdle(c)
+        shutdown(scope)
+    }
+
+    // A1 (PLAN_V0133 §1, Rote-Test 2): Kaltstart mit 4 500 ms load — die Quelle
+    // liefert nach erfolgreichem Start zunächst Blöcke und dann 3 000+ ms
+    // keine mehr (echter Quelltod). Erwartung: GENAU EIN audio_error:stall,
+    // onAborted genau 1x, Controller IDLE — und der Abort kommt erst nach dem
+    // Quelltod, nicht schon im ersten leeren Poll nach dem Modell-Load
+    // (vor dem Fix: ERR_STALL vor dem ersten Block, capBlocks=0).
+    @Test fun `A1 Quelltod 3000ms nach Capture-Start loest genau einen stall-Abbruch aus`() {
+        val base = 1_000_000L
+        val now = AtomicLong(base)
+        val src = ColdStartSource(firstStepMs = 100, stepMs = 500, deliverReads = 3, advance = { now.addAndGet(it) })
+        val engine = SlowLoadEngine(loadMs = 4500, advance = { now.addAndGet(it) })
+        val scope = newScope()
+        val c = DictationCoordinator(
+            scope, { src }, { engine }, FakeSink(),
+            modelDir = File("vk-test-model"),
+            nowMs = { now.get() },
+        )
+        val aborts = CopyOnWriteArrayList<String>()
+        c.onAborted = { aborts.add(it) }
+        assertTrue(c.start())
+        val deadline = System.currentTimeMillis() + 3000
+        while (c.lastAbortReason != "audio_error:stall" && System.currentTimeMillis() < deadline) {
+            Thread.sleep(5)
+        }
+        assertEquals("Quelltod muss die Session ueber den Stall-Pfad beenden", "audio_error:stall", c.lastAbortReason)
+        assertEquals("kontrollierter Fehlercode, keine Audio-Inhalte", "stall:no_audio", c.lastError)
+        assertEquals("onAborted feuert genau einmal mit dem Grund", listOf("audio_error:stall"), aborts)
+        assertEquals("Controller ist IDLE", DictationState.IDLE, c.state)
+        assertFalse("Session ist beendet", c.isActive)
+        assertTrue("Quelle muss vor dem Tod Bloecke geliefert haben (kein Frueh-Abbruch)", c.capBlocks() >= 1)
+        shutdown(scope)
     }
 }

@@ -103,4 +103,100 @@ class MicToggleTest {
             }
         }
     }
+
+    // ---- T3 (v0.1.35, Debugger-Design, Beweis /tmp/vk_phone_e2.log Z.74-97):
+    // Tap/Hold-Klassifikation der Fußzeilen-Mikro-Geste (micHoldReleaseDecision) ----
+
+    // ① frischer Tap, UP 150 ms VOR start_ok ⇒ TOGGLE_ON — die Session läuft
+    // weiter (STARTING = Start noch nicht fertig), das Flag bleibt UNgesetzt
+    // (micStartFinishedAction RUN ⇒ nach start_ok RECORDING, kein Stop).
+    @Test
+    fun `T3 frischer Tap 150ms VOR start_ok - TOGGLE_ON, Session laeuft weiter`() {
+        assertEquals(
+            MicReleaseDecision.TOGGLE_ON,
+            micHoldReleaseDecision(
+                stateAtDown = DictationState.IDLE,
+                stateAtRelease = DictationState.STARTING, // start_ok noch nicht gekommen
+                holdDurationMs = 150L,
+                cancelled = false,
+                startingUp = true,
+            ),
+        )
+        // TOGGLE_ON setzt KEIN wantedStop-Flag — nach start_ok läuft die Session (RUN):
+        assertEquals(MicStartFinishAction.RUN, micStartFinishedAction(wantedStop = false, wantedAbort = false))
+    }
+
+    // ② frischer Tap, UP 40 ms NACH start_ok ⇒ TOGGLE_ON, KEIN Stop — genau der
+    // Beweisfall (Warm): vorher tötete micHoldReleaseAction(RECORDING, UP) die
+    // Session sofort (stopped ok=0/audio_s=0, 10-90 ms nach start_ok).
+    @Test
+    fun `T3 frischer Tap 40ms NACH start_ok - TOGGLE_ON, kein Stop, Session lebt`() {
+        assertEquals(
+            MicReleaseDecision.TOGGLE_ON,
+            micHoldReleaseDecision(
+                stateAtDown = DictationState.IDLE,
+                stateAtRelease = DictationState.RECORDING, // start_ok kam schon
+                holdDurationMs = 40L,
+                cancelled = false,
+                startingUp = false,
+            ),
+        )
+        // auch der Down-lose-Fall (null = kein Coordinator) ist ein frischer Tap:
+        assertEquals(
+            MicReleaseDecision.TOGGLE_ON,
+            micHoldReleaseDecision(null, DictationState.RECORDING, 40L, cancelled = false, startingUp = false),
+        )
+    }
+
+    // ③ Hold > 300 ms ⇒ echter Hold-Release: STOP mit Finale; Variante Release
+    // WÄHREND des Starts ⇒ HOLD_STOP_PENDING — der nachgereichte Stop greift NACH
+    // Startende (micStartFinishedAction STOP_AFTER_START, nicht blind KEEP_RUNNING).
+    @Test
+    fun `T3 Hold ueber 300ms - Stop mit Finale - Release im Start haelt pending Stop nach`() {
+        assertEquals(
+            "Hold-Release auf laufender Session: regulärer Stop mit Finale",
+            MicReleaseDecision.HOLD_STOP,
+            micHoldReleaseDecision(DictationState.IDLE, DictationState.RECORDING, 350L, cancelled = false, startingUp = false),
+        )
+        assertEquals(
+            "Release während STARTING: pending Stop",
+            MicReleaseDecision.HOLD_STOP_PENDING,
+            micHoldReleaseDecision(DictationState.IDLE, DictationState.STARTING, 350L, cancelled = false, startingUp = true),
+        )
+        assertEquals(
+            "Release auf RECORDING, während start_ok noch aussteht: pending Stop",
+            MicReleaseDecision.HOLD_STOP_PENDING,
+            micHoldReleaseDecision(DictationState.IDLE, DictationState.RECORDING, 350L, cancelled = false, startingUp = true),
+        )
+        // der pending Stop greift NACH Startende WIRKLICH (T3 ersetzt KEEP_RUNNING):
+        assertEquals(MicStartFinishAction.STOP_AFTER_START, micStartFinishedAction(wantedStop = true, wantedAbort = false))
+        // Grenze: genau 300 ms sind noch ein Tap (>) — 301 ms schon Hold:
+        assertEquals(MicReleaseDecision.TOGGLE_ON,
+            micHoldReleaseDecision(DictationState.IDLE, DictationState.RECORDING, MIC_TAP_MAX_MS, cancelled = false, startingUp = false))
+        assertEquals(MicReleaseDecision.HOLD_STOP,
+            micHoldReleaseDecision(DictationState.IDLE, DictationState.RECORDING, MIC_TAP_MAX_MS + 1, cancelled = false, startingUp = false))
+    }
+
+    // ④ Gegenprobe: zweiter Tap auf die laufende Session ⇒ TOGGLE_OFF bleibt
+    // (regulär ausschalten) — die T3-Klassifikation öffnet keinen Dauertoaster.
+    @Test
+    fun `T3 Gegenprobe - zweiter Tap auf laufender Session ist TOGGLE_OFF`() {
+        assertEquals(
+            MicReleaseDecision.TOGGLE_OFF,
+            micHoldReleaseDecision(DictationState.RECORDING, DictationState.RECORDING, 120L, cancelled = false, startingUp = false),
+        )
+        assertEquals(
+            "Tap auf startender Session schaltet ebenfalls aus",
+            MicReleaseDecision.TOGGLE_OFF,
+            micHoldReleaseDecision(DictationState.RECORDING, DictationState.STARTING, 120L, cancelled = false, startingUp = true),
+        )
+        // CANCEL unverändert: Abbruch ohne Finale (nur aus laufender/startender Aufnahme):
+        assertEquals(MicReleaseDecision.ABORT,
+            micHoldReleaseDecision(DictationState.RECORDING, DictationState.RECORDING, 120L, cancelled = true, startingUp = false))
+        assertEquals(MicReleaseDecision.IGNORE,
+            micHoldReleaseDecision(DictationState.IDLE, DictationState.IDLE, 120L, cancelled = true, startingUp = false))
+        // Session endete zwischen DOWN und UP: bewusst nichts:
+        assertEquals(MicReleaseDecision.IGNORE,
+            micHoldReleaseDecision(DictationState.RECORDING, DictationState.FINALIZING, 120L, cancelled = false, startingUp = false))
+    }
 }

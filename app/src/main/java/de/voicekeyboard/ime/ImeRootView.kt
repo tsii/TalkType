@@ -6,6 +6,8 @@ import android.graphics.drawable.GradientDrawable
 import android.graphics.drawable.LayerDrawable
 import android.util.AttributeSet
 import android.view.Gravity
+import android.view.View
+import android.view.ViewOutlineProvider
 import android.widget.Button
 import android.widget.FrameLayout
 import android.widget.LinearLayout
@@ -38,6 +40,13 @@ class ImeRootView @JvmOverloads constructor(
 
     val statusText: TextView
     val micButton: Button
+    /** P0 (2026-11-01): 🐞 als ERSTES View-Kind der statusRow (48 dp, rechts) —
+     *  vorher dynamisches addView im Service (brüchig, ungetestet, verschwand
+     *  geräteseitig). Immer sichtbar, Service hängt nur den Listener an. */
+    val debugButton: Button
+    /** T9 (v0.1.38): die Statuszeile als Ganzes — NUR Debug sichtbar (s. init);
+     *  die Sichtbarkeit ist Tests zugänglich, ohne über micButton.parent zu gehen. */
+    val statusRow: LinearLayout
     val keyboardView: KeyboardView
     val emojiPanel: EmojiPanelView
 
@@ -61,9 +70,11 @@ class ImeRootView @JvmOverloads constructor(
         setBackgroundColor(palette.background)
 
         statusText = TextView(context).apply {
-            // S4: „Leere Leiste = leer, kein Platzhalter-Text" — Inhalt setzt
-            // ausschließlich der Service (updateStatus); hier bewusst leer.
-            text = ""
+            // P0 (2026-11-01, Nutzer-Entscheidung): Grundzustand NIE leer —
+            // vorher (S4) bewusst "", weil der Service den Text setzt; der
+            // Service-Weg (updateStatus) bleibt, "Bereit" ist nur der
+            // Konstruktions-Default, falls er (noch) nicht lief.
+            text = "Bereit"
             // Sol §1: Status 12 sp, sekundäre Textfarbe (Texte links).
             textSize = KeyboardTheme.SP_SECONDARY_SP
             setTextColor(palette.textSecondary)
@@ -84,7 +95,38 @@ class ImeRootView @JvmOverloads constructor(
             )
         }
 
-        val statusRow = LinearLayout(context).apply {
+        debugButton = Button(context).apply {
+            // P0: 48-dp-Trefferfläche, RECHTS (letztes Kind der statusRow),
+            // Tokens wie micButton (kein fremdes Relief-Thema).
+            text = "🐞"
+            contentDescription = "Diagnose kopieren/teilen"
+            isAllCaps = false
+            minWidth = 0
+            minimumWidth = 0
+            setPadding(0, 0, 0, 0)
+            setTextColor(palette.textFunctional)
+            setBackgroundColor(palette.background)
+            layoutParams = LinearLayout.LayoutParams(
+                (48 * density).toInt(),
+                (48 * density).toInt(),
+            )
+        }
+
+        // T9 (v0.1.38): Statuszeile NUR DEBUG — im Release (FLAG_DEBUGGABLE fehlt)
+        // bleibt die statusRow GONE: Statustext + 🎤 + 🐞 belegen KEINEN Layout-
+        // platz, die Tastatur erhält das volle Höhenbudget. Injizierbare Naht:
+        // context.applicationInfo.flags, EINMAL gelesen (Robolectric-Tests steuern
+        // das Bit). Service-Updates (statusText.text, micButton.isEnabled/
+        // isActivated) sind reine Property-Sets auf weiterhin angehängten Views —
+        // bei GONE gefahrlos, kein Guard nötig (geprüft: VoiceKeyboardService
+        // :1537/1550/1552 und syncMicUi :921). T5-Band-Overlay: ohne sichtbare
+        // statusRow liegt die KeyboardView an der Stack-Oberkante (top = 0) ⇒
+        // statusBandPx = 0 ⇒ menuTopForStatusBand fällt auf die T1-Zweizonenregel
+        // zurück (Bestands-Fallback).
+        val debugStatusRow =
+            (context.applicationInfo?.flags ?: 0) and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE != 0
+
+        statusRow = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             // T21/S2-Höhenhaushalt (DESIGN_STOCK_LOOK §3): DIESER Zeilenblock ist die
@@ -110,6 +152,15 @@ class ImeRootView @JvmOverloads constructor(
             }
             addView(statusText)
             addView(micButton)
+            addView(debugButton) // P0: rechts, fest in der Zeile (kein dynamisches addView)
+            // T9 (vc39): Release ⇒ GONE (kein Layout-Platz); Debug ⇒ Bestand (VISIBLE).
+            // T9b-Härtung (vc39-Beweislauf, Review-Nachlese): die Modi-Wechsler
+            // showEmojiPanel()/hideEmojiPanel() fassen NUR keyboardView/emojiBlock an —
+            // nie statusRow; der Service setzt überhaupt keine visibility. Damit kein
+            // künftiger Wechsler die Release-Zeile zurückholt, bleibt die Setzung hier
+            // die einzige Stelle und ist per Test erzwungen (ImeRootViewLayoutTest:
+            // Release-Test prüft GONE in Tastatur- UND Emoji-Modus inkl. Roundtrip).
+            visibility = if (debugStatusRow) VISIBLE else GONE
         }
 
         keyboardView = KeyboardView(context)
@@ -151,6 +202,24 @@ class ImeRootView @JvmOverloads constructor(
         // Der Stack ist das einzige inhaltliche Kind der Root.
         val stack = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
+            // F28a: das Langdruckmenü der obersten Tastenreihe wird UEBER die
+            // Statusleiste gezeichnet (negatives top im KeyboardView-Koordinatensystem).
+            // Der Stack darf seine Kinder daher NICHT auf die Child-/eigene Grenze
+            // klemmen, sonst wäre der über die View-Oberkante hinausreichende Teil
+            // der Palette unsichtbar. NUR diese zwei Properties — kein Layout-Umbau.
+            clipChildren = false
+            clipToPadding = false
+            // F34/P2-2 (REVIEW_F29_F33): die statusRow liegt in der Z-Ordnung ÜBER
+            // der KeyboardView — das r0-Popup (negatives top) ist nur Canvas-Zeichnung
+            // im KeyboardView-Child und würde die 🐞-Taste zwar touchbar, aber
+            // visuell verdecken. Elevation = Z-Anhebung OHNE Layout-/Geometrie-
+            // Änderung (OutlineProvider.NONE: keine Schattenkante).
+            statusRow.elevation = 1f
+            // Kein Umriss = keine Schattenkante; die NONE-Konstante ist im
+            // Offline-SDK-Stub nicht auflösbar (F34-Workaround 2026-11-01).
+            statusRow.outlineProvider = object : ViewOutlineProvider() {
+                override fun getOutline(v: View, o: android.graphics.Outline) {}
+            }
             addView(statusRow)
             addView(keyboardView)
             addView(emojiBlock)
@@ -169,7 +238,14 @@ class ImeRootView @JvmOverloads constructor(
         setOnApplyWindowInsetsListener { v, insets ->
             val nav = insets.systemGestureInsets.bottom
                 .coerceAtLeast(insets.systemWindowInsetBottom)
-            v.setPadding(v.paddingLeft, v.paddingTop, v.paddingRight, nav)
+            // P0-0.1.20: INSET-ANOMALIE-Deckel — ein aehnlich großes bottom-Systeminset
+            // (neueer OS-Stand, IME im eigenen Prozess) duerfe nie den ganzen Stack
+            // einquetschen: das untere Root-Padding ist der EINZIGE Mechanismus, der
+            // die Statuszeile (48 dp) von oben herdruecken/komprimieren kann. Der Deckel
+            // gilt NUR fuer das Padding (Hoehe-Abzug bleibt genau einmal), nicht fuer
+            // die Insets-Auslieferung.
+            val navCapped = nav.coerceAtMost((120 * v.resources.displayMetrics.density).toInt())
+            v.setPadding(v.paddingLeft, v.paddingTop, v.paddingRight, navCapped)
             insets
         }
     }

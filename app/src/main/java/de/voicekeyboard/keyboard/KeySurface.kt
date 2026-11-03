@@ -1,5 +1,7 @@
 package de.voicekeyboard.keyboard
 
+import kotlin.math.min
+
 /**
  * D11 (docs/DESIGN_STOCK_LOOK.md „D11 — Rückmeldung gedrückte Taste", ab Zeile
  * 240): Reine, JVM-testbare Entscheidung Flächen-/Glyphen-Zustand — KEIN
@@ -64,5 +66,25 @@ object KeySurface {
             else -> Glyph.NORMAL
         }
         return Decision(surface, glyph)
+    }
+
+    /**
+     * F23a2 (DESIGN_KEY_POPUP.md §7.2): Hint-Anker rechts oben — Textmittelpunkt
+     * = rechte Tastenkante minus seitlichem Innenabstand [padPx] (POPUP_PAD_DP)
+     * minus halber gemessener Inkbreite. Reine Maße, kein Android.
+     */
+    fun hintAnchorX(keyRight: Float, padPx: Float, inkWidth: Float): Float =
+        keyRight - padPx - inkWidth / 2f
+
+    /**
+     * F23a2 (§7.2): vertikaler Abstand Tastenoberkante → sichtbare Glyphenkante
+     * in dp: (padDp / 2) × min(1, h / Sollhöhe) — nominal 2 dp bei voller
+     * Zeilenhöhe, relativ kleiner bei geschrumpften Reihen, NIE über padDp/2
+     * und NIE negativ (kaputte/leere Höhe -> 0).
+     */
+    fun hintTopOffsetDp(padDp: Float, actualRowHeightDp: Double, targetRowHeightDp: Int): Float {
+        if (targetRowHeightDp <= 0 || actualRowHeightDp <= 0.0) return 0f
+        val scale = min(1.0, actualRowHeightDp / targetRowHeightDp).toFloat()
+        return (padDp / 2f * scale).coerceAtLeast(0f)
     }
 }

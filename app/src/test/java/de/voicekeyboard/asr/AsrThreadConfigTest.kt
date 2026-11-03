@@ -68,7 +68,9 @@ class AsrThreadConfigTest {
 
     @Test
     fun `chunks werden genau an den chunk-grenzen geschnitten`() {
-        val cfg = AsrThreadConfig.DEFAULT
+        // F21: chunkMs-GEOMETRIE ist unveraendlich — Test pinnt chunkMs=1000 fest
+        // (der DEFAULT ist seit F21 = 2000, gehört aber zu den Default-Asserts).
+        val cfg = AsrThreadConfig(intraOpThreads = 4, interOpThreads = 1, chunkMs = 1000)
         // 1 s Chunk = 16000 Samples bei 16 kHz; 5 s Audio → Grenzen 1..5 s
         val boundaries = cfg.chunkBoundaries(totalSamples = 16000 * 5)
         assertEquals(listOf(16000, 32000, 48000, 64000, 80000), boundaries)
@@ -93,21 +95,25 @@ class AsrThreadConfigTest {
     }
 
     @Test
-    fun `defaults fuer chunk und intervall entsprechen den heutigen ist-werten`() {
-        // Heute: Coordinator-Tick 1 s (chunkMs=1000), Partials ab 2 s (Intervall 2000)
-        assertEquals(1000, AsrThreadConfig.DEFAULT.chunkMs)
+    fun `defaults fuer chunk und intervall entsprechen den aktuellen soll-werten`() {
+        // F21 (Nutzerfreigabe 2026-10-30): Coordinator-Tick 2 s (chunkMs=2000),
+        // Partials ab 2 s (Intervall 2000) — Grund: quadratisches Neudekodieren.
+        assertEquals(2000, AsrThreadConfig.DEFAULT.chunkMs)
         assertEquals(2000, AsrThreadConfig.DEFAULT.hypothesisMinIntervalMs)
         assertEquals(4, AsrThreadConfig.DEFAULT.intraOpThreads)
         assertEquals(1, AsrThreadConfig.DEFAULT.interOpThreads)
+        // F21: Takt-Klammern des cost-aware Decode-Takts (DecodePace)
+        assertEquals(2000L, AsrThreadConfig.DEFAULT.decodePaceBaseMs)
+        assertEquals(6000L, AsrThreadConfig.DEFAULT.decodePaceMaxMs)
     }
 
     // ---- S12b: Defaults bitgenau = heutiges Coordinator-Verhalten ----
 
     @Test
-    fun `S12b default tick entspricht exakt TICK_SAMPLES_1S`() {
-        // Coordinator: tickSamples = chunkMs * 16_000 / 1000 = 16_000 bei Default
+    fun `S12b default tick entspricht exakt zwei TICK_SAMPLES_1S`() {
+        // F21: tickSamples = chunkMs * 16_000 / 1000 = 32_000 bei Default (chunkMs 2000)
         val tick = AsrThreadConfig.DEFAULT.chunkMs * 16_000 / 1000
-        assertEquals(de.voicekeyboard.ime.DictationCoordinator.TICK_SAMPLES_1S, tick)
+        assertEquals(2 * de.voicekeyboard.ime.DictationCoordinator.TICK_SAMPLES_1S, tick)
     }
 
     @Test

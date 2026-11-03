@@ -3,6 +3,7 @@ package de.voicekeyboard.layouts
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
+import de.voicekeyboard.layouts.KeyKind
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -256,5 +257,146 @@ class LayoutParserTest {
             }
             assertEquals("Пробел", spaceKey.label)
         }
+    }
+
+    // ---- F23a1: optionales hint-Feld (docs/DESIGN_DEDE_ZIELBILD.md §1/§4) ----
+    // Regel: ein kaputtes hint darf NIE die Tastatur killen — fehlend/leer/zu
+    // lang (> 2 Zeichen) -> null, die uebrigen Felder der Taste bleiben intakt.
+
+    private fun hintAsset(keyJson: String) = """
+        {
+          "schemaVersion": 1, "id": "xx-xx",
+          "language": {"tag": "xx-XX", "label": "X", "caseLocale": "xx-XX", "direction": "ltr"},
+          "deadKeys": {},
+          "layers": {
+            "base": {"rows": [[
+              {"id": "q", "label": "q", "width": 1, "kind": "text", "value": "q", "alternates": ["x", "y"]$keyJson}
+            ]]},
+            "shift": {"rows": [[
+              {"id": "q", "label": "Q", "width": 1, "kind": "text", "value": "Q"}
+            ]]},
+            "symbols": {"rows": [[
+              {"id": "s1", "label": "1", "width": 1, "kind": "text", "value": "1"}
+            ]]},
+            "symbolsShift": {"rows": [[
+              {"id": "s1", "label": "1", "width": 1, "kind": "text", "value": "1"}
+            ]]}
+          }
+        }
+        """.trimIndent()
+
+    private fun hintOf(keyJson: String) =
+        LayoutParser.parse(hintAsset(keyJson)).layers.getValue("base").rows[0][0]
+
+    @Test fun `a) Taste ohne hint-Feld liefert null`() {
+        org.junit.Assert.assertNull(hintOf("").hint)
+    }
+
+    @Test fun `b) hint mit einer Ziffer wird gelesen`() {
+        assertEquals("1", hintOf(", \"hint\": \"1\"").hint)
+    }
+
+    @Test fun `c) leerer hint wird zu null, nicht zum leeren String`() {
+        org.junit.Assert.assertNull(hintOf(", \"hint\": \"\"").hint)
+    }
+
+    @Test fun `d) zu langer hint wird verworfen, uebrige Felder bleiben intakt`() {
+        val key = hintOf(", \"hint\": \"abc\"")
+        org.junit.Assert.assertNull("hint mit > 2 Zeichen wird verworfen", key.hint)
+        // der wichtige Teil: die Taste selbst ist unversehrt geladen
+        assertEquals("q", key.id)
+        assertEquals("q", key.label)
+        assertEquals("q", key.value)
+        assertEquals(1.0, key.width, 0.0)
+        assertEquals(listOf("x", "y"), key.alternates)
+    }
+
+    // ---- F24e1: optionales cellActions-Feld (Aktionszellen im Langdruck-Menue) ----
+
+    private fun cellActionsAsset(altJson: String, actionsJson: String?) = """
+        {
+          "schemaVersion": 1, "id": "xx-xx",
+          "language": {"tag": "xx-XX", "label": "X", "caseLocale": "xx-XX", "direction": "ltr"},
+          "deadKeys": {},
+          "layers": {
+            "base": {"rows": [[
+              {"id": "p", "label": ".", "width": 1, "kind": "text", "value": ".",
+               "alternates": [$altJson]${actionsJson?.let { ", \"cellActions\": [$it]" } ?: ""}}
+            ]]},
+            "shift": {"rows": [[
+              {"id": "p", "label": ".", "width": 1, "kind": "text", "value": "."}
+            ]]},
+            "symbols": {"rows": [[
+              {"id": "s1", "label": "1", "width": 1, "kind": "text", "value": "1"}
+            ]]},
+            "symbolsShift": {"rows": [[
+              {"id": "s1", "label": "1", "width": 1, "kind": "text", "value": "1"}
+            ]]}
+          }
+        }
+        """.trimIndent()
+
+    private fun cellActionsOf(altJson: String, actionsJson: String?) =
+        LayoutParser.parse(cellActionsAsset(altJson, actionsJson)).layers.getValue("base").rows[0][0].cellActions
+
+    @Test fun `F24e1 a) fehlende cellActions liefern emptyList`() {
+        assertEquals(emptyList<String>(), cellActionsOf("\",\", \"!\", \"?\"", null))
+    }
+
+    @Test fun `F24e1 b) funf cellActions an Taste mit funf alternates bleiben 5, leerstring bleibt`() {
+        val got = cellActionsOf(
+            "\",\", \"!\", \"?\", \"‹\", \"›\"",
+            "\"\", \"\", \"\", \"cursor-left\", \"cursor-right\"",
+        )
+        assertEquals(5, got.size)
+        assertEquals(listOf("", "", "", "cursor-left", "cursor-right"), got)
+    }
+
+    // ---- F27a1: MARGIN-Randflaechen (Stock-Geometrie) ----
+
+    private fun marginAsset(marginJson: String) = """
+        {
+          "schemaVersion": 1, "id": "xx-xx",
+          "language": {"tag": "xx-XX", "label": "X", "caseLocale": "xx-XX", "direction": "ltr"},
+          "deadKeys": {},
+          "layers": {
+            "base": {"rows": [[
+              $marginJson,
+              {"id": "q", "label": "q", "width": 1, "kind": "text", "value": "q"}
+            ]]},
+            "shift": {"rows": [[
+              $marginJson,
+              {"id": "q", "label": "Q", "width": 1, "kind": "text", "value": "Q"}
+            ]]},
+            "symbols": {"rows": [[
+              {"id": "s1", "label": "1", "width": 2, "kind": "text", "value": "1"}
+            ]]},
+            "symbolsShift": {"rows": [[
+              {"id": "s1", "label": "1", "width": 2, "kind": "text", "value": "1"}
+            ]]}
+          }
+        }
+        """.trimIndent()
+
+    @Test fun `F27a1 a) margin-Key wird geparst (kind MARGIN, width durchgereicht)`() {
+        val key = LayoutParser.parse(
+            marginAsset("""{"id": "margin-left", "kind": "margin", "width": 1.5}"""),
+        ).layers.getValue("base").rows[0][0]
+        assertEquals(KeyKind.MARGIN, key.kind)
+        assertEquals(1.5, key.width, 0.0)
+        assertEquals("", key.value)
+        assertEquals("", key.label)
+        assertTrue(key.alternates.isEmpty())
+    }
+
+    @Test fun `F27a1 b) margin mit value wird abgelehnt`() {
+        val json = marginAsset("""{"id": "margin-left", "kind": "margin", "width": 1, "value": "x"}""")
+        var caught = false
+        try {
+            LayoutParser.parse(json)
+        } catch (e: LayoutParser.LayoutException) {
+            caught = true
+        }
+        assertTrue("margin mit value muss abgelehnt werden", caught)
     }
 }

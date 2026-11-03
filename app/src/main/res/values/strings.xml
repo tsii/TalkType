@@ -38,6 +38,7 @@
     <string name="dictation_error_audio_start">Audio-Start fehlgeschlagen – erneut versuchen</string>
     <string name="dictation_error_permission">Mikrofon-Berechtigung fehlt</string>
     <string name="dictation_error_permission_mic">Mikrofonfreigabe nötig – ohne sie kann nicht diktiert werden</string>
+    <string name="dictation_error_permission_notification">Benachrichtigungsfreigabe nötig – sonst kann das System die Aufnahme stoppen (in den Systemeinstellungen aktivieren)</string>
     <string name="dictation_error_permission_settings">Berechtigung nötig – in den Systemeinstellungen aktivieren</string>
     <string name="dictation_starting">Starte Aufnahme…</string>
     <!-- F13a: Start-Frist abgelaufen (B1/A1) — Nutzer erhält eine Handlungsoption,
@@ -53,6 +54,7 @@
     <string name="dictation_error_model_broken">Modelldatei defekt – neu herunterladen</string>
     <string name="dictation_error_bt_lost">Bluetooth-Mikrofon getrennt</string>
     <string name="dictation_error_no_mic">Kein Mikrofon gefunden – Gerät prüfen</string>
+    <string name="dictation_error_no_signal">Kein Mikrofon-Signal – bitte Mikrofon-Berechtigung/Benachrichtigung prüfen</string>
     <string name="dictation_error_out_of_memory">Zu wenig Speicher – App neu starten</string>
     <string name="dictation_error_unknown">Diktat-Start fehlgeschlagen</string>
 
@@ -83,4 +85,20 @@
     <string name="key_space_label">Space</string>
     <string name="setup_languages_title">Aktive Sprachen (Tastaturlayouts)</string>
     <string name="setup_languages_hint">Mindestens eine Sprache muss aktiv bleiben. Kurztipp auf 🌐 in der Tastatur wechselt zwischen den aktiven Sprachen.</string>
+    <!-- F50a (PLAN_V0130 A2): UP während des asynchronen Starts — das Loslassen
+         ist vorgemerkt (transienter Hint, ersetzt das stille Flag). -->
+    <string name="dictation_start_pending_stop">Loslassen vorgemerkt — Aufnahme endet gleich</string>
+    <!-- F51 (K2-String-Audit, PLAN_V0130 A2): bisher hartkodierte UI-Texte als
+         Ressourcen (ein Locale, values/). -->
+    <string name="status_finalizing">Verarbeite…</string>
+    <string name="status_ready">Bereit</string>
+    <string name="diagnose_copied_share_opened">Diagnose kopiert — Teilen-Dialog geöffnet</string>
+    <string name="capture_notification_title">Diktat läuft</string>
+    <!-- B2 (PLAN §6.2 Option A): Warnung ab 13 min Session-Audio (Obergrenze
+         900 s minus 2 min Vorlauf) — transienter Hint, genau einmal je Session. -->
+    <string name="hold_limit_warning">Obergrenze in 2 Minuten — rechtzeitig loslassen</string>
+    <string name="hold_limit_warning_short">Obergrenze in 2 min</string>
+    <!-- AP7-E1-P2 (Fable §0.2.5): Editor wurde im restartInput von der App
+         verändert — Diktat kontrolliert beendet (kein Geisterschreiben). -->
+    <string name="editor_rebaseline_lost_hint">Editor gewechselt — Diktat beendet</string>
 </resources>

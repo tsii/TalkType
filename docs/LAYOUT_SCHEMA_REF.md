@@ -190,6 +190,13 @@ Alles andere ist ein Artefakt (`⌇` U+2307, `=\<`, `⇧` auf einer Zeichentaste
   **nur für Zeichen mit Großform**. Caseless Zeichen (`€ § – — … µ`) werden nicht
   gespiegelt (Regel 3, präzisiert in Rev 3 / Audit D3).
 - `alternates` sind Stufe **B**: sie ersetzen **nie** ein §2.1/§2.2-Pflichtzeichen.
+- **Symbolebenen** (`symbols`/`symbolsShift`): dieselben Alternates-Regeln —
+  die Langdruck-Menüs sind **sprachneutral** und in allen 15 Assets identisch
+  (T4/PLAN_LONGPRESS_SYMBOLS.md; Ziffern ohne Menü, kein `hint` auf Symbol-Tasten).
+- **Symbolebenen-Raster** (T6/PLAN_SYMBOL_RASTER.md): Σ=[10,10,10,13] je Reihe
+  mit stabilen Buchstaben-Slots — ⌫ exakt am r1-Ende (width 1,0), ⏎ exakt am
+  r2-Ende (width 1,0) wie in den Buchstaben-Ebenen; kein Textzeichen neben der
+  Spacebar (Footer: ABC 1,5 · 🌐 1 · 😊 1 · space 7,5 · 🎤 2).
 
 ## Sonstige Regeln, die ein Asset erfüllen muss
 

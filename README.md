@@ -3,6 +3,10 @@
 Android-Tastatur (IME) für GrapheneOS: **15 Sprachen tippen** und **offline diktieren** —
 ohne Google-Dienste, ohne Netzwerkzugriff zur Laufzeit, ohne Wörterbücher oder Autokorrektur.
 
+<p align="center">
+  <img src="docs/img/tastatur-0.1.38.png" alt="Voice Keyboard — QWERTZ-Tastatur (15 Sprachen, Y-Reihe zentriert)" width="720">
+</p>
+
 ## Was es kann
 
 - Tastatur mit 15 Layouts (Schichtsystem: Grund-/Shift-/Symbol-/Emoji-Ebene), Optik nah am Systemstandard, heller und dunkler Modus.

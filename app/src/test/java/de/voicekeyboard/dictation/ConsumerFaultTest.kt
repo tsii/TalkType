@@ -66,6 +66,10 @@ class ConsumerFaultTest {
         override fun start(sessionId: Long): Boolean = true
         override fun read(dst: ShortArray, timeoutMs: Int): Int {
             val n = minOf(samplesPerRead, dst.size)
+            // F31: Block INHALT laut füllen (Amplitude 12000 ≈ −9 dBFS) — ohne
+            // Inhalt wäre dst (0) still und der F31-Stille-Watchdog hätte bei
+            // Last>3 s einen neuen (falschen) Abbruchpfad in diesen Test gebracht.
+            java.util.Arrays.fill(dst, 0, n, 12_000.toShort())
             return n // sofort lieferbar — treibt den Consumer zügig an
         }
         override fun stopAndDrain(): List<PcmBlock> = emptyList()
@@ -113,10 +117,36 @@ class ConsumerFaultTest {
             "Fehlercode muss sichtbar sein (Regel: jeder gefangene Fall setzt einen Grund)",
             coordinator.visibleError != null,
         )
+        // Flaky-Entscheidung 2026-11-01 (BAU 23/24, F31, F31b, BAU 26): das Outcome
+        // wird Worker-seitig gesetzt und ist dem Assert um ein paar Coroutine-
+        // Dispatches hinterher — unter paralleler Suite-Last las der Sofort-Check
+        // (rot bei 0,012 s Testzeit) zu früh. Deterministisch: bis zu 2 s in
+        // 10-ms-Schritten auf das Outcome pollen. Bleibt es länger null, ist das
+        // ein ECHTER Produkt-Fehler — die Frist wird bewusst NICHT erhöht.
+        // F50 (Last-Flaky-Stabilisierung): der alte Poll pruefte auf null —
+        // lastStopOutcome traegt aber bereits ab Konstruktion den Sentinel
+        // IdleNoOp (NIE null), der Poll war ein No-Op und das Assert rannte
+        // unter Suite-Last dem NoFinal-Schreibvorgang im Consumer-Catch davon
+        // (dann las es den initialen IdleNoOp). Deterministisch: auf den
+        // ERWARTETEN Endzustand pollen (Fake-Synchronisation ueber Zustand,
+        // nicht Echtzeit-Geduld); Assertions unveraendert, Frist unveraendert
+        // (2 s — ein echter Produktfehler timeoutet weiterhin rot).
+        withTimeout(2_000) {
+            while (coordinator.lastStopOutcome !is StopOutcome.NoFinal) {
+                kotlinx.coroutines.delay(10)
+            }
+        }
         // Der Ausgang ist als StopOutcome sichtbar — kein stummer Tod:
         val outcome = coordinator.lastStopOutcome
         assertTrue("Outcome muss NoFinal mit Fehlercode tragen", outcome is StopOutcome.NoFinal)
         assertEquals("editor_sync_timeout", (outcome as StopOutcome.NoFinal).errorCode)
+        // F56 (vc33-Gerätefund): der FEINE Drift-Code darf vom generischen
+        // consumer:<Klasse> NICHT maskiert werden — visibleError und
+        // lastAbortRule (stop_cause) tragen editor_sync_timeout (F1-Vertrag:
+        // mapVisibleError zeigt die echte Ursache; vorher Gerätelog
+        // „visibleError=consumer:IllegalStateException" → Else-Fallback).
+        assertEquals("F56: visibleError unmaskiert", "editor_sync_timeout", coordinator.visibleError)
+        assertEquals("F56: Abort-Grund fein (stop_cause-Familie)", "editor_sync_timeout", coordinator.lastAbortReason)
 
         // Zweiter Coordinator mit routeObserver: Route wird am Ende freigegeben
         assertTrue(coordWithRoute.start())

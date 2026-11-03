@@ -25,3 +25,10 @@ core
 
 # Lokale Betriebsnotizen: enth\u00E4lt Komprimierungs-Snapshots der Unterhaltung
 state/
+
+# Python-Cache
+__pycache__/
+*.pyc
+
+# Mess-CSVs koennen Feldnamen enthalten (Regel 9-Hygiene)
+reports/*.csv

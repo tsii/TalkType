@@ -6,7 +6,14 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * V16a: Notification-Berechtigung ist WERBEND, aber NIEMALS SPERREND.
+ * V16a: Notification-Berechtigung ist WERBEND, aber unter api 33 NIEMALS
+ * SPERREND.
+ *
+ * F28c (Export #2, api 37, notif=no, Aufnahme nach 1,0 s stumm beendet):
+ * AB api 33 ist POST_NOTIFICATIONS Diktat-Bedingung — der FGS-Typ microphone
+ * kann ohne sie vom System stumm gestoppt werden. Die V16a-Tests unten laufen
+ * mit dem Default apiLevel=29 und bleiben gültig; der api-33-Guard ist im
+ * Test `F28c api33 ohne notif-Permission …` belegt.
  *
  * Kern-Fehler aus dem Live-Betrieb: REQUIRED_IN_ORDER enthielt
  * POST_NOTIFICATIONS — fehlte sie, gab nextStep nie Ready und
@@ -77,5 +84,46 @@ class DictationPermissionsTest {
     // Bestands-Semantik, gezogen auf ein Pflicht-Merkmal: Reihenfolge stabil
     @Test fun `V16a REQUIRED enthaelt nur das Mikrofon`() {
         assertEquals(listOf(mic), DictationPermissions.REQUIRED_IN_ORDER)
+    }
+
+    // F28c (Export #2: api 37, notif=no, Aufnahme nach 1,0 s stumm beendet):
+    // ab api 33 ist POST_NOTIFICATIONS Diktat-Bedingung. Guard-Logik: ohne sie
+    // liefert nextStep Ask statt Ready — VoiceKeyboardService.bricht in
+    // ensurePermissions() BEVOR startFgs()/AudioRecord.startRecording() ab und
+    // zeigt einen sichtbaren Fehler (neuer String), statt still zu starten.
+    @Test fun `F28c api33 ohne notif-Permission - kein Start, Ask statt Ready`() {
+        // Mikro erteilt, Anzeige NICHT: unter api 33 Ready (V16a bleibt erhalten)
+        assertEquals(
+            DictationPermissions.Decision.Ready,
+            DictationPermissions.nextStep(setOf(mic), emptySet(), 32),
+        )
+        // ab api 33 mit Mikro ODER ohne: Ask(POST_NOTIFICATIONS) — Diktat gesperrt
+        assertEquals(
+            DictationPermissions.Decision.Ask(notif),
+            DictationPermissions.nextStep(setOf(mic), emptySet(), 33),
+        )
+        assertEquals(
+            DictationPermissions.Decision.Ask(notif),
+            DictationPermissions.nextStep(setOf(mic), emptySet(), 37),
+        )
+        // dauerhaft abgelehnt: kein zweiter Dialog, Weg zu den Einstellungen
+        assertEquals(
+            DictationPermissions.Decision.PermanentlyDenied(notif),
+            DictationPermissions.nextStep(setOf(mic), setOf(notif), 33),
+        )
+        // mit erteilter Anzeige: Ready — Diktat darf (wieder) starten
+        assertEquals(
+            DictationPermissions.Decision.Ready,
+            DictationPermissions.nextStep(setOf(mic, notif), emptySet(), 33),
+        )
+        // isReady spiegelt denselben Guard
+        assertFalse("api 33 ohne notif = nicht ready", DictationPermissions.isReady(setOf(mic), emptySet(), 33))
+        assertTrue("api 33 mit notif = ready", DictationPermissions.isReady(setOf(mic, notif), emptySet(), 33))
+        assertTrue("api 32 ohne notif = ready (V16a)", DictationPermissions.isReady(setOf(mic), emptySet(), 32))
+        // Reihenfolge: Mikro wird VOR Anzeige gefragt (Mikro fehlt + api 33)
+        assertEquals(
+            DictationPermissions.Decision.Ask(mic),
+            DictationPermissions.nextStep(emptySet(), emptySet(), 33),
+        )
     }
 }

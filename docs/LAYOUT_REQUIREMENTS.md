@@ -200,12 +200,12 @@ nur als Alternate. Varianten in `{…}` sind Alternative (mindestens eine Varian
 
 | id | tag | Layout | A in `base` | B in `base` | Satzzeichen (direkt) |
 |---|---|---|---|---|---|
-| `de-de` | de-DE | QWERTZ | ä ö ü ß | é è ê á à â ç | „ “ {oder » «}, –, €, §, ° |
+| `de-de` | de-DE | QWERTZ | — (R8-Ausnahme, siehe de-de-Notiz unten) | **ä ö ü ß** (erste Alternates von a/o/u/s) é è ê á à â ç | „ “ {oder » «}, –, €, §, ° |
 | `en-us` | en-US | QWERTY | — | — (ASCII) | ' – — … £ $ ° |
 | `fr-fr` | fr-FR | AZERTY | é è à ç ù | ê ë â ï î ô û ü œ æ ÿ | « », ’, €, ° |
 | `es-es` | es-ES | QWERTY | ñ | á é í ó ú ü | ¿ ¡, « », º ª, € |
 | `it-it` | it-IT | QWERTY | à è é ì ò ù | á í ó ú î ü | « » {oder “ ”}, ’, € |
-| `pt-pt` | pt-PT | QWERTY | á â ã à ç é ê í ó ô õ ú | ü | « », º ª, €, § |
+| `pt-pt` | pt-PT | QWERTY | — (R10-Ausnahme, siehe pt-pt-Notiz unten) | **á â ã à ç é ê í ó ô õ ú** (Akzente als erste Alternates von a/c/e/i/o/u) ü | « », º ª, €, § |
 | `nl-nl` | nl-NL | QWERTY | — | á à ä ë é è ê ï ö ü | ‘ ’ „ ” {oder “ ”}, € |
 | `pl-pl` | pl-PL | QWERTY | ą ć ę ł ń ó ś ź ż | — | „ ”, –, € |
 | `tr-tr` | tr-TR | Türkisch Q | ç ğ ı i ö ş ü | â î û | ‘ ’, € |
@@ -241,16 +241,81 @@ Hinweise zur Tabelle (jeweils fachlich begründet, nicht Geschmack):
 - **`ru-ru`:** `ё` liegt außerhalb des Bereichs а–я (U+0451) und muss explizit
   geführt werden; `ъ`/`ь` liegen innerhalb und sind damit abgedeckt. `№` ist
   die russische Nummernzeichen-Taste und in Rev 1 nicht vorgekommen.
-- **`de-de`:** `ẞ` (U+1E9E) ist **Tastenlabel** der ß-Taste in `shift` (Regel 2).
-  Das ist ausdrücklich **nicht** die Text-Transformation: `"ß".uppercase()` ist
-  `"SS"` (amtliche Regel), und dieser Unterschied muss im Code sichtbar getrennt
-  sein (`CaseMapper.upperLabel(c)` vs. `TextTransforms.uppercase(s)`).
+- **`de-de`:** **Ausnahme (R8-Entscheidung 2026-10-30, nicht zur Disposition):**
+  `ä ö ü ß` wandern aus Spalte **A** in Spalte **B** — keine eigenen base-Tasten mehr,
+  stattdessen **erste Alternative** von a/o/u/s. Belegt am AOSP:
+  `java/res/xml/rowkeys_qwertz1.xml` trägt als `latin:keySpec` nur `q w e r t z u i o p`
+  (kein `ü`; dazu `latin:keyHintLabel` 1..0), `rowkeys_qwertz3.xml` nur `y x c v b n m`
+  (kein `ß`); Umlaute/ß wohnen dort als `latin:moreKeys="!text/morekeys_a/_o/_u/_s"`
+  (Auflösung `TEXTS_de`, Umlaut/ß jeweils an Position 1). Erreichbar **bleiben** muss
+  außerdem das große `ẞ` (U+1E9E): es ist künftig die **erste Alternative des `S`**
+  in `shift` (Großform gemäß §3/`CaseMapper.upperLabel`, ausdrücklich **nicht** die
+  Text-Transformation — `"ß".uppercase()` ist `"SS"`, amtliche Regel; getrennter Pfad
+  sichtbar in `CaseMapperTest`). Die frühere Formulierung „`ẞ` ist **Tastenlabel**
+  der ß-Taste in `shift`“ ist damit überholt. **Diese Ausnahme gilt nur für `de-de`**;
+  für alle anderen 14 Sprachen bleibt Spalte A („eigene Taste in `base`“) unverändert,
+  und die Erreichbarkeits-Grundsätze (Pflichtzeichen §2.1, Satzzeichen „niemals nur
+  als Alternate“) bleiben unberührt — bewusste, belegte **Pro-Sprache-Ausnahme**,
+  keine generelle Regeländerung.
+- **`pt-pt`:** **Ausnahme (R10-Entscheidung 2026-10-30, heute entschieden, nicht zur
+  Disposition):** `á â ã à ç é ê í ó ô õ ú` wandern aus Spalte **A** in Spalte **B** —
+  keine eigenen base-Tasten, stattdessen **erste Alternative** von a/c/e/i/o/u (Shift:
+  Großformen analog, §3). Der bisherige Rev-3/D2-Text („pt-pt: A = á â ã à ç é ê í ó ô õ ú
+  als EIGENE Pflichtzeichen“) ist damit **aufgehoben durch R10** — historisch belegt,
+  aber nicht mehr Sollzustand. Begründung — AOSP-Vorbild: `rows_qwerty.xml` mit
+  `rowkeys_qwerty1..3` führt die portugiesischen Akzente **nicht** als eigene Tasten,
+  sondern als moreKeys an den Grundbuchstaben (Beleg: `docs/AOSP_ROWKEYS_BELEGE.md`,
+  Abschnitt „qwerty-Satz (en-us, it-it, nl-nl, pl-pl, pt-pt, tr-tr)“: a **á** ,ã,à,â…;
+  c **ç** …; e **é** ,ê…; i **í** …; o **ó** ,õ,ô…; u **ú** …,
+  aufgelöst aus `KeyboardTextsTable.java` `TEXTS_pt`). Analog zu de-de/R8 entfällt auch
+  die frühere 5-Zeilen-Struktur (Stock = flache 4-Reihen-QWERTY).
+  **Testfolge:** `LayoutCompletenessTest` — pt-pt-MatrixRow auf `emptyList()` (Spalte A)
+  umgestellt; neuer Fall `pt-pt - Akzente sind erste Alternative statt eigener Taste`
+  (Base und Shift, je `alternates[0]`; Negativfall „ohne Akzentkette an a“ enthält
+  Rot). Gilt nur für `pt-pt` (neben `de-de`/R8); die übrigen 12 Sprachen bleiben
+  unverändert.
 - **`tr-tr`:** `i` und `ı` sind beide `A`, `İ` und `I` sind beide in `shift` —
   vier Zeichen, zwei Tasten (siehe §3).
 - **`fr-fr`:** `ê` ist auf Hardware-AZERTY **nicht** direkt belegt (Zirkumflex +
   e); die Anforderung lautet deshalb „erreichbar" (B), nicht „eigene Taste".
   Ziffern liegen bei AZERTY nie auf der Buchstabenreihe — sie gehören auf
   `symbols` (§1 Regel 9), was hier automatisch erfüllt ist.
+
+### 2.3 Fußreihe — einheitliches Zielbild (F24e, Entscheidung R14, 2026-10-30)
+
+**Alle 15 Layouts** (base UND shift) führen dieselbe Fußzeile, Σ = **13**:
+
+- **Keine `cursor-left`/`cursor-right`-Tasten mehr** in der Fußzeile — die früheren
+  `‹ ›`-Tasten sind in allen 15 Layouts entfallen (in `symbols`-Ebene bleiben die
+  Satzzeichen, §2.1 unberührt).
+- Stattdessen **eine Punkt-Taste** (`id=period`, label `.`) mit **fünf Menüfeldern**:
+  `alternates = [",", "!", "?", "‹", "›"]` und dem neuen, indexparallelen Feld
+  `cellActions = ["", "", "", "cursor-left", "cursor-right"]`.
+  Bedeutung: leerer String = normales Textfeld (`commitText`), nicht-leerer Eintrag =
+  **Aktion** über `listener.onAction` — umgesetzt in `layouts/LayoutParser.kt` (Feld
+  `cellActions` in der Allowlist, F24e1) und `keyboard/LongPressMenu.kt:48`
+  (`cellAction(…) = actionCells.getOrNull(index)?.takeIf { it.isNotBlank() }`).
+  Damit sind Links-/Rechts-Kursor **Menüfelder der Punkttaste**, keine Direkttasten.
+- Breite: `period` width **1** in `de-de` (F23-Zielbild), width **2** in den übrigen
+  14 Layouts; jeweils `width`-Neutralisierung an anderer Stelle der Reihe, damit Σ = 13
+  bleibt (Testgate `FooterAcrossAssetsTest`).
+- **D10-Fußnote (warum das Modell ≠ Asset ist):** die Fußreihe ist im Modell **nicht
+  asset-wörtlich**. `D10_FOOTER.composeRow` (`keyboard/KeyboardModel.kt:140ff`) baut sie
+  um: Mic ans rechte Ende, Enter als vorletzte Taste, und die **Leertaste gibt eine
+  Einheit an die Mic-Taste ab** (asset 5 → Modell 4; asset-Mic 1 → Modell 2). Alle
+  gemessenen Rechtecke weichen deshalb vom Asset ab (Beispiel de-de: period 706..789,
+  enter 789..913, mic 913..1080 px) — das ist **Soll**, kein Fehler.
+- Gerätbelegt (<device>, F24e-Bau): Aktionszelle geloggt als
+  `popup-commit cell=3 action=cursor-left` mit echter Cursorbewegung ohne Textänderung;
+  Textzelle als `popup-commit cell=2 action=-` mit angehängtem Zeichen.
+- Herkunft: **Nutzerwunsch**, nicht AOSP (AOSP-Ansicht: `docs/AOSP_ROWKEYS_BELEGE.md`).
+- **Ziffern-Hints bleiben unverändert** (F24a/b/c): r0 trägt `hint` 1..0 in base UND
+  shift; Sondertasten (å æ ø ñ ł ó ć ę ş ı ç й …) haben **niemals** einen Hint.
+
+**F25 (gehört zur Fußzeile):** der Globus links in der Fußreihe schaltet wieder —
+`ime/VoiceKeyboardService.kt:979` verdrahtet `KeyActions.LANGUAGE ->
+switchToNextLanguage()` (Funktion ab Zeile 1022; Guards: während des Diktats nur
+Vormerkung + Hinweis, bei nur einer aktiven Sprache Toast).
 
 ## 3. Case-Mapping-Tabelle (verbindlich, ausführbar zu testen)
 

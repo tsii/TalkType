@@ -109,8 +109,23 @@ class InputConnectionSink(
         return mine != null && mine === looper
     }
 
-    /** Eigener Span in UTF-16-Codeeinheiten (nur Länge/Struktur, nie geloggt). */
-    private var ownSpan: String = ""
+    /** Eigener Span in UTF-16-Codeeinheiten (nur Länge/Struktur, nie geloggt).
+     *  AP7-E1c: @Volatile — ownText() wird auch außerhalb des Edit-Threads
+     *  gelesen (Re-Baseline-Diagnosefelder); der Schreibsatz selbst bleibt
+     *  Edit-Thread-serialisiert. */
+    @Volatile private var ownSpan: String = ""
+
+    /** A5 (v0.1.34): Sitzungswechsel — ownSpan-Leiche beseitigen (Toggle-W1:
+     *  Coordinator+Sink werden über Sitzungen hinweg wiederverwendet, die
+     *  Spanne der Vorgänger-Sitzung fälscht ab der zweiten Hypothese der
+     *  Folgesitzung den Besitzbeweis in DeltaTyper.ownershipVerified).
+     *  Direkte @Volatile-Zuweisung, synchron — es gibt keine Ableitungen von
+     *  ownSpan; der Schreibsatz selbst bleibt Edit-Thread-serialisiert, und
+     *  der Aufrufer (DictationController.start()) serialisiert die
+     *  Sitzungsgrenze ohnehin (ein Orchestrierungs-Thread). */
+    override fun resetSession() {
+        ownSpan = ""
+    }
 
     override fun replaceBeforeCursor(replaceLength: Int, newText: String) {
         onEditExecutor { replaceBeforeCursorSync(replaceLength, newText) }
@@ -154,4 +169,7 @@ class InputConnectionSink(
         }
 
     override fun ownLength(): Int = ownSpan.length
+
+    // AP7-E1c: synchroner Eigen-Text aus der commit-Runde (siehe EditorSink).
+    override fun ownText(): String = ownSpan
 }

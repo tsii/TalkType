@@ -31,6 +31,8 @@ class StatusBarTextTest {
         finalizing: Boolean = false,
         errorsNewerThanTransient: Boolean = false,
         success: Boolean = false,
+        transientHint: Boolean = false,
+        diagSuffix: Boolean = false,
     ) = StatusBarText.Inputs(
         extra = extra,
         transientText = transientText,
@@ -43,6 +45,8 @@ class StatusBarTextTest {
         idleText = idle,
         errorsNewerThanTransient = errorsNewerThanTransient,
         success = success,
+        transientHint = transientHint,
+        diagSuffix = diagSuffix,
     )
 
     // 1. Starttext + laufende Aufnahme -> Aufnahmetext; NIE „starte…" nach dem 3. Aufruf.
@@ -122,5 +126,61 @@ class StatusBarTextTest {
         val startExtra = StatusBarText.select(inputs(extra = start, transientText = start))
         assertFalse("Starttext-extra ist transient, NICHT sticky", startExtra.extraIsSticky)
         assertEquals(start, startExtra.text)
+    }
+
+    // F52 (PLAN_V0130 A3, 🐞: status_res): Art des gewählten Texts je Zweig —
+    // nur Codes/Ressourcen-Namen (Regel 9); RAW darf NIE aus select kommen
+    // (er ist der verbotene Rückfall, Assertion unten).
+    @Test
+    fun `F52 kind je Zweig - RAW nie - statusResCode nur Codes`() {
+        // STARTING: transiente Startmeldung ohne Hint-Flag.
+        assertEquals(
+            StatusKind.STARTING,
+            StatusBarText.select(inputs(transientText = start)).kind,
+        )
+        // HINT: derselbe transiente Kanal, aber mit Hint-Flag (F50a-Hint etc.).
+        assertEquals(
+            StatusKind.HINT,
+            StatusBarText.select(inputs(transientText = "Loslassen vorgemerkt…", transientHint = true)).kind,
+        )
+        // RECORDING ohne / DIAG mit Debug-Suffix (Strukturmarker, kein Inhalt).
+        assertEquals(StatusKind.RECORDING, StatusBarText.select(inputs(recording = true)).kind)
+        assertEquals(
+            StatusKind.DIAG,
+            StatusBarText.select(inputs(recording = true, diagSuffix = true)).kind,
+        )
+        // FINALIZING / IDLE / ERROR (extra und visibleError).
+        assertEquals(StatusKind.FINALIZING, StatusBarText.select(inputs(finalizing = true)).kind)
+        assertEquals(StatusKind.IDLE, StatusBarText.select(inputs()).kind)
+        assertEquals(StatusKind.IDLE, StatusBarText.select(inputs(success = true)).kind)
+        assertEquals(StatusKind.ERROR, StatusBarText.select(inputs(extra = "Fehler X")).kind)
+        assertEquals(
+            StatusKind.ERROR,
+            StatusBarText.select(inputs(visibleError = "editor_sync_timeout")).kind,
+        )
+        // RAW: darf aus select NIE kommen — Assertion über alle obigen Fälle
+        // hinaus: statusResCode ist die einzige Stelle, die RAW benennen kann.
+        for (r in listOf(
+            StatusBarText.select(inputs(transientText = start)),
+            StatusBarText.select(inputs(recording = true)),
+            StatusBarText.select(inputs(finalizing = true)),
+            StatusBarText.select(inputs()),
+            StatusBarText.select(inputs(extra = "Fehler X")),
+        )) {
+            assertTrue("RAW ist der nie erlaubte Rückfall", r.kind != StatusKind.RAW)
+        }
+        // statusResCode: nur Codes, ERROR trägt den Ressourcen-Namen (Regel 9).
+        assertEquals("starting", StatusBarText.statusResCode(StatusKind.STARTING))
+        assertEquals("recording", StatusBarText.statusResCode(StatusKind.RECORDING))
+        assertEquals("finalizing", StatusBarText.statusResCode(StatusKind.FINALIZING))
+        assertEquals("idle", StatusBarText.statusResCode(StatusKind.IDLE))
+        assertEquals("hint", StatusBarText.statusResCode(StatusKind.HINT))
+        assertEquals("diag", StatusBarText.statusResCode(StatusKind.DIAG))
+        assertEquals(
+            "error:dictation_error_editor_busy",
+            StatusBarText.statusResCode(StatusKind.ERROR, "dictation_error_editor_busy"),
+        )
+        assertEquals("error:unknown", StatusBarText.statusResCode(StatusKind.ERROR, null))
+        assertEquals("raw", StatusBarText.statusResCode(StatusKind.RAW))
     }
 }

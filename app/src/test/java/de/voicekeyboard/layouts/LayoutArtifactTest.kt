@@ -55,6 +55,11 @@ class LayoutArtifactTest {
 
     private fun checkKey(key: JSONObject, layerName: String, r: Int, k: Int, source: String) {
         val where = "$source, Ebene '$layerName' rows[$r][$k] (id='${key.optString("id")}')"
+        val kind = key.optString("kind", "")
+        // F27a1 MARGIN: Randfläche — nur Breite, kein Label/Glyphe/Touch. Leere
+        // label/value sind hier KORREKT; 5a–5f gelten nicht (der Parser prüft separat,
+        // dass MARGIN kein value/alternates trägt).
+        if (kind == "margin") return
         val label = key.optString("label", "")
         val value = key.optString("value", "")
         // 5e: keine leeren Labels/Values (alle kinds)
@@ -66,7 +71,6 @@ class LayoutArtifactTest {
                 fail("$where: Artefakt '${bad}' in label/value (Regel 5c, §2.1.3)")
             }
         }
-        val kind = key.optString("kind", "")
         when (kind) {
             "text" -> {
                 // 5a: label == value

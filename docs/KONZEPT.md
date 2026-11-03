@@ -500,3 +500,17 @@ beim ersten Tastendruck).
 
 **Wichtig:** Bei Whisper `language` **explizit** setzen, wenn die Sprache bekannt ist —
 die Auto-Erkennung kippt bei gemischtem DE/EN in die falsche Sprache.
+
+---
+
+## Dokumentierte Präzisierung F43 (2026-11-01) — Inhalt oben unverändert, hier nur ergänzt
+
+**Auto-Stop nach ~2,5 s Sprechpause** (`TRAILING_SILENCE_MS = 2500`,
+`ime/DictationCoordinator.kt:97/436-439`) ist eine **vom Nutzer ausdrücklich gewünschte
+Präzisierung** des Diktat-Ablaufs (0.1.28/F43): Stille **nach Sprechbeginn** schließt die
+Session regulär über `stop()` ab (Finaler Decode über den Gesamtpuffer, kein Fehlerpfad).
+**c-Gate „Stille ≠ Stall“:** der Auto-Stop greift **nur bei streamender Stille**
+(`capStallMs < TRAILING_SILENCE_MS` — Blöcke laufen weiter, nur leise); eine **tote
+Quelle** (keine Blöcke) bleibt beim `ERR_STALL`-Vertrag (F28b1/F30) und wird vom
+Auto-Stop **nicht** präemptet (belegt: `FakeAudioScenarioTest` Fall c). Kürzere Pausen
+(< 2500 ms) unterbrechen nie.

@@ -376,20 +376,20 @@ class DictationPipelineTest {
 
         tracker.onOwnEdit("")
         // Partielle Revisionen: "abc" → "abcd" → "abcd€!" (Surrogatpaar € U+20AC)
-        typer.revise("abc")
+        typer.reviseOutcome("abc").delta
         assertEquals("abc", ic.text)
-        typer.revise("abcd")
+        typer.reviseOutcome("abcd").delta
         assertEquals("abcd", ic.text)
-        typer.revise("abcd€!")
+        typer.reviseOutcome("abcd€!").delta
         assertEquals("abcd€!", ic.text)
         // Löschung zählt UTF-16-Einheiten: "€" = 2 Einheiten — "abcd€" → "abcd"
-        typer.revise("abcd")
+        typer.reviseOutcome("abcd").delta
         assertEquals("abcd", ic.text)
         // Korrekte DeltaTyper-Semantik: OHNE commitUpTo wird der komplette Tail
         // revidiert ("abcd" → "ä" ersetzt alles). Präfix-Schutz greift erst mit
         // commitUpTo — danach bleibt "abcd" unangetastet und "ä" wird angehängt.
         typer.commitUpTo(4) // "abcd" einfrieren
-        typer.revise("abcdä")
+        typer.reviseOutcome("abcdä").delta
         assertEquals("abcdä", ic.text)
 
         // Batch-Paarung auch bei Wurf: Editor lehnt ab
@@ -416,7 +416,7 @@ class DictationPipelineTest {
         val tracker = OwnershipTracker()
         val typer = de.voicekeyboard.editor.DeltaTyper(sink)
         tracker.onOwnEdit("")
-        typer.revise("das ist")
+        typer.reviseOutcome("das ist").delta
         val opsAtLoss = ic.commits.get() + ic.deletes.get()
         assertTrue(opsAtLoss > 0)
 
@@ -425,7 +425,7 @@ class DictationPipelineTest {
         ic.commitText("X", 1) // simulierter Fremdtext (User-Eingabe)
         // Diktat weiter: Tracker verweigert
         val before = ic.commits.get() + ic.deletes.get()
-        org.junit.Assert.assertNull("nach Besitzverlust KEINE Schreiboperation", typer.revise("das ist mehr"))
+        org.junit.Assert.assertNull("nach Besitzverlust KEINE Schreiboperation", typer.reviseOutcome("das ist mehr").delta)
         assertEquals(before, ic.commits.get() + ic.deletes.get())
     }
 
@@ -445,7 +445,7 @@ class DictationPipelineTest {
         tracker.onOwnEdit(alt)
         // Langer neuer Text, der >60 Zeichen zurücknehmen würde: DeltaTyper
         // muss auf Append-only entscheiden — Alttext-Präfix bleibt unangetastet.
-        typer.revise(alt.substring(0, 20) + "NEU") // 60 Zeichen Differenz in der Tail-Revision
+        typer.reviseOutcome(alt.substring(0, 20) + "NEU").delta // 60 Zeichen Differenz in der Tail-Revision
         val after = ic.text
         assertTrue(
             "Alttext muss unverändertes Präfix enthalten; Ist=${after.take(90)}",

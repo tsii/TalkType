@@ -19,9 +19,18 @@ data class LayoutKey(
     val value: String, // Zeichen, Action-ID oder Deadkey-ID
     val caps: String? = null,
     val alternates: List<String> = emptyList(),
+    /** F23a1: optionales Kurz-Hint (z. B. Ziffer "1"), max 2 Zeichen; null = keins. */
+    val hint: String? = null,
+    /**
+     * F24e1: optionale Aktionsnamen fuer die Langdruck-Menuezellen, parallel zu
+     * [alternates] (gleicher Index; "" = normales Textfeld, sonst eine Aktion wie
+     * "cursor-left"). Kurzer als alternates = Rest Text; Länge wird im Parser auf
+     * alternates-Grösse gekürzt.
+     */
+    val cellActions: List<String> = emptyList(),
 )
 
-enum class KeyKind { TEXT, ACTION, DEAD }
+enum class KeyKind { TEXT, ACTION, DEAD, /** F27a1: Randflaeche (nur Breite, kein Glyph, kein Touch). */ MARGIN }
 
 data class LayoutLayer(
     val name: String, // base | shift | symbols | symbolsShift

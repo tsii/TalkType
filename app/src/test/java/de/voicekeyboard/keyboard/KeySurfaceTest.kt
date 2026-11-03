@@ -131,4 +131,32 @@ class KeySurfaceTest {
             decide(micRecording = true).glyph == KeySurface.Glyph.CONTRAST,
         )
     }
+
+    // ---- F23a2: Hint-Platzierung (docs/DESIGN_KEY_POPUP.md §7.2) — reine Naht ----
+
+    @Test
+    fun `hintAnchorX liegt rechtsbuendig innerhalb pad plus halber Inkbreite`() {
+        // Vorgabe des Auftrags: padPx 21 -> 98 - 21 - 9 = 68
+        assertEquals(68f, KeySurface.hintAnchorX(98f, 21f, 18f), 1f)
+        // Doku-Beispiel §7.2: padPx = 4 dp @ density 420 = 10,5 px -> 78,5
+        assertEquals(78.5f, KeySurface.hintAnchorX(98f, 10.5f, 18f), 1f)
+    }
+
+    @Test
+    fun `hintTopOffsetDp ist nominal 2 dp bei voller Zeilenhoehe`() {
+        assertEquals(2.0f, KeySurface.hintTopOffsetDp(4f, 55.0, 55), 0.01f)
+    }
+
+    @Test
+    fun `hintTopOffsetDp schrumpft relativ mit der Reihe`() {
+        // 44/55 x 2 dp = 1,6 dp (kleiner als 2)
+        assertEquals(1.6f, KeySurface.hintTopOffsetDp(4f, 44.0, 55), 0.05f)
+    }
+
+    @Test
+    fun `hintTopOffsetDp ueberschreitet 2 dp nie und wird nie negativ`() {
+        assertEquals(2.0f, KeySurface.hintTopOffsetDp(4f, 90.0, 55), 0.01f) // hoehere Reihe
+        assertEquals(0f, KeySurface.hintTopOffsetDp(4f, 0.0, 55), 0.01f) // kaputte Hoehe
+        assertEquals(0f, KeySurface.hintTopOffsetDp(4f, -10.0, 55), 0.01f) // negativ
+    }
 }

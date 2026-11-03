@@ -132,4 +132,57 @@ class KeyboardModelTest {
         assertEquals("feste Masse, Fit ignoriert", 144f, m.keys.first().bottom - m.keys.first().top, 0.01f)
         assertEquals(144f + 6f + 144f, m.heightPx, 0.01f)
     }
+
+    // F27a2: MARGIN wird wie jede Taste in die Zeilenbreite eingeplant (zählt ins
+    // Σ ein) und belegt die Breite, hat aber kein Label/keine Glyphe (view-seitig
+    // ignoriert Hit-Test/Draw — KeyboardView.keyAtVisible/onDraw).
+    @Test
+    fun `F27a2 margin zaehlt ins Zeilen-Sigma ein und belegt Breite`() {
+        val m = KeyboardModel(
+            LayoutLayer(
+                name = "base",
+                rows = listOf(
+                    listOf(
+                        LayoutKey("margin-left", "", 1.0, KeyKind.MARGIN, ""),
+                        LayoutKey("a", "a", 1.0, KeyKind.TEXT, "a"),
+                        LayoutKey("b", "b", 1.0, KeyKind.TEXT, "b"),
+                        LayoutKey("margin-right", "", 1.0, KeyKind.MARGIN, ""),
+                    ),
+                ),
+            ),
+            300f, keyHeightPx = 50f, rowGapPx = 6f, keyGapPx = 4f, fit = null,
+        )
+        val row = m.keys.filter { it.top == 0f }
+        assertEquals("MARGIN-Keys liegen im Modell als Breite drin", 4, row.size)
+        val sum = row.sumOf { (it.right - it.left).toDouble() } + 4f * (row.size - 1)
+        assertEquals("Summe + Gaepen = nutzbare Breite", 300f, sum.toFloat(), 0.01f)
+        val margin = m.keys.first { it.id == "margin-left" }
+        val a = m.keys.first { it.id == "a" }
+        assertEquals("MARGIN Breite = Tastenbreite (je 1 Einheit)", a.right - a.left, margin.right - margin.left, 0.01f)
+        assertEquals("", margin.label)
+    }
+
+    // F27d: D10_FOOTER.composeRow ist no-op, wenn die Zeile KEIN enter traegt.
+    // Neues Footer-Zielbild (Stock-Geometrie): enter liegt in r2, die Fussreihe r3
+    // hat KEIN enter — compose darf sie unveraendert lassen (keine Mic/Enter-
+    // Umplatzung, keine Space->Mic-Breiten-Abgabe).
+    @Test
+    fun `F27d composeRow ist no-op ohne enter in der Zeile`() {
+        val footer = listOf(
+            LayoutKey("symbols", "?123", 1.5, KeyKind.ACTION, "layer-symbols"),
+            LayoutKey("language", "\uD83C\uDF10", 1.0, KeyKind.ACTION, "language"),
+            LayoutKey("emoji", "\uD83D\uDE0A", 1.0, KeyKind.ACTION, "emoji"),
+            LayoutKey("space", "Space", 7.0, KeyKind.ACTION, "space"),
+            LayoutKey("period", ".", 1.0, KeyKind.TEXT, ".", alternates = listOf(",", "!"), cellActions = listOf("", "cursor-left")),
+            LayoutKey("mic", "\uD83C\uDFA4", 1.5, KeyKind.ACTION, "mic"),
+        )
+        val composed = D10_FOOTER.compose(listOf(footer))
+        assertEquals("Zeilenanzahl unveraendert", 1, composed.size)
+        val out = composed[0]
+        assertEquals("Tastenanzahl unveraendert", footer.size, out.size)
+        assertEquals("Reihenfolge/IDs unveraendert", footer.map { it.id }, out.map { it.id })
+        assertEquals("Breiten unveraendert", footer.map { it.width }, out.map { it.width })
+        assertEquals("mic bleibt 1.5 (bekommt ohne enter nichts)", 1.5, out.first { it.id == "mic" }.width, 0.0)
+        assertEquals("space bleibt 7 (gibt ohne enter nichts ab)", 7.0, out.first { it.id == "space" }.width, 0.0)
+    }
 }

@@ -9,6 +9,7 @@ import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.IBinder
 import android.os.SystemClock
+import de.voicekeyboard.R
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
@@ -32,6 +33,13 @@ class CaptureForegroundService : Service() {
         const val ACTION_START = "de.voicekeyboard.capture.START"
         const val ACTION_STOP = "de.voicekeyboard.capture.STOP"
         private const val TAG = "VK-Capture"
+
+        /** F28c: In-Prozess-Handshake (IME + Service laufen im selben Prozess):
+         *  wird NACH abgeschlossener [startForeground] gerufen. Die IME wartet
+         *  darauf, BEVOR sie AudioRecord.startRecording() öffnet — ab api 33
+         *  muss der FGS-Typ microphone aktiv sein, sonst kann das System die
+         *  Aufnahme stumm stoppen (Export #2: Ende nach 1,0 s). */
+        @Volatile var onForegroundReady: (() -> Unit)? = null
     }
 
     private val running = AtomicBoolean(false)
@@ -65,6 +73,9 @@ class CaptureForegroundService : Service() {
             startedAtMs = SystemClock.elapsedRealtime()
         }
         startForeground(NOTIFICATION_ID, buildNotification(), ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE)
+        // F28c: erst JETZT ist der FGS garantiert aktiv — die IME darf das
+        // Mikrofon öffnen (synchroner Aufruf, nur Lock/notify, keine UI-Arbeit).
+        onForegroundReady?.invoke()
         return START_NOT_STICKY
     }
 
@@ -89,7 +100,7 @@ class CaptureForegroundService : Service() {
                 Notification.Builder(this, CHANNEL_ID)
             }
         return builder
-            .setContentTitle("Diktat läuft")
+            .setContentTitle(getString(R.string.capture_notification_title)) // F51 (K2): Ressource statt hartkodiert
             .setContentText("Mikrofon ist aktiv")
             .setSmallIcon(android.R.drawable.ic_btn_speak_now)
             .setOngoing(true)

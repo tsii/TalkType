@@ -76,7 +76,7 @@ class LongPressMenuTest {
     //     (4 dp · 2.625), view 1080 px (420 dpi). ---
 
     @Test fun `menuLeftClamped centers and clamps at both view edges`() {
-        // 2 cells à 126 + 3 padding à 11 = 285 px.
+        // 2 cells of 126 + 3 paddings of 11 = 285 px.
         assertEquals(540 - 285 / 2, LongPressMenu.menuLeftClamped(2, 540, 126, 1080, 11))
         assertEquals(0, LongPressMenu.menuLeftClamped(2, 100, 126, 1080, 11))    // out on the left
         assertEquals(1080 - 285, LongPressMenu.menuLeftClamped(2, 1070, 126, 1080, 11)) // right

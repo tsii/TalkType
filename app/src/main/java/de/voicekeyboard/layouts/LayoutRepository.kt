@@ -68,6 +68,6 @@ class LayoutRepository(private val context: Context) {
     fun loadOrFallback(id: String): LayoutAsset {
         load(id)?.let { return it }
         load("de-de")?.let { return it }
-        return load("en-us") ?: throw IllegalStateException("Kein Layout ladenbar (Fallback de-de/en-us fehlgeschlagen)")
+        return load("en-us") ?: throw IllegalStateException("No layout loadable (fallback de-de/en-us failed)")
     }
 }

@@ -268,8 +268,8 @@ class SegmentGoldenTest {
             )
             assertNull("no ERR", c.lastError)
             val text = finishAndText(ctx)
-            // T10 (v0.1.39) nachgezogen: das SESSION-Finale hängt hinter dem
-            // Satzzeichen-Ende EIN Leerzeichen an (Golden + trail_sp).
+            // T10 (v0.1.39) added: the SESSION final appends ONE space after
+            // punctuation at the end (golden + trail_sp).
             assertEquals(
                 "chain == golden total text (exact, one space per seam, T10 final space)",
                 "alpha. bravo. charlie. ",

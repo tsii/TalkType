@@ -100,11 +100,11 @@ exclusively for the start phase. New/extended strings (all ≤ 45 characters):
 
 | Raw code | User text | Length |
 |---|---|---|
-| `asr_final_error` | `Text nicht übernommen – erneut versuchen` | 40 |
+| `asr_final_error` | `Text not committed – try again` (translated from German) | 40 |
 | `asr_partial_error` | `Erkennung fehlgeschlagen – weiter sprechen` | 42 |
 | `invalidOperation:*`, `systemStop:*` | `Aufnahme gestoppt – erneut versuchen` | 36 |
 | `maxDuration:*` | `Aufnahme-Limit 5 Minuten erreicht` | 33 |
-| `aborted` (editor drift) | `Editor geändert – Diktat verworfen` | 34 |
+| `aborted` (editor drift) | `Editor changed – dictation discarded` (translated from German) | 34 |
 | everything else (start phase) | `Diktat-Start fehlgeschlagen` | 27 |
 
 This leaves rule 9 untouched (only codes, no content), the 45-character limit is

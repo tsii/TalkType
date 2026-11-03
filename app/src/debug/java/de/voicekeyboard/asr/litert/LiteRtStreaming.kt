@@ -16,7 +16,7 @@ class GlobalFeatureStats(private val dims: Int) {
     private var n = 0L
 
     fun addFrame(frame: FloatArray) {
-        require(frame.size == dims) { "Frame hat ${frame.size} Dim, erwartet $dims" }
+        require(frame.size == dims) { "frame has ${frame.size} dims, expected $dims" }
         n++
         val count = n.toDouble()
         for (d in 0 until dims) {
@@ -90,8 +90,8 @@ object LiteRtStreaming {
         val expected = (CACHE_FRAMES + validFrames) * featureSize
         if (feats.size != expected) {
             throw IllegalArgumentException(
-                "preEncodeCache: feats.size=${feats.size} verletzt den Vertrag — " +
-                    "erwartet (9+validFrames)*featureSize=$expected, erhalten ${feats.size}",
+                "preEncodeCache: feats.size=${feats.size} violates the contract — " +
+                    "expected (9+validFrames)*featureSize=$expected, got ${feats.size}",
             )
         }
         val out = Array(CACHE_FRAMES) { FloatArray(featureSize) }
@@ -115,8 +115,8 @@ object LiteRtStreaming {
         val expected = CACHE_FRAMES + validFrames
         if (feats.size != expected) {
             throw IllegalArgumentException(
-                "preEncodeCache: ${feats.size} Zeilen verletzt den Vertrag — " +
-                    "erwartet 9+validFrames=$expected, erhalten ${feats.size}",
+                "preEncodeCache: ${feats.size} rows violate the contract — " +
+                    "expected 9+validFrames=$expected, got ${feats.size}",
             )
         }
         val out = Array(CACHE_FRAMES) { FloatArray(dims) }

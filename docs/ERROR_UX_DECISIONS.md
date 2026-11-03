@@ -18,10 +18,10 @@ blocks").
   `"Start fehlgeschlagen (${e.javaClass.simpleName})"` (L.163) — the latter is a
   **developer class in the user text** (`IllegalStateException`).
 - `updateStatus()` (L.304) renders `c.visibleError` additionally as
-  `"Fehler: Mikrofon/Route (<code>)"` — that too is a raw code
+  `"Error: Microphone/Route (<code>)"` (translated from German) — that too is a raw code
   (`audioInit:IllegalStateException`, `model:<msg>`, `startFailed`).
 - Existing, already differentiated paths: model not ready
-  (`!store.isReady()` → "Modell nicht installiert — Setup öffnen", L.144),
+  (`!store.isReady()` → "Model not installed – open Setup", translated from German, L.144),
   permission (L.247/262).
 - Available signals: `DictationCoordinator.lastError`/`visibleError`
   (`startFailed`, `audioInit:<class>`, `model:<msg>`, `audio:<code>:<detail>`),
@@ -33,11 +33,11 @@ blocks").
 
 | Class | User text (max 45 chars) | Chars | Action option in the UI | Technically distinguishable? |
 |---|---|---|---|---|
-| **(a)** no microphone | `Kein Mikrofon gefunden – Gerät prüfen` | 37 | no action in the app; hint line "connect microphone/check system", mic stays locked | **Yes, conditionally**: `AudioManager.getDevices(GET_DEVICES_INPUTS)` empty or `RoutingPolicy.preferredInput()` = `null`. Otherwise the case falls into (d). |
+| **(a)** no microphone | `No microphone found – check the device` | 37 | no action in the app; hint line "connect microphone/check system", mic stays locked | **Yes, conditionally**: `AudioManager.getDevices(GET_DEVICES_INPUTS)` empty or `RoutingPolicy.preferredInput()` = `null`. Otherwise the case falls into (d). |
 | **(b)** microphone occupied | — **no own text** → (d) | — | — | **No.** Other recordings are not visible to normal apps (`getActiveRecordingConfigurations` is privileged); "occupied" would be a guessed diagnosis. Only the *hint* in the explanation is allowed, not the claim. |
 | **(c)** permission missing/revoked | `Mikrofon-Berechtigung fehlt` | 27 | Button "Grant permission" (in-app request); on `denied_forever` → "Open system settings" | **Yes**: `checkSelfPermission(RECORD_AUDIO)` before the start **or** `lastError == "audioInit:SecurityException"`. |
-| **(d)** audio init/system error (+ b) | `Audio-Start fehlgeschlagen – erneut versuchen` | 45 | Press the mic key again (no auto retry loop); explanation: "Possible causes: microphone occupied by another app, system error." | **Yes as a class**: `startFailed`, `audioInit:<not SecurityException>`, `ERR_INIT`, `ERR_INVALID_OP`, `ERR_SYSTEM_STOP` **without** a simultaneous route change. |
-| **(e)** model not loaded | `Modell nicht geladen – Setup öffnen` | 35 | Tap → `SetupActivity` | **Yes**: `store.isReady() == false` **and** `status ∈ {ABSENT, DOWNLOADING, VERIFYING}`, or `lastError == "model:<…>"` (engine load error, C-2/R-1). |
+| **(d)** audio init/system error (+ b) | `Audio start failed – try again` | 45 | Press the mic key again (no auto retry loop); explanation: "Possible causes: microphone occupied by another app, system error." | **Yes as a class**: `startFailed`, `audioInit:<not SecurityException>`, `ERR_INIT`, `ERR_INVALID_OP`, `ERR_SYSTEM_STOP` **without** a simultaneous route change. |
+| **(e)** model not loaded | `Model not loaded – open Setup` | 35 | Tap → `SetupActivity` | **Yes**: `store.isReady() == false` **and** `status ∈ {ABSENT, DOWNLOADING, VERIFYING}`, or `lastError == "model:<…>"` (engine load error, C-2/R-1). |
 | **(f)** model damaged/BROKEN | `Modelldatei defekt – neu herunterladen` | 38 | Tap → setup, there "check/download again" (hash repair) | **Yes**: `store.status() == BROKEN` (pointer present, `verifyInstalled()` false). |
 | **(g)** memory low (runtime) | `Zu wenig Speicher – App neu starten` | 35 | only a hint + process restart by the user; no auto recovery | **Partially**: `OutOfMemoryError` (must be caught **explicitly** as an `Error`/`Throwable` — `catch (e: Exception)` does not see it) and ORT messages with `alloc`/`memory`/`bad_alloc`. Everything else is not classifiable → (d). |
 | **(h)** Bluetooth SCO lost | `Bluetooth-Mikrofon getrennt` | 27 | End the recording **in a controlled way**, hint "continue via the device microphone?"; no automatic restart | **Yes**: `state == RECORDING` **and** `routeListener` reports a change from `BLUETOOTH_SCO` to `BUILTIN`/`WIRED`/`null` (or `ERR_SYSTEM_STOP` exactly at that moment). |
@@ -87,19 +87,19 @@ the system level.
 
 **Variant A (recommended, minimally invasive, 2 sentences):**
 
-> "Nach dem Download deaktiviert die App ihren Download-Schalter automatisch; es
-> findet dann kein weiterer Netzwerkzugriff statt. Sie können den Schalter jederzeit
-> wieder aktivieren oder der App in den Android-Einstellungen die
-> Netzwerkberechtigung ganz entziehen — die Tastatur funktioniert danach unverändert
-> offline."
+> "After the download the app automatically deactivates its download switch; no
+> further network access then takes place. You can re-enable the switch at any
+> time or revoke the network permission for the app entirely in the Android
+> settings — the keyboard keeps working unchanged offline afterwards."
+> (translated from German)
 
 **Variant B (more explicit about the permission, 3 sentences):**
 
-> "Die Netzwerkberechtigung bleibt im App-Manifest, wird aber ausschließlich für
-> diesen einen Download genutzt. Danach schaltet die App ihren Download-Schalter
-> automatisch ab, sodass kein weiterer Netzwerkzugriff stattfindet. Sie können den
-> Schalter jederzeit wieder aktivieren oder der App in den Android-Einstellungen die
-> Netzwerkberechtigung ganz entziehen — die Tastatur funktioniert weiterhin offline."
+> "The network permission stays in the app manifest but is used exclusively for
+> this one download. Afterwards the app automatically turns its download switch
+> off, so no further network access takes place. You can re-enable the switch at
+> any time or revoke the network permission for the app entirely in the Android
+> settings — the keyboard keeps working offline." (translated from German)
 
 **Recommendation: variant A.** Rationale: it removes the only ambiguity ("turns
 off network access" → "deactivates its download switch") and keeps the second
@@ -136,8 +136,7 @@ unguarded start**, but defensive starting with a fallback.
    type = from the manifest, without a time limit on API 29–33).
 3. **If that also fails:** `stopSelf()`, the download stays `Idle` (`.part`
    untouched) and the setup page shows the existing text
-   `setup_error_fgs_blocked` ("Download konnte nicht gestartet werden. Öffnen Sie
-   die App erneut und versuchen Sie es noch einmal."). No crash, no silent
+   `setup_error_fgs_blocked` ("Download could not be started. Open the app again and try once more."). No crash, no silent
    continuation without a notification.
 4. **No own text for "old Android":** on API 29–33 the download runs unchanged
    with the 2-arg fallback (only without type semantics/6-h limit). The user

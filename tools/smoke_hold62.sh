@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Compact hold proof: 62 s hold (2x 3-s pauses), 75 s finalize time, then export.
 set -u
-cd <workdir>
-ADB="adb -s <device>"
+cd "${VK_WORKDIR:=$(dirname "$(readlink -f "$0")")/..}"   # <workdir>
+ADB="adb -s ${VK_DEVICE:-emulator-5554}"   # <device>
 export PATH=$PATH:/opt/android-sdk/platform-tools
 export XDG_RUNTIME_DIR=/run/user/$(id -u)
 LOG=/tmp/sm30_k2.log; : > "$LOG"; exec >>"$LOG" 2>&1

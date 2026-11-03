@@ -27,8 +27,8 @@ pactl load-module module-null-sink sink_name=vkmic sink_properties=device.descri
 pactl load-module module-remap-source master=vkmic.monitor source_name=vkmic_src \
       source_properties=device.description=VKMicSrc
 pactl set-default-source vkmic_src
-adb -s <device> emu kill                       # ONLY 5560, 5558 is foreign
-QEMU_AUDIO_DRV=pa "$ANDROID_HOME/emulator/emulator" -avd vk-api36 -port 5560 \
+adb -s <device> emu kill                       # ONLY <device>, <other-device> is foreign
+QEMU_AUDIO_DRV=pa "$ANDROID_HOME/emulator/emulator" -avd vk-api36 -port <device> \
       -no-window -no-snapshot -no-boot-anim -gpu swiftshader_indirect &
 adb -s <device> wait-for-device
 adb -s <device> shell dumpsys media.audio_flinger | grep -i -m5 "input\|source"   # input present?
@@ -68,7 +68,7 @@ enable/set`)
 ```bash
 adb -s <device> emu kill
 pactl unload-module <remap-id>; pactl unload-module <null-sink-id>; pulseaudio --kill
-"$ANDROID_HOME/emulator/emulator" -avd vk-api36 -port 5560 -no-window -no-snapshot \
+"$ANDROID_HOME/emulator/emulator" -avd vk-api36 -port <device> -no-window -no-snapshot \
       -no-audio -gpu swiftshader_indirect &
 adb -s <device> wait-for-device
 adb -s <device> install -r app/build/outputs/apk/debug/app-debug.apk
@@ -81,7 +81,7 @@ adb -s <device> shell ime set    de.voicekeyboard/.ime.VoiceKeyboardService
 headless without an audio backend (C1+C3, fallback `-audio auto`) · PulseAudio
 needs `XDG_RUNTIME_DIR` (C2) · guest resampling falsifies the golden (M3 with
 tolerance, not exact) · `connectedDebugAndroidTest` uninstalls (after every run
-§1.6) · confusing 5558 (**always** `-s <device>`).
+§1.6) · confusing <other-device> (**always** `-s <device>`).
 
 ## 2. Keyboard layout
 

@@ -86,7 +86,7 @@ class OwnershipTracker(
     fun onOwnEdit(newExpectedText: String) = synchronized(lock) {
         expectedText = newExpectedText
         ownEditPending = true
-        lastOwnEditMs = nowMs() // AP7-E1b: Frische-Fenster starten je Write
+        lastOwnEditMs = nowMs() // AP7-E1b: freshness window restarts on every write
     }
 
     /**

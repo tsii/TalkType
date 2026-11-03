@@ -6,7 +6,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * D11 (docs/DESIGN_STOCK_LOOK.md “D11 — Rückmeldung gedrückte Taste”, from line 240):
+ * D11 (docs/DESIGN_STOCK_LOOK.md “D11 — Pressed key feedback”, from line 240):
  * pure surface/glyph decision without Android — the seam that KeyboardView
  * calls while drawing. Test-first, JVM.
  *
@@ -73,7 +73,7 @@ class KeySurfaceTest {
     fun `shiftTemporary does not fill the surface - only the glyph is accented`() {
         val r = decide(istShiftKey = true, shiftTemporary = true)
         assertEquals("surface stays normal", KeySurface.Surface.NORMAL, r.surface)
-        assertEquals("Glyphe akzentuiert (keyToggledGlyph-Token)", KeySurface.Glyph.ACCENT, r.glyph)
+        assertEquals("Glyph accented (keyToggledGlyph token)", KeySurface.Glyph.ACCENT, r.glyph)
         // ...and not in combination with pressed either:
         assertEquals(
             KeySurface.Surface.PRESSED,

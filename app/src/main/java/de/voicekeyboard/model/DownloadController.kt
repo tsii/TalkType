@@ -118,11 +118,11 @@ class DownloadController(
                     currentOp = null
                 }
                 if (!ok) {
-                    setState(State.Failed(ModelError.Storage("Download endete ohne Erfolg: ${file.storeName}")))
+                    setState(State.Failed(ModelError.Storage("download ended without success: ${file.storeName}")))
                     return
                 }
                 if (!store.movePartToStaging(file.storeName, staging)) {
-                    setState(State.Failed(ModelError.Storage("Staging-Move fehlgeschlagen: ${file.storeName}")))
+                    setState(State.Failed(ModelError.Storage("Staging move failed: ${file.storeName}")))
                     return
                 }
                 completedBytes += sizeByName.getValue(file.storeName)
@@ -130,7 +130,7 @@ class DownloadController(
             store.markVerifying()
             setState(State.Verifying)
             if (!store.activate(staging)) {
-                setState(State.Failed(ModelError.Storage("Aktivierung fehlgeschlagen (Staging unvollständig/Hash)")))
+                setState(State.Failed(ModelError.Storage("activation failed (staging incomplete/hash)")))
                 return
             }
             setState(State.Ready)

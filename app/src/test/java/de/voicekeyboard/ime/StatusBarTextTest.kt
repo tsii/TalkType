@@ -7,7 +7,7 @@ import org.junit.Test
 
 /**
  * F13a (B1, docs/STREAMING_FREEZE_ANALYSE.md): purely logical text selection
- * of the IME status row — „starte Aufnahme…“ is TRANSIENT and must neither be
+ * of the IME status row — "Starting recording…" is TRANSIENT and must neither be
  * set sticky nor cover an existing error.
  *
  * Clarity rule (fixed): an error (sticky/visible) is NEWER than the transient
@@ -17,10 +17,10 @@ import org.junit.Test
  */
 class StatusBarTextTest {
 
-    private val start = "Starte Aufnahme…"
-    private val idle = "Bereit"
-    private val recordingText = "Diktat… (intern)"
-    private val finalizingText = "Verarbeite…"
+    private val start = "Starting recording…"
+    private val idle = "Ready"
+    private val recordingText = "Dictating… (built-in)"
+    private val finalizingText = "Processing…"
 
     private fun inputs(
         extra: String? = null,
@@ -49,9 +49,9 @@ class StatusBarTextTest {
         diagSuffix = diagSuffix,
     )
 
-    // 1. start text + running recording -> recording text; NEVER „starte…“ after the 3rd call.
+    // 1. start text + running recording -> recording text; NEVER "Starting recording…" after the 3rd call.
     @Test
-    fun `start text yields to the running recording - never starte again after the third call`() {
+    fun `start text yields to the running recording - never start again after the third call`() {
         val first = StatusBarText.select(inputs(transientText = start, recording = false))
         assertEquals(start, first.text) // before the start the transient text is correct
         val second = StatusBarText.select(inputs(transientText = start, recording = true))
@@ -67,9 +67,9 @@ class StatusBarTextTest {
     @Test
     fun `start text covers no existing error`() {
         val r = StatusBarText.select(
-            inputs(transientText = start, stickyError = "Berechtigung nötig", errorsNewerThanTransient = true),
+            inputs(transientText = start, stickyError = "Permission needed", errorsNewerThanTransient = true),
         )
-        assertEquals("Berechtigung nötig", r.text)
+        assertEquals("Permission needed", r.text)
         assertFalse(r.stickyConsumed) // the error persists (R-2)
     }
 
@@ -77,27 +77,27 @@ class StatusBarTextTest {
     @Test
     fun `visibleError after the recording start is displayed although the start text was running`() {
         val r = StatusBarText.select(
-            inputs(transientText = start, visibleError = "Audio-Start fehlgeschlagen", errorsNewerThanTransient = true),
+            inputs(transientText = start, visibleError = "Audio start failed", errorsNewerThanTransient = true),
         )
-        assertEquals("Audio-Start fehlgeschlagen", r.text)
+        assertEquals("Audio start failed", r.text)
         assertTrue(r.transientConsumed) // the start text is done
     }
 
     // 4. stickyError survives a pure updateStatus() (without extra) (R-2).
     @Test
     fun `stickyError survives a pure updateStatus`() {
-        val whileRecording = StatusBarText.select(inputs(stickyError = "Berechtigung nötig", recording = true))
-        assertEquals("Berechtigung nötig", whileRecording.text)
+        val whileRecording = StatusBarText.select(inputs(stickyError = "Permission needed", recording = true))
+        assertEquals("Permission needed", whileRecording.text)
         assertFalse(whileRecording.stickyConsumed)
-        val atIdle = StatusBarText.select(inputs(stickyError = "Berechtigung nötig"))
-        assertEquals("Berechtigung nötig", atIdle.text) // without success it stays
+        val atIdle = StatusBarText.select(inputs(stickyError = "Permission needed"))
+        assertEquals("Permission needed", atIdle.text) // without success it stays
         assertFalse(atIdle.stickyConsumed)
     }
 
     // 5. success (idle) clears stickyError — existing R-2b behavior.
     @Test
     fun `success clears stickyError`() {
-        val r = StatusBarText.select(inputs(stickyError = "Berechtigung nötig", success = true))
+        val r = StatusBarText.select(inputs(stickyError = "Permission needed", success = true))
         assertEquals(idle, r.text)
         assertTrue("the caller MAY clear stickyError", r.stickyConsumed)
     }
@@ -120,9 +120,9 @@ class StatusBarTextTest {
     // Addition: extra as an ERROR is sticky; extra == transientText is NOT.
     @Test
     fun `extra is only sticky if it is not a transient text`() {
-        val error = StatusBarText.select(inputs(extra = "Fehler X", transientText = start))
+        val error = StatusBarText.select(inputs(extra = "Error X", transientText = start))
         assertTrue("the error extra must be marked sticky", error.extraIsSticky)
-        assertEquals("Fehler X", error.text)
+        assertEquals("Error X", error.text)
         val startExtra = StatusBarText.select(inputs(extra = start, transientText = start))
         assertFalse("the start-text extra is transient, NOT sticky", startExtra.extraIsSticky)
         assertEquals(start, startExtra.text)
@@ -141,7 +141,7 @@ class StatusBarTextTest {
         // HINT: the same transient channel, but with the hint flag (F50a hint etc.).
         assertEquals(
             StatusKind.HINT,
-            StatusBarText.select(inputs(transientText = "Loslassen vorgemerkt…", transientHint = true)).kind,
+            StatusBarText.select(inputs(transientText = "Release pre-noted…", transientHint = true)).kind,
         )
         // RECORDING without / DIAG with debug suffix (structure marker, no content).
         assertEquals(StatusKind.RECORDING, StatusBarText.select(inputs(recording = true)).kind)
@@ -153,7 +153,7 @@ class StatusBarTextTest {
         assertEquals(StatusKind.FINALIZING, StatusBarText.select(inputs(finalizing = true)).kind)
         assertEquals(StatusKind.IDLE, StatusBarText.select(inputs()).kind)
         assertEquals(StatusKind.IDLE, StatusBarText.select(inputs(success = true)).kind)
-        assertEquals(StatusKind.ERROR, StatusBarText.select(inputs(extra = "Fehler X")).kind)
+        assertEquals(StatusKind.ERROR, StatusBarText.select(inputs(extra = "Error X")).kind)
         assertEquals(
             StatusKind.ERROR,
             StatusBarText.select(inputs(visibleError = "editor_sync_timeout")).kind,
@@ -165,7 +165,7 @@ class StatusBarTextTest {
             StatusBarText.select(inputs(recording = true)),
             StatusBarText.select(inputs(finalizing = true)),
             StatusBarText.select(inputs()),
-            StatusBarText.select(inputs(extra = "Fehler X")),
+            StatusBarText.select(inputs(extra = "Error X")),
         )) {
             assertTrue("RAW is the never-allowed fallback", r.kind != StatusKind.RAW)
         }

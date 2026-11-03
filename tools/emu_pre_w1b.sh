@@ -3,8 +3,8 @@
 # Supersede prefix: toggle session 1 starts, immediately hold session 2 → the vc32 gate
 # is opened by an asynchronous late abort → F43 stops at the first pause.
 set -u
-cd <workdir>
-ADB="adb -s <device>"; LOG=/tmp/c2_pre_w1b_mic.log; : > "$LOG"; exec >>"$LOG" 2>&1
+cd "${VK_WORKDIR:=$(dirname "$(readlink -f "$0")")/..}"   # <workdir>
+ADB="adb -s ${VK_DEVICE:-emulator-5554}"; LOG=/tmp/c2_pre_w1b_mic.log; : > "$LOG"; exec >>"$LOG" 2>&1
 ts() { date "+%H:%M:%S.%3N"; }
 export PATH=$PATH:/opt/android-sdk/platform-tools
 export XDG_RUNTIME_DIR=/run/user/$(id -u)

@@ -138,7 +138,7 @@ class EmojiPanelTest {
                     EmojiPages.pagesInCategory(48, size), page)
                 total += catTotal
             }
-            assertEquals("Gesamt bei Seitengroesse $size", 384, total)
+            assertEquals("Total at page size $size", 384, total)
         }
         // row calculation: height suffices for 6 → 6; tight → fewer, never 0
         assertEquals(6, EmojiPages.rowsForHeight(6f * 44f, 44f))

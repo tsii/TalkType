@@ -11,7 +11,7 @@ package de.voicekeyboard.editor
 data class TextDelta(val replaceLength: Int, val newText: String) {
 
     init {
-        require(replaceLength >= 0) { "replaceLength muss >= 0 sein, war $replaceLength" }
+        require(replaceLength >= 0) { "replaceLength must be >= 0, was $replaceLength" }
     }
 
     /** true if the delta has no effect (neither delete nor insert). */

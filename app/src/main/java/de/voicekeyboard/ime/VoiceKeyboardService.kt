@@ -327,7 +327,7 @@ class VoiceKeyboardService : InputMethodService(), KeyboardView.Listener {
 
     /**
      * D10-rest §3: character output of the ACTIVE dictation session (numbers only,
-     * rule 9 — never text content). Basis for the "Kein Text erkannt" toast and
+     * rule 9 — never text content). Basis for the "No text recognized" toast and
      * the commit check mark; reset at every mic DOWN.
      */
     private val outputCounter = de.voicekeyboard.ime.DictationOutputCounter()
@@ -853,7 +853,7 @@ class VoiceKeyboardService : InputMethodService(), KeyboardView.Listener {
                 // session ALREADY STARTED must not remain a zombie dictation; the
                 // FGS must not leak. Re-throw: the coroutine ends as
                 // "cancelled" — the deadline/supersede owners have already informed
-                // the UI (no additional "Start fehlgeschlagen" text).
+                // the UI (no additional "Dictation start failed" text).
                 if (started) mine?.abort("start_superseded")
                 stopFgs("superseded")
                 throw e
@@ -884,7 +884,7 @@ class VoiceKeyboardService : InputMethodService(), KeyboardView.Listener {
         noteMicRel("up")
         // F50a: pure decision — UP during the (cold) start is NOT a
         // regular stop, but the catch-up plus a transient hint
-        // ("Loslassen vorgemerkt"): the previously SILENT flag was the
+        // ("Release pre-noted"): the previously SILENT flag was the
         // point of confusion (C2-1). The KEEP_RUNNING design (P0 finding 2(a)) stays.
         when (micUpDuringStart(startingUp)) {
             MicUpDuringStartAction.PENDING_STOP_HINT -> {
@@ -975,7 +975,7 @@ class VoiceKeyboardService : InputMethodService(), KeyboardView.Listener {
 
     private fun stopDictationIfRunning() {
         val c = coordinator
-        // AP7-W1: gate_open_at_stop — Sample DIREKT vor dem Stopp (0/1).
+        // AP7-W1: gate_open_at_stop — sample DIRECTLY before the stop (0/1).
         gateOpenAtStopValue = if (holdGate.activeGen == 0L) 1 else 0
         // F34/P2-1 (REVIEW_F29_F33): even WITHOUT a coordinator the mic state must
         // not hang — focus loss/IME hiding are end paths (before:
@@ -985,7 +985,7 @@ class VoiceKeyboardService : InputMethodService(), KeyboardView.Listener {
                 c.state == de.voicekeyboard.dictation.DictationState.STARTING
             ) {
                 finalResultExpected = true // D10-rest: finale expected → judge toast/check mark
-                c.stop() // Final-Decode bis fertig, drain (Coordinator-M4c-1)
+                c.stop() // final decode until done, drain (Coordinator-M4c-1)
             } else {
                 // F13b/C1: release over a session that STILL FAILED (state from
                 // fail() already IDLE) — secure the error code BEFORE abort() (abort
@@ -1014,7 +1014,7 @@ class VoiceKeyboardService : InputMethodService(), KeyboardView.Listener {
             // F9 P0: onStopped runs in the worker (serviceScope = Default). Without the
             // main dispatcher the coordinator would run its UI finale in the worker
             // context -> CalledFromWrongThreadException on the new info row TextView and
-            // thus a dead IME process (user: "Eingaben werden ignoriert").
+            // thus a dead IME process (user: "input is ignored").
             mainDispatcher = kotlinx.coroutines.Dispatchers.Main,
             // F49 wiring (PLAN_V0130 A2): auto-stop suppressed while a hold
             // gesture keeps the finger down ("not yet done"); toggle
@@ -1056,7 +1056,7 @@ class VoiceKeyboardService : InputMethodService(), KeyboardView.Listener {
             // C-2/C-4: load in the coordinator. Important: the store folder itself is
             // NOT the model directory — the files live in
             // versions/<active>. The engine checks directly for vocab.txt and
-            // otherwise throws "vocab.txt fehlt" even though the store reports READY.
+            // otherwise throws "vocab.txt missing in model folder" even though the store reports READY.
             modelDir = de.voicekeyboard.model.ModelStore(
                 java.io.File(filesDir, MODEL_DIR_NAME),
             ).modelDir(),
@@ -1104,8 +1104,8 @@ class VoiceKeyboardService : InputMethodService(), KeyboardView.Listener {
     /**
      * D10-rest §2/§3: finale after STOP (not after abort — the coordinator calls
      * onStopped only in the stop() path). Runs on the main dispatcher (N-2).
-     *  - Empty output (0 characters) → toast "Kein Text erkannt. Bitte erneut
-     *    versuchen." — the silent empty output is no longer silent; NO check mark.
+     *  - Empty output (0 characters) → toast "No text recognized. Please try
+     *    again." — the silent empty output is no longer silent; NO check mark.
      *  - Output > 0 → short-lived commit check mark (600 ms) on the mic cell.
      */
     private fun onDictationStopped() {
@@ -1123,7 +1123,7 @@ class VoiceKeyboardService : InputMethodService(), KeyboardView.Listener {
         sess("final", " trail_sp=" +
             if ((coordinator?.lastStopOutcome as? de.voicekeyboard.dictation.StopOutcome.FinalRan)
                     ?.trailingSpace == true) 1 else 0
-        ) // AP1: VK-SESS — mini/overall finale; T10: trail_sp=0|1 (Regel 9: nur Zahl)
+        ) // AP1: VK-SESS — mini/overall finale; T10: trail_sp=0|1 (rule 9: number only)
         holdWarnShown = false // B2: session end ⇒ warning flag back (next session warns anew)
         val c = coordinator
         val hadOutput = outputCounter.hasOutput
@@ -1238,9 +1238,9 @@ class VoiceKeyboardService : InputMethodService(), KeyboardView.Listener {
     }
 
     private fun routeLabel(route: de.voicekeyboard.audio.Route): String = when (route) {
-        de.voicekeyboard.audio.Route.WIRED_HEADSET -> "Kabel-Headset"
-        de.voicekeyboard.audio.Route.BLUETOOTH_SCO -> "BT-Headset"
-        de.voicekeyboard.audio.Route.BUILTIN_MIC -> "intern"
+        de.voicekeyboard.audio.Route.WIRED_HEADSET -> "wired headset"
+        de.voicekeyboard.audio.Route.BLUETOOTH_SCO -> "BT headset"
+        de.voicekeyboard.audio.Route.BUILTIN_MIC -> "built-in"
     }
 
     // ---- Permissions (order: grant → FGS → start) ----
@@ -1483,7 +1483,7 @@ class VoiceKeyboardService : InputMethodService(), KeyboardView.Listener {
         // start text no longer sets/masks stickyError; extra is only
         // sticky only when the function marks it as an error.
         val recText = buildString { // F52: hoisted — the diagSuffix derivation needs the line before select
-            append("Diktat… (")
+            append("Dictating… (")
             append(routeLabel(router?.currentRoute ?: de.voicekeyboard.audio.Route.BUILTIN_MIC))
             append(")")
             // S12b: diagnostics short form only in debug builds (rule 9: numbers only —
@@ -1590,7 +1590,7 @@ class VoiceKeyboardService : InputMethodService(), KeyboardView.Listener {
                 // F8 Q6 (P1) + F9 d (P2): the footer-row mic key is a toggle,
                 // but only in IDLE/RECORDING. In STARTING/FINALIZING a tap would be a
                 // restart attempt that fails at coordinator.start() and shows
-                // "Start fehlgeschlagen" — hence deliberately nothing there.
+                // "Dictation start failed" — hence deliberately nothing there.
                 // Holding remains additionally possible: DOWN of the status row bar
                 // starts, UP stops.
                 when (micToggleAction(coordinator?.state)) {
@@ -1635,24 +1635,24 @@ class VoiceKeyboardService : InputMethodService(), KeyboardView.Listener {
             // D10 §3 variant (b) — "pre-book for the next recording": the deliberate tap
             // is ACCEPTED (instead of being helplessly rejected), the running PTT/edit
             // session stays untouched; no false promise of an ASR language switch
-            // ("Diktatsprache Auto" — the recognition follows the model).
+            // ("dictation language auto" — the recognition follows the model).
             val active = activeLanguages()
             // Further taps cycle from the PRE-BOOKED instead of the current ID;
             // an invalid pending (target removed from the active languages) is deleted.
             val pending = pendingLayoutId?.takeIf { it in active }
             val next = LanguageCycle.nextActiveLanguage(active, pending ?: currentLanguage())
             if (next == null) {
-                toast(getString(R.string.language_switch_single_active)) // "Nur ein Layout aktiv."
+                toast(getString(R.string.language_switch_single_active)) // "Only one language active"
                 return
             }
             if (next == currentLanguage()) {
                 // Returning to the current ID lifts the pre-booking (D10 §3).
                 pendingLayoutId = null
-                toast("Vormerkung aufgehoben. Erkennung Auto.")
+                toast("Pre-note cancelled. Recognition auto.")
                 return
             }
             pendingLayoutId = next
-            toast("Layout ${LanguageCycle.endonym(next)} vorgemerkt; Diktatsprache Auto")
+            toast("Layout ${LanguageCycle.endonym(next)} pre-noted; dictation language auto")
             return
         }
         val active = activeLanguages()
@@ -1971,8 +1971,8 @@ fun micStartGate(
 /**
  * F50a (PLAN_V0130 A2): UP during the asynchronous (cold) start — the pure
  * decision whether the release acts as a REGULAR stop or as a
- * CAUGHT-UP stop with a transient hint ("Loslassen vorgemerkt — Aufnahme
- * endet gleich"). Removes the silent flag (point of confusion C2-1) without
+ * CAUGHT-UP stop with a transient hint ("Release pre-noted — recording ends
+ * shortly"). Removes the silent flag (point of confusion C2-1) without
  * changing the KEEP_RUNNING design (P0 finding 2(a)). JVM-testable (StartGateTest).
  */
 enum class MicUpDuringStartAction { PENDING_STOP_HINT, REGULAR_STOP }
@@ -2070,7 +2070,7 @@ internal fun editorRestartAction(
  * Fix W1b: the gate was a global boolean that EVERY asynchronous session end
  * (onAborted of a predecessor session, a late onDictationStopped) nulled — without
  * knowing whether it was the session of the CURRENT gesture. Consequence: the
- * F43 auto-stop fired while the finger was held ("bis zum ersten Satzzeichen → Bereit").
+ * F43 auto-stop fired while the finger was held ("until the first punctuation → Ready").
  * Now every gesture gets a monotone generation ([begin]); [end] acts ONLY
  * on its own generation — a foreign reset is REJECTED and counted
  * ([foreignResets] ⇒ 🐞 gate_foreign_resets = positive W1b evidence).

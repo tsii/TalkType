@@ -21,7 +21,7 @@ class LiteRtLoaderTest {
 
     @Test
     fun `broken tflite yields a typed error without heap bubbles`() {
-        val f = tempFile("broken", "dies ist kein tflite-modell, nur text")
+        val f = tempFile("broken", "this is not a tflite model, just text")
         try {
             LiteRtLoader.open(f, 1)
             fail("LiteRtLoadException expected")
@@ -43,7 +43,7 @@ class LiteRtLoaderTest {
         } catch (e: LiteRtLoader.LiteRtLoadException) {
             assertTrue(e.message!!.contains(f.name)) // flat file name
             assertTrue("no path: ${e.message}", '/' !in e.message!!.substringAfter(f.name))
-            assertTrue(e.message!!.contains("Größe abweichend"))
+            assertTrue(e.message!!.contains("size differs"))
         }
     }
 
@@ -54,7 +54,7 @@ class LiteRtLoaderTest {
             LiteRtLoader.open(missing, 1)
             fail("controlled error expected")
         } catch (e: IllegalStateException) {
-            assertTrue(e.message!!.contains("fehlt"))
+            assertTrue(e.message!!.contains("missing"))
         }
     }
 

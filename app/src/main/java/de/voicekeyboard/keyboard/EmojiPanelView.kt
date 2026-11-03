@@ -330,33 +330,33 @@ object EmojiPages {
     /** Validates the loaded categories against E9.4 (throws on violation). */
     fun validate(categories: List<EmojiCategoryData>) {
         require(categories.size == CATEGORIES) {
-            "Erwartet genau $CATEGORIES Kategorien, gefunden: ${categories.size}"
+            "Expected exactly $CATEGORIES categories, found: ${categories.size}"
         }
         val ids = categories.map { it.id }
-        require(ids.size == ids.distinct().size) { "Doppelte Kategorie-ID: $ids" }
+        require(ids.size == ids.distinct().size) { "Duplicate category ID: $ids" }
         val all = mutableListOf<String>()
         for (cat in categories) {
             require(cat.emoji.size == PAGE_SIZE) {
-                "Kategorie '${cat.id}': ${cat.emoji.size} Glyphen != $PAGE_SIZE"
+                "Category '${cat.id}': ${cat.emoji.size} glyphs != $PAGE_SIZE"
             }
             require(cat.emoji.distinct().size == PAGE_SIZE) {
-                "Kategorie '${cat.id}': doppelte Glyphen"
+                "Category '${cat.id}': duplicate glyphs"
             }
             for (e in cat.emoji) {
-                require(e.isNotEmpty()) { "Leerer Emoji-Eintrag in '${cat.id}'" }
+                require(e.isNotEmpty()) { "Empty emoji entry in '${cat.id}'" }
                 // E9.4: no skin-tone modifiers (U+1F3FB..U+1F3FF), no flags (regional indicators)
                 require(!e.any { ch -> ch.code in 0x1F3FB..0x1F3FF }) {
-                    "Hautton-Modifier in '$e' (${cat.id}) verboten (E9.4)"
+                    "Skin-tone modifier in '$e' (${cat.id}) forbidden (E9.4)"
                 }
                 require(e.none { ch -> ch.code in 0x1F1E6..0x1F1FF }) {
-                    "Flaggen (Regional Indicator) in '$e' (${cat.id}) verboten (E9.4)"
+                    "Flags (regional indicator) in '$e' (${cat.id}) forbidden (E9.4)"
                 }
                 // no ZWJ (U+200D) — the v1 asset has only single/pair code points
-                require('\u200D' !in e) { "ZWJ-Sequenz '$e' (${cat.id}) verboten (E9.4)" }
+                require('\u200D' !in e) { "ZWJ sequence '$e' (${cat.id}) forbidden (E9.4)" }
             }
             all += cat.emoji
         }
-        require(all.size == TOTAL) { "Gesamt ${all.size} != $TOTAL" }
+        require(all.size == TOTAL) { "Total ${all.size} != $TOTAL" }
     }
 
     /** Pure data class (independent of the view inner class, JVM-testable). */

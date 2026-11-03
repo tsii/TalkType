@@ -129,8 +129,8 @@ counter would definitively settle D1).
   error, no persistent "Diktat…".
 
 **(b2) backpressure visible/braked:**
-- `hyp_gap_ms` into the status row (debug) and on > 4 s "Verarbeite…
-  (Rückstau)".
+- `hyp_gap_ms` into the status row (debug) and on > 4 s "Processing…
+  (backpressure)" (translated from German).
 - optional: an **adaptive** hypothesis interval (at RTF > 0.5 to 3 s), so
   the worker does not permanently lag behind.
 

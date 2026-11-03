@@ -62,7 +62,7 @@ class SymbolMenuClampAcrossAssetsTest {
     private val padPx = (KeyboardTheme.POPUP_PAD_DP * density).roundToInt()
 
     @Test
-    fun jedeSymbolMenueMengeBleibtMitClampKomplettImView() {
+    fun everySymbolMenuSetStaysFullyInViewWithClamp() {
         for (id in assetIds) {
             val a = asset(id)
             for (layerName in listOf("symbols", "symbolsShift")) {

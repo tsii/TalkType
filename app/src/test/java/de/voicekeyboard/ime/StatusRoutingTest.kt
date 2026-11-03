@@ -14,21 +14,21 @@ class StatusRoutingTest {
 
     @Test
     fun `the start message goes on the transient channel - never sticky`() {
-        assertEquals(StatusChannel.TRANSIENT, StatusRouting.route(StatusEvent.Starting("Starte Aufnahme…")))
+        assertEquals(StatusChannel.TRANSIENT, StatusRouting.route(StatusEvent.Starting("Starting recording…")))
     }
 
     @Test
     fun `hints and confirmations go on the transient channel`() {
-        assertEquals(StatusChannel.TRANSIENT, StatusRouting.route(StatusEvent.Hint("Diagnose kopiert — Teilen-Dialog geöffnet")))
-        assertEquals(StatusChannel.TRANSIENT, StatusRouting.route(StatusEvent.Hint("Emoji während Diktat gesperrt")))
-        assertEquals(StatusChannel.TRANSIENT, StatusRouting.route(StatusEvent.Hint("Sprache gewechselt: Polski")))
+        assertEquals(StatusChannel.TRANSIENT, StatusRouting.route(StatusEvent.Hint("Diagnostics copied — share dialog opened")))
+        assertEquals(StatusChannel.TRANSIENT, StatusRouting.route(StatusEvent.Hint("Emoji blocked during dictation")))
+        assertEquals(StatusChannel.TRANSIENT, StatusRouting.route(StatusEvent.Hint("Language switched: Polski")))
     }
 
     @Test
     fun `errors go on the sticky channel - R-2 until the next deliberate action`() {
-        assertEquals(StatusChannel.STICKY, StatusRouting.route(StatusEvent.Error("Modell nicht geladen – Setup öffnen")))
-        assertEquals(StatusChannel.STICKY, StatusRouting.route(StatusEvent.Error("Start dauert zu lange – erneut versuchen.")))
-        assertEquals(StatusChannel.STICKY, StatusRouting.route(StatusEvent.Error("Mikrofonfreigabe nötig")))
+        assertEquals(StatusChannel.STICKY, StatusRouting.route(StatusEvent.Error("Model not loaded – open Setup")))
+        assertEquals(StatusChannel.STICKY, StatusRouting.route(StatusEvent.Error("Start takes too long – try again.")))
+        assertEquals(StatusChannel.STICKY, StatusRouting.route(StatusEvent.Error("Microphone access needed")))
     }
 
     @Test

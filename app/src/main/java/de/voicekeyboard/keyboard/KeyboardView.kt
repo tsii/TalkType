@@ -219,7 +219,7 @@ class KeyboardView @JvmOverloads constructor(
         // Allows TalkBack/uiautomator to see the keyboard as a clickable element;
         // the individual keys are reachable via the AccessibilityNodeProvider (below).
         isClickable = true
-        contentDescription = "Tastatur"
+        contentDescription = "Keyboard"
     }
 
     fun setLayout(asset: LayoutAsset, widthPx: Int) {
@@ -1274,21 +1274,21 @@ class KeyboardView @JvmOverloads constructor(
         val src = sourceKeys[key.id]
         return when (src?.kind) {
             KeyKind.ACTION -> when (src.value) {
-                KeyActions.BACKSPACE -> "Löschen"
-                KeyActions.ENTER -> "Eingabetaste"
-                KeyActions.SPACE -> "Leertaste"
-                KeyActions.SHIFT -> if (capsLock) "Feststell shift" else "Umschalt"
-                KeyActions.LAYER_SYMBOLS -> "Ziffern und Symbole"
-                KeyActions.LAYER_BASE -> "Buchstaben"
-                KeyActions.CURSOR_LEFT -> "Cursor links"
-                KeyActions.CURSOR_RIGHT -> "Cursor rechts"
-                KeyActions.LANGUAGE -> "Sprache wechseln"
+                KeyActions.BACKSPACE -> "Delete"
+                KeyActions.ENTER -> "Enter key"
+                KeyActions.SPACE -> "Space bar"
+                KeyActions.SHIFT -> if (capsLock) "Caps lock" else "Shift"
+                KeyActions.LAYER_SYMBOLS -> "Digits and symbols"
+                KeyActions.LAYER_BASE -> "Letters"
+                KeyActions.CURSOR_LEFT -> "Cursor left"
+                KeyActions.CURSOR_RIGHT -> "Cursor right"
+                KeyActions.LANGUAGE -> "Switch language"
                 KeyActions.EMOJI -> "Emojis"
-                KeyActions.MIC -> "Diktieren"
+                KeyActions.MIC -> "Dictate"
                 else -> src.label
             }
-            KeyKind.TEXT -> "Taste ${src?.label ?: key.label}"
-            KeyKind.DEAD -> "Tottaste ${src?.label ?: key.label}"
+            KeyKind.TEXT -> "Key ${src?.label ?: key.label}"
+            KeyKind.DEAD -> "Dead key ${src?.label ?: key.label}"
             KeyKind.MARGIN -> "" // F27a2: invisible margin area — no TalkBack name
             null -> key.label
         }
@@ -1308,7 +1308,7 @@ class KeyboardView @JvmOverloads constructor(
     override fun onInitializeAccessibilityNodeInfo(info: AccessibilityNodeInfo) {
         super.onInitializeAccessibilityNodeInfo(info)
         info.className = KeyboardView::class.java.name
-        info.contentDescription = "Tastatur ${layout?.language?.label ?: ""}"
+        info.contentDescription = "Keyboard ${layout?.language?.label ?: ""}"
     }
 
     override fun onPopulateAccessibilityEvent(event: AccessibilityEvent) {

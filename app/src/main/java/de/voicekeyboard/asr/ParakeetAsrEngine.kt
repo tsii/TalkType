@@ -33,16 +33,16 @@ class ParakeetAsrEngine : AsrEngine, Closeable {
     private var vocab: Vocabulary? = null
 
     override fun load(modelDir: File) {
-        check(sessions == null) { "AsrEngine.load() wurde bereits aufgerufen" }
+        check(sessions == null) { "AsrEngine.load() already called" }
         val vocabFile = File(modelDir, "vocab.txt")
-        check(vocabFile.isFile) { "vocab.txt fehlt im Modellordner" } // rule 9: never paths in error messages
+        check(vocabFile.isFile) { "vocab.txt missing in model folder" } // rule 9: never paths in error messages
         val vocab = Vocabulary.parse(vocabFile.readText())
         this.sessions = OnnxSessions.load(modelDir)
         this.vocab = vocab
     }
 
     override suspend fun transcribe(window: PcmWindow, sessionId: Long, runId: Long): Hypothesis {
-        val sessions = checkNotNull(sessions) { "AsrEngine nicht geladen — load() vor transcribe() aufrufen" }
+        val sessions = checkNotNull(sessions) { "ASR engine not loaded — call load() before transcribe()" }
         val vocab = checkNotNull(vocab)
         val env = OrtEnvironment.getEnvironment()
         val total0 = System.nanoTime()
@@ -68,7 +68,7 @@ class ParakeetAsrEngine : AsrEngine, Closeable {
                     val featTensor = tensor(result, AsrContract.MEL_OUT_FEATURES)
                     val shape = featTensor.info.shape
                     require(shape.size == 3 && shape[1] == AsrContract.MEL_BINS.toLong()) {
-                        "Mel-Features haben unerwartete Form: ${shape.contentToString()}"
+                        "Mel features have unexpected shape: ${shape.contentToString()}"
                     }
                     features = FloatArray(featTensor.floatBuffer.remaining())
                     featTensor.floatBuffer.get(features)
@@ -80,7 +80,7 @@ class ParakeetAsrEngine : AsrEngine, Closeable {
             }
         }
         val melNanos = System.nanoTime() - mel0
-        check(melTime > 0) { "Mel-Frontend lieferte features_lens=0 für $nSamples Samples" }
+        check(melTime > 0) { "Mel frontend returned features_lens=0 for $nSamples samples" }
 
         // ---- 2. Encoder: audio_signal [1,128,T] float, length [1] int64 ----
         val enc0 = System.nanoTime()
@@ -100,7 +100,7 @@ class ParakeetAsrEngine : AsrEngine, Closeable {
                     val outTensor = tensor(result, AsrContract.ENC_OUT_OUTPUTS)
                     val shape = outTensor.info.shape
                     require(shape.size == 3 && shape[1] == AsrContract.ENCODER_DIM.toLong()) {
-                        "Encoder-Output hat unerwartete Form: ${shape.contentToString()}"
+                        "Encoder output has unexpected shape: ${shape.contentToString()}"
                     }
                     encOut = FloatArray(outTensor.floatBuffer.remaining())
                     outTensor.floatBuffer.get(encOut)
@@ -113,13 +113,13 @@ class ParakeetAsrEngine : AsrEngine, Closeable {
             }
         }
         val encNanos = System.nanoTime() - enc0
-        check(encFrames > 0) { "Encoder lieferte 0 Frames für $nSamples Samples" }
+        check(encFrames > 0) { "Encoder returned 0 frames for $nSamples samples" }
 
         // NaN guard BEFORE the decode (§7 error mapping): a NaN/Inf encoder output
         // must not run through the complete decoder first (argmax on NaN → index 0).
         for (v in encOut) {
             if (!v.isFinite()) {
-                throw IllegalStateException("Encoder-Output enthält NaN/Inf (Wert $v)")
+                throw IllegalStateException("Encoder output contains NaN/Inf (value $v)")
             }
         }
 
@@ -164,7 +164,7 @@ class ParakeetAsrEngine : AsrEngine, Closeable {
 
     private fun tensor(result: ai.onnxruntime.OrtSession.Result, name: String): OnnxTensor {
         val value = result.get(name).orElse(null)
-            ?: throw IllegalStateException("Output-Tensor '$name' fehlt im Ergebnis")
+            ?: throw IllegalStateException("Output tensor '$name' missing in result")
         return value as OnnxTensor
     }
 }
@@ -189,7 +189,7 @@ private class EncoderJointStep(
     private val targetLength = intArrayOf(1)
 
     override fun step(frameIndex: Int, lastLabel: Int, states1: FloatArray, states2: FloatArray): JointOut {
-        require(frameIndex in 0 until encFrames) { "Frame-Index $frameIndex außerhalb [0,$encFrames)" }
+        require(frameIndex in 0 until encFrames) { "Frame index $frameIndex outside [0,$encFrames)" }
         // Extract the frame column from [1,1024,T] (channel-major)
         val t = frameIndex
         for (ch in 0 until AsrContract.ENCODER_DIM) {
@@ -221,7 +221,7 @@ private class EncoderJointStep(
                                 )
                             ).use { result ->
                                 val logitsTensor = result.get(AsrContract.DEC_OUT_OUTPUTS).orElse(null)
-                                    ?: throw IllegalStateException("Joint-Output 'outputs' fehlt")
+                                    ?: throw IllegalStateException("Joint output 'outputs' missing")
                                 val lTensor = logitsTensor as OnnxTensor
                                 val logitsShape = lTensor.info.shape
                                 require(
@@ -229,7 +229,7 @@ private class EncoderJointStep(
                                         logitsShape[0] == 1L && logitsShape[1] == 1L &&
                                         logitsShape[2] == 1L && logitsShape[3] == AsrContract.LOGIT_COUNT.toLong()
                                 ) {
-                                    "Joint-Output hat unerwartete Form: ${logitsShape.contentToString()} (erwartet [1,1,1,8198])"
+                                    "Joint output has unexpected shape: ${logitsShape.contentToString()} (expected [1,1,1,8198])"
                                 }
                                 val logits = FloatArray(AsrContract.LOGIT_COUNT)
                                 lTensor.floatBuffer.get(logits)

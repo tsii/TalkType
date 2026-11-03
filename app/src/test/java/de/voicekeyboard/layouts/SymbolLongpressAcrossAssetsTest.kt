@@ -52,7 +52,7 @@ class SymbolLongpressAcrossAssetsTest {
     )
 
     @Test
-    fun symbolLangdruckMenusGeltenSprachneutralInAllen15Assets() {
+    fun symbolLongPressMenusApplyLanguageNeutrallyInAll15Assets() {
         assertEquals("layout assets count", 15, assetIds.size)
         // collect the sets per plan id across all assets (parity at the end).
         val perId = mutableMapOf<String, MutableSet<List<String>>>()

@@ -4,8 +4,9 @@ import java.io.File
 
 /**
  * Typed model errors (sealed), so the controller/setup screen can
- * distinguish them (IMPLEMENTATION_PLAN M7: „Hash-Mismatch; freier Speicher;
- * Resume nach ETag-Wechsel“ — a separate UI response per error).
+ * distinguish them (IMPLEMENTATION_PLAN M7, quoted from the German spec:
+ * “hash mismatch; free storage; resume after ETag change” — a separate UI
+ * response per error).
  */
 
 sealed class ModelError(
@@ -15,7 +16,7 @@ sealed class ModelError(
 
     /** Connection/timeout/DNS — retry sensible. */
     class Network(val detail: String, cause: Throwable? = null) :
-        ModelError("Netzwerkfehler: $detail", cause)
+        ModelError("network error: $detail", cause)
 
     /** HTTP error status — retry only sensible for 5xx, 4xx final. */
     class Http(val statusCode: Int, val detail: String) :
@@ -23,19 +24,19 @@ sealed class ModelError(
 
     /** Downloaded file does not match the manifest — final, delete .part. */
     class HashMismatch(val fileName: String, val expected: String, val actual: String) :
-        ModelError("SHA-256-Mismatch für '$fileName': erwartet $expected, erhalten $actual")
+        ModelError("SHA-256 mismatch for '$fileName': expected $expected, got $actual")
 
     /** Disk full / no space / write error — offer storage cleanup. */
     class Storage(detail: String, cause: Throwable? = null) :
-        ModelError("Speicherfehler: $detail", cause)
+        ModelError("storage error: $detail", cause)
 
     /** User abort — no error banner, freeze the progress. */
     class Cancelled(val fileName: String) :
-        ModelError("Download abgebrochen: $fileName")
+        ModelError("download cancelled: $fileName")
 
     /**
      * D1: short, approximate technical line for the user (dictatable, e. g.
-     * "HTTP 403 - Datei 2/4"). PRIVACY (rule 9): never URLs, query parameters
+     * "HTTP 403 - file 2/4"). PRIVACY (rule 9): never URLs, query parameters
      * (Signature/Expires/xip) or tokens — only error classes and numbers.
      * Shown in addition to the normal message (SetupActivity, State.Failed).
      */
@@ -61,11 +62,11 @@ sealed class ModelError(
         }
         return when (this) {
             is Http -> "HTTP $statusCode" +
-                (detail.removePrefix("für ").takeIf { it.isNotEmpty() }?.let { " · ${scrub(it)}" } ?: "")
+                (detail.removePrefix("for ").takeIf { it.isNotEmpty() }?.let { " · ${scrub(it)}" } ?: "")
             is Network -> scrub(detail)
             is HashMismatch -> "Hash · ${scrub(fileName)}"
-            is Storage -> "Speicher"
-            is Cancelled -> "abgebrochen · ${scrub(fileName)}"
+            is Storage -> "storage"
+            is Cancelled -> "cancelled · ${scrub(fileName)}"
         }
     }
 

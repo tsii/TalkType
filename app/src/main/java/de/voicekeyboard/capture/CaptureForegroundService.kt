@@ -19,7 +19,8 @@ import java.util.concurrent.atomic.AtomicBoolean
  *   **and** a microphone permission — both are in the manifest.
  * - `startForeground` is called immediately in [onStartCommand] (within the
  *   FGS start deadline), before any audio/model initialization happens.
- * - No audio over Binder (DESIGN §2.2 „capture-service … kein Audio über Binder”):
+ * - No audio over Binder (DESIGN §2.2, quoted from the German spec:
+ *   “capture-service … no audio over binder”):
  *   this service only holds the foreground presence; recording runs in the
  *   IME process via the AudioRecord pipeline. Start/stop are idempotent.
  * - Without `POST_NOTIFICATIONS` the service still runs (notification invisible);
@@ -62,7 +63,8 @@ class CaptureForegroundService : Service() {
                 return START_NOT_STICKY
             }
             // null intent after restart (avoiding the STICKY case): end in a controlled way,
-            // no automatic resumption (DESIGN §3 „kein automatisches Wiederanlaufen”)
+            // no automatic resumption (DESIGN §3, quoted from the German spec:
+            // “no automatic restart”)
             null -> {
                 stopSelf()
                 return START_NOT_STICKY
@@ -82,10 +84,10 @@ class CaptureForegroundService : Service() {
     private fun createChannel() {
         val channel = NotificationChannel(
             CHANNEL_ID,
-            "Diktat-Aufnahme",
+            "Dictation recording",
             NotificationManager.IMPORTANCE_LOW, // no sound: recording indication, no alarm
         ).apply {
-            description = "Zeigt an, solange das Mikrofon für das Diktat aktiv ist"
+            description = "Shown while the microphone is active for dictation"
             setShowBadge(false)
         }
         (getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager).createNotificationChannel(channel)
@@ -101,7 +103,7 @@ class CaptureForegroundService : Service() {
             }
         return builder
             .setContentTitle(getString(R.string.capture_notification_title)) // F51 (K2): resource instead of hardcoded
-            .setContentText("Mikrofon ist aktiv")
+            .setContentText("Microphone is active")
             .setSmallIcon(android.R.drawable.ic_btn_speak_now)
             .setOngoing(true)
             .setOnlyAlertOnce(true)

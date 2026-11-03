@@ -25,7 +25,7 @@ import de.voicekeyboard.keyboard.KeyboardView
  *  - Keyboard: statusRow VISIBLE, keyboardView VISIBLE, emoji block GONE.
  *  - Emoji:    statusRow VISIBLE, keyboardView GONE (completely, bottom row too
  *              — no invisible keyboard hit surfaces), emoji block
- *              VISIBLE with native footer button „Zur Tastatur“.
+ *              VISIBLE with native footer button "Back to keyboard".
  *
  * No overlay math: no onLayout height handling, no margin/gravity anchors
  * for the panel (the three overlay variants are refuted by the device, M8b-3b/c/d).
@@ -72,9 +72,9 @@ class ImeRootView @JvmOverloads constructor(
         statusText = TextView(context).apply {
             // P0 (2026-11-01, user decision): the ground state is NEVER empty —
             // previously (S4) deliberately "", because the service sets the text; the
-            // service path (updateStatus) stays, "Bereit" is only the
+            // service path (updateStatus) stays, "Ready" is only the
             // construction default in case it (still) did not run.
-            text = "Bereit"
+            text = "Ready"
             // Spec §1: status 12 sp, secondary text color (texts on the left).
             textSize = KeyboardTheme.SP_SECONDARY_SP
             setTextColor(palette.textSecondary)
@@ -99,7 +99,7 @@ class ImeRootView @JvmOverloads constructor(
             // P0: 48-dp hit surface, RIGHT (last child of the statusRow),
             // tokens like micButton (no foreign relief theme).
             text = "🐞"
-            contentDescription = "Diagnose kopieren/teilen"
+            contentDescription = "Copy/share diagnostics"
             isAllCaps = false
             minWidth = 0
             minimumWidth = 0
@@ -140,9 +140,9 @@ class ImeRootView @JvmOverloads constructor(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 (48 * density).toInt(),
             )
-            // S4: 1-dp separator line BELOW the bar (spec §1 „Trennlinien: 1 dp unter
-            // der Diagnoseleiste — einzige feste Linie, auch in Emoji-Ansicht
-            // konsistent“). As a background layer WITHIN the 48 dp so that the
+            // S4: 1-dp separator line BELOW the bar (spec §1: separator lines 1 dp
+            // below the status bar — the only fixed line, consistent also in the
+            // emoji view). As a background layer WITHIN the 48 dp so that the
             // subtraction chain (key budget) does not change again — no additional
             // stack child, no measurement change.
             val fill = GradientDrawable().apply { setColor(palette.background) }

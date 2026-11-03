@@ -173,7 +173,7 @@ class DictationCoordinator(
     fun diagnosticsLine(threads: Int): String {
         val erst = if (firstHypothesisLatencyMs > 0) "%.1f".format(firstHypothesisLatencyMs / 1000.0) else "-"
         val rtf = if (audioMs > 0) "%.2f".format(processingMs.toDouble() / audioMs.toDouble()) else "-"
-        return "Diagnose: erst=${erst}s RTF=${rtf} T=$threads Peak=${levelPeak.short()}"
+        return "Diagnostics: erst=${erst}s RTF=${rtf} T=$threads Peak=${levelPeak.short()}"
     }
 
     /** Visible route for the UI (set by the IME from the AudioRouter). */
@@ -821,7 +821,8 @@ class DictationCoordinator(
         if (controller.state == DictationState.IDLE && active.get()) {
             active.set(false)
             channel?.close()
-            // AP3 (Fable §0.1 item 5, „:696-Überschreiber“): first-writer-keeps-
+            // AP3 (Fable §0.1 item 5, “line 696 overwrite writer” — quoted from
+            // the German spec): first-writer-keeps-
             // detail — a previously set FINE detail (editor_change,
             // michold_cancel, abort:<r>) must NOT be covered by the generic ASR
             // error code of the consumer ending. Only if still open

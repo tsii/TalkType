@@ -116,7 +116,7 @@ class MicToggleTest {
             MicReleaseDecision.TOGGLE_ON,
             micHoldReleaseDecision(
                 stateAtDown = DictationState.IDLE,
-                stateAtRelease = DictationState.STARTING, // start_ok noch nicht gekommen
+                stateAtRelease = DictationState.STARTING, // start_ok has not arrived yet
                 holdDurationMs = 150L,
                 cancelled = false,
                 startingUp = true,
@@ -135,7 +135,7 @@ class MicToggleTest {
             MicReleaseDecision.TOGGLE_ON,
             micHoldReleaseDecision(
                 stateAtDown = DictationState.IDLE,
-                stateAtRelease = DictationState.RECORDING, // start_ok kam schon
+                stateAtRelease = DictationState.RECORDING, // start_ok already arrived
                 holdDurationMs = 40L,
                 cancelled = false,
                 startingUp = false,
@@ -159,7 +159,7 @@ class MicToggleTest {
             micHoldReleaseDecision(DictationState.IDLE, DictationState.RECORDING, 350L, cancelled = false, startingUp = false),
         )
         assertEquals(
-            "Release während STARTING: pending Stop",
+            "release during STARTING: pending stop",
             MicReleaseDecision.HOLD_STOP_PENDING,
             micHoldReleaseDecision(DictationState.IDLE, DictationState.STARTING, 350L, cancelled = false, startingUp = true),
         )

@@ -27,7 +27,7 @@ class LiteRtSignature(
         private fun firstKeyOf(it: Interpreter): String {
             val keys = it.signatureKeys ?: emptyArray()
             if (keys.isNullOrEmpty()) {
-                throw SignatureException("Modell hat keine Signature")
+                throw SignatureException("model has no signature")
             }
             return keys.first()
         }
@@ -35,11 +35,11 @@ class LiteRtSignature(
 
     /** Allowed input names (from the model signature, not guessed). */
     val inputNames: List<String> = interpreter.getSignatureInputs(signatureKey)?.toList()
-        ?: throw SignatureException("Keine Eingänge für Signature '$signatureKey'")
+        ?: throw SignatureException("no inputs for signature '$signatureKey'")
 
     /** Allowed output names. */
     val outputNames: List<String> = interpreter.getSignatureOutputs(signatureKey)?.toList()
-        ?: throw SignatureException("Keine Ausgänge für Signature '$signatureKey'")
+        ?: throw SignatureException("no outputs for signature '$signatureKey'")
 
     /**
      * Runs the signature: inputs by name, outputs by name.
@@ -49,7 +49,7 @@ class LiteRtSignature(
         val unknownIn = inputs.keys - inputNames.toSet()
         if (unknownIn.isNotEmpty()) {
             throw SignatureException(
-                "Unbekannte Eingänge $unknownIn — erlaubt: $inputNames",
+                "unknown inputs $unknownIn — allowed: $inputNames",
             )
         }
         val outputs = mutableMapOf<String, Any>()

@@ -15,13 +15,13 @@ reachable via existing menus (menu handover, sharply checked).
 
   symbolsShift (structure 10/10/10/13, asset-specific mandatory characters stay):
     r0 = first 10 keys à 1.0; the r0 tail (11th key: €/$/_/~/…) moves
-         to the r1 block start (plan: de-de „€ r0→r1“);
+         to the r1 block start (plan: de-de "€ r0→r1");
     r1 = block à 9.0/n + ⌫ 1.0 (overflow > 10 keys moves into the r2 block);
     r2 = ⇧ 1.5 + block à 7.5/n + ⏎ 1.0;
     r3 = like symbols.
     da-dk/fi-fi/el-gr: € (symbols r0, position 11) moves as a symbolsShift
-    direct key to the r0 end position; the previous r0 tail key (id „euro“,
-    label „>") moves into the r1 block (id → „greater“, collision freedom).
+    direct key to the r0 end position; the previous r0 tail key (id "euro",
+    label ">") moves into the r1 block (id → "greater", collision freedom).
     da-dk/fi-fi: the ‰ direct key is dropped (plan acceptance; reachable via the
     T4 menu percent→[‰]).
 
@@ -49,8 +49,8 @@ R2_MAX_CELLS = 10  # T7 M rule: r2 direct cells à 0.75 within the budget 7.5 (�
 # T7 (v0.1.37) menu handover: characters that drop out of an overcrowded r2
 # MUST stay reachable via an existing menu (guarded by the before==after assert
 # in main()); documentation of the actual cases (PLAN_SYMBOL_RASTER.md
-# M rule): da/fi „…“ → dot menu [. → …], el-gr „–“ → hyphen menu [–, —],
-# el-gr „…“ → dot menu.
+# M rule): da/fi "…" → dot menu [. → …], el-gr "–" → hyphen menu [–, —],
+# el-gr "…" → dot menu.
 
 
 def num(w):
@@ -157,7 +157,7 @@ def rebuild_symbols_shift(layer, euro_in, asset_id):
     assert len(tail) <= 1, f"r0 tail >1 key: {[k['label'] for k in tail]}"
     # da/fi/el: the tail key carries id 'euro' like the immigrating € — make it
     # unambiguous ( '>' → id 'greater'); € moves to the r1 block start (plan rule
-    # „€ → r1" like de-de), NOT into r0 (the plan target „r0 10×1.0" stays intact).
+    # "€ → r1" like de-de), NOT into r0 (the plan target "r0 10×1.0" stays intact).
     if euro_in is not None:
         for k in tail:
             if k["id"] == "euro":

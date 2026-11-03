@@ -60,18 +60,18 @@ class DownloadPolicyTest {
         assertEquals("abgebrochen", DownloadPolicy.userMessageKey(ModelError.Cancelled("f")))
         assertEquals("netz", DownloadPolicy.userMessageKey(ModelError.Http(503, "x")))
         // D1 real taxonomy: 4xx is not a "network error"
-        assertEquals("server", DownloadPolicy.userMessageKey(ModelError.Http(403, "für encoder-model.int8.onnx")))
-        assertEquals("server", DownloadPolicy.userMessageKey(ModelError.Http(404, "für x")))
-        assertEquals("warte", DownloadPolicy.userMessageKey(ModelError.Http(429, "für x")))
-        assertEquals("warte", DownloadPolicy.userMessageKey(ModelError.Http(408, "für x")))
+        assertEquals("server", DownloadPolicy.userMessageKey(ModelError.Http(403, "for encoder-model.int8.onnx")))
+        assertEquals("server", DownloadPolicy.userMessageKey(ModelError.Http(404, "for x")))
+        assertEquals("warte", DownloadPolicy.userMessageKey(ModelError.Http(429, "for x")))
+        assertEquals("warte", DownloadPolicy.userMessageKey(ModelError.Http(408, "for x")))
         assertEquals("hash", DownloadPolicy.userMessageKey(ModelError.HashMismatch("f", "a", "b")))
         // D1-02: 416 is a resume problem, not a server rejection
-        assertEquals("fortsetzung", DownloadPolicy.userMessageKey(ModelError.Http(416, "Range nicht erfüllbar")))
+        assertEquals("fortsetzung", DownloadPolicy.userMessageKey(ModelError.Http(416, "range not satisfiable")))
     }
 
     @Test fun `D1 detailForUser never urls query or token`() {
         // HTTP 403: code + file name, but NO query string
-        val e403 = ModelError.Http(403, "für encoder-model.int8.onnx")
+        val e403 = ModelError.Http(403, "for encoder-model.int8.onnx")
         val d = e403.detailForUser()
         assertTrue("HTTP code present", d.contains("403"))
         assertTrue("file name present", d.contains("encoder-model.int8.onnx"))
@@ -79,7 +79,7 @@ class DownloadPolicyTest {
         // counter-check: even if the detail text contains a signature URL,
         // it must NEVER appear in detailForUser() (rule 9)
         val poisoned = ModelError.Http(403,
-            "für x?Signature=abc123&Expires=999&xip=1.2.3.4 https://us.aws.cdn.hf.co/xet-bridge-us/secret")
+            "for x?Signature=abc123&Expires=999&xip=1.2.3.4 https://us.aws.cdn.hf.co/xet-bridge-us/secret")
         val d2 = poisoned.detailForUser()
         assertFalse("Signature= must never occur: $d2", d2.contains("Signature="))
         assertFalse("Expires= must never occur", d2.contains("Expires="))
@@ -101,7 +101,7 @@ class DownloadPolicyTest {
         assertFalse("no /", d4.contains("/"))
         assertTrue("file name stays", d4.contains("encoder-model.int8.onnx"))
         // the legitimate case stays visible
-        val ok = ModelError.Http(403, "für encoder-model.int8.onnx")
+        val ok = ModelError.Http(403, "for encoder-model.int8.onnx")
         val d5 = ok.detailForUser()
         assertTrue(d5.contains("HTTP 403"))
         assertTrue(d5.contains("encoder-model.int8.onnx"))

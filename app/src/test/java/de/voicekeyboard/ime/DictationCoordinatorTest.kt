@@ -283,7 +283,7 @@ class DictationCoordinatorTest {
         c.stop()
         awaitIdle(c)
         // the final transcribes the WHOLE BUFFER: 24000 samples in ONE window
-        assertTrue("mind. ein transcribe", engine.transcribeCalls.get() >= 1)
+        assertTrue("at least one transcribe", engine.transcribeCalls.get() >= 1)
         assertEquals(
             "the final must run over all 3 blocks (24000 samples)",
             24000,

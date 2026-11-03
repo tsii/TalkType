@@ -179,7 +179,7 @@ class DictationHoldGateTest {
             // Oracle: auto-stop 2.5 s INTO the 3-s pause (after 8 s of corpus), the
             // third speech (from 9 s on) is NEVER fed.
             assertTrue(
-                "Auto-Stop nach der 3. Sprache, in der Pause (audio_s=${c.audioSeconds})",
+                "auto-stop after the 3rd utterance, during the pause (audio_s=${c.audioSeconds})",
                 c.audioSeconds >= 8.0 && c.audioSeconds <= 9.5,
             )
             assertTrue("no ERR_STALL/ERR_SILENT abort", c.lastAbortReason.startsWith("audio_error").not())
@@ -227,7 +227,7 @@ class DictationHoldGateTest {
                     awaitReason(c, "final")
                 }
                 assertTrue(
-                    "gate=$suppressed: Hypothesen erzeugt (hyp_count=${c.hypCount})",
+                    "gate=$suppressed: hypotheses produced (hyp_count=${c.hypCount})",
                     c.hypCount >= 1 && ctx.engine.calls >= 1,
                 )
                 assertTrue(

@@ -63,7 +63,7 @@ class LetterRowAlignmentAcrossAssetsTest {
     }
 
     @Test
-    fun siebenerReihen_YMittigUnterAS_MMittigUnterKL() {
+    fun sevenLetterRows_YCenteredUnderAS_MCenteredUnderKL() {
         for (id in sevenLetterAssets) {
             for (ln in listOf("base", "shift")) {
                 val rows = asset(id).layers.getValue(ln).rows

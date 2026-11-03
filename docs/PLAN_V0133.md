@@ -409,7 +409,7 @@ cd <workdir>
 export PATH="$PATH:/opt/android-sdk/platform-tools"
 export XDG_RUNTIME_DIR="/run/user/$(id -u)"
 unset DISPLAY                         # explicitly NO DISPLAY
-ADB="adb -s <device>"            # never 5558/another port
+ADB="adb -s <device>"            # never <other-device>/another port
 PKG=de.voicekeyboard
 
 # Silence the Google troublemakers before any IME handling; no pm clear!
@@ -555,7 +555,7 @@ tesseract /tmp/v0133_row0.png stdout -l eng 2>/dev/null | grep -q "1"
 # B2a: 30 characters, hold backspace ~2 s; evaluate the length difference only.
 $ADB shell input keyevent 280
 $ADB shell input text "ABCDEFGHIJKLMNOPQRSTUVWXYZ1234"
-read -r BX BY <<< "$(ui_key Löschen)"
+read -r BX BY <<< "$(ui_key Delete)"
 BEFORE=$(editor_len)
 $ADB shell input -d 0 motionevent DOWN "$BX" "$BY"; sleep 2
 $ADB shell input -d 0 motionevent UP "$BX" "$BY"

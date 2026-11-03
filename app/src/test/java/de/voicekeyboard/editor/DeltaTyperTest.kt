@@ -326,7 +326,7 @@ class DeltaTyperTest {
         assertEquals("exactly one new sink call", callsBefore + 1, sink.calls.size)
         assertEquals("b".repeat(75), sink.text)
         assertEquals("b".repeat(75), typer.currentText)
-        assertEquals("W3a-Analog: committedLength auf common geschrumpft", 0, typer.committedLength)
+        assertEquals("W3a analog: committedLength shrunk to common", 0, typer.committedLength)
         assertFalse("the divergence is resolved", typer.divergent)
     }
 

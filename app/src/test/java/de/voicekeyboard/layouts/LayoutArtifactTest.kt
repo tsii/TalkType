@@ -31,7 +31,7 @@ import org.robolectric.annotation.Config
 @Config(sdk = [35])
 class LayoutArtifactTest {
 
-    /** Action whitelist — maintained in the test (order: „Whitelist im Test"). */
+    /** Action whitelist — maintained in the test (order: "whitelist in the test"). */
     private val actionWhitelist = setOf(
         "shift", "caps", "layer-symbols", "layer-base", "backspace", "space", "enter",
         "language", "emoji", "mic", "cursor-left", "cursor-right",

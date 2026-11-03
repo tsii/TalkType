@@ -10,7 +10,7 @@ used in M4d) or synthetic.
 ## 0) Current situation (evidenced, with paths)
 
 - **AVD/emulator:** `vk-api36` = **x86_64** / 4 cores / 1536 MB / API 36
-  `google_apis` (`<workdir>/.android/avd/vk-api36.avd/config.ini`); container
+  `google_apis` (`~/.android/avd/vk-api36.avd/config.ini`); container
   without a display ⇒ headless operation only; the IME is not shown there
   (`mInputShown=false`), `adb`/`connectedDebugAndroidTest` work. Emulator
   currently not started.
@@ -38,7 +38,7 @@ used in M4d) or synthetic.
 | **NOT checked** | real microphone, api 37 policy | microphone, FGS, IME UI | engine only if F32-B is green; IME UI in headless (see below) | **no transcription**, no backlog, no level |
 | **Blocker** | **F32-B** (x86_64 SIGSEGV); headless IME UI | **F32-B** for the emulator — **on the phone (arm64) it runs IMMEDIATELY** (M4d 6/6 green) | F32-B + headless audio (see below) | **none** — runs today |
 | **Effort** | ~2–4 h (test + wiring, after F32-B) | ~2 h (fixture + 1 test class; the S1 pattern exists) | ~2 h setup (recipe exists: `tools/emulator_audio_up.sh`) + orchestration | ~1–2 h (extend the F30 tests, e.g. 30/60-s backlog curves) |
-| **Risk** | medium (emulator audio/timing) | **low** (no audio stack, deterministic) | high (Qt/audio stack in the container, only on 5560) | **zero** (JVM test) |
+| **Risk** | medium (emulator audio/timing) | **low** (no audio stack, deterministic) | high (Qt/audio stack in the container, only on <device>) | **zero** (JVM test) |
 | **CI-capable** | yes (after F32-B, offline) | yes (offline) | **no** (host PulseAudio, exclusive emulator) | yes |
 
 **C headless check (the important question):** the measured recipe in

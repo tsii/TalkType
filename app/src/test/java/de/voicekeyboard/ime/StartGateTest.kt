@@ -91,7 +91,7 @@ class StartGateTest {
     @Test
     fun `UP during STARTING - pending-stop flag with hint, otherwise a regular stop`() {
         // UP in the (cold) start window: the stop is applied later (cancelStartRequested)
-        // PLUS a transient hint „Loslassen vorgemerkt — Aufnahme endet gleich”
+        // PLUS a transient hint "Release pre-noted — recording ends shortly"
         // — the previously silent flag was the point of confusion (C2 symptom 1).
         assertEquals(
             MicUpDuringStartAction.PENDING_STOP_HINT,

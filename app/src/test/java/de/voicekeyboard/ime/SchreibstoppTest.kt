@@ -209,7 +209,7 @@ class SchreibstoppTest {
 
         // counter-check: the app REPLACES our text (no suffix) — lost stays,
         // NO sink access, the counter reports W1.
-        sink.own = "GANZ ANDERER TEXT"
+        sink.own = "COMPLETELY DIFFERENT TEXT"
         c.onUpdateSelection(0, 0, 2, 5) // range ⇒ lost true again
         clock.addAndGet(500)
         val callsBeforeForeign = sink.calls.size
@@ -222,7 +222,7 @@ class SchreibstoppTest {
         assertEquals("W1 counted", 1, c.writeW1Count)
         assertEquals("write_delta unchanged", deltaBefore, c.writeDeltaCount)
         assertTrue("lost stays set", tracker.ownershipLost)
-        assertEquals("foreign text untouched byte-wise", "GANZ ANDERER TEXT", sink.own)
+        assertEquals("foreign text untouched byte-wise", "COMPLETELY DIFFERENT TEXT", sink.own)
         assertEquals("w1", c.writeReason)
     }
 
@@ -248,7 +248,7 @@ class SchreibstoppTest {
         assertEquals("no ownership-loss stamp", -1.0, c.ownershipDeniedAtS, 1e-9)
 
         // a real foreign case: counter and stamp set as before
-        sink.own = "GANZ ANDERER TEXT"
+        sink.own = "COMPLETELY DIFFERENT TEXT"
         c.onUpdateSelection(0, 0, 2, 5)
         clock.addAndGet(500)
         assertFalse(c.applyPartial(hyp("hallo welt nochmehr", c.sessionId)))

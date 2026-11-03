@@ -190,7 +190,7 @@ class ConsumerFaultTest {
         try {
             controller.feedAudio(seconds(3))
         } catch (e: IllegalStateException) {
-            // Vertrag: Wurf nach oben
+            // contract: throw upward
         }
         val oldOutcome = controller.stop() // NoFinal with error code (snapshot A)
 

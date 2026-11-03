@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Core proof for v0.1.31: 92-s hold dictation AS THE FIRST app session after a cold start.
 set -u
-cd <workdir>
-ADB="adb -s <device>"
+cd "${VK_WORKDIR:=$(dirname "$(readlink -f "$0")")/..}"   # <workdir>
+ADB="adb -s ${VK_DEVICE:-emulator-5554}"   # <device>
 export PATH=$PATH:/opt/android-sdk/platform-tools
 export XDG_RUNTIME_DIR=/run/user/$(id -u)
 LOG=/tmp/sm31_hold.log; : > "$LOG"; exec >>"$LOG" 2>&1

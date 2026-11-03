@@ -77,7 +77,7 @@ class FakeWavAudioSource(
                 wavFile, gapFromMs = 1_000L, gapToMs = 4_500L, nowMs = nowMs,
             )
             "short" -> FakeWavAudioSource(wavFile, stopAfterMs = 1_200L, nowMs = nowMs)
-            else -> throw IllegalArgumentException("Unbekanntes Szenario (nur Name, kein Inhalt)")
+            else -> throw IllegalArgumentException("unknown scenario (name only, no content)")
         }
     }
 
@@ -87,10 +87,10 @@ class FakeWavAudioSource(
 
     /** Minimal s16le mono reader: searches for the "data" chunk (independent of the header layout). */
     private fun loadWavSamples(file: File): ShortArray {
-        if (!file.isFile) throw IllegalStateException("WAV fehlt: " + file.name)
+        if (!file.isFile) throw IllegalStateException("WAV missing: " + file.name)
         val b = file.readBytes()
         if (b.size < 44 || String(b, 0, 4) != "RIFF" || String(b, 8, 4) != "WAVE") {
-            throw IllegalStateException("Kein RIFF/WAVE: " + file.name)
+            throw IllegalStateException("not RIFF/WAVE: " + file.name)
         }
         var i = 12
         while (i + 8 <= b.size) {
@@ -101,7 +101,7 @@ class FakeWavAudioSource(
                 ((b[i + 7].toInt() and 0xff) shl 24))
             if (id == "data") {
                 val n = minOf(size, b.size - i - 8)
-                require(n > 0) { "data-Chunk leer: " + file.name }
+                require(n > 0) { "data chunk empty: " + file.name }
                 val out = ShortArray(n / 2)
                 for (j in out.indices) {
                     val off = i + 8 + j * 2
@@ -111,7 +111,7 @@ class FakeWavAudioSource(
             }
             i += 8 + size + if (size and 1 == 1) 1 else 0
         }
-        throw IllegalStateException("data-Chunk nicht gefunden: " + file.name)
+        throw IllegalStateException("data chunk not found: " + file.name)
     }
 
     /** Idempotent (AudioSource contract). Notes the session start — the block

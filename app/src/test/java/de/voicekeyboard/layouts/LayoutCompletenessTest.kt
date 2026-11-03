@@ -67,7 +67,7 @@ class LayoutCompletenessTest {
         MatrixRow("it-it", emptyList(), requiredReachable = listOf("à", "è", "é", "ì", "ò", "ù", "á", "í", "ó", "ú", "î", "ü")),
         // F24d (R8 decision like de-de): pt-pt has NO own accent keys anymore —
         // the AOSP qwerty row carries a/e/i/o/u/c accents as moreKeys
-        // (docs/AOSP_ROWKEYS_BELEGE.md: "keine / 12 Akzent-Tasten + 5. Reihe (uns) -> Rebuild").
+        // (docs/AOSP_ROWKEYS_BELEGE.md: "none / 12 accent keys + 5th row (ours) -> rebuild").
         // Reachability as the FIRST alternate is checked by the own case below;
         // shiftPairs checks Ç against the shift layer (own value OR alternate).
         MatrixRow("pt-pt", emptyList(), requiredReachable = listOf("ü"), shiftPairs = listOf("ç" to "Ç")),
@@ -183,7 +183,7 @@ class LayoutCompletenessTest {
      * F24d (AOSP qwerty row, R8 like de-de): the Portuguese accents are no
      * own keys anymore but the FIRST alternate of their base key — base a->á, c->ç,
      * e->é, i->í, o->õ, u->ú; shift the same uppercase forms. Ü stays a stage-B
-     * alternate of U (IST takeover from the former u-acute key).
+     * alternate of U (as-is takeover from the former u-acute key).
      */
     private fun firstAltOf(parsed: LayoutAsset, layer: String, id: String): String? =
         keysOf(parsed.layers.getValue(layer)).firstOrNull { it.id == id }?.alternates?.firstOrNull()
@@ -544,9 +544,9 @@ class LayoutCompletenessTest {
      * 0.001u (≤ 0.11 px). Special cases: cs-cz r1 = 10 letters at 0.85 + ⌫ 1.0
      * (the same 8.5u block); ru-ru r0/r1 = margin 0.11111 (12 px) per side +
      * 11 at 0.88889 (96 px, spec §6), r2 stays the D27 full row ⇧1 + 10 at
-     * 1.0 + ⏎1 = Σ12 (spec §6 „unverändert“; NO swap — no @ in r1, ⌫ only on
+     * 1.0 + ⏎1 = Σ12 (spec §6 "unchanged"; NO swap — no @ in r1, ⌫ only on
      * the symbol layers, @ on period). fr-fr is structurally standard (r1 has
-     * IST 9 letters + ⌫, m lies in r2 — spec §6 „10 Buchstaben“ does not match
+     * As-is 9 letters + ⌫, m lies in r2 — spec §6 "10 letters" does not match
      * the asset, no key moves).
      */
     private fun checkGeometry(parsed: LayoutAsset) {
@@ -712,9 +712,9 @@ class LayoutCompletenessTest {
         val base = LayoutParser.parse(asset("de-de.json")!!) // correct reference asset
         // (a) key effectively missing in symbolsShift row 2/column 0 (id changed)
         assertRejected(mutateShiftKey(base, "symbolsShift") { it.copy(id = "shift-x") }, "(a) key missing")
-        // (b) da-dk IST state: label ?123 + value shift
+        // (b) da-dk as-is state: label ?123 + value shift
         assertRejected(mutateShiftKey(base, "symbolsShift") { it.copy(label = "?123") }, "(b) ?123 label")
-        // (c) ⇧ with value layer-base (IST state ru-ru/cs-cz)
+        // (c) ⇧ with value layer-base (as-is state ru-ru/cs-cz)
         assertRejected(mutateShiftKey(base, "symbolsShift") { it.copy(value = "layer-base") }, "(c) layer-base on ⇧")
     }
 

@@ -197,6 +197,6 @@ class ModelStoreTest {
             ModelManifest.fileByName("vocab.txt")?.sha256,
         )
         assertTrue(ModelManifest.isAllowedName("vocab.txt"))
-        assertFalse(ModelManifest.isAllowedName("böse/onnx"))
+        assertFalse(ModelManifest.isAllowedName("evil/onnx"))
     }
 }

@@ -38,9 +38,9 @@ class FooterAcrossAssetsTest {
         LayoutParser.parse(java.io.File("src/main/assets/layouts/$id.json").readText())
 
     @Test
-    fun neuesFooterZielbildGiltFürAlle15Assets() {
-        assertEquals("Layout-Assets zahlen", 15, assetIds.size)
-        var gepruefteEbenen = 0
+    fun newFooterTargetImageAppliesToAll15Assets() {
+        assertEquals("layout asset count", 15, assetIds.size)
+        var checkedLayers = 0
         for (id in assetIds) {
             val asset = asset(id)
             val base = asset.layers.getValue("base").rows
@@ -53,15 +53,15 @@ class FooterAcrossAssetsTest {
                 base[3].map { it.id to it.width to it.value },
                 shift[3].map { it.id to it.width to it.value },
             )
-            gepruefteEbenen += 2
+            checkedLayers += 2
         }
-        assertEquals("all base/shift layers checked", 30, gepruefteEbenen)
+        assertEquals("all base/shift layers checked", 30, checkedLayers)
     }
 
     private fun checkNewFooter(rows: List<List<LayoutKey>>, ctx: String) {
         val r3 = rows[3]
-        assertEquals("$ctx r3 Summe 13", 13.0, r3.sumOf { it.width }, 0.0001)
-        assertEquals("$ctx r3 exakt 6 Tasten", 6, r3.size)
+        assertEquals("$ctx r3 sum 13", 13.0, r3.sumOf { it.width }, 0.0001)
+        assertEquals("$ctx r3 exactly 6 keys", 6, r3.size)
         val byId = r3.associateBy { it.id }
         // F29 target image: space 6.5 instead of 7.0, mic 2 instead of 1.5 (the
         // period sits further left, the microphone gets 2u).
@@ -96,14 +96,14 @@ class FooterAcrossAssetsTest {
      *  alternates[0] on the period key of the footer row (base AND shift), the
      *  cursor cells stay on '‹'/'›'. */
     @Test
-    fun ruRuKeinAtKeyInR1StattdessenAtAlsAlternates0AmPeriod() {
+    fun ruRuNoAtKeyInR1InsteadAtAsAlternates0OnPeriod() {
         val asset = asset("ru-ru")
         for (layerName in listOf("base", "shift")) {
             val rows = asset.layers.getValue(layerName).rows
             assertTrue("$layerName: no 'at' object in r1", rows[1].none { it.id == "at" })
             val period = rows[3].first { it.id == "period" }
             assertEquals("$layerName: @ is alternates[0] on the period key", "@", period.alternates.first())
-            assertEquals("$layerName: F54-Standardzellen hinter @", listOf(",", "!", "?", ":", ";", "(", ")"), period.alternates.drop(1))
+            assertEquals("$layerName: F54 standard cells behind @", listOf(",", "!", "?", ":", ";", "(", ")"), period.alternates.drop(1))
             assertEquals("$layerName: F54 — no more cursor actions", 0, period.cellActions.size)
         }
     }
@@ -114,23 +114,23 @@ class FooterAcrossAssetsTest {
      *  as in the letter layer; no text character next to the space bar).
      *  D10_FOOTER.compose is thereby no longer a reflow (no enter in the row). */
     @Test
-    fun symbolEbenenT6FooterOhneEnter() {
+    fun symbolLayersT6FooterWithoutEnter() {
         for (id in assetIds) {
             val asset = asset(id)
             for (layerName in listOf("symbols", "symbolsShift")) {
                 val raw = asset.layers.getValue(layerName).rows
                 val foot = raw[3]
-                assertEquals("$id/$layerName Fussreihe = 13", 13.0, foot.sumOf { it.width }, 0.0001)
-                assertEquals("$id/$layerName r3 exakt 5 Tasten (T6)", 5, foot.size)
+                assertEquals("$id/$layerName footer row = 13", 13.0, foot.sumOf { it.width }, 0.0001)
+                assertEquals("$id/$layerName r3 exactly 5 keys (T6)", 5, foot.size)
                 assertEquals(
-                    "$id/$layerName Footer-Belegung",
+                    "$id/$layerName footer layout",
                     listOf("base", "language", "emoji", "space", "mic"),
                     foot.map { it.id },
                 )
-                assertEquals("$id/$layerName mic 2,0 (zuletzt)", 2.0, foot.last().width, 0.0001)
-                assertEquals("$id/$layerName space 7,5", 7.5, foot[3].width, 0.0001)
+                assertEquals("$id/$layerName mic 2.0 (last)", 2.0, foot.last().width, 0.0001)
+                assertEquals("$id/$layerName space 7.5", 7.5, foot[3].width, 0.0001)
                 assertTrue(
-                    "$id/$layerName KEIN enter im Footer (T6: ⏎ sitzt am r2-Ende)",
+                    "$id/$layerName NO enter in the footer (T6: ⏎ sits at the r2 end)",
                     foot.none { it.value == KeyActions.ENTER },
                 )
                 assertTrue(

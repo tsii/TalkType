@@ -67,7 +67,7 @@ class AudioRecordSource(
         }
         try {
             if (rec.state != AudioRecord.STATE_INITIALIZED) {
-                throw IllegalStateException("AudioRecord nicht initialisiert (state=${rec.state})")
+                throw IllegalStateException("AudioRecord not initialized (state=${rec.state})")
             }
             rec.startRecording()
             if (rec.recordingState != AudioRecord.RECORDSTATE_RECORDING) {

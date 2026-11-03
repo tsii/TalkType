@@ -6,7 +6,8 @@ import android.media.AudioDeviceInfo
 import android.media.AudioManager
 
 /**
- * Selection of the audio input route (DESIGN §3 „Routing ist Bestandteil der Aufnahme"):
+ * Selection of the audio input route (DESIGN §3, quoted from the German spec:
+ * “routing is part of the recording”):
  *
  * - Wired/USB headset before Bluetooth communication microphone before built-in mic.
  * - Bluetooth A2DP is NOT a microphone input (only type BLUETOOTH_SCO counts).
@@ -17,7 +18,7 @@ import android.media.AudioManager
 enum class Route(internal val uiLabel: String) {
     WIRED_HEADSET("Headset"),
     BLUETOOTH_SCO("Bluetooth"),
-    BUILTIN_MIC("Mikrofon"),
+    BUILTIN_MIC("Microphone"),
 }
 
 /** Framework-free device picture for the pure selection rule (JVM-testable). */

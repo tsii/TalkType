@@ -123,8 +123,8 @@ class LiteRtStreamingTest {
             LiteRtStreaming.preEncodeCacheFlat(wrong, validFrames = 12, featureSize = 4)
             fail("contract error expected")
         } catch (e: IllegalArgumentException) {
-            assertTrue(e.message!!.contains("erwartet"))
-            assertTrue(e.message!!.contains("erhalten"))
+            assertTrue(e.message!!.contains("expected"))
+            assertTrue(e.message!!.contains("got"))
         }
     }
 

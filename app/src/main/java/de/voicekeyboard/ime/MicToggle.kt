@@ -13,7 +13,7 @@ import de.voicekeyboard.dictation.DictationState
  *   ended, F8 Q6 = P1).
  * - STARTING / FINALIZING (and any future intermediate state): IGNORE —
  *   a tap must not trigger a restart here, because onMicDown would then fail
- *   at coordinator.start() and show „Start fehlgeschlagen“ (F9 d = P2).
+ *   at coordinator.start() and show "Dictation start failed" (F9 d = P2).
  */
 enum class MicToggleAction { START, STOP, IGNORE }
 

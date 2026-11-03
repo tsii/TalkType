@@ -177,17 +177,17 @@ The transcription stream repeatedly delivers **the whole text**. Only the
 **difference** may be typed.
 
 ```python
-old = zuletzt_getippter_text
-committed = len(committeter_praefix)     # unantastbar
+old = last_typed_text
+committed = len(committed_prefix)         # inviolable
 
-# Sicherheitsnetz: committeter Bereich darf nie verloren gehen
+# Safety net: the committed region must never be lost
 if len(new) < committed: return
 
-# Nur den NICHT-committeten Tail vergleichen
+# Compare ONLY the not-yet-committed tail
 old_tail, new_tail = old[committed:], new[committed:]
 common = common_prefix_len(old_tail, new_tail)
 to_remove = len(old_tail) - common        # Backspaces
-to_add    = new_tail[common:]             # neuer Text
+to_add    = new_tail[common:]             # new text
 
 if to_remove: backspace(to_remove)
 if to_add:    type_text(to_add)
@@ -210,9 +210,9 @@ if to_add:    type_text(to_add)
 **Real bug that swallowed audio.** Wrong order:
 
 ```python
-rest = source.stop()        # ❌ neueste Bytes zuerst
+rest = source.stop()        # ❌ newest bytes first
 transcriber.feed(rest)
-drain_queue()               # ältere Bytes danach → Zeitachse verdreht!
+drain_queue()               # older bytes afterwards → time axis scrambled!
 ```
 
 **Correct:**
@@ -220,8 +220,8 @@ drain_queue()               # ältere Bytes danach → Zeitachse verdreht!
 ```python
 state = FINALIZING          # 1) Capture-Thread beendet sich
 capture_thread.join(1.0)    # 2) wait until no more chunks arrive
-drain_queue()               # 3) ÄLTERE Bytes zuerst
-rest = source.stop()        # 4) NEUESTE Bytes zuletzt
+drain_queue()               # 3) OLDER bytes first
+rest = source.stop()        # 4) NEWEST bytes last
 transcriber.feed(rest)
 ```
 
@@ -239,8 +239,8 @@ A **fixed** token limit hard-truncates long dictations. Measured: the same
 
 ```python
 def token_budget(audio_seconds: float) -> int:
-    # Deutsche Sprache ≈ 12 Subword-Tokens/Sekunde (2–4 Tokens/Wort,
-    # ~2,5 Wörter/s + Reserve)
+    # German ≈ 12 subword tokens/second (2–4 tokens/word,
+    # ~2.5 words/s + reserve)
     budget = int(audio_seconds * 12) + 64
     return max(256, min(budget, 4096))    # minimum and maximum bound
 ```
@@ -341,9 +341,9 @@ cpu_threads  = 8             # = physical cores (no hyperthreading)
 # Streaming
 streaming_mode   = "whole_buffer"  # robuster als "windowed" (siehe 5.)
 min_audio_s      = 3.0   # erst ab 3 s Audio transkribieren (Halluzinations-Schutz)
-asr_interval_s   = 1.0   # Re-Transkription alle 1 s Audio
-max_record_s     = 300.0 # 5 Minuten
-commit_agreements = 2    # LocalAgreement-Bestätigungen
+asr_interval_s   = 1.0   # re-transcription every 1 s of audio
+max_record_s     = 300.0 # 5 minutes
+commit_agreements = 2    # LocalAgreement confirmations
 
 # Ausgabe
 typer            = "dotool"   # "dotool" | "wtype" | "clipboard"
@@ -351,7 +351,7 @@ xkb_layout       = "de"
 xkb_variant      = "nodeadkeys"
 typedelay_ms     = 20
 typehold_ms      = 15
-append_space     = true   # Leerzeichen nach dem Diktat
+append_space     = true   # space after the dictation
 max_revision_chars = 60   # guard bound for backspace revisions
 ```
 

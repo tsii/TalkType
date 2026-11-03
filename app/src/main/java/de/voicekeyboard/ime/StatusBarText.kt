@@ -3,7 +3,7 @@ package de.voicekeyboard.ime
 /**
  * F13a/B1 (docs/STREAMING_FREEZE_ANALYSE.md §2): pure-logic text selection for
  * the IME status row — no Android types, so that the status freezing
- * („starte Aufnahme…“ staying sticky and covering errors) is proven on the
+ * ("Starting recording…" staying sticky and covering errors) is proven on the
  * JVM (see StatusBarTextTest).
  *
  * Two strictly separated categories:
@@ -29,7 +29,7 @@ object StatusBarText {
     data class Inputs(
         /** Newly passed text (error) OR the transient start text itself. */
         val extra: String? = null,
-        /** Currently active transient text (e. g. „Starte Aufnahme…“); null = none. */
+        /** Currently active transient text (e. g. "Starting recording…"); null = none. */
         val transientText: String? = null,
         /** Blocking error message (R-2): stays until the next deliberate action. */
         val stickyError: String? = null,

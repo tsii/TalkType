@@ -41,8 +41,9 @@ object Sha256 {
 enum class ModelStatus { ABSENT, DOWNLOADING, VERIFYING, READY, BROKEN }
 
 /**
- * File system store for model states (IMPLEMENTATION_PLAN M7, DESIGN „atomare
- * Aktivierung, keine Mischung alter und neuer Graphen“).
+ * File system store for model states (IMPLEMENTATION_PLAN M7; DESIGN principle,
+ * quoted from the German spec: “atomic activation, no mixing of old and new
+ * graphs”).
  *
  * Layout below [root]:
  * ```
@@ -148,8 +149,8 @@ class ModelStore(
      * Reason (measured 2026-10-30, <device>): `isReady()` = full check over
      * ~670 MB. On the IME main thread the keyboard was no longer responsive
      * after 5 000 ms — `am_anr: InputMethod is not responding. Waited 5000ms for
-     * MotionEvent` exactly on the Mic tap — and the user impression was „Eingaben
-     * werden ignoriert“. Integrity is still checked hard: on every
+     * MotionEvent` exactly on the Mic tap — and the user impression was “input
+     * is ignored” (quoted from the German report). Integrity is still checked hard: on every
      * activation (`activate`, ModelStore:216) and in `verifyInstalled()`.
      */
     fun isReadyQuick(variant: ModelVariant = ModelVariant.ONNX_CPU): Boolean =
@@ -214,7 +215,7 @@ class ModelStore(
     /** New, empty staging version. */
     fun newStagingDir(): File {
         val dir = File(versionsDir, "v-${System.nanoTime()}")
-        check(dir.mkdirs() || dir.isDirectory) { "Staging nicht anlegbar: ${dir.path}" }
+        check(dir.mkdirs() || dir.isDirectory) { "cannot create staging: ${dir.path}" }
         return dir
     }
 
@@ -243,7 +244,8 @@ class ModelStore(
      * Activates a staging version: checks all files (present +
      * size + SHA-256), writes the pointer atomically (tmp+rename) and deletes
      * all NON-active versions. On failure the previously active
-     * version stays untouched (DESIGN: „aktive Version bleibt intakt“).
+     * version stays untouched (DESIGN, quoted from the German spec: “the active
+     * version stays intact”).
      */
     fun activate(stagingDir: File): Boolean = activate(stagingDir, ModelVariant.ONNX_CPU)
 
@@ -311,7 +313,7 @@ class ModelStore(
 
     /** V5: whitelist check against the VARIANT (store knows its own via manifestFor). */
     private fun safeName(name: String, variant: ModelVariant): String {
-        require(isAllowedName(name, variant)) { "Dateiname nicht whitelistet: $name" }
+        require(isAllowedName(name, variant)) { "file name not whitelisted: $name" }
         return name
     }
 
@@ -329,15 +331,15 @@ class ModelStore(
 
     private fun safeChild(dir: File, name: String, variant: ModelVariant): File {
         val base = name.removeSuffix(PART_SUFFIX)
-        require(isAllowedName(base, variant)) { "Dateiname nicht whitelistet: $name" }
+        require(isAllowedName(base, variant)) { "file name not whitelisted: $name" }
         require('/' !in name && '\\' !in name && name != "." && name != "..") {
-            "Pfad-Traversal verweigert: $name"
+            "path traversal denied: $name"
         }
         val child = File(dir, name)
         val canonicalParent = dir.canonicalFile
         val canonicalChild = child.canonicalFile
         require(canonicalChild.parentFile == canonicalParent) {
-            "Pfad-Traversal verweigert: ${child.path}"
+            "path traversal denied: ${child.path}"
         }
         return canonicalChild
     }

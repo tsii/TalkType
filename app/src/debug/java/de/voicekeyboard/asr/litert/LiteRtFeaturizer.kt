@@ -66,7 +66,7 @@ class LiteRtFeaturizer(file: File, numThreads: Int = 2) {
     private val closed = java.util.concurrent.atomic.AtomicBoolean(false)
 
     init {
-        check(file.isFile) { "Featurizer fehlt: ${file.name}" }
+        check(file.isFile) { "featurizer missing: ${file.name}" }
         val bytes = file.readBytes()
         val opts = Interpreter.Options().apply { setNumThreads(numThreads) }
         interpreter = Interpreter(
@@ -79,7 +79,7 @@ class LiteRtFeaturizer(file: File, numThreads: Int = 2) {
         if (inputs != INPUT_COUNT) {
             interpreter.close()
             throw LiteRtAsrEngine.AsrNotReadyException(
-                "Featurizer erwartet $INPUT_COUNT Eingänge, gefunden: $inputs",
+                "featurizer expects $INPUT_COUNT inputs, found: $inputs",
             )
         }
         for (i in 0 until INPUT_COUNT) {
@@ -87,7 +87,7 @@ class LiteRtFeaturizer(file: File, numThreads: Int = 2) {
             if (t.dataType() != DataType.FLOAT32) {
                 interpreter.close()
                 throw LiteRtAsrEngine.AsrNotReadyException(
-                    "Eingang $i erwartet float32, gefunden: ${t.dataType()}",
+                    "input $i expects float32, found: ${t.dataType()}",
                 )
             }
         }
@@ -122,8 +122,8 @@ class LiteRtFeaturizer(file: File, numThreads: Int = 2) {
         prevCache: FloatArray? = null,
         prevSample: Float? = null,
     ): Result {
-        check(!closed.get()) { "Featurizer geschlossen" }
-        require(pcmLen in 0..WINDOW_SAMPLES) { "pcmLen $pcmLen außerhalb 0..$WINDOW_SAMPLES" }
+        check(!closed.get()) { "featurizer closed" }
+        require(pcmLen in 0..WINDOW_SAMPLES) { "pcmLen $pcmLen outside 0..$WINDOW_SAMPLES" }
         val rawWav = FloatArray(WINDOW_SAMPLES)
         val sampleMask = FloatArray(WINDOW_SAMPLES)
         System.arraycopy(pcm, 0, rawWav, 0, pcmLen)
@@ -192,9 +192,9 @@ class LiteRtFeaturizer(file: File, numThreads: Int = 2) {
             // V9: make the original LiteRT message VISIBLE (previously swallowed),
             // but rule-9-scrubbed: per token shorten everything from '/' to the file name
             // (no path, no URL), max. 160 characters. append the cause.
-            val scrubbed = e.message?.let { scrubForUser(it) } ?: "(keine Meldung)"
+            val scrubbed = e.message?.let { scrubForUser(it) } ?: "(no message)"
             val ex = LiteRtAsrEngine.AsrNotReadyException(
-                "Featurizer-Inferenz fehlgeschlagen (${e.javaClass.simpleName}: $scrubbed)",
+                "featurizer inference failed (${e.javaClass.simpleName}: $scrubbed)",
             )
             ex.initCause(e)
             throw ex

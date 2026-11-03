@@ -77,7 +77,7 @@ class ModelDownloader(
                 }
             }
         }
-        throw lastError ?: ModelError.Network("unerwarteter Retry-Ende")
+        throw lastError ?: ModelError.Network("unexpected end of retries")
     }
 
     @Throws(ModelError::class)
@@ -88,7 +88,7 @@ class ModelDownloader(
         currentAttempt: Int = 1,
     ): Boolean {
         val part = store.partFile(file.storeName)
-        val parent = part.parentFile ?: throw ModelError.Storage("kein Elternverzeichnis für ${part.name}")
+        val parent = part.parentFile ?: throw ModelError.Storage("no parent directory for ${part.name}")
         parent.mkdirs()
 
         var resumeFrom = 0L
@@ -108,7 +108,7 @@ class ModelDownloader(
             connection.connect()
             val status = connection.responseCode
             if (status !in 200..299 && status != 416) {
-                throw ModelError.Http(status, "für ${file.storeName}")
+                throw ModelError.Http(status, "for ${file.storeName}")
             }
 
             // ETag guard: change ⇒ old .part unusable, start from scratch.
@@ -141,7 +141,7 @@ class ModelDownloader(
                 part.delete()
                 store.storeEtag(file.storeName, null)
                 if (restartedAfter416) {
-                    throw ModelError.Http(416, "Range nicht erfüllbar auch ohne Resume (${file.storeName})")
+                    throw ModelError.Http(416, "range not satisfiable even without resume (${file.storeName})")
                 }
                 return downloadAttempt(file, listener, restartedAfter416 = true)
             }
@@ -186,7 +186,7 @@ class ModelDownloader(
                         // classify as a network error (retry logic applies).
                         if (written > file.sizeBytes) {
                             raf.setLength(0)
-                            throw ModelError.Network("beschädigte Fortsetzung (${file.storeName})")
+                            throw ModelError.Network("corrupted resume (${file.storeName})")
                         }
                         val now = System.currentTimeMillis()
                         if (listener != null && (now - lastEmitMs >= 250 || written == total)) {
@@ -210,7 +210,7 @@ class ModelDownloader(
 
             // Hash check (end to end, also in the pure 416 continuation case)
             if (written != file.sizeBytes) {
-                throw ModelError.Network("unvollständig: ${written}/${file.sizeBytes} Bytes (${file.storeName})")
+                throw ModelError.Network("incomplete: ${written}/${file.sizeBytes} bytes (${file.storeName})")
             }
             val actual = Sha256.hex(digest.digest())
             if (!Sha256.constantTimeEquals(actual, file.sha256)) {
@@ -236,7 +236,7 @@ class ModelDownloader(
         val usable = parent.usableSpace
         val remaining = totalBytes - alreadyThere
         if (usable < remaining) {
-            throw ModelError.Storage("zu wenig Platz: $remaining B nötig, $usable B frei")
+            throw ModelError.Storage("not enough space: $remaining B needed, $usable B free")
         }
     }
 
@@ -246,7 +246,7 @@ class ModelDownloader(
             var remaining = length
             while (remaining > 0) {
                 val n = input.read(buf, 0, minOf(buf.size.toLong(), remaining).toInt())
-                if (n < 0) throw ModelError.Storage("part-Datei kürzer als erwartet: ${part.name}")
+                if (n < 0) throw ModelError.Storage("part file shorter than expected: ${part.name}")
                 digest.update(buf, 0, n)
                 remaining -= n
             }

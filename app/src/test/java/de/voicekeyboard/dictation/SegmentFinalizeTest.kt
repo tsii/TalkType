@@ -312,8 +312,8 @@ class SegmentFinalizeTest {
             // segment-1 text + exactly ONE space + segment-2 text — the proof
             // that the second segment decoded over the RESET buffer (buffer
             // reset, race-free).
-            // T10 (v0.1.39) nachgezogen: das SESSION-Finale hängt EIN Leerzeichen
-            // hinter dem Satzzeichen-Ende an (die seg_final-Naht selbst bleibt exakt).
+            // T10 (v0.1.39) added: the SESSION final appends ONE space
+            // after punctuation at the end (the seg_final seam itself stays exact).
             assertEquals(
                 "seam: prefix + segment-2 text (+ T10 final space)",
                 "Ein Satz. Ein Satz. ",
@@ -443,7 +443,7 @@ class SegmentFinalizeTest {
         val f = ::segmentBoundary
         // segmenter off => never.
         assertFalse(
-            "segmentFinalizeMs=0 => aus",
+            "segmentFinalizeMs=0 => off",
             f(1_010_000L, 1_000_000L, true, 20L, 1_000_000L, true, 0L),
         )
         // (b) length rule: 35 s reached => even without silence/punctuation.

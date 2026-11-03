@@ -3,7 +3,7 @@ package de.voicekeyboard.keyboard
 import kotlin.math.min
 
 /**
- * D11 (docs/DESIGN_STOCK_LOOK.md „D11 — Rückmeldung gedrückte Taste", from line
+ * D11 (docs/DESIGN_STOCK_LOOK.md "D11 — Pressed key feedback", from line
  * 240): pure, JVM-testable surface/glyph state decision — NO
  * Android type; KeyboardView calls [decide per key while drawing.
  *

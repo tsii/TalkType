@@ -61,14 +61,13 @@ called by the system from `targetSdk 35` (TECH_FACTS §4.1). The existing
 
 ### Lifecycle rules (rule text for the coder — binding)
 
-- **L1 start:** only on an explicit "Modell herunterladen" tap **in a RESUMED
+- **L1 start:** only on an explicit "Download model" tap (translated from German) **in a RESUMED
   `SetupActivity`** (`ContextCompat.startForegroundService`). Do not start
   from the background (Android 12+ prohibition; a
-  `ForegroundServiceStartNotAllowedException` is caught and shown as "App
-  erneut öffnen", never as a crash).
+  `ForegroundServiceStartNotAllowedException` is caught and shown as "Open the app again and try once more" (translated from German), never as a crash).
 - **L2 `startForeground`:** in the service immediately (≪ 5 s) with
   `FOREGROUND_SERVICE_TYPE_DATA_SYNC` (API ≥ 29), channel `model_download`
-  (`IMPORTANCE_LOW`), text "Modell wird geladen · <x> % · <MB>/<MB>".
+  (`IMPORTANCE_LOW`), text "Loading model · <x> % · <MB>/<MB>" (translated from German).
 - **L3 activity destroy:** **no** cancel. The download keeps running; on
   return the activity shows the state from `DownloadController.state` resp.
   `ModelStore.status()`.
@@ -77,7 +76,7 @@ called by the system from `targetSdk 35` (TECH_FACTS §4.1). The existing
   service calls `stopSelf()`.
 - **L5 termination:** on `Ready` / `Failed` / `Cancelled` the service calls
   `stopSelf()` (within ~1 s) and removes the notification. `Ready`
-  additionally triggers "Modell aktiv, Mikrofon freigeschaltet" in the UI.
+  additionally triggers "Model active, microphone unlocked" (translated from German) in the UI.
 - **L6 process death/reboot:** no forced cleanup. At the next start
   `ModelStore.status()` decides: `ABSENT` → download button; `PARTIAL` →
   "Fortsetzen" (resume via `.part` + ETag); `READY` → setup counts as
@@ -102,7 +101,7 @@ called by the system from `targetSdk 35` (TECH_FACTS §4.1). The existing
 ### Decision
 
 **Option (a): `INTERNET` + `ACCESS_NETWORK_STATE` permanently in the
-manifest, plus an in-app switch "Netzwerkzugriff für Downloads erlauben"
+manifest, plus an in-app switch "Allow network for downloads" (translated from German)
 (default: on until setup is complete, off afterwards).**
 `tools:node="remove"` **is dropped** (B-4), the `TelemetryInitializer`
 removal **stays**.
@@ -131,25 +130,25 @@ removal **stays**.
 2. `ModelDownloader` is called **only** via `PromptedDownloadGate` (or
    similar): `settings.allowNetworkDownloads && store.status() != READY &&
    !userOptOut`. If the switch is off, no request starts — the UI shows
-   "Download deaktiviert".
+   "Download disabled" (translated from German).
 3. After a successful `Ready`: switch automatically to **off**, a visible
-   hint "Netzwerkzugriff für Downloads ist jetzt aus".
+   hint "Network access for downloads is now off" (translated from German).
 4. No second network path: no update checks, no telemetry, no crash
    uploads, no cloud ASR. `SecurityException`/`UnknownHostException` are
    mapped as their own `ModelError` kind (B-4), not as `Storage`.
 
 **Privacy text for the setup page (3–5 sentences, adoptable verbatim):**
 
-> "Ihre Sprache und Ihr Text bleiben auf diesem Gerät. Die App nutzt das
-> Netzwerk ausschließlich für den einmaligen Download des
-> Spracherkennungsmodells (ca. 671 MB) von der angegebenen Adresse; es gibt
-> keine Telemetrie, keine Konten und keine Cloud-Erkennung. Nach dem
-> Download schaltet die App den Netzwerkzugriff für sich selbst ab; Sie
-> können ihn hier jederzeit wieder erlauben oder dauerhaft aus lassen.
-> Zusätzlich können Sie der App in den Android-Einstellungen die
-> Netzwerkberechtigung komplett entziehen — die Tastatur funktioniert
-> danach unverändert offline. Ohne installiertes Modell bleibt die Tastatur
-> nutzbar, die Sprachfunktion ist dann deaktiviert."
+> "Your language and your text stay on this device. The app uses the network
+> exclusively for the one-time download of the speech-recognition model
+> (approx. 671 MB) from the specified address; there is no telemetry, no
+> accounts and no cloud recognition. After the download the app switches
+> network access off for itself; you can allow it again here at any time or
+> leave it permanently off. Additionally you can revoke the network permission
+> for the app entirely in the Android settings — the keyboard keeps working
+> unchanged offline afterwards. Without an installed model the keyboard stays
+> usable; the speech feature is then disabled." (translated from German;
+> German original in `strings.xml`)
 
 **Effect on `docs/TECH_FACTS.md`:** §3 point 3 remains substantively
 correct ("INTERNET stays in only for the model download"), but must be
@@ -178,8 +177,8 @@ background").
    from `ModelStore.status()` and exactly one primary action ("Modell
    herunterladen" / "Fortsetzen" / "Fertig").
 2. **IME without a model:** the keyboard appears and types normally. The
-   mic key shows the state "Modell fehlt" (grayed out + label/icon,
-   `contentDescription` "Sprachfunktion: Modell nicht installiert") and is
+   mic key shows the state "Model missing" (translated from German; grayed out + label/icon,
+   `contentDescription` "Voice feature: model not installed", translated from German) and is
    **not** silent: a tap opens `SetupActivity` (`FLAG_ACTIVITY_NEW_TASK`),
    no download starts automatically.
 3. **No background download:** a download begins exclusively through an
@@ -194,12 +193,11 @@ background").
    to turn it on, **no** request.
 6. **Hash mismatch:** `ModelError.Hash` → the affected file is discarded and
    **only that one** re-downloaded; the active version stays untouched
-   (`ModelStore` atomicity), message "Datei war beschädigt, wird erneut
-   geladen".
+   (`ModelStore` atomicity), message "File was corrupted, is being reloaded" (translated from German).
 7. **Little storage:** a plausibility check before the start
    (recommendation: **≥ 2.5 GB** free, i.e. ~3.7× the model size because of
    staging + `.part`); on too little space abort **before** the first byte
-   with a concrete number ("2,5 GB benötigt, 0,8 GB frei"). During the
+   with a concrete number ("2.5 GB required, 0.8 GB free", translated from German). During the
    download treat `ModelError.Storage` the same way.
 8. **Doze/battery/process death:** the download runs only in the
    `dataSync` FGS (E1); screen-off is allowed. If the system kills the

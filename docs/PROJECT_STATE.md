@@ -1,6 +1,6 @@
 # Voice-Keyboard project status (working file for continuation)
 
-**Status: 2026-11-03 07:50 · v0.1.39 / versionCode 40** (next build 40 /
+**Status: 2026-11-03 07:50 · v0.1.40 / versionCode 41** (next build 40 /
 0.1.39). Current details see `HANDOFF.md`, verification status see
 `state/progress.md`, order see `reports/NEXT.md`.
 
@@ -25,8 +25,8 @@ JDK 17, Gradle 8.10.2, /opt/android-sdk (API 35/36, NDK 27), KVM present.
   only) → **dictation/engine cannot be validated there**; key/gesture
   delivery works (`q` → `qq`). Audio bridge **OFF**
   (`tools/emulator_audio_down.sh`), peak = 0.
-- `<device>` (a foreign AVD, API 35) — **do not touch**.
-- Models/test WAVs on 5560 under `/data/local/tmp/…` (documented
+- `<other-device>` (a foreign AVD, API 35) — **do not touch**.
+- Models/test WAVs on `<device>` under `/data/local/tmp/…` (documented
   project-relatively in `docs/PLAN_AUDIO_UND_LAYOUT.md`).
 
 ## Delivery (status v0.1.31, delivered 2026-11-02 01:40)
@@ -133,7 +133,7 @@ open** (hold duration with export #2, microphone in other apps —
 `ANALYSE_…` §10); P2 note: popup clip/`isFooterRow` edge case
 (`REVIEW_F28_F31.md`).
 
-## F35 "Weg D" — corpus cadence tests (green, in 0.1.27)
+## F35 "path D" (translated from German) — corpus cadence tests (green, in 0.1.27)
 - **`KorpusFixture`** (30 s/60 s from `testdata/de_smoke.wav` + `de_part1/2`
   + `de_pause`, 0.3-s silence loops) + **stub engine with a constant 150-ms
   latency** (injectable clock) + **`KorpusTaktTest` with 7 assertions**
@@ -175,7 +175,8 @@ open** (hold duration with export #2, microphone in other apps —
   (`app/src/test/java/de/voicekeyboard/ime/`).
 - **F50 (A2) = start serialization:** startJob cancel, supersede,
   `lastStartMs` protection (no double start); **F50a:** UP hint
-  "Loslassen vorgemerkt" (`dictation_start_pending_stop`); F49 wiring
+  "release pre-registered" (translated from German; resource
+  `dictation_start_pending_stop`); F49 wiring
   `holdGestureActive`.
 - **F51 (K2):** 4 strings into `strings.xml` (including the FGS title).
 - **F52 (A3) = `status_res`:** StatusKind enum + 🐞 export field +
@@ -238,7 +239,7 @@ continuation)
   existing reason).
 - **Concept fidelity (F43):** the auto-stop after ~2.5 s of speech pause is
   a **refinement explicitly requested by the user** (documented in
-  `docs/KONZEPT.md` as "Dokumentierte Präzisierung F43", the other KONZEPT
+  `docs/KONZEPT.md` as "documented refinement F43" (translated from German), the other KONZEPT
   contents unchanged).
 
 ## Finished artifacts in docs/

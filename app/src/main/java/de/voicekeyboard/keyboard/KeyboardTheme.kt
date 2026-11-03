@@ -1,8 +1,8 @@
 package de.voicekeyboard.keyboard
 
 /**
- * S3 — stock-look tokens (docs/DESIGN_STOCK_LOOK.md §1 „Konkrete Geometrie und
- * Typografie“ + „Farben – ARGB, Hell/Dunkel“). Pure JVM values, no Android
+ * S3 — stock-look tokens (docs/DESIGN_STOCK_LOOK.md §1 "Concrete geometry and
+ * typography" + "Colors – ARGB, light/dark"). Pure JVM values, no Android
  * import, so that the token matrix is tested as numbers (KeyboardThemeTest).
  *
  * COLOR TABLE — source: AOSP LatinIME (android16-release, java/res/values/

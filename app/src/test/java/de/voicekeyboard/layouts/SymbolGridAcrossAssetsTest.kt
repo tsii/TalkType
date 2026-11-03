@@ -44,9 +44,9 @@ class SymbolGridAcrossAssetsTest {
     /** PLAN order symbols r2 (language-neutral, identical in all 15 assets). */
     private val symbolsR2Order = listOf(".", ",", "?", "!", "'", "\"", "%", "+", "_", "*")
 
-    /** Anchored migration list: IST character set (direct keys ∪ menus) per asset
+    /** Anchored migration list: as-is character set (direct keys ∪ menus) per asset
      *  BEFORE the T6 migration — sorted character string, nothing lost.
-     *  Provenance (REVIEW_V0136 P2#1): the list = the T6 IST inventory, hardcoded — an
+     *  Provenance (REVIEW_V0136 P2#1): the list = the T6 as-is inventory, hardcoded — an
      *  independent verification against the real pre-state is only possible with
      *  the git history (the real protection was the script assert before==after). */
     private val anchoredSets = mapOf(
@@ -68,7 +68,7 @@ class SymbolGridAcrossAssetsTest {
     )
 
     @Test
-    fun symbolRasterGiltMitStabilenSlotsInAllen15Assets() {
+    fun symbolGridAppliesWithStableSlotsInAll15Assets() {
         assertEquals("layout assets count", 15, assetIds.size)
         for (id in assetIds) {
             val asset = asset(id)

@@ -1,9 +1,9 @@
 - 2026-10-30 16:49 UTC: SSH deploy key pair for GitHub generated:
-  ~/.ssh/voice_keyboard_github_deploy (ed25519,
+  ~/.ssh/<deploy-key> (ed25519,
   SHA256:LMjwQnpHd+jkU6dLPKwC+J5MG7x80A1pdiFJZzGDFmo), host alias
   '<ssh-alias>' added to ~/.ssh/config. Public key handed to the
   user; the private key stays in the container. Finding: the existing entry
-  'Host github.com' points to ~/.ssh/id_deploy, which does not exist
+  'Host github.com' points to ~/.ssh/<deploy-key>, which does not exist
   (IdentitiesOnly yes) -> direct git@github.com operations fail; not
   changed.
 - 2026-10-30 16:49 UTC: user decision: English dictation is clarified, the

@@ -5,7 +5,7 @@ import kotlin.math.min
 
 /**
  * T20/S1 — height contract WITHOUT row drop (corrects T19; docs/DESIGN_STOCK_LOOK.md
- * §3 „Ein einziger Höhenhaushalt"): pure JVM logic, no Android import.
+ * §3 "A single height budget"): pure JVM logic, no Android import.
  *
  * CONTRACT (S1):
  *  - ALL existing rows are kept — a row that does not fit is
@@ -75,12 +75,12 @@ object KeyboardHeight {
         desiredLabelPx: Int = 0,
         minLabelPx: Int = 0,
     ): HeightFit {
-        require(rows >= 1) { "rows muss >= 1 sein" }
-        require(desiredRowPx > 0) { "desiredRowPx muss > 0 sein" }
+        require(rows >= 1) { "rows must be >= 1" }
+        require(desiredRowPx > 0) { "desiredRowPx must be > 0" }
         require(desiredRowGapPx >= 0 && statusLinePx >= 0 && navInsetPx >= 0) { "gap/status/nav >= 0" }
-        require(minKeyHeightPx > 0) { "minKeyHeightPx muss > 0 sein (Vertrag S1)" }
+        require(minKeyHeightPx > 0) { "minKeyHeightPx must be > 0 (contract S1)" }
         require(minLabelPx >= 0) { "minLabelPx >= 0" }
-        require(maxPx > 0) { "maxPx muss > 0 sein" }
+        require(maxPx > 0) { "maxPx must be > 0" }
 
         // Budget: offer (unlimited → maxPx), capped by maxPx.
         val budget = if (offeredPx <= 0) maxPx else min(offeredPx, maxPx)

@@ -41,11 +41,11 @@ class LiteRtAsrEngine : AsrEngine, Closeable {
     private val cacheGeneration = AtomicLong(0)
 
     override fun load(modelDir: File) {
-        check(interpreters.isEmpty()) { "AsrEngine.load() wurde bereits aufgerufen" }
+        check(interpreters.isEmpty()) { "AsrEngine.load() already called" }
         val files = ModelManifest.forVariant(ModelVariant.LITERT_CPU)
             .filter { it.storeName.endsWith(".tflite") }
         check(files.size == TFLITE_COUNT) {
-            "Variante B erwartet $TFLITE_COUNT .tflite-Dateien, gefunden: ${files.size}"
+            "variant B expects $TFLITE_COUNT .tflite files, found: ${files.size}"
         }
         val opened = ArrayList<Interpreter>(files.size)
         try {
@@ -99,7 +99,7 @@ class LiteRtAsrEngine : AsrEngine, Closeable {
         prevCache: FloatArray? = null, prevSample: Float? = null,
     ): IntArray {
         val f = featurizerHandle
-            ?: throw AsrNotReadyException("Featurizer nicht geladen — load()/attachFeaturizer zuerst")
+            ?: throw AsrNotReadyException("featurizer not loaded — call load()/attachFeaturizer first")
         return f.featurize(pcm, pcmLen, prevCache, prevSample).inputFeaturesShape
     }
 
@@ -109,7 +109,7 @@ class LiteRtAsrEngine : AsrEngine, Closeable {
         prevCache: FloatArray? = null, prevSample: Float? = null,
     ): LiteRtFeaturizer.Result {
         val f = featurizerHandle
-            ?: throw AsrNotReadyException("Featurizer nicht geladen — load()/attachFeaturizer zuerst")
+            ?: throw AsrNotReadyException("featurizer not loaded — call load()/attachFeaturizer first")
         return f.featurize(pcm, pcmLen, prevCache, prevSample)
     }
 
@@ -142,7 +142,7 @@ class LiteRtAsrEngine : AsrEngine, Closeable {
      */
     fun precomputeGlobalStats(audio: FloatArray, length: Int): Pair<FloatArray, FloatArray> {
         val f = signatureFeaturizer
-            ?: throw AsrNotReadyException("Signature-Featurizer fehlt — attachSignatureFeaturizer zuerst")
+            ?: throw AsrNotReadyException("signature featurizer missing — call attachSignatureFeaturizer first")
         val stats = GlobalFeatureStats(LiteRtStreaming.FEAT_DIM)
         var off = 0
         while (off < length) {
@@ -156,7 +156,7 @@ class LiteRtAsrEngine : AsrEngine, Closeable {
                 0f)
             @Suppress("UNCHECKED_CAST")
             val logMel = out["log_mel"] as? Array<FloatArray>
-                ?: throw AsrNotReadyException("log_mel fehlt im Ausgang: ${f.outputNames}")
+                ?: throw AsrNotReadyException("log_mel missing in outputs: ${f.outputNames}")
             for (frame in 0 until valid) stats.addFrame(logMel[frame])
             off += n
         }
@@ -201,15 +201,15 @@ class LiteRtAsrEngine : AsrEngine, Closeable {
         prevCache: Array<FloatArray>,
     ): Pair<Array<FloatArray>, Long> {
         val f = signatureFeaturizer
-            ?: throw AsrNotReadyException("Signature-Featurizer fehlt")
+            ?: throw AsrNotReadyException("signature featurizer missing")
         val e = signatureEncoder
-            ?: throw AsrNotReadyException("Signature-Encoder fehlt — attachSignatureEncoder zuerst")
+            ?: throw AsrNotReadyException("signature encoder missing — call attachSignatureEncoder first")
         val n = minOf(LiteRtStreaming.WINDOW_SAMPLES, length - start)
         val prevSample = LiteRtStreaming.previousSampleAt(audio, start)
         val out = runFeaturizerSignature(f, audio, start, n, mean, invStd, prevCache, prevSample)
         @Suppress("UNCHECKED_CAST")
         val feats = out["input_features"] as? Array<FloatArray>
-            ?: throw AsrNotReadyException("input_features fehlt: ${f.outputNames}")
+            ?: throw AsrNotReadyException("input_features missing: ${f.outputNames}")
         val valid = LiteRtStreaming.validFramesFor(n)
         val inputLength = LiteRtStreaming.inputLengthFor(valid)
         val encOut = e.run(
@@ -223,11 +223,11 @@ class LiteRtAsrEngine : AsrEngine, Closeable {
         )
         @Suppress("UNCHECKED_CAST")
         val pool = encOut["encoder_pooler_output"] as? Array<FloatArray>
-            ?: throw AsrNotReadyException("encoder_pooler_output fehlt: ${e.outputNames}")
+            ?: throw AsrNotReadyException("encoder_pooler_output missing: ${e.outputNames}")
         val encLen = when (val el = encOut["encoder_output_length"]) {
             is LongArray -> el[0]
             is Long -> el
-            else -> throw AsrNotReadyException("encoder_output_length fehlt: ${e.outputNames}")
+            else -> throw AsrNotReadyException("encoder_output_length missing: ${e.outputNames}")
         }
         // update the caches (ptdt.cpp: NOT internally!)
         (encOut["cache_last_channel"] as? Array<Array<FloatArray>>)?.let {
@@ -259,13 +259,13 @@ class LiteRtAsrEngine : AsrEngine, Closeable {
 
     fun openFeaturizerOnly(file: File) {
         // V8: same path as production — the 7-input featurizer
-        check(file.isFile) { "Featurizer fehlt: ${file.name}" }
+        check(file.isFile) { "featurizer missing: ${file.name}" }
         attachFeaturizer(file)
     }
 
     override suspend fun transcribe(window: PcmWindow, sessionId: Long, runId: Long): Hypothesis {
         check(interpreters.isNotEmpty()) {
-            "AsrEngine nicht geladen — load() vor transcribe() aufrufen"
+            "ASR engine not loaded — call load() before transcribe()"
         }
         // Streaming cache: a session change discards the cache (V3/V6a invariant).
         if (cachedSessionId != sessionId) {
@@ -274,7 +274,7 @@ class LiteRtAsrEngine : AsrEngine, Closeable {
         }
         // Deliberately blocked until V4: typed error instead of empty text
         throw AsrNotReadyException(
-            "LiteRT-Transkription in dieser Stufe nicht verdrahtet (V4) — Cache-Generation ${cacheGeneration.get()}",
+            "LiteRT transcription not wired at this stage (V4) — cache generation ${cacheGeneration.get()}",
         )
     }
 

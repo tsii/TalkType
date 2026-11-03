@@ -31,7 +31,7 @@
 
 ## Assessment of the orchestrator's findings
 
-- **R-3 (P2):** confirmed and evidenced in code (`NetworkDisabled → setup_error_network`, SetupActivity.kt:178). The correct message = its own string, e.g. `setup_network_disabled`: "Network access is disabled. Enable the switch 'Netzwerk für Downloads erlauben' to download the model."
+- **R-3 (P2):** confirmed and evidenced in code (`NetworkDisabled → setup_error_network`, SetupActivity.kt:178). The correct message = its own string, e.g. `setup_network_disabled`: "Network access is disabled. Enable the switch 'Allow network for downloads' to download the model."
 - **`denied_forever`:** correct (see point 4) — the settings button is in fact visible in the "BERECHTIGUNGEN ERTEILEN" state as soon as the marker has been written (`anyPermissionDeniedForever()` → VISIBLE).
 - **No microphone ⇒ "Start fehlgeschlagen":** not differentiated enough (S5-3). Three classes distinguishable for the user: (1) no microphone device, (2) audio start/init error, (3) model/permission (already separate).
 - **Cancel button** (`setup_download_cancel`, SetupActivity.kt:146 → `ACTION_CANCEL`): `onStartCommand` → `controller?.cancel()` → `stopSelf()`; `DownloadController.cancel()` calls `currentOp?.cancel()` → `ModelDownloader.cancel()` sets `@Volatile cancelled` → the read loop throws `ModelError.Cancelled` → `State.Cancelled`. Visibility: `cancelButton` VISIBLE only on Downloading/Verifying (render), GONE on Idle/Cancelled/Failed/Ready ✓. Reentrancy on double tap: `cancel()` is idempotent (`currentOp?.cancel()` throws no state), `stopSelf()` multiple times is harmless. No finding.

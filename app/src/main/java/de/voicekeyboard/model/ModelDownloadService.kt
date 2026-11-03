@@ -208,9 +208,9 @@ class ModelDownloadService : Service() {
     private fun buildNotification(state: DownloadController.State? = null): Notification {
         val text = when (state) {
             is DownloadController.State.Downloading ->
-                "Datei ${state.currentIndex + 1}/${state.totalFiles} · ${(state.fraction * 100).toInt()}%"
-            is DownloadController.State.Verifying -> "Prüfe Hash …"
-            else -> "Modell wird geladen …"
+                "file ${state.currentIndex + 1}/${state.totalFiles} · ${(state.fraction * 100).toInt()}%"
+            is DownloadController.State.Verifying -> "checking hash …"
+            else -> "loading model …"
         }
         val builder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             Notification.Builder(this, CHANNEL_ID)

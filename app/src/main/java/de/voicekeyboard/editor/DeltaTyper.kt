@@ -162,11 +162,11 @@ class DeltaTyper(
 
     /**
      * A2a/A2b (PLAN_V0133 §A2b): ownership-secured FINALE — checks ownership first
-     *  (W1 without a write attempt) and CANNOT be blocked (§3.3: „finale
-     *  W3d-Sperre ausgeschlossen", no old partial hypothesis stays):
+     *  (W1 without a write attempt) and CANNOT be blocked (§3.3: "finale
+     *  W3d block excluded", no old partial hypothesis stays):
      *  - identical state ⇒ SAME (no duplicate, no sink call);
      *  - normal case ⇒ MINIMAL delta (W2 tail resp. W3c rollback — the
-     *    stock expectation „Finale ersetzt den Partial-Schwanz minimal" stays);
+     *    stock expectation "Finale replaces the partial tail minimally" stays);
      *  - rollback limits violated (W3d case) OR freeze case (> 60 in the tail)
      *    ⇒ atomic FULL REVISION of the own span in exactly ONE sink step
      *    (60 limit crossed once; the foreign text boundary stays — the

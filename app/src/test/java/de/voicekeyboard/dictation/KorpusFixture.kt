@@ -95,14 +95,14 @@ object KorpusFixture {
             if (File(cand, name).isFile) return cand.resolve(name)
             dir = dir.parentFile ?: return@repeat
         }
-        throw IllegalStateException("testdata/$name nicht gefunden")
+        throw IllegalStateException("testdata/$name not found")
     }
 
     /** Minimal s16le-mono reader: finds the data chunk (independent of header layout). */
     private fun loadWavS16Mono(file: File): ShortArray {
         val b = file.readBytes()
         require(b.size > 44 && String(b, 0, 4) == "RIFF" && String(b, 8, 4) == "WAVE") {
-            "Kein RIFF/WAVE: " + file.name
+            "not RIFF/WAVE: " + file.name
         }
         var i = 12
         while (i + 8 <= b.size) {
@@ -111,7 +111,7 @@ object KorpusFixture {
                 ((b[i + 6].toInt() and 0xff) shl 16) or ((b[i + 7].toInt() and 0xff) shl 24))
             if (id == "data") {
                 val n = minOf(size, b.size - i - 8)
-                require(n > 1) { "data-Chunk leer: " + file.name }
+                require(n > 1) { "data chunk empty: " + file.name }
                 val out = ShortArray(n / 2)
                 for (j in out.indices) {
                     val off = i + 8 + j * 2
@@ -121,6 +121,6 @@ object KorpusFixture {
             }
             i += 8 + size + if (size and 1 == 1) 1 else 0
         }
-        throw IllegalStateException("data-Chunk nicht gefunden: " + file.name)
+        throw IllegalStateException("data chunk not found: " + file.name)
     }
 }

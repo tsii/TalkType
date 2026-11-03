@@ -56,8 +56,8 @@ class KeyboardModel(
     val effectiveRowGapPx: Float
 
     init {
-        require(totalWidthPx > 0) { "totalWidthPx muss > 0 sein" }
-        require(keyHeightPx > 0) { "keyHeightPx muss > 0 sein" }
+        require(totalWidthPx > 0) { "totalWidthPx must be > 0" }
+        require(keyHeightPx > 0) { "keyHeightPx must be > 0" }
         // S1: apply the fit only if it matches THIS layer (same row count)
         // and shrinks the row height (scale ≤ 1) — never enlarge.
         val applied = fit?.takeIf { it.rows == layer.rows.size && it.rowPx > 0 }
@@ -68,7 +68,7 @@ class KeyboardModel(
         var top = 0f
         for (row in D10_FOOTER.compose(layer.rows)) {
             val sum = row.sumOf { it.width }
-            require(sum > 0) { "Zeile ohne Breite" }
+            require(sum > 0) { "Row without width" }
             val unit = (usable - keyGapPx * (row.size - 1)) / sum
             var left = horizontalPaddingPx
             for (key in row) {

@@ -29,8 +29,8 @@ sealed class StopOutcome {
         val finalError: String? = null,
         val failedWith: Boolean = false,
         val droppedWith: Int = 0,
-        /** T10 (v0.1.39): hat das Session-Finale ein Leerzeichen hinter
-         *  Satzzeichen-Ende angehängt (VK-SESS-Feld trail_sp=0|1, Regel 9)? */
+        /** T10 (v0.1.39): did the session final append a space after
+         *  punctuation at the end (VK-SESS field trail_sp=0|1, rule 9)? */
         val trailingSpace: Boolean = false,
     ) : StopOutcome()
 
@@ -379,7 +379,7 @@ class DictationController(
         segmentPrefix = ""
         segmentBaseSamples = 0L
         lastHypPunct = false
-        trailingSpaceCommitted = false // T10: trail_sp-Flag per Session zurück
+        trailingSpaceCommitted = false // T10: trail_sp flag reset per session
         state = DictationState.RECORDING
         return true
     }
@@ -508,11 +508,11 @@ class DictationController(
                 finalError = ASR_FINAL_ERROR
             }
         } else {
-            // T10 (v0.1.39): Session-Ende OHNE Rest-Finale — leeres Rest-Buffer
-            // (z. B. direkt nach einer Zwischensegment-Finalisierung, F53): das
-            // echo Session-Finale hängt das Leerzeichen trotzdem an den bereits
-            // committeten Text (ownership-gesichert wie jede Revision; die
-            // Zwischensegment-Finalisierung SELBST bleibt ohne Space).
+            // T10 (v0.1.39): session end WITHOUT a rest final — empty rest
+            // buffer (e.g. right after an intermediate-segment finalization, F53):
+            // the session final still appends the space to the already
+            // committed text (ownership-guarded like every revision; the
+            // intermediate-segment finalization ITSELF stays without a space).
             appendTrailingSpaceAtSessionEnd()
         }
         if (state == DictationState.FINALIZING) state = DictationState.IDLE
@@ -520,20 +520,20 @@ class DictationController(
             finalError,
             failedWith = failedAtStop,
             droppedWith = droppedAtStop,
-            trailingSpace = trailingSpaceCommitted, // T10: trail_sp-Snapshot im Finale
+            trailingSpace = trailingSpaceCommitted, // T10: trail_sp snapshot in the final
         )
     }
 
     /**
-     * T10 (v0.1.39): Leerzeichen-Anhang am SESSION-Ende ohne Rest-Finale
-     * (leeres Rest-Buffer nach seg_final) — gleiche reine Regel
-     * ([TrailingSpace.rule]), gleicher Ownership-Gate und gleiche Typer-
-     * Buchhaltung wie das finale writeHypothesis; setzt [trailingSpaceCommitted].
+     * T10 (v0.1.39): space append at SESSION end without a rest final
+     * (empty rest buffer after seg_final) — same pure rule
+     * ([TrailingSpace.rule]), same ownership gate and same typer bookkeeping
+     * as the final writeHypothesis; sets [trailingSpaceCommitted].
      */
     private fun appendTrailingSpaceAtSessionEnd() {
         val text = typer.currentText
-        if (!TrailingSpace.rule(text, text.lastOrNull())) return // leere Session: nichts
-        if (!tracker.isOwned(typer.currentText, contextForOwnText())) return // nicht unser Span: kein Write
+        if (!TrailingSpace.rule(text, text.lastOrNull())) return // empty session: nothing
+        if (!tracker.isOwned(typer.currentText, contextForOwnText())) return // not our span: no write
         val outcome = typer.reviseFinal(text + " ")
         noteWrite(outcome.kind, text + " ")
         trailingSpaceCommitted = true
@@ -668,13 +668,13 @@ class DictationController(
         )
         typer.commitUpTo(committed)
         val committedBefore = typer.committedLength
-        // T10 (v0.1.39): NUR das echte Session-Finale (final=true) hängt hinter
-        // Satzzeichen-Ende EIN Leerzeichen an (reine Entscheidung
-        // [TrailingSpace.rule], Doppelschutz dort). Zwischensegment-Finals
-        // (F53: finalizeSegment ruft writeHypothesis OHNE final) und der
-        // Abbruch-Pfad (gar kein writeHypothesis) bleiben unberührt. Der Space
-        // ist TEIL des reviseFinal-Ziels ⇒ Ownership/Tracker-Kette bleibt
-        // konsistent — KEIN separater commitText außerhalb der Typer-Buchhaltung.
+        // T10 (v0.1.39): ONLY the real session final (final=true) appends ONE
+        // space after punctuation at the end (pure decision
+        // [TrailingSpace.rule], double guard there). Intermediate-segment finals
+        // (F53: finalizeSegment calls writeHypothesis WITHOUT final) and the
+        // abort path (no writeHypothesis at all) remain untouched. The space
+        // is PART of the reviseFinal target ⇒ ownership/tracker chain stays
+        // consistent — NO separate commitText outside the typer bookkeeping.
         val finalTarget = if (final && TrailingSpace.rule(fullText, fullText.lastOrNull())) {
             fullText + " "
         } else {
@@ -834,9 +834,9 @@ class DictationController(
      *  segment rule (a). Boolean only, never text (rule 9). */
     fun lastHypothesisEndsWithPunct(): Boolean = lastHypPunct
 
-    /** T10 (v0.1.39): hat das SESSION-Finale (nur final=true) ein Leerzeichen
-     *  hinter Satzzeichen-Ende angehängt? Per Session, landet im StopOutcome-
-     *  Snapshot (VK-SESS trail_sp=0|1, Regel 9: nur die Zahl). */
+    /** T10 (v0.1.39): did the SESSION final (only final=true) append a space
+     *  after punctuation at the end? Per session, lands in the StopOutcome
+     *  snapshot (VK-SESS trail_sp=0|1, rule 9: only the number). */
     @Volatile var trailingSpaceCommitted: Boolean = false
         private set
 

@@ -22,7 +22,7 @@ directive), without shipping the C2 symptoms unsolved.
 | V4 | **Start race symptom 1 is evidenced in the code:** `onMicDown` guard `if (startingUp) return` only until the 15-s deadline; after that the first coroutine keeps running (no cancel of `engine.load()`), a second DOWN starts a second coroutine and **resets `startAbandoned = false`** → the first (old) session can keep running as "valid" (zombie), the second `start()` fails at `active.compareAndSet`, **and the second run overwrites `lastStartMs` in `finally`** (the export's `start_ms` can be a collision value). | `ime/VoiceKeyboardService.kt:139,407–411,447–455,493–510` · `ime/DictationCoordinator.kt:208–215,296–297` |
 | V5 | **UP in the STARTING window is a silent flag** (`cancelStartRequested = true`, no UI feedback; making it up later as KEEP_RUNNING is the intended P0 finding 2(a) design). | `ime/VoiceKeyboardService.kt:572–583` |
 | V6 | **Two start gestures exist:** status bar = hold (DOWN starts / UP stops, `VoiceKeyboardService.kt:321–327`), footer mic = **toggle** (tap starts/stops, `micToggleAction`, `:1155–1161`). Today F43 fires **mode-independently** on every pause ≥ 2.5 s — even while the finger is down. | `ime/VoiceKeyboardService.kt` as cited |
-| V7 | **Symptom 2:** every status row path runs through `getString(...)`/`mapVisibleError` (the fallback "Audio-Start fehlgeschlagen" is **translated** — the raw-code suspicion applies to the four candidates K1–K4). Hardcoded non-resource strings (K2) evidenced: `"Verarbeite…"`, `"Bereit"`, `"Diktat… ("` (`updateStatus`), `"Diagnose kopiert — Teilen-Dialog geöffnet"` (`:637`), FGS title `"Diktat läuft"` (`capture/CaptureForegroundService.kt:102`). `mapErrorTextRes` already exists as a pure function (`:156`). | `ime/VoiceKeyboardService.kt:969–1001,1040–1112,637` · `capture/CaptureForegroundService.kt:102` |
+| V7 | **Symptom 2:** every status row path runs through `getString(...)`/`mapVisibleError` (the fallback "Audio start failed" (translated from German "Audio-Start fehlgeschlagen") is **translated** — the raw-code suspicion applies to the four candidates K1–K4). Hardcoded non-resource strings (K2) evidenced (German originals at review time, translated): `"Processing…"`, `"Ready"`, `"Dictation… ("` (`updateStatus`), `"Diagnostics copied — share dialog opened"` (`:637`), FGS title `"Dictation running"` (`capture/CaptureForegroundService.kt:102`). `mapErrorTextRes` already exists as a pure function (`:156`). | `ime/VoiceKeyboardService.kt:969–1001,1040–1112,637` · `capture/CaptureForegroundService.kt:102` |
 | V8 | **The export has no `status_res`** and no session ring buffer; `mic_rel`, `status_shown`, `fgs_stopped_by` exist; the collector takes service parameters (a pattern for new fields exists). | `debug/DebugInfoFormatter.kt:110–160,217–218` · `debug/DebugInfoCollector.kt:42–54,121–122` |
 | V9 | **F46 (⇧ = up arrow) is code-ready** (stroked path shaft+head+base bar, equal-height gate with ⌫/⏎) — only a visual check in the build needed. | `keyboard/KeyboardView.kt:693–740` |
 | V10 | **Infrastructure is ready:** Robolectric 4.17 in `testImplementation`; `kotlinx-coroutines-test` 1.10.2 **in the Gradle cache** (usable offline); a JVM auto-stop test scaffold with a virtual clock exists (`DictationAutoStopTest` with `VClock` + scripted fake source). | `app/build.gradle.kts:134` · `~/.gradle/caches` · `ime/DictationAutoStopTest.kt` |
@@ -135,8 +135,8 @@ string audit (K2)
      ignored" (C2 symptom 1) without changing the KEEP_RUNNING design (P0
      finding 2(a)).
   6. **F51 (K2 string audit, evidenced V7):** `"Verarbeite…"`, `"Bereit"`,
-     `"Diagnose kopiert — Teilen-Dialog geöffnet"`, FGS title `"Diktat
-     läuft"` → `strings.xml` resources (`getString`). Only `values/` present
+     `"Diagnostics copied — share dialog opened"` (translated from German), FGS title `"Dictation running"`
+     (translated from German) → `strings.xml` resources (`getString`). Only `values/` present
      (one locale) — no translation effort. K1 (diagnostics suffix) **stays**
      (debug-only, intended; clarity comes via `status_res`); K3/K4 are
      OPTION (§0) and do not go into this task.
@@ -215,7 +215,7 @@ task on `KeyboardView.kt` only.
    `ANDROID_HOME=/opt/android-sdk ./gradlew --offline assembleDebug
    assembleRelease`. Target: debug ≈ 495–501/0, release ≈ 452/0 (+ possibly
    shared tests).
-4. **Emulator smoke** (exclusive, **<device>**, never 5558 = a foreign
+4. **Emulator smoke** (exclusive, **<device>**, never <other-device> = a foreign
    project, never parallel to the build; `tools/emulator_audio_up.sh`, F41
    precondition: the PulseAudio sink visible):
    start, short dictation (toggle: auto-stop on pause ✓), hold dictation
@@ -285,7 +285,7 @@ until E2 (user) on the basis of I3+I5.
 | 3 | **A3** F52 `status_res` | A2 (2-line seam in the service) | — | `testDebug` ≥495/0, review ok |
 | 4 | merge + full check | A1, A2, A3 | — | debug+release completely green |
 | 5 | build v0.1.30 (vc 31) | 4 | — | APKs in `dist/`, F46 screenshot ok |
-| 6 | emulator smoke (5560, exclusive) | 5 | no build | smoke checklist §1 "build" fulfilled |
+| 6 | emulator smoke (<device>, exclusive) | 5 | no build | smoke checklist §1 "build" fulfilled |
 | 7 | delivery + download link + docs | 6 | — | link to the user; SESSION_LOG/HANDOFF updated |
 
 *Slice B starts after step 7; I3 (corpus tools) may explicitly run in

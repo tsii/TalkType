@@ -102,7 +102,7 @@ def frame(theme, rows, endonym, pressed=None, shift=False):
                 d.rounded_rectangle([X0, Y0, X1, Y1], radius=10, outline=c16(Tm["accent"]), width=4)
             kind = ICON_BY_ID.get(k["id"]) or ICON_BY_LABEL.get(label)
             if k["id"] == "space":
-                # SpaceLabelRule: the asset label „Leer" does NOT override the endonym
+                # SpaceLabelRule: the asset label "Leer" does NOT override the endonym
                 d.text((cx, cy), endonym, font=H10, fill=c16(Tm["text"]), anchor="mm")
             elif k["id"] == "symbols":
                 d.text((cx, cy), "123", font=H11, fill=c16(Tm["text"]), anchor="mm")

@@ -18,7 +18,7 @@ class LocalAgreement(private val requiredAgreements: Int = DEFAULT_AGREEMENTS) {
 
     init {
         require(requiredAgreements in 1..MAX_AGREEMENTS) {
-            "requiredAgreements muss in 1..$MAX_AGREEMENTS liegen (KONZEPT §2.6 / E8.2), war $requiredAgreements"
+            "requiredAgreements must lie in 1..$MAX_AGREEMENTS (KONZEPT §2.6 / E8.2), was $requiredAgreements"
         }
     }
 

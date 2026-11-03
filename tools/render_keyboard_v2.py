@@ -117,7 +117,7 @@ def frame(theme, pressed=None, shift=False, popup=False):
             icon(d, {"sym": ",", "lang": "globe", "emoji": "emoji", "mic": "mic", "dot": "."}[label],
                  cx, cy, (x1 - x0) * 0.55, T["text"])
         elif label == "space":
-            # endonym of the active language (de-de rendering: „Deutsch", see DESIGN §4a)
+            # endonym of the active language (de-de rendering: "Deutsch", see DESIGN §4a)
             text_c(d, "Deutsch", cx, cy, T["text"])
         else:
             ch = label.upper() if (shift and label.isalpha()) else label

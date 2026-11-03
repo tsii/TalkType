@@ -196,7 +196,7 @@ class DebugInfoCollector(private val context: Context) {
             type = "text/plain"
             putExtra(Intent.EXTRA_TEXT, text)
         }
-        val chooser = Intent.createChooser(send, "Diagnose teilen")
+        val chooser = Intent.createChooser(send, "Share diagnostics")
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         try {
             context.startActivity(chooser)

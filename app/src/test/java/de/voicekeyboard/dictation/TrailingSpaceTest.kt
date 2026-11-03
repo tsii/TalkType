@@ -13,27 +13,27 @@ import org.junit.Test
 import java.io.File
 
 /**
- * T10 (v0.1.39): Endet ein Diktat auf einem Satzzeichen, hängt das
- * SESSION-Finale automatisch EIN Leerzeichen in den Editor („Hallo.Guten
- * Morgen“ → „Hallo. Guten Morgen“) — reine Entscheidung [TrailingSpace.rule],
- * verankert am echten Final-Pfad ([DictationController.writeHypothesis] nur
- * mit `final=true`): NICHT bei Zwischensegment-Finalisierungen (F53
- * seg_final / finalizeSegment) und NICHT beim Abbruch (abort ohne Finale).
+ * T10 (v0.1.39): if a dictation ends on punctuation, the SESSION final
+ * automatically appends ONE space in the editor („Hallo.Guten
+ * Morgen“ → „Hallo. Guten Morgen“) — pure decision [TrailingSpace.rule],
+ * anchored on the real final path ([DictationController.writeHypothesis] only
+ * with `final=true`): NOT on intermediate-segment finalizations (F53
+ * seg_final / finalizeSegment) and NOT on abort (abort without a final).
  *
- * Doppelschutz der Regel: der committete Text endet nicht schon auf
- * Whitespace UND am Cursor steht kein Leerzeichen; leere Session ⇒ nichts.
- * Satzzeichen (getestete Konstante [TrailingSpace.PUNCT]): `. ! ? : ; …` plus
- * nachgestellte Schlusszeichen [TrailingSpace.CLOSERS] `” “ " » ) ]` — dann
- * massgeblich das Zeichen davor (mehrstufig: „…“).
+ * Double guard of the rule: the committed text does not already end on
+ * whitespace AND no space sits at the cursor; empty session ⇒ nothing.
+ * Punctuation (tested constant [TrailingSpace.PUNCT]): `. ! ? : ; …` plus
+ * trailing closing characters [TrailingSpace.CLOSERS] `” “ " » ) ]` — then
+ * the character before them is relevant (multi-level: „…“).
  */
 class TrailingSpaceTest {
 
-    // ---- reine Regel (≥ 8 Fälle) ----
+    // ---- pure rule (≥ 8 cases) ----
 
     @Test
-    fun `jedes Satzzeichen haengt genau ein Leerzeichen an`() {
+    fun `every punctuation appends exactly one space`() {
         assertEquals(
-            "PUNCT-Konstante (getestete Liste)",
+            "PUNCT constant (tested list)",
             setOf('.', '!', '?', ':', ';', '…'),
             TrailingSpace.PUNCT,
         )
@@ -43,9 +43,9 @@ class TrailingSpaceTest {
     }
 
     @Test
-    fun `Schlusszeichen - massgeblich ist das Zeichen davor`() {
+    fun `closers - the character before them is relevant`() {
         assertEquals(
-            "CLOSERS-Konstante (getestete Liste)",
+            "CLOSERS constant (tested list)",
             setOf('”', '“', '"', '»', ')', ']'),
             TrailingSpace.CLOSERS,
         )
@@ -60,29 +60,29 @@ class TrailingSpaceTest {
     }
 
     @Test
-    fun `Wortende haengt KEIN Space an`() {
+    fun `word end appends NO space`() {
         assertFalse("word", TrailingSpace.rule("Tag", 'g'))
         assertFalse("comma is not in the rule", TrailingSpace.rule("Hallo,", ','))
         assertFalse("hyphen", TrailingSpace.rule("Hallo-", '-'))
     }
 
     @Test
-    fun `Doppelschutz - kein zweites Leerzeichen`() {
+    fun `double guard - no second space`() {
         assertFalse("text already ends on a Space", TrailingSpace.rule("Hallo. ", ' '))
         assertFalse("alreadyAtCursor is a Space (cursor side)", TrailingSpace.rule("Hallo.", ' '))
         assertFalse("tab at the end of the text", TrailingSpace.rule("Hallo.\t", null))
     }
 
     @Test
-    fun `leere Session - kein Space`() {
+    fun `empty session - no space`() {
         assertFalse("null (no output)", TrailingSpace.rule(null, null))
         assertFalse("empty string", TrailingSpace.rule("", null))
         assertFalse("whitespace only", TrailingSpace.rule("   ", ' '))
     }
 
-    // ---- Verankerung am echten Final-Pfad (nur dort) ----
+    // ---- anchoring on the real final path (only there) ----
 
-    /** Fake sink: wendet Deltas am Cursor an (wie DictationControllerTest). */
+    /** Fake sink: applies deltas at the cursor (like DictationControllerTest). */
     private class RecordingSink : EditorSink {
         var text: String = ""
         override fun replaceBeforeCursor(replaceLength: Int, newText: String) {
@@ -93,7 +93,7 @@ class TrailingSpaceTest {
         override fun ownLength(): Int = text.length
     }
 
-    /** Fake ASR: konfigurierbarer Text, echo der Session-Id. */
+    /** Fake ASR: configurable text, echoes the session id. */
     private class FakeEngine : AsrEngine {
         var nextText = ""
         override fun load(modelDir: File) {}
@@ -122,13 +122,13 @@ class TrailingSpaceTest {
     private fun seconds(n: Int): PcmBlock = PcmBlock(0, 0, ShortArray(n * 16_000))
 
     @Test
-    fun `Session-Finale haengt Space hinter Satzzeichen und meldet trail_sp 1`() {
+    fun `session final appends space after punctuation and reports trail_sp 1`() {
         val f = Fixture()
         f.engine.nextText = "Hallo."
         f.controller.start()
         runBlocking { f.controller.feedAudio(seconds(2)) } // Partial: "Hallo."
         assertEquals("partial unchanged", "Hallo.", f.sink.text)
-        val outcome = runBlocking { f.controller.stop() } // echtes Session-Finale
+        val outcome = runBlocking { f.controller.stop() } // real session final
         assertEquals("final with the trailing space appended (T10)", "Hallo. ", f.sink.text)
         assertTrue("FinalRan", outcome is StopOutcome.FinalRan)
         assertTrue("trail_sp=1 in the final snapshot (VK-SESS)",
@@ -136,7 +136,7 @@ class TrailingSpaceTest {
     }
 
     @Test
-    fun `Session-Finale ohne Satzzeichen - kein Space, trail_sp 0`() {
+    fun `session final without punctuation - no space, trail_sp 0`() {
         val f = Fixture()
         f.engine.nextText = "Hallo"
         f.controller.start()
@@ -148,28 +148,28 @@ class TrailingSpaceTest {
     }
 
     @Test
-    fun `Zwischensegment-Finale (F53) haengt KEIN Space an`() {
+    fun `intermediate-segment final (F53) appends NO space`() {
         val f = Fixture()
         f.engine.nextText = "Ein Satz."
         f.controller.start()
         runBlocking { f.controller.feedAudio(seconds(2)) }
-        val ok = runBlocking { f.controller.finalizeSegment() } // seg_final, KEIN Session-Finale
+        val ok = runBlocking { f.controller.finalizeSegment() } // seg_final, NOT the session final
         assertTrue("mini-final ran", ok)
         assertEquals("seg_final without an appended space", "Ein Satz.", f.sink.text)
-        // das SESSION-Finale danach hängt den Space (Regel greift am Ende genau einmal)
+        // the SESSION final afterwards appends the space (the rule fires exactly once at the end)
         val outcome = runBlocking { f.controller.stop() }
         assertEquals("final after it: one Space", "Ein Satz. ", f.sink.text)
         assertTrue("trail_sp=1", (outcome as StopOutcome.FinalRan).trailingSpace)
     }
 
     @Test
-    fun `Abbruch-Pfad haengt KEIN Space an`() {
+    fun `abort path appends NO space`() {
         val f = Fixture()
         f.engine.nextText = "Hallo."
         f.controller.start()
-        runBlocking { f.controller.feedAudio(seconds(2)) } // Partial: "Hallo."
+        runBlocking { f.controller.feedAudio(seconds(2)) } // partial: "Hallo."
         assertEquals("Hallo.", f.sink.text)
-        f.controller.abort() // KEIN Finale, kein Space
+        f.controller.abort() // NO final, no space
         assertEquals("abort without an appended space", "Hallo.", f.sink.text)
     }
 }

@@ -152,12 +152,12 @@ class KeyboardModelTest {
             300f, keyHeightPx = 50f, rowGapPx = 6f, keyGapPx = 4f, fit = null,
         )
         val row = m.keys.filter { it.top == 0f }
-        assertEquals("MARGIN-Keys liegen im Modell als Breite drin", 4, row.size)
+        assertEquals("MARGIN keys count as width in the model", 4, row.size)
         val sum = row.sumOf { (it.right - it.left).toDouble() } + 4f * (row.size - 1)
-        assertEquals("Summe + Gaepen = nutzbare Breite", 300f, sum.toFloat(), 0.01f)
+        assertEquals("sum + gaps = usable width", 300f, sum.toFloat(), 0.01f)
         val margin = m.keys.first { it.id == "margin-left" }
         val a = m.keys.first { it.id == "a" }
-        assertEquals("MARGIN Breite = Tastenbreite (je 1 Einheit)", a.right - a.left, margin.right - margin.left, 0.01f)
+        assertEquals("MARGIN width = key width (1 unit each)", a.right - a.left, margin.right - margin.left, 0.01f)
         assertEquals("", margin.label)
     }
 

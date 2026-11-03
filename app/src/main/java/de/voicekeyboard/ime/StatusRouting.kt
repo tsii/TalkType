@@ -3,7 +3,7 @@ package de.voicekeyboard.ime
 /**
  * F13c/P2-3 (docs/REVIEW_F13_STATUSBAR.md): wiring seam of the status row.
  *
- * B1 („starte Aufnahme…“ became sticky) was a SEAM FAILURE: the wrong place
+ * B1 ("starting recording…" became sticky) was a SEAM FAILURE: the wrong place
  * chose the channel. This table makes the seam explicit and JVM-testable
  * (StatusRoutingTest) — the service calls [route] at every affected place:
  *
@@ -22,7 +22,7 @@ internal enum class StatusChannel { TRANSIENT, STICKY }
 internal sealed class StatusEvent {
     abstract val text: String
 
-    /** Transient start message (e. g. „Starte Aufnahme…"). */
+    /** Transient start message (e. g. "Starting recording…"). */
     data class Starting(override val text: String) : StatusEvent()
 
     /** Hint/confirmation without a blocking character (e. g. diagnosis copied). */

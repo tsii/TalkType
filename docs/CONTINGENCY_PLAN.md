@@ -294,7 +294,7 @@ I11 reference gate.
 force-termination message instead of a result ("tool timeout / hung model stream",
 synthetic result). The target session kept running, wrote `KeyboardView.kt` +
 `tools/normalize_symbol_shift.py` (01:47) and all 15 layout assets (01:48), but then
-ended with a **question** ("Ich frage kurz nach:" — "let me ask quickly"). No
+ended with a **question** ("I will ask briefly" — translated from German). No
 `schedule_task` was set; the last alarm had been processed at 01:32. Result: 6 h of
 standstill until the manual `get_result` at 07:46.
 

@@ -39,7 +39,7 @@ class BackspaceTest {
             t += 10
         }
         assertEquals(
-            "Repeats exakt bei 450..940 im 70er-Raster",
+            "Repeats exactly at 450..940 in the 70 grid",
             listOf(450L, 520L, 590L, 660L, 730L, 800L, 870L, 940L),
             fired,
         )
@@ -95,19 +95,19 @@ class BackspaceTest {
         val e = FakeBackspaceEditor(selected = null, before = "lloHa\u0308")
         backspaceDeleteOnce(e)
         assertEquals("grapheme-cluster path (retained)", 1, e.deleteGraphemeCalls)
-        assertEquals("EIN Graphemcluster = 2 UTF-16-Einheiten (a+U+0308)", 2, e.lastDeleteUnits)
+        assertEquals("ONE grapheme cluster = 2 UTF-16 units (a+U+0308)", 2, e.lastDeleteUnits)
         assertEquals(0, e.commitEmptyCalls)
         assertEquals(0, e.deleteKeyCalls)
         assertEquals("exactly ONE operation per call", 1, e.totalOps())
         // EMPTY selection ("" from getSelectedText) is like none: stock path
         val emptySel = FakeBackspaceEditor(selected = "", before = "abc")
         backspaceDeleteOnce(emptySel)
-        assertEquals("leere Selektion ⇒ Graphempfad", 1, emptySel.deleteGraphemeCalls)
+        assertEquals("empty selection ⇒ grapheme path", 1, emptySel.deleteGraphemeCalls)
         assertEquals(0, emptySel.commitEmptyCalls)
         // empty buffer: DEL-key fallback (stock)
         val empty = FakeBackspaceEditor(selected = null, before = null)
         backspaceDeleteOnce(empty)
-        assertEquals("DEL-Key-Fallback bei leerem Puffer", 1, empty.deleteKeyCalls)
+        assertEquals("DEL-key fallback on an empty buffer", 1, empty.deleteKeyCalls)
         assertEquals(0, empty.deleteGraphemeCalls)
     }
 

@@ -1,11 +1,11 @@
 # Next tasks (order)
 
-**Status 2026-11-03 · v0.1.39 / versionCode 40 delivered** (11:00): repo translated DE→EN (docs + comments + assertion messages; UI stays German), new adaptive shield+waveform icon, T10 auto-space after dictation-ending punctuation; tests **613/0 + 578/0 = 1191/0**; next build **41 / 0.1.40**.md` P0/P1=0 Push YES; next build **41 / 0.1.40**.
+**Status 2026-11-03 · v0.1.40 / versionCode 41 delivered (English UI, sanitized repo)** (11:00): repo translated DE→EN (docs + comments + assertion messages; UI stays German), new adaptive shield+waveform icon, T10 auto-space after dictation-ending punctuation; tests **613/0 + 578/0 = 1191/0**; next build **41 / 0.1.40**.md` P0/P1=0 Push YES; next build **41 / 0.1.40**.
 
 1. **Phone evidence 0.1.38 (highest priority):** hold run 60–90 s (open — the field test
    ended with michold_cancel; tap chain 2× PASSED 22:30 /tmp/vk_phone_e3.log), 🐞 export
    (warm_hit/engine_load_ms); vc34 criteria remain (write=delta, no w1 corpse,
-   start_ms<250). ADB port rotates — ask the user (34147 most recently).
+   start_ms<250). ADB port rotates — ask the user (<adb-port> most recently).
    Follow-ups: P2 anchor provenance (git), SegmentFinalizeTest lastflaky, P2-1 length guard,
    P2-2 coordinator @Volatile (docs/REVIEW_A5_W.md, docs/REVIEW_V0136.md).
 2. **P2 report points (optional):** 3 of them in `docs/REVIEW_A1_A3_B.md` (stale comment,
@@ -68,13 +68,13 @@
   **v0.1.14 … v0.1.31 are not pushed.**
 
 ## History (done, do not pick up again)
-- „Build wieder vollständig grün (157 Tests)“ → 726/0 (0.1.13) → 734/0 (0.1.14, superseded)
+- "Build fully green again (157 tests)" (translated from German) → 726/0 (0.1.13) → 734/0 (0.1.14, superseded)
   → 818/0 (0.1.15, superseded) → 819/0 (F24d, superseded) → 828/0 (F24e, superseded) → … →
   897/0 (0.1.24, superseded) → (0.1.27: 475 debug, release measurement to follow, superseded) →
   935/0 (0.1.29, superseded) → 961/0 (0.1.30, superseded) → currently **995 / 0** (debug **513**
   per `app/build/test-results/testDebugUnitTest`, release **482** per `testReleaseUnitTest`).
-- „DeepSeek-Review M4b + M5a“ → completed (`REVIEW_STAGE4B`/`4C`/`6`).
-- „M4c IME wiring“, „M4d WAV test“, „M5b setup UI“, „M6 release“, „M7 review“ →
+- "DeepSeek review M4b + M5a" (translated from German) → completed (`REVIEW_STAGE4B`/`4C`/`6`).
+- "M4c IME wiring", "M4d WAV test", "M5b setup UI", "M6 release", "M7 review" →
   **all implemented**; currently signed: release **v0.1.31** (SHA-256 `367165ea…`,
   diag `2ee37322…`); history incl. v0.1.30 (`34edb6d7…`), v0.1.29 (`1cdb1801…`),
   v0.1.14 (`cdb1606c…f462`).

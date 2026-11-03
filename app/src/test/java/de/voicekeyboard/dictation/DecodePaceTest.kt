@@ -14,7 +14,7 @@ class DecodePaceTest {
     private val max = 6000L
 
     // 1) fast engine (never measured) -> baseMs = behavior as today
-    @Test fun `lastDecodeMs null zeigt baseMs`() {
+    @Test fun `lastDecodeMs null shows baseMs`() {
         assertEquals(base, DecodePace.intervalMs(0L, 3000L, base, max))
     }
 

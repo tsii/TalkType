@@ -35,7 +35,7 @@ object Graphemes {
      * grapheme boundary. `index == 0` and `index == s.length` are boundaries.
      */
     fun isBoundary(s: String, index: Int): Boolean {
-        require(index in 0..s.length) { "index $index außerhalb 0..${s.length}" }
+        require(index in 0..s.length) { "index $index outside 0..${s.length}" }
         if (index == 0 || index == s.length) return true
         val prev = s[index - 1]
         val next = s[index]

@@ -94,8 +94,8 @@ class InputConnectionSink(
         if (!latch.await(EDIT_TIMEOUT_MS, java.util.concurrent.TimeUnit.MILLISECONDS)) {
             abandoned.set(true) // A1: mark BEFORE throwing — block becomes a no-op
             throw IllegalStateException(
-                "Editor-Sync Timeout: Main-Thread hat den Edit nicht in " +
-                    EDIT_TIMEOUT_MS + " ms ausgeführt (blockiert/überlastet?)"
+                "Editor sync timeout: main thread did not execute the edit within " +
+                    EDIT_TIMEOUT_MS + " ms (blocked/overloaded?)"
             )
         }
         error?.let { throw it }
@@ -133,7 +133,7 @@ class InputConnectionSink(
 
     private fun replaceBeforeCursorSync(replaceLength: Int, newText: String) {
         val ic = connectionProvider()
-            ?: throw EditorUnavailableException("InputConnection nicht verfügbar")
+            ?: throw EditorUnavailableException("InputConnection not available")
         // Align the delete length with a grapheme boundary (UTF-16 units stay preserved,
         // only the boundary may move forward; the remainder migrates into the text).
         var deleteLength = replaceLength
@@ -150,10 +150,10 @@ class InputConnectionSink(
         ic.beginBatchEdit() // groups the display update, is not a transaction (DESIGN §6)
         try {
             if (deleteLength > 0 && !ic.deleteSurroundingText(deleteLength, 0)) {
-                throw EditorWriteException("deleteSurroundingText wurde abgelehnt")
+                throw EditorWriteException("deleteSurroundingText was rejected")
             }
             if (effectiveText.isNotEmpty() && !ic.commitText(effectiveText, 1)) {
-                throw EditorWriteException("commitText wurde abgelehnt")
+                throw EditorWriteException("commitText was rejected")
             }
             ownSpan = ownSpan.dropLast(replaceLength) + newText
         } finally {

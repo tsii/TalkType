@@ -2,14 +2,14 @@
 # v0.1.30 emulator smoke: hold dictation with sentence pauses + UP-in-STARTING hint.
 # Evidence: 🐞 export via clipboard -> KEYCODE_PASTE into the debug field -> uiautomator text.
 set -u
-cd <workdir>
-ADB="adb -s <device>"
+cd "${VK_WORKDIR:=$(dirname "$(readlink -f "$0")")/..}"   # <workdir>
+ADB="adb -s ${VK_DEVICE:-emulator-5554}"   # <device>
 export PATH=$PATH:/opt/android-sdk/platform-tools
 export XDG_RUNTIME_DIR=/run/user/$(id -u)
 LOG=/tmp/sm30_smoke.log; : > "$LOG"; exec >>"$LOG" 2>&1
 ts() { date "+%H:%M:%S.%3N"; }
 grab_export() { # $1 = target file
-  for versuch in 1 2; do
+  for attempt in 1 2; do
     $ADB shell input tap 1017 1635; sleep 2          # 🐞: copy + share dialog
     $ADB shell input keyevent 4; sleep 1             # close the share dialog
     $ADB shell input tap 540 300; sleep 1            # focus the debug field
@@ -27,8 +27,8 @@ for m in re.finditer(r'text=\"([^\"]*)\"', x):
     if 'audio_s' in t and 'status_res' in t:
         print(t)
 " > "$1"
-    if [ -s "$1" ]; then echo "--- export -> $1 ($(wc -l < "$1") lines, attempt $versuch)"; return; fi
-    echo "--- attempt $versuch empty, retrying"; sleep 2
+    if [ -s "$1" ]; then echo "--- export -> $1 ($(wc -l < "$1") lines, attempt $attempt)"; return; fi
+    echo "--- attempt $attempt empty, retrying"; sleep 2
   done
   echo "--- EXPORT MISSING: $1"
 }

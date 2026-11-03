@@ -24,7 +24,7 @@ import org.robolectric.Shadows
 import org.robolectric.annotation.Config
 
 /**
- * P0 regression (0.1.20): the status row ("Bereit"/"Diktat" + mic + 🐞) and
+ * P0 regression (0.1.20): the status row ("Ready"/"Dictating" + mic + 🐞) and
  * the 48-dp height budget above the q row. The test proves the basic state:
  *
  *  - the root view contains statusText, micButton and the 🐞 debug key (as
@@ -103,7 +103,7 @@ class ImeRootViewLayoutTest {
         assertEquals("🐞 VISIBLE", View.VISIBLE, debugButton.visibility)
         assertTrue("🐞 height > 0", debugButton.height > 0)
 
-        assertEquals("Tastatur VISIBLE", View.VISIBLE, view.keyboardView.visibility)
+        assertEquals("Keyboard VISIBLE", View.VISIBLE, view.keyboardView.visibility)
         assertTrue("keyboard height > 0", view.keyboardView.height > 0)
         assertTrue(
             "the keyboard lies BELOW the status row, not above",
@@ -160,7 +160,7 @@ class ImeRootViewLayoutTest {
         setDebuggable(false)
         val view = ImeRootView(app)
         assertEquals("release: statusRow GONE (no layout space)", View.GONE, view.statusRow.visibility)
-        assertFalse("Tastaturmodus aktiv", view.isEmojiPanelVisible)
+        assertFalse("keyboard mode active", view.isEmojiPanelVisible)
 
         view.showEmojiPanel()
         assertEquals("release, emoji mode: statusRow stays GONE", View.GONE, view.statusRow.visibility)
@@ -198,7 +198,7 @@ class ImeRootViewLayoutTest {
 
         // finding 1a: in the basic state (the service has not run yet) there is a text.
         assertTrue("statusText is NOT empty in the idle state", view.statusText.text.isNotEmpty())
-        assertEquals("Bereit", view.statusText.text.toString())
+        assertEquals("Ready", view.statusText.text.toString())
 
         // finding 1b: 🐞 is a view child (view.debugButton), right (last child),
         // 48 dp wide, visible with height > 0.
@@ -262,7 +262,7 @@ class ImeRootViewLayoutTest {
             View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED),
         )
         view.layout(0, 0, view.measuredWidth, view.measuredHeight)
-        val model = view.currentModel ?: error("kein Modell")
+        val model = view.currentModel ?: error("no model")
         val canvas = Canvas(Bitmap.createBitmap(view.width, view.height, Bitmap.Config.ARGB_8888))
         view.draw(canvas)
         return canvas to model

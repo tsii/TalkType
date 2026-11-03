@@ -16,7 +16,7 @@ import java.io.File
  * Size check against the manifest BEFORE `open` (wrong size ⇒ typed error
  * with a flat file name, no path — rule 9).
  * `Throwable` boundary: even errors (e.g. OutOfMemoryError) flow in a controlled
- * way into the typed error with its own, German-readable branch.
+ * way into the typed error with its own, readable branch.
  */
 object LiteRtLoader {
 
@@ -32,24 +32,24 @@ object LiteRtLoader {
      * Size check against [expectedSizeBytes] (0 = no check).
      */
     fun open(file: File, threads: Int, expectedSizeBytes: Long = 0L): LoadedModel {
-        check(file.isFile) { "Modell-Datei fehlt: ${file.name}" }
+        check(file.isFile) { "model file missing: ${file.name}" }
         if (expectedSizeBytes > 0 && file.length() != expectedSizeBytes) {
             throw LiteRtLoadException(
-                "Größe abweichend: ${file.name} (${file.length()} != $expectedSizeBytes Bytes)",
+                "size differs: ${file.name} (${file.length()} != $expectedSizeBytes bytes)",
             )
         }
         val opts = Interpreter.Options().apply { setNumThreads(threads) }
         return try {
             LoadedModel(Interpreter(file, opts), file.name)
         } catch (e: OutOfMemoryError) {
-            // Own German-readable branch (V10-2): heap is not sufficient.
+            // Own readable branch (V10-2): heap is not sufficient.
             throw LiteRtLoadException(
-                "Der Arbeitsspeicher reicht für dieses Modell nicht.", e,
+                "Not enough memory for this model.", e,
             )
         } catch (t: Throwable) {
             // Throwable boundary: other errors too, controlled and typed
             throw LiteRtLoadException(
-                "LiteRT-Modell konnte nicht geöffnet werden (${t.javaClass.simpleName}: " +
+                "Could not open LiteRT model (${t.javaClass.simpleName}: " +
                     scrub(t.message) + ")",
                 t,
             )
@@ -58,7 +58,7 @@ object LiteRtLoader {
 
     /** Rule 9: trim tokens with path separators to flat file names, max. 120 characters. */
     private fun scrub(msg: String?): String {
-        if (msg.isNullOrEmpty()) return "(keine Meldung)"
+        if (msg.isNullOrEmpty()) return "(no message)"
         val sb = StringBuilder()
         for (tok in msg.split(Regex("[\\s]+"))) {
             if (sb.isNotEmpty()) sb.append(' ')

@@ -24,33 +24,33 @@ class KeyboardThemeTest {
     @Test
     fun `light palette matches the V2 table`() {
         val p = KeyboardTheme.LIGHT
-        assertEquals(0xFFF2F3F5.toInt(), p.background)      // V2 §7 Hintergrund
-        assertEquals(0xFFFFFFFF.toInt(), p.keyNormal)       // V2 §7 Taste (heller als Hintergrund)
-        assertEquals(0xFFDCE7E6.toInt(), p.keyPressed)      // V2 §7 gedrückt (direkt, kein Overlay)
-        assertEquals(0xFF2E7D74.toInt(), p.keyToggledGlyph) // V2 §7 Akzent (⇧/⌫/⏎, Shift-aktiv)
-        assertEquals(0xFF1A1C1E.toInt(), p.textPrimary)    // V2 §7 Text (17,09:1 auf Taste → AAA)
-        assertEquals(0xCC37474F.toInt(), p.textFunctional) // nicht in V2: AOSP bleibt
-        assertEquals(0xB337474F.toInt(), p.textSecondary)  // nicht in V2: AOSP bleibt
-        assertEquals(0xFFE0E2E5.toInt(), p.separator)      // V2 §7 Trennlinie
-        assertEquals(0xFF2E7D74.toInt(), p.accent)        // V2 §7 Akzent
-        assertEquals(0xFFFFFFFF.toInt(), p.micRecordingGlyph) // Gegenfarbe auf #2E7D74 (≈ 4,6:1)
-        assertEquals(0xFFB3261E.toInt(), p.error)          // nicht in V2: bleibt
+        assertEquals(0xFFF2F3F5.toInt(), p.background)      // V2 §7 background
+        assertEquals(0xFFFFFFFF.toInt(), p.keyNormal)       // V2 §7 key (lighter than background)
+        assertEquals(0xFFDCE7E6.toInt(), p.keyPressed)      // V2 §7 pressed (direct, no overlay)
+        assertEquals(0xFF2E7D74.toInt(), p.keyToggledGlyph) // V2 §7 accent (⇧/⌫/⏎, shift active)
+        assertEquals(0xFF1A1C1E.toInt(), p.textPrimary)    // V2 §7 text (17.09:1 on key → AAA)
+        assertEquals(0xCC37474F.toInt(), p.textFunctional) // not in V2: AOSP remains
+        assertEquals(0xB337474F.toInt(), p.textSecondary)  // not in V2: AOSP remains
+        assertEquals(0xFFE0E2E5.toInt(), p.separator)      // V2 §7 separator
+        assertEquals(0xFF2E7D74.toInt(), p.accent)        // V2 §7 accent
+        assertEquals(0xFFFFFFFF.toInt(), p.micRecordingGlyph) // contrast color on #2E7D74 (≈ 4.6:1)
+        assertEquals(0xFFB3261E.toInt(), p.error)          // not in V2: remains
     }
 
     @Test
     fun `dark palette matches the V2 table`() {
         val p = KeyboardTheme.DARK
-        assertEquals(0xFF202124.toInt(), p.background)      // V2 §7 Hintergrund
-        assertEquals(0xFF2B2D31.toInt(), p.keyNormal)       // V2 §7 Taste
-        assertEquals(0xFF3A4543.toInt(), p.keyPressed)      // V2 §7 gedrückt (direkt)
-        assertEquals(0xFF80CBC4.toInt(), p.keyToggledGlyph) // V2 §7 Akzent
-        assertEquals(0xFFE8EAED.toInt(), p.textPrimary)    // V2 §7 Text (11,44:1 → AAA)
-        assertEquals(0xCCFFFFFF.toInt(), p.textFunctional) // nicht in V2: AOSP bleibt
-        assertEquals(0xB3FFFFFF.toInt(), p.textSecondary)  // nicht in V2: AOSP bleibt
-        assertEquals(0xFF3C3F44.toInt(), p.separator)      // V2 §7 Trennlinie
-        assertEquals(0xFF80CBC4.toInt(), p.accent)        // V2 §7 Akzent
-        assertEquals(0xFF263238.toInt(), p.micRecordingGlyph) // Gegenfarbe auf #80CBC4 (≈ 7,4:1)
-        assertEquals(0xFFFFB4AB.toInt(), p.error)          // nicht in V2: bleibt
+        assertEquals(0xFF202124.toInt(), p.background)      // V2 §7 background
+        assertEquals(0xFF2B2D31.toInt(), p.keyNormal)       // V2 §7 key
+        assertEquals(0xFF3A4543.toInt(), p.keyPressed)      // V2 §7 pressed (direct)
+        assertEquals(0xFF80CBC4.toInt(), p.keyToggledGlyph) // V2 §7 accent
+        assertEquals(0xFFE8EAED.toInt(), p.textPrimary)    // V2 §7 text (11.44:1 → AAA)
+        assertEquals(0xCCFFFFFF.toInt(), p.textFunctional) // not in V2: AOSP remains
+        assertEquals(0xB3FFFFFF.toInt(), p.textSecondary)  // not in V2: AOSP remains
+        assertEquals(0xFF3C3F44.toInt(), p.separator)      // V2 §7 separator
+        assertEquals(0xFF80CBC4.toInt(), p.accent)        // V2 §7 accent
+        assertEquals(0xFF263238.toInt(), p.micRecordingGlyph) // contrast color on #80CBC4 (≈ 7.4:1)
+        assertEquals(0xFFFFB4AB.toInt(), p.error)          // not in V2: remains
     }
 
     // ---- contract assertions: states must not collapse ----
@@ -171,9 +171,9 @@ class KeyboardThemeTest {
         val density = 2.625f // reference density (KeyboardTheme comment F36/V2 §7)
         val letterPx = KeyboardTheme.SP_LETTER_SP * density // 26 sp ≈ 68 px
         val digitPx = KeyboardTheme.SP_DIGIT_SP * density   // 24 sp ≈ 63 px
-        assertTrue("Buchstaben-Glyphe frei in der 1u-Zelle (108 px)",
+        assertTrue("letter glyphs free in the 1u cell (108 px)",
             letterPx + 2f * 2f < 108f)
-        assertTrue("Ziffern-Glyphe frei in der 1u-Zelle",
+        assertTrue("digit glyphs free in the 1u cell",
             digitPx + 2f * 2f < 108f)
         assertTrue("free within the row height (55 dp = 144 px)",
             letterPx < KeyboardTheme.ROW_HEIGHT_4_ROWS_DP * density)
@@ -205,7 +205,7 @@ class KeyboardThemeTest {
                 KeyboardTheme.ACTION_GLYPH_STROKE_DP / KeyboardTheme.ACTION_GLYPH_DP)
         // shift-head-y = line-y − offset, offset > 0 (arrow foot ABOVE the line):
         assertEquals(
-            "Pfeilfuß = Sockelleiste − Abstand",
+            "arrow foot = base line − gap",
             KeyboardTheme.ShiftGlyph.BASE_LINE_RATIO - KeyboardTheme.ShiftGlyph.BASE_GAP_RATIO,
             KeyboardTheme.ShiftGlyph.arrowBottomRatio(),
         )
@@ -227,7 +227,7 @@ class KeyboardThemeTest {
         assertEquals(44, KeyboardTheme.rowHeightDp(rows = 6))
         assertEquals(0, KeyboardTheme.ROW_GAP_DP)
         assertEquals(0, KeyboardTheme.KEY_GAP_DP)
-        // F36/V2 §7: 2 px Fuge je Seite / 10 px Eckenradius @ Referenzdichte 2,625 → dp.
+        // F36/V2 §7: 2 px gap per side / 10 px corner radius @ reference density 2.625 → dp.
         assertEquals(2f / 2.625f, KeyboardTheme.KEY_FUGE_DP)
         assertEquals(10f / 2.625f, KeyboardTheme.KEY_RADIUS_DP)
         // F39 (user feedback v0.1.27): stroke width 2.0 dp — the glyphs must not be

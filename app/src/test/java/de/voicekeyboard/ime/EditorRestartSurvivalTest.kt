@@ -225,7 +225,7 @@ class EditorRestartSurvivalTest {
     @Test
     fun `P2 one sentinel does not block - a different package stays an abort`() {
         assertEquals(
-            "eine Seite ≤ 0, andere > 0, gleiches Paket ⇒ REBASELINE",
+            "one side ≤ 0, other > 0, same package ⇒ REBASELINE",
             EditorRestartAction.REBASELINE,
             editorRestartAction(
                 restarting = true, sessionActive = true,
@@ -234,7 +234,7 @@ class EditorRestartSurvivalTest {
             ),
         )
         assertEquals(
-            "Paket anders ⇒ ABORT — auch mit Sentinel-Feldern",
+            "different package ⇒ ABORT — also with sentinel fields",
             EditorRestartAction.ABORT,
             editorRestartAction(
                 restarting = true, sessionActive = true,
@@ -266,10 +266,10 @@ class EditorRestartSurvivalTest {
             assertEquals("no ghost writing — editor stays empty", "", ctx.sink.text)
             assertTrue("previous text existed (evidence plausibility)", before.isNotEmpty())
         } finally {
-            // KEIN Leak: FakeSource endet nie und scope.cancel() stoppt den
-            // Capture-Thread NICHT — ohne shutdown() pumpte der weiter in den
-            // totenglaubten Kanal (unbeschaenkt) und riss den Test-JVM-Heap
-            // (Lauf-1: OOM, FakeAudioScenarioTest nicht ausfuehrbar).
+            // NO leak: FakeSource never ends and scope.cancel() does NOT stop
+            // the capture thread — without shutdown() it kept pumping into the
+            // dead-looking channel (unbounded) and tore down the test JVM heap
+            // (run 1: OOM, FakeAudioScenarioTest not runnable).
             ctx.coordinator.shutdown()
             ctx.scope.cancel()
         }

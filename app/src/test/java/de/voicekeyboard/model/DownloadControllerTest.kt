@@ -54,7 +54,7 @@ class DownloadControllerTest {
                 if (file.storeName == cancelAt) throw ModelError.Cancelled(file.storeName)
                 if (file.storeName == failureAt && file.storeName !in seenFail) {
                     seenFail += file.storeName
-                    throw ModelError.Network("fake failure für ${file.storeName}")
+                    throw ModelError.Network("fake failure for ${file.storeName}")
                 }
                 val bytes = ByteArray(file.sizeBytes.toInt()) { 7 }
                 store.partFile(file.storeName).writeBytes(bytes)

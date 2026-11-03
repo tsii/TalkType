@@ -6,12 +6,12 @@
 # (instrumented runs uninstall the app at the end) — and NEVER
 # `pm clear` / clearPackageData, otherwise the 671-MB model inventory is gone.
 #
-# EMULATOR 5558 BELONGS TO ANOTHER PROJECT — only 5560 is touched here.
+# EMULATOR <other-device> BELONGS TO ANOTHER PROJECT — only <device-port> is touched here.
 set -u
 export ANDROID_HOME=${ANDROID_HOME:-/opt/android-sdk}
 export PATH="$PATH:$ANDROID_HOME/platform-tools"
 export XDG_RUNTIME_DIR=/run/user/$(id -u)
-PORT=5560
+PORT="${VK_DEVICE_PORT:-5554}"   # <device-port>
 AVD=vk-api36
 APK=${APK:-app/build/outputs/apk/debug/app-debug.apk}
 

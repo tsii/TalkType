@@ -39,7 +39,7 @@ class OnnxSessions private constructor(
                 File(dir, FILE_DECODER),
             )
             for (f in files) {
-                check(f.isFile) { "Modell-Datei fehlt: ${f.name}" } // rule 9: only the name, never the path
+                check(f.isFile) { "model file missing: ${f.name}" } // rule 9: only the name, never the path
             }
             val env = OrtEnvironment.getEnvironment()
             val opts = OrtSession.SessionOptions().apply {
@@ -94,25 +94,25 @@ class OnnxSessions private constructor(
         for ((name, exp) in expectedNames.zip(expected)) {
             val node = nodes[name]
                 ?: throw IllegalStateException(
-                    "$model: $direction-Tensor '$name' fehlt — vorhanden: ${nodes.keys.sorted()}")
+                    "$model: $direction tensor '$name' missing — present: ${nodes.keys.sorted()}")
             val info = node.info
             if (info !is TensorInfo) {
                 throw IllegalStateException(
-                    "$model: $direction-Tensor '$name' ist kein Tensor: $info")
+                    "$model: $direction tensor '$name' is not a tensor: $info")
             }
             if (info.type != exp.second) {
                 throw IllegalStateException(
-                    "$model: $direction-Tensor '$name' hat Dtype ${info.type.pretty()}, erwartet ${exp.second.pretty()}")
+                    "$model: $direction tensor '$name' has dtype ${info.type.pretty()}, expected ${exp.second.pretty()}")
             }
             if (info.shape.size != exp.third) {
                 throw IllegalStateException(
-                    "$model: $direction-Tensor '$name' hat Rang ${info.shape.size}, erwartet ${exp.third} (Shape=${info.shape.contentToString()})")
+                    "$model: $direction tensor '$name' has rank ${info.shape.size}, expected ${exp.third} (Shape=${info.shape.contentToString()})")
             }
         }
         for (extra in nodes.keys) {
             if (extra !in expectedNames) {
                 throw IllegalStateException(
-                    "$model: unerwarteter $direction-Tensor '$extra' — Vertrag kennt nur ${expectedNames.sorted()}")
+                    "$model: unexpected $direction tensor '$extra' — contract knows only ${expectedNames.sorted()}")
             }
         }
     }

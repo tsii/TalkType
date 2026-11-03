@@ -12,15 +12,15 @@ import org.robolectric.annotation.Config
 
 /**
  * PunctuationCoverageTest (LAYOUT_REQUIREMENTS §6.3, Rev 3):
- * The language-specific punctuation from §2.2 (column „Satzzeichen (direkt)") must
+ * The language-specific punctuation from §2.2 (column "Punctuation (direct)") must
  * be reachable per asset:
  *
  * - SZ = an own key on `symbols` OR `symbolsShift` OR an alternate (any layer).
- *   (Rev 3: „direkt" = an own key on symbols OR symbolsShift; the stage-3 order
+ *   (Rev 3: "direct" = an own key on symbols OR symbolsShift; the stage-3 order
  *   defines SZ as reachable — own key or alternate.)
  * - `{…}` or-variants in §2.2 are encoded as alternative sets: at least ONE
  *   variant must be fully reachable.
- * - the error message names the asset, the character and the required stage („SZ").
+ * - the error message names the asset, the character and the required stage ("SZ").
  *
  * Negative tests (counter-checks, no asset revert in the files — inline mutation):
  * prepared JSON strings must turn the test RED.
@@ -35,9 +35,9 @@ class PunctuationCoverageTest {
      */
     private data class SzRequirement(val variants: List<Set<String>>)
 
-    /** §2.2 column „Satzzeichen (direkt)" — every row with § reference from LAYOUT_REQUIREMENTS.md. */
+    /** §2.2 column "Punctuation (direct)" — every row with § reference from LAYOUT_REQUIREMENTS.md. */
     private val szMatrix: Map<String, List<SzRequirement>> = mapOf(
-        // §2.2: „ “ {oder » «}, –, €, §, °
+        // §2.2: „ “ {or » «}, –, €, §, °
         "de-de" to listOf(
             SzRequirement(listOf(setOf("„", "“"), setOf("»", "«"))),
             SzRequirement(listOf(setOf("–"))),
@@ -73,7 +73,7 @@ class PunctuationCoverageTest {
             SzRequirement(listOf(setOf("ª"))),
             SzRequirement(listOf(setOf("€"))),
         ),
-        // §2.2: « » {oder “ ”}, ’, €
+        // §2.2: « » {or “ ”}, ’, €
         "it-it" to listOf(
             SzRequirement(listOf(setOf("«", "»"), setOf("“", "”"))),
             SzRequirement(listOf(setOf("’"))),
@@ -88,7 +88,7 @@ class PunctuationCoverageTest {
             SzRequirement(listOf(setOf("€"))),
             SzRequirement(listOf(setOf("§"))),
         ),
-        // §2.2: ‘ ’ „ ” {oder “ ”}, €
+        // §2.2: ‘ ’ „ ” {or “ ”}, €
         "nl-nl" to listOf(
             SzRequirement(listOf(setOf("‘", "’"), setOf("„", "”"), setOf("“", "”"))),
             SzRequirement(listOf(setOf("€"))),
@@ -122,21 +122,21 @@ class PunctuationCoverageTest {
             SzRequirement(listOf(setOf("€"))),
             SzRequirement(listOf(setOf("°"))),
         ),
-        // §2.2: ” ” {oder » «}, –, §, €
+        // §2.2: ” ” {or » «}, –, §, €
         "sv-se" to listOf(
             SzRequirement(listOf(setOf("”"), setOf("»", "«"))),
             SzRequirement(listOf(setOf("–"))),
             SzRequirement(listOf(setOf("§"))),
             SzRequirement(listOf(setOf("€"))),
         ),
-        // §2.2: » « {oder ” ”}, –, §, €
+        // §2.2: » « {or ” ”}, –, §, €
         "da-dk" to listOf(
             SzRequirement(listOf(setOf("»", "«"), setOf("”"))),
             SzRequirement(listOf(setOf("–"))),
             SzRequirement(listOf(setOf("§"))),
             SzRequirement(listOf(setOf("€"))),
         ),
-        // §2.2: ” ” {oder » «}, –, §, €
+        // §2.2: ” ” {or » «}, –, §, €
         "fi-fi" to listOf(
             SzRequirement(listOf(setOf("”"), setOf("»", "«"))),
             SzRequirement(listOf(setOf("–"))),

@@ -150,7 +150,7 @@ ran the test in isolation, restored the file exactly.
 |---|---|---|
 | Original (backup) | — | `1e0badeb45118a17b4a1e4f2e1464b4213a348cd5873830267c352676f1e4539` |
 | Mutation (`ü`→`ux`) | Test **RED**: `LayoutCompletenessTest … FAILED` (AssertionError line 108) | `0a3d7528…` |
-| Error message | `Asset 'de-de': Pflichtzeichen fehlen als eigene base-Taste: [ü] (alternates zählen NICHT, LAYOUT_REQUIREMENTS Grundregel 1)` | — |
+| Error message | `Asset 'de-de': mandatory characters missing as own base keys: [ü] (alternates do NOT count, LAYOUT_REQUIREMENTS basic rule 1)` | — |
 | Restored | hash identical to the backup | `1e0badeb45118a17b4a1e4f2e1464b4213a348cd5873830267c352676f1e4539` ✔ |
 
 **Skip logic checked:** `LayoutCompletenessTest.asset()` returns `null` only for a *missing/readable*

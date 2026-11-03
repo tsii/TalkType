@@ -13,14 +13,14 @@ no build, no git. RULE 9: no audio content; test WAVs may be synthetic
 | Pipeline test with real WAV + real engine | **exists** (M4d, S1: `de_smoke.wav` → `controller.feedAudio` in 320-sample blocks → final text = §4.1 golden; S2–S4 editor sinks; M3: audio **from the virtual microphone**) | `app/src/androidTest/java/de/voicekeyboard/dictation/DictationPipelineTest.kt` (brackets S1/M3, `feedAudio` ~line 99); 6/6 GREEN on **device** (`state/progress.md` M4d) |
 | Real AudioRecord path + level channel | **exists** (M1/M2/M4: samples + `LevelPeak` proof) | `app/src/androidTest/java/de/voicekeyboard/MicCaptureTest.kt` |
 | Emulator virtual microphone recipe | **exists and measured** (`-allow-host-audio` — without it: **mic is zeroed**; no `-no-window` (headless has no `pa` driver), instead offscreen + `-qt-hide-window`; PulseAudio + null sink; operating sensor **65 %** ⇒ peak ~19800, RMS ~1900) | `tools/emulator_audio_up.sh` (comment block 1–25), `tools/emulator_audio_down.sh` |
-| Engine run on 5560 | **Blocker:** native **SIGSEGV in `libonnxruntime.so`** (dlopen/call_constructors, worker thread only) — dictation/engine in the IME process there is **not validatable** | `docs/PROJECT_STATE.md` "environment" (main evidence: `HANDOFF.md`) |
+| Engine run on <device> | **Blocker:** native **SIGSEGV in `libonnxruntime.so`** (dlopen/call_constructors, worker thread only) — dictation/engine in the IME process there is **not validatable** | `docs/PROJECT_STATE.md` "environment" (main evidence: `HANDOFF.md`) |
 | Injection seam for the source | **exists**: `interface AudioSource` (`start/read/stopAndDrain/release`, `app/src/main/java/de/voicekeyboard/audio/AudioSource.kt:24`); in production `AudioRecordSource` in `buildCoordinator` (`ime/VoiceKeyboardService.kt:651`); engine behind the `AsrEngine` interface (`asr/`) | — |
 | Measurement fields for the scenarios | **all present** (F26a/b + F28b): `cap_blocks`, `cap_stall_ms`, `mic_rel`, `status_shown`, `abort_reason`, `hyp_count`, `buffer_s` (🐞 export, `debug/DebugInfoFormatter.kt`, drift check) | `docs/ANALYSE_DIKTAT_ABBRUCH_2.md` §5 |
 | Stall watchdog | **IN**: `ERR_STALL`/`STALL_LIMIT_MS = 3000` (`ime/DictationCoordinator.kt:71/73`) → `audio_error:stall` path | `docs/PROJECT_STATE.md` "F28" |
 
 **Most important constraint:** the engine SIGSEGV affects **every** process that
 loads the native ONNX lib on x86_64. **Hypothesis (to be checked before A/B run
-seriously):** the 5560 AVD is x86_64 and uses the x86_64 `libonnxruntime.so` — the
+seriously):** the <device> AVD is x86_64 and uses the x86_64 `libonnxruntime.so` — the
 `dlopen/call_constructors` crash pattern is typical of an inconsistent x86_64
 library, not of the ONNX model content (the same runs 6/6 green on the
 device/arm64). Litmus test: swap in a known-good x86_64 ONNX runtime build (one
@@ -57,7 +57,7 @@ different), real routing/mute states.
 `input swipe`/`wm` + 🐞 export via the adb clipboard).
 **Duration:** ~5–10 min per scenario (manual orchestration). **CI-capable:**
 **no** (host PulseAudio + exclusive adb use). **Risk:** medium/high — emulator
-audio on 5560 notoriously flaky (see script comment), **engine crash remains** ⇒
+audio on <device> notoriously flaky (see script comment), **engine crash remains** ⇒
 the transcription half (decodes, `hyp_count`) stays blind in the emulator as long
 as the §1 hypothesis is not fixed. B then covers only: capture field, FGS
 handshake, stop/abort paths, status.
@@ -68,7 +68,7 @@ synthetic WAV, configurable **silence / dropouts (0 blocks) / abort after N ms**
 injected via a debug flag in `buildCoordinator` (seam
 `VoiceKeyboardService.kt:651`); optionally `FakeAsrEngine : AsrEngine` (counts
 decodes, constant latency) ⇒ **without ONNX loading** → also runs **on the
-SIGSEGV-5560**. The UI is driven: adb DOWN/UP/hide events on a schedule; assertion
+SIGSEGV-<device>**. The UI is driven: adb DOWN/UP/hide events on a schedule; assertion
 via 🐞 fields (all present).
 **What is NOT:** mic driver/route/FGS real behavior, real decode quality (only
 with the real engine, which brings back the x86_64 problem), api 37 policy.
@@ -85,7 +85,7 @@ release during start — deterministically repeatable.
 
 1. **C immediately** — deterministic regression network over coordinator/watchdog/
    state machine; the only way to test all abort paths **repeatably and
-   CI-capably**, and the only one that runs on 5560 despite the engine SIGSEGV.
+   CI-capably**, and the only one that runs on <device> despite the engine SIGSEGV.
 2. **Before A: check the x86_64 runtime hypothesis** (1 build, swap the lib) — if
    green: **A for decode quality/C2 progression** (30/60-s continuous dictation
    with the real engine, `decode_ms_max`/`buffer_s` curves) — this also answers the

@@ -49,7 +49,7 @@ everyday use via short tap.
    no learning behavior). Wraps at the end.
 4. **Only one active language:** a short tap changes **nothing** about the
    layout and shows the status row
-   `Nur eine Sprache aktiv – in Einrichtung ändern` for 2 s. No silent no-op.
+   `Only one language active – change in Setup` for 2 s. No silent no-op.
 5. **The layout always matches the language:** the switch loads the target
    language's asset (`repository.load(id)`, fallback `de-de`) and sets
    `activeLayerName = "base"`. There is **no** state "ru layout with de
@@ -84,8 +84,7 @@ exist; (iii) per-field memory is observable behavior with error potential
 (wrong layout after an app switch) that we cannot test.
 
 **During active recording (state ≠ IDLE) the language switch is locked:**
-`onAction("language")` is ignored, status row `Sprachwechsel während Diktat
-nicht möglich`. Reason: the committed text is in the old language's
+`onAction("language")` is ignored, status row `Language switch not possible during dictation`. Reason: the committed text is in the old language's
 orthography, the running hypothesis is decoded in the old language; a switch
 mid-run would produce mixed-script revisions and rollbacks across language
 boundaries and violate the commit invariants (E8). After release (IDLE) the
@@ -152,7 +151,7 @@ write path, no use of `setText`/`setComposingText`; the emoji lands at the
 cursor position and the cursor stands behind it afterwards. During an active
 recording (state ≠ IDLE) the emoji panel is **locked** (as in E9.2), because
 a manual foreign edit ends the dictation's ownership (DESIGN §6) — status row
-`Emoji während Diktat nicht möglich`.
+`Emoji not possible during dictation`.
 
 **Explicitly NOT in v1:** skin-tone/gender variants, search, "recently
 used"/frequency history (KONZEPT: no learning dictionaries, no learning
@@ -167,7 +166,7 @@ behavior), stickers, GIFs, clipboard insertion.
 | T1 | JVM | the `active_languages` default is `"de-de,en-us"`; after changes in the setup list the **canonical** order is preserved; deselecting the last language is refused |
 | T2 | JVM | `nextLanguage(current, active)` with `["de-de","en-us","ru-ru"]` yields the sequence `en-us → ru-ru → de-de` (wrap); with only one active language it returns the same ID plus a hint flag |
 | T3 | instrumented | after switching to `ru-ru`: `view.layout.id == "ru-ru"`, `activeLayerName == "base"`, a base key carries a Cyrillic label (e.g. `ф`), and `currentInputConnection` is still not `null` (focus intact) |
-| T4 | instrumented | `onAction("language")` **during** RECORDING changes neither the layout nor `current_language` and sets the status row `Sprachwechsel während Diktat nicht möglich` |
+| T4 | instrumented | `onAction("language")` **during** RECORDING changes neither the layout nor `current_language` and sets the status row `Language switch not possible during dictation` |
 | T5 | instrumented | an emoji tap inserts **exactly** the expected character at the cursor position (`textBeforeCursor` grows by 2 UTF-16 units for surrogate pairs) and does **not** alter the existing old text (prefix byte-identical) |
 | T6 | JVM | `emoji_v1.json` validates: 8 categories × 48, no duplicates, NFC, no ZWJ/skin-tone/flag sequences, exactly 1 grapheme cluster per entry |
 
@@ -265,7 +264,7 @@ no overlay while paging.
 | `animals` | `emoji_cat_animals` | `Tiere & Natur` |
 | `food` | `emoji_cat_food` | `Essen & Trinken` |
 | `travel` | `emoji_cat_travel` | `Reisen & Orte` |
-| `activities` | `emoji_cat_activities` | `Aktivität` |
+| `activities` | `emoji_cat_activities` | `Activities` |
 | `objects` | `emoji_cat_objects` | `Objekte` |
 | `symbols` | `emoji_cat_symbols` | `Symbole` |
 
@@ -305,7 +304,7 @@ no overlay while paging.
    the panel open across a language switch (grid geometry and counting
    depend on the layout).
 4. **Dictation active (state ≠ IDLE):** the panel stays locked (E9.4),
-   status row `Emoji während Diktat nicht möglich`; an opening attempt
+   status row `Emoji not possible during dictation`; an opening attempt
    closes nothing.
 5. **Insertion:** unchanged via `onTextInput → commitText(text,1)`; the panel
    stays **open** after insertion (several emoji in a row), the cursor stands

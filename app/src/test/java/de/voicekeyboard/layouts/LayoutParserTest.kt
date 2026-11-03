@@ -67,10 +67,10 @@ class LayoutParserTest {
     @Test
     fun `invalid JSON throws LayoutException with a clear message`() {
         try {
-            LayoutParser.parse("{ kein json")
+            LayoutParser.parse("{ not json")
             fail("LayoutException expected")
         } catch (e: LayoutParser.LayoutException) {
-            assertTrue(e.message!!.contains("Kein gültiges JSON"))
+            assertTrue(e.message!!.contains("Not valid JSON"))
         }
     }
 
@@ -102,7 +102,7 @@ class LayoutParserTest {
             LayoutParser.parse(json)
             fail("LayoutException expected")
         } catch (e: LayoutParser.LayoutException) {
-            assertTrue(e.message!!.contains("unbekannte Aktion"))
+            assertTrue(e.message!!.contains("unknown action"))
         }
     }
 
@@ -124,7 +124,7 @@ class LayoutParserTest {
             LayoutParser.parse(json)
             fail("LayoutException expected")
         } catch (e: LayoutParser.LayoutException) {
-            assertTrue("message: ${e.message}", e.message!!.contains("'shift' fehlt"))
+            assertTrue("message: ${e.message}", e.message!!.contains("'shift' missing"))
         }
     }
 
@@ -135,7 +135,7 @@ class LayoutParserTest {
             LayoutParser.parse(json)
             fail("LayoutException expected")
         } catch (e: LayoutParser.LayoutException) {
-            assertTrue(e.message!!.contains("Unbekannte schemaVersion"))
+            assertTrue(e.message!!.contains("Unknown schemaVersion"))
         }
     }
 
@@ -160,7 +160,7 @@ class LayoutParserTest {
             LayoutParser.parse(json)
             fail("LayoutException expected")
         } catch (e: LayoutParser.LayoutException) {
-            assertTrue("message: ${e.message}", e.message!!.contains("Zeilensumme"))
+            assertTrue("message: ${e.message}", e.message!!.contains("Row-sum deviation"))
         }
     }
 
@@ -184,7 +184,7 @@ class LayoutParserTest {
             LayoutParser.parse(json)
             fail("LayoutException expected")
         } catch (e: LayoutParser.LayoutException) {
-            assertTrue(e.message!!.contains("Doppelte Tasten-ID"))
+            assertTrue(e.message!!.contains("Duplicate key ID"))
         }
     }
 

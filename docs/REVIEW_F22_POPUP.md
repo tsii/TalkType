@@ -24,7 +24,7 @@
 - **F) Temporary shift consumed only on a genuine commit.** `commitAlternate` flips `shiftTemporary` exclusively with a chosen cell; abort/0-character leaves `shiftTemporary` untouched (shift still applies to the next input). ✓
 - **G) Geometry consistency yes, comments stale.** `POPUP_HEIGHT_DP=56→147 px`, `POPUP_CELL_DP=48→126 px`, `POPUP_PAD_DP=8→21 px`; `drawLongPressMenu` and `popupCellAt`/`popupSelectionAt` use the same `p.left/p.padPx/p.cellPx` and the same `cellWins` threshold ⇒ drawing == hit testing. Only the KDoc/test examples ("4 dp", "418") are outdated (note above).
 - **H) Rule 9 defensible.** VK-HIT logs only key `id` + static `value` label + geometry, `FLAG_DEBUGGABLE`-only, never field/audio content ⇒ no input content.
-- **I) Tests catch the three regressions red:** (a) slop rule removed ⇒ `cellWins auf der Grundtaste gewinnt nie` (test, `assertFalse(cellWins(0,0,…))`) red; (b) `cellWins` "always true" ⇒ same test + "innerhalb Slop … gewinnt nicht" red; (c) `MAX_CELLS→4` ⇒ `cellCount deckelt auf 8` (asserts 8) red. Coverage exists.
+- **I) Tests catch the three regressions red:** (a) slop rule removed ⇒ `cellWins on the base key never wins` (test, `assertFalse(cellWins(0,0,…))`) red; (b) `cellWins` "always true" ⇒ same test + `cellWins inside the slop zone downwards and on the boundary does not win` red; (c) `MAX_CELLS→4` ⇒ `cellCount caps at 8` (asserts 8) red. Coverage exists.
 
 ---
 

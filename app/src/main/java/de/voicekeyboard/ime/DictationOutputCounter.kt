@@ -2,12 +2,12 @@ package de.voicekeyboard.ime
 
 /**
  * Counts for D10-rest §3 whether a dictation produced characters in this session —
- * the decision basis for the commit check mark vs. "Kein Text erkannt".
+ * the decision basis for the commit check mark vs. "No text recognized".
  *
  * **Why gross and not net (review F12, P2):** the first version counted
  * `new characters - replaced characters`. Correcting five characters with five
  * new ones nets 0, even though the user sees text in the field — the check mark
- * was missing and instead "Kein Text erkannt" appeared. Therefore the sum of all
+ * was missing and instead "No text recognized" appeared. Therefore the sum of all
  * characters written in this session is counted.
  *
  * Deliberate deviation from D10 §2: a rollback to nothing also counts as

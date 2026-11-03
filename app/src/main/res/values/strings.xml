@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Voice Keyboard</string>
-    <string name="setup_title">Voice Keyboard – Setup</string>
+    <string name="app_name">TalkType</string>
+    <string name="setup_title">TalkType – Setup</string>
 
     <string name="setup_download_start">Download model (approx. 671 MB)</string>
     <string name="setup_download_cancel">Cancel</string>

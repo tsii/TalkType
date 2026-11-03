@@ -1,6 +1,6 @@
 # Next tasks (order)
 
-**Status 2026-11-03 · v0.1.40 / versionCode 41 delivered (English UI, sanitized repo)** (11:00): repo translated DE→EN (docs + comments + assertion messages; UI stays German), new adaptive shield+waveform icon, T10 auto-space after dictation-ending punctuation; tests **613/0 + 578/0 = 1191/0**; next build **41 / 0.1.40**.md` P0/P1=0 Push YES; next build **41 / 0.1.40**.
+**Status 2026-11-03 · v0.1.41 / versionCode 42 (TalkType) delivered (English UI, sanitized repo)** (11:00): repo translated DE→EN (docs + comments + assertion messages; UI stays German), new adaptive shield+waveform icon, T10 auto-space after dictation-ending punctuation; tests **613/0 + 578/0 = 1191/0**; next build **41 / 0.1.40**.md` P0/P1=0 Push YES; next build **41 / 0.1.40**.
 
 1. **Phone evidence 0.1.38 (highest priority):** hold run 60–90 s (open — the field test
    ended with michold_cancel; tap chain 2× PASSED 22:30 /tmp/vk_phone_e3.log), 🐞 export

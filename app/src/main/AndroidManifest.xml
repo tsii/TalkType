@@ -23,7 +23,7 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
 
     <application
-        android:label="Voice Keyboard"
+        android:label="@string/app_name"
         android:icon="@mipmap/ic_launcher"
         android:theme="@style/Theme.VoiceKeyboard"
         android:allowBackup="false">
@@ -46,7 +46,7 @@
         <service
             android:name=".ime.VoiceKeyboardService"
             android:exported="true"
-            android:label="Voice Keyboard"
+            android:label="@string/app_name"
             android:permission="android.permission.BIND_INPUT_METHOD">
             <intent-filter>
                 <action android:name="android.view.InputMethod" />

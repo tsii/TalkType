@@ -1,6 +1,7 @@
-# HANDOFF — Voice-Keyboard (project root, checkpoint for the next phase)
+# HANDOFF — TalkType (formerly Voice-Keyboard) (project root, checkpoint for the next phase)
 
-**Status:** 2026-11-03 ~12:05 UTC · **Delivered version: v0.1.40 / versionCode 41** (English UI language across app + repo; docs fully translated incl. last German fragments; repo sanitized for public release: git-grep internal-endpoint/alias/home-path/device-id patterns = 0. Tests **613/0 + 578/0 = 1191/0**; dist 0.1.40 `94111cf5…`/diag `561fb1ad…`. History rewritten (filter-repo, force-push done)).
+**Status:** 2026-11-03 ~13:35 UTC · **Delivered version: v0.1.41 / versionCode 42 — TalkType** (product renamed: app label centralized via @string/app_name = TalkType, README/HANDOFF titles, dist pattern talktype-<ver>.apk; GitHub repo now tsii/TalkType. Tests **613/0 + 578/0 = 1191/0**; dist 0.1.41 `6b2a7327…`/diag `a7535bdc…`; installed on user phone, label TalkType).
+Before that v0.1.40 / versionCode 41 (English UI language across app + repo; docs fully translated incl. last German fragments; repo sanitized for public release: git-grep internal-endpoint/alias/home-path/device-id patterns = 0. Tests **613/0 + 578/0 = 1191/0**; dist 0.1.40 `94111cf5…`/diag `561fb1ad…`. History rewritten (filter-repo, force-push done)).
 Before that v0.1.39 / versionCode 40 (REPO TRANSLATED DE→EN: ~101 markdown + ~150 Kotlin comment files + test assertion messages; UI strings/literals/logic unchanged German. NEW ADAPTIVE APP ICON shield+waveform (design sipgate-ultra, user choice) incl. monochrome layer. T10: auto space after dictation ending on punctuation (trail_sp field, TrailingSpaceTest 9/0). Tests **613/0 + 578/0 = 1191/0**; dist 0.1.39 `ac9c8341…`/diag `41a369f8…`. Translator preference qwen-38-flash-next; coder primacy glm-5.3-verda (user order).
 Before that v0.1.38 / versionCode 39 (T8 Y-row centering — @ key removed (→ long-press m, de next to µ), ⇧ 96.5 px, ⏎ 150.5 px, Y exactly on the A/S gap, M exactly on the K/L gap (13/9, 145/18; pixel-exact, planner sipgate-ultra approved, review independently recomputed); cs/ru documented exceptions; checkGeometry newly hardened; T9 status row+🐞 ONLY in debug (release GONE, FLAG_DEBUGGABLE seam). Tests 604/0+569/0=1173/0; Review docs/REVIEW_V0138.md P0/P1=0 Push YES; dist 0.1.38 `2a379f2f…`/diag `fca9592a…`; **installed on the user's phone via adb -r (same signature, model remained)**; Y evidence image w_dbg3.png). Planner confirmation by user 2026-11-03: sipgate-coding-ultra.
 Before that v0.1.37 / versionCode 38 (T7 user finding "overlapping menus" (translated from German) healed: edge clamp menuLeftClamped (popup+arming) + M rule r2 max 10 à 0.75 — overflows el-gr 12/da-fi 11 cells capped, …→dot menu, –→hyphen menu; invariant test: no menu ever runs off the view (red evidence 1381>1080 px) + character protection … ” ª º ‰ ±; clamp evidence image u_clamp.png; Review docs/REVIEW_V0137.md P0/P1=0 Push YES; Tests 597/0+562/0=1159/0; dist 0.1.37 `0421519d…`/diag `418bc77a…`).
@@ -17,7 +18,7 @@ Before that v0.1.34 / versionCode 35 (A5 ownSpan corpse fix = toggle root cause 
 - **Review of every code task:** DeepSeek V4 Pro 0813 (`cortecs/deepseek-v4-pro-0813`).
 - **Orchestrator:** commissions + verifies mechanically; no own specialist work, no own reviews.
 
-## Version history (delivered, all in `dist/`, SSH link via `<download-server>/api/file?path=Voice-Keyboard/dist/<name>&download=1`)
+## Version history (delivered, all in `dist/`, SSH link via `<download-server>/api/file?path=TalkType/dist/<name>&download=1`)
 | Version | Build | Note |
 |---|---|---|
 | 0.1.14 … 0.1.25 | — | historic, removed from `dist/` (rotated per build) |

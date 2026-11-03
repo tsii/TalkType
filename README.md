@@ -1,10 +1,10 @@
-# Voice Keyboard
+# TalkType
 
 Android keyboard (IME) for GrapheneOS: **type in 15 languages** and **dictate offline** —
 without Google services, without network access at runtime, without dictionaries or autocorrect.
 
 <p align="center">
-  <img src="docs/img/tastatur-0.1.38.png" alt="Voice Keyboard — QWERTZ keyboard (15 languages, Y row centered)" width="720">
+  <img src="docs/img/tastatur-0.1.38.png" alt="TalkType — QWERTZ keyboard (15 languages, Y row centered)" width="720">
 </p>
 
 ## What it can do

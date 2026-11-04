@@ -5,13 +5,18 @@ import android.content.pm.ApplicationInfo
 import android.content.res.Configuration
 import android.graphics.Bitmap
 import android.graphics.Canvas
+import android.graphics.Rect
 import android.graphics.RectF
+import android.inputmethodservice.InputMethodService
 import android.view.View
 import android.widget.Button
 import android.widget.LinearLayout
 import de.voicekeyboard.dictation.DictationState
+import de.voicekeyboard.keyboard.KeyboardTheme
 import de.voicekeyboard.keyboard.KeyboardView
 import de.voicekeyboard.layouts.LayoutRepository
+import kotlin.math.roundToInt
+import org.robolectric.Robolectric
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertSame
@@ -344,5 +349,186 @@ class ImeRootViewLayoutTest {
                 strokes.all { it == strokes.first() },
             )
         }
+    }
+
+    // ==================================================================
+    // T15 (Opus option H, docs/PLAN_T13_T15.md): popup headroom — the IME
+    // window is 64 dp taller than the keyboard (root paddingTop), the band
+    // stays TRANSPARENT (root background = InsetDrawable with top inset) and
+    // TOUCH-THROUGH for the app (onComputeInsets → touchableRegion = keyboard
+    // only). No visible head bar over the keyboard (root cause R1/R4).
+    // ==================================================================
+
+    /** Measures/lay outs the root like the IME framework (width EXACTLY, height UNSPECIFIED). */
+    private fun layoutRoot(view: ImeRootView): ImeRootView {
+        view.measure(
+            View.MeasureSpec.makeMeasureSpec(1080, View.MeasureSpec.EXACTLY),
+            View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED),
+        )
+        view.layout(0, 0, view.measuredWidth, view.measuredHeight)
+        return view
+    }
+
+    @Test
+    fun `T15 headroom - root paddingTop 64dp, clip off, keyboard top at stack top`() {
+        val view = layoutRoot(buildRoot())
+        val density = app.resources.displayMetrics.density
+        val headroom = (KeyboardTheme.POPUP_HEADROOM_DP * density).roundToInt()
+
+        assertEquals("headroomPx = POPUP_HEADROOM_DP · density", headroom, view.headroomPx)
+        assertEquals("root paddingTop = headroom (window taller than the keyboard)",
+            headroom, view.paddingTop)
+        assertFalse("root does not clip the popup away (clipChildren)", view.clipChildren)
+        assertFalse("root does not clip the popup away (clipToPadding)", view.clipToPadding)
+
+        // keyboard surface top in window = stack top = paddingTop: in RELEASE this
+        // is exactly the KeyboardView top edge (statusRow GONE); in DEBUG it INCLUDES
+        // the 48-dp band (mic/🐞 stay inside the touchable region).
+        assertEquals(headroom, view.keyboardTopInWindow())
+        // the stack begins below the headroom, the keyboard below the status row:
+        val stack = view.keyboardView.parent as LinearLayout
+        assertEquals(headroom, stack.top)
+        assertEquals(headroom + view.statusRow.height, stack.top + view.keyboardView.top)
+    }
+
+    @Test
+    fun `T15 headroom band stays transparent - no visible head bar over the keyboard`() {
+        val view = layoutRoot(buildRoot())
+        assertTrue("root background = InsetDrawable (head band transparent)",
+            view.background is android.graphics.drawable.InsetDrawable)
+
+        // Root background ALONE on the raster (NOT via view.draw — Robolectric does
+        // not apply the child canvas translation to the bitmap): it must leave the
+        // headroom strip FULLY transparent and paint only from headroomPx downwards.
+        val bitmap = Bitmap.createBitmap(view.width, view.height, Bitmap.Config.ARGB_8888)
+        view.background.setBounds(0, 0, view.width, view.height)
+        view.background.draw(Canvas(bitmap))
+        assertEquals("headroom pixel (left) transparent", 0, bitmap.getPixel(5, 5) ushr 24)
+        assertEquals(
+            "headroom pixel (upper edge, last row) transparent",
+            0,
+            bitmap.getPixel(view.width / 2, view.headroomPx - 1) ushr 24,
+        )
+        assertEquals(
+            "background paints only from headroomPx (top inset = headroomPx)",
+            KeyboardTheme.palette(isDark = false).background,
+            bitmap.getPixel(5, view.headroomPx + 5),
+        )
+
+        // the opaque surface moved to the stack — it starts at root paddingTop
+        // (layout-proven): nothing opaque lies in the headroom band.
+        val stack = view.keyboardView.parent as LinearLayout
+        assertTrue("stack carries the opaque background (ColorDrawable)",
+            stack.background is android.graphics.drawable.ColorDrawable)
+        assertEquals(
+            "stack background = palette background (S4 root contract)",
+            KeyboardTheme.palette(isDark = false).background,
+            (stack.background as android.graphics.drawable.ColorDrawable).color,
+        )
+        assertEquals("stack starts below the headroom", view.paddingTop, stack.top)
+    }
+
+    /**
+     * T15: onComputeInsets VALUES — VoiceKeyboardService.onComputeInsets delegates
+     * 1:1 to [applyImeInsets] with exactly these root values (pure seam, testable
+     * without a running service): contentTopInsets = visibleTopInsets =
+     * keyboard top, TOUCHABLE_INSETS_REGION with (0, keyboardTop, width, bottom) —
+     * touches in the headroom pass through to the app, the keyboard stays touchable.
+     */
+    @Test
+    fun `T15 onComputeInsets values - content and visible top = keyboard top, region keyboard only`() {
+        val view = layoutRoot(buildRoot())
+        val insets = InputMethodService.Insets()
+
+        applyImeInsets(
+            insets = insets,
+            keyboardTop = view.keyboardTopInWindow(),
+            width = view.width,
+            rootBottom = view.bottom,
+        )
+
+        val top = view.keyboardTopInWindow()
+        assertEquals("contentTopInsets = keyboard top", top, insets.contentTopInsets)
+        assertEquals("visibleTopInsets = keyboard top", top, insets.visibleTopInsets)
+        assertEquals(
+            "touchableInsets = REGION (headroom passes touches through)",
+            InputMethodService.Insets.TOUCHABLE_INSETS_REGION,
+            insets.touchableInsets,
+        )
+        assertEquals(
+            "touchableRegion = (0, keyboardTop, width, rootBottom) — keyboard only",
+            Rect(0, top, view.width, view.bottom),
+            insets.touchableRegion.bounds,
+        )
+        // headroom strip (0 until top) lies OUTSIDE the region: app touches there
+        // reach the app (acceptance: touch-through 30 dp above the keyboard).
+        assertTrue("region top edge is below the headroom strip", insets.touchableRegion.bounds.top > 0)
+    }
+
+    /**
+     * T15 fix (emu 5564 re-measure): the opaque 243 strip between the window top
+     * and stack.top is the IME WINDOW/DECOR background (Theme.VoiceKeyboard
+     * windowBackground — the root view layer is clean). VoiceKeyboardService.onCreate
+     * sets the window background transparent AT RUNTIME (no theme change —
+     * SetupActivity shares the theme). Provable here: onCreate applies exactly this
+     * to the lazily created IME dialog window.
+     */
+    @Test
+    fun `T15 IME window background transparent - decor paints nothing in the headroom band`() {
+        val service = Robolectric.buildService(VoiceKeyboardService::class.java).get()
+        service.onCreate()
+
+        val window = service.getWindow()?.window
+            ?: error("IME window must exist after onCreate (lazily created Dialog)")
+        val background = Shadows.shadowOf(window).backgroundDrawable
+        assertTrue(
+            "window background = transparent ColorDrawable (headroom shows the app)",
+            background is android.graphics.drawable.ColorDrawable &&
+                (background as android.graphics.drawable.ColorDrawable).alpha == 0,
+        )
+    }
+
+    /**
+     * T15 hardening: the keyboard surface fill is EXPLICITLY bounded to the view —
+     * with the root unclipped (clipChildren/clipToPadding=false for the popup)
+     * canvas.drawColor would fill the ENTIRE inherited clip = the whole window,
+     * including the transparent headroom band. Draw-op proof (ShadowCanvas rect
+     * history): the fill is exactly the view bounds, and NO surface-colored rect
+     * leaves [0, height].
+     */
+    @Test
+    fun `T15 keyboard surface fill bounded to the view - never into the headroom band`() {
+        val view = KeyboardView(app)
+        view.setLayout(LayoutRepository(app).loadOrFallback("de-de"), 1080)
+        view.measure(
+            View.MeasureSpec.makeMeasureSpec(1080, View.MeasureSpec.EXACTLY),
+            View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED),
+        )
+        view.layout(0, 0, view.measuredWidth, view.measuredHeight)
+        assertTrue("test precondition: view laid out", view.width > 0 && view.height > 0)
+
+        val canvas = Canvas(Bitmap.createBitmap(view.width, view.height, Bitmap.Config.ARGB_8888))
+        view.draw(canvas)
+        val sh = Shadows.shadowOf(canvas)
+        val surface = KeyboardTheme.palette(isDark = false).background
+
+        var fullFill = false
+        for (i in 0 until sh.rectPaintHistoryCount) {
+            val event = sh.getDrawnRect(i)
+            if (event.paint.color == surface) {
+                if (event.rect == RectF(0f, 0f, view.width.toFloat(), view.height.toFloat())) {
+                    fullFill = true
+                }
+                assertTrue(
+                    "surface-colored rect ${event.rect} stays inside the view bounds",
+                    event.rect.top >= 0f && event.rect.bottom <= view.height &&
+                        event.rect.left >= 0f && event.rect.right <= view.width,
+                )
+            }
+        }
+        assertTrue(
+            "surface fill = exactly the view bounds (no full-canvas drawColor)",
+            fullFill,
+        )
     }
 }

@@ -109,6 +109,13 @@ object KeyboardTheme {
     const val POPUP_GLYPH_SP = 24f
     /** Movement > 8 dp from DOWN definitively aborts the arming (§2). */
     const val POPUP_MOVE_CANCEL_DP = 8f
+    /** T15 (Opus option H): vertical headroom of the IME window ABOVE the keyboard
+     *  (root paddingTop in ImeRootView) — space into which the long-press popup
+     *  may extend. 64 dp = 168 px @ density 2.625 = exactly gap 8 dp + menu height
+     *  56 dp: the r0 popup (keyTop=0) fits COMPLETELY into the headroom (top=-168).
+     *  The band stays transparent (InsetDrawable) and touch-through for the app
+     *  (onComputeInsets touchableRegion = keyboard only). */
+    const val POPUP_HEADROOM_DP = 64f
     /** Long-press threshold 450 ms (§2 table line 94); DOUBLE_TAP_MS=350 stays untouched. */
     const val LONG_PRESS_MS = 450L
 

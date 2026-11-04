@@ -56,7 +56,7 @@ class KeyboardView @JvmOverloads constructor(
         /**
          * B2w: backspace repeat in WORD mode (held ≥
          * [BackspaceRepeat.WORD_THRESHOLD_MS] = 2000 ms) — ONE whole word per
-         * firing (3 words/s) instead of a single character. Internal gesture of
+         * firing (6 words/s) instead of a single character. Internal gesture of
          * the repeat timer (no layout action); the character path stays on
          * onAction(BACKSPACE).
          */
@@ -118,6 +118,15 @@ class KeyboardView @JvmOverloads constructor(
 
     // S3 — surface-fill paint (key surface flat; color per state in onDraw).
     private val keyPaint = Paint().apply { textAlign = Paint.Align.CENTER }
+
+    // T15 (Opus option H): opaque keyboard-surface fill — EXPLICITLY bounded to the
+    // view's own bounds (drawRect). NOT canvas.drawColor: since the root no longer
+    // clips (clipChildren/clipToPadding=false, so the popup may rise into the
+    // headroom), the inherited clip is the whole window — drawColor would fill the
+    // ENTIRE window on the device, including the transparent headroom band above
+    // the keyboard (emu 5564: opaque 243 strip from the window top to stack.top).
+    // Visually identical inside the keyboard (spec §1 — surface opaque, flat).
+    private val surfacePaint = Paint().apply { color = palette.background }
 
     // S3 — typography by role (spec §1, T2/vc36): 26 sp letters, 24 sp digits,
     // 14 sp function, 12 sp space/status — as sp (fontScale via scaledDensity).
@@ -222,6 +231,11 @@ class KeyboardView @JvmOverloads constructor(
     // the later popup (otherwise one slides out before the popup is open).
     private val popupHeightPx = (KeyboardTheme.POPUP_HEIGHT_DP * density).roundToInt()
     private val popupGapPx = (KeyboardTheme.POPUP_GAP_DP * density).roundToInt()
+    /** T15 (Opus option H): transparent headroom of the IME window above the
+     *  keyboard (ImeRootView paddingTop, SAME token/formula — both derive from
+     *  KeyboardTheme.POPUP_HEADROOM_DP · density) — the popup may extend up to
+     *  −(statusBandPx + headroomPx) above the view. */
+    private val headroomPx = (KeyboardTheme.POPUP_HEADROOM_DP * density).roundToInt()
     private val longPressRunnable = Runnable { openPopupIfArmed() }
 
     init {
@@ -384,9 +398,10 @@ class KeyboardView @JvmOverloads constructor(
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
         if (model == null) return
-        // S3: fill the canvas opaquely with the keyboard surface (spec §1 — root and canvas
-        // opaque, flat; normal keys are identical to the background).
-        canvas.drawColor(palette.background)
+        // S3: fill the keyboard surface opaquely (spec §1 — root and canvas opaque,
+        // flat; normal keys are identical to the background) — T15: bounded to the
+        // view bounds, the headroom band above stays free (see surfacePaint).
+        canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), surfacePaint)
         for (key in visibleKeys()) {
             // F27a2: MARGIN = transparent width — no KeySurface, no glyph,
             // no touch (hit test ignores it above); the digit grid stays drawn.
@@ -578,6 +593,11 @@ class KeyboardView @JvmOverloads constructor(
             spaceAbovePx = bandPx,
             statusBandPx = bandPx,
             rowBelowTop = key.bottom.toInt(),
+            // T15 (Opus option H): the popup may reach into the headroom of the
+            // IME window (root paddingTop) — r0 takes the TRUE above position
+            // (log: popup-open top=-168 @2.625), mid rows/footer clamp to
+            // −(bandPx + headroomPx) instead of 0.
+            headroomPx = headroomPx,
         )
         if (top + menuH > height) {
             armedKey = null
@@ -867,7 +887,7 @@ class KeyboardView @JvmOverloads constructor(
     // ---- B2 (PLAN_V0133 §B2): backspace repeat — pure time logic + timer adapter ----
 
     /** B2/B2w: schedule (450 ms start, 70 ms period; from 2000 ms whole words
-     *  every 333 ms) — JVM-testable (BackspaceTest). */
+     *  every 167 ms) — JVM-testable (BackspaceTest). */
     private val backspaceRepeat = BackspaceRepeat()
 
     /** B2/B2w: repeat firing — CHARACTER over the SAME service branch
@@ -900,7 +920,7 @@ class KeyboardView @JvmOverloads constructor(
                 pressedKey = down
                 // B2 (PLAN_V0133 §B2): backspace DOWN performs EXACTLY ONE action
                 // and arms the repeat timer (450 ms start / 70 ms period; from
-                // 2000 ms held whole words every 333 ms) —
+                // 2000 ms held whole words every 167 ms) —
                 // UP/CANCEL ends without a second action (no double delete).
                 if (down != null && down.kind == "action" && down.value == KeyActions.BACKSPACE) {
                     if (backspaceRepeat.down(android.os.SystemClock.elapsedRealtime())) {

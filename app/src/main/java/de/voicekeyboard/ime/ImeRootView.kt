@@ -2,7 +2,9 @@ package de.voicekeyboard.ime
 
 import android.content.Context
 import android.content.res.Configuration
+import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.GradientDrawable
+import android.graphics.drawable.InsetDrawable
 import android.graphics.drawable.LayerDrawable
 import android.util.AttributeSet
 import android.view.Gravity
@@ -17,6 +19,7 @@ import de.voicekeyboard.keyboard.EmojiPanelView
 import de.voicekeyboard.keyboard.KeyboardPalette
 import de.voicekeyboard.keyboard.KeyboardTheme
 import de.voicekeyboard.keyboard.KeyboardView
+import kotlin.math.roundToInt
 
 /**
  * IME container (V2: mode switch instead of overlay, EMOJI_PANEL_DESIGN_V2 §2).
@@ -56,6 +59,20 @@ class ImeRootView @JvmOverloads constructor(
     /** Emoji content block: alternative stack child (no overlay). */
     private val emojiBlock: LinearLayout
 
+    /** T15 (Opus option H): the vertical stack — promoted to a field so that
+     *  [keyboardTopInWindow] stays pure view arithmetic (no re-walk of the hierarchy). */
+    private val stack: LinearLayout
+
+    /** T15 (Opus option H, docs/PLAN_T13_T15.md): transparent headroom of the IME
+     *  window ABOVE the keyboard — root paddingTop ([KeyboardTheme.POPUP_HEADROOM_DP]).
+     *  The long-press popup may extend into it (top ≥ −headroomPx above the stack);
+     *  the band itself stays TRANSPARENT (root background = InsetDrawable with top
+     *  inset = headroomPx) and TOUCH-THROUGH for the app (onComputeInsets in the
+     *  service limits the touchable region to the keyboard). 64 dp = 168 px @2.625
+     *  = gap 8 dp + menu height 56 dp: the r0 popup fits COMPLETELY. */
+    val headroomPx: Int =
+        (KeyboardTheme.POPUP_HEADROOM_DP * resources.displayMetrics.density).roundToInt()
+
     init {
         val density = resources.displayMetrics.density
 
@@ -67,7 +84,20 @@ class ImeRootView @JvmOverloads constructor(
                 Configuration.UI_MODE_NIGHT_YES,
         )
         // Dark must take effect at the root too (spec §1) — opaque surface for the whole stack.
-        setBackgroundColor(palette.background)
+        // T15 (Opus option H): the root background is an InsetDrawable with top inset
+        // = headroomPx — the headroom band stays TRANSPARENT (no visible head bar over
+        // the keyboard); the opaque background moves to the stack (which starts at
+        // paddingTop). Everything below (status row/emoji rest area up to the nav
+        // padding) keeps the palette color via THIS inset drawable, as before a single
+        // setBackgroundColor would have done.
+        background = InsetDrawable(ColorDrawable(palette.background), 0, headroomPx, 0, 0)
+        // T15: the popup may extend up to −(statusBandPx + headroomPx) above the
+        // KeyboardView — the ROOT must not clip it away (the stack already has
+        // clipChildren/clipToPadding = false since F28a). ONLY these properties —
+        // no layout rebuild.
+        clipChildren = false
+        clipToPadding = false
+        setPadding(paddingLeft, headroomPx, paddingRight, 0)
 
         statusText = TextView(context).apply {
             // P0 (2026-11-01, user decision): the ground state is NEVER empty —
@@ -200,8 +230,11 @@ class ImeRootView @JvmOverloads constructor(
         }
 
         // The stack is the root's only content child.
-        val stack = LinearLayout(context).apply {
+        stack = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
+            // T15 (Opus option H): the opaque background lives HERE (the stack
+            // starts at root paddingTop) — the headroom above stays transparent.
+            setBackgroundColor(palette.background)
             // F28a: the long-press menu of the top key row is drawn OVER the
             // status bar (negative top in the KeyboardView coordinate system).
             // The stack must therefore NOT clamp its children to the child/own
@@ -256,6 +289,19 @@ class ImeRootView @JvmOverloads constructor(
         keyboardView.visibility = GONE
         emojiBlock.visibility = VISIBLE
     }
+
+    /**
+     * T15 (Opus option H): top edge of the (opaque) keyboard surface in WINDOW
+     * coordinates — pure view arithmetic (top of the root in its parent + top of
+     * the stack in the root). In RELEASE this is exactly the KeyboardView's top
+     * edge (statusRow GONE, stack begins with the keyboard); in DEBUG it INCLUDES
+     * the 48-dp status band, so mic/🐞 stay inside the touchable region (T5 band
+     * zone: the r0 popup opens in the band too — menu coords are stack-relative).
+     * VoiceKeyboardService.onComputeInsets uses this value as contentTopInsets /
+     * visibleTopInsets and as the top edge of the touchableRegion — touches in
+     * the headroom above (0 until this value) pass through to the app.
+     */
+    fun keyboardTopInWindow(): Int = top + stack.top
 
     /** Keyboard mode (idempotent): emoji block GONE, keyboard VISIBLE; no MotionEvent forwarding. */
     fun hideEmojiPanel() {

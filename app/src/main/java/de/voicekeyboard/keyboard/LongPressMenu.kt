@@ -96,16 +96,15 @@ object LongPressMenu {
     }
 
     /**
-     * Row position (F28a + T1 two-zone rule):
-     *  - Row 0 (letter row Q..P): **T1 two-zone rule** (no band known):
-     *    zone A entirely ABOVE the key in the view ([row0MenuBelowKey] false),
-     *    otherwise zone B edge (top=0) — NEVER below the key. **T5 (vc37)**: with
-     *    a known status band ([statusBandPx] > 0, adapter: own top edge in the
-     *    stack) the r0 menu opens IN THE BAND instead (menuTopForStatusBand) —
-     *    user intent: one row above the letter key, right where
-     *    status row + 🐞 sit; invariant: never below the key's row.
-     *  - Footer row: directly above the key, clamped to 0 (F28a2).
-     *  - middle rows: one row higher, clamped to 0 (F28a).
+     * Row position (F28a + T1 two-zone rule + T5 band zone + T15 headroom):
+     *  - Row 0 (letter row Q..P): **T15 (Opus option H)**: with headroom
+     *    ([headroomPx] > 0, adapter: root paddingTop of the IME window) the menu
+     *    takes the TRUE above position ([keyTop] − gap − menuH) whenever it lies
+     *    ≥ −(statusBandPx + headroomPx) — i.e. fully inside band + headroom; the
+     *    T5 band zone / T1 two-zone rule only remains as fallback (menu even
+     *    bigger). headroomPx = 0 (default) ⇒ byte-identical to the old behavior.
+     *  - Footer row: directly above the key, clamped to −spaceAbove (T15).
+     *  - middle rows: one row higher, clamped to −spaceAbove (F28a; T15 clamp).
      */
     fun menuTopPx(
         keyTop: Int,
@@ -123,10 +122,26 @@ object LongPressMenu {
         /** T5 (vc37): top edge of the row below the pressed key — invariant
          *  of the band zone (top + menuH ≤ rowBelowTop). Default: non-binding. */
         rowBelowTop: Int = Int.MAX_VALUE,
-    ): Int = when {
-        rowIndex == 0 -> menuTopForStatusBand(keyTop, menuHeight, gapPx, statusBandPx, rowBelowTop)
-        isFooterRow -> (keyTop - gapPx - menuHeight).coerceAtLeast(0)
-        else -> (keyTop - rowHeightPx - gapPx - menuHeight).coerceAtLeast(0)
+        /** T15 (Opus option H): transparent headroom of the IME window above the
+         *  KeyboardView (ImeRootView paddingTop) — space into which the menu may
+         *  extend. ADDITIVE to [statusBandPx]: spaceAbove = statusBandPx + headroomPx.
+         *  Default 0 ⇒ all old call sites (and tests) stay byte-identical. */
+        headroomPx: Int = 0,
+    ): Int {
+        val spaceAbove = statusBandPx + headroomPx
+        return when {
+            rowIndex == 0 -> {
+                // T15: TRUE above — the menu never sits ON the pressed row, as long
+                // as it fits completely into band + headroom (invariant
+                // top + menuH ≤ keyTop − gap holds by construction: above + menuH
+                // = keyTop − gap).
+                val above = keyTop - gapPx - menuHeight
+                if (above >= -spaceAbove) above
+                else menuTopForStatusBand(keyTop, menuHeight, gapPx, statusBandPx, rowBelowTop)
+            }
+            isFooterRow -> (keyTop - gapPx - menuHeight).coerceAtLeast(-spaceAbove)
+            else -> (keyTop - rowHeightPx - gapPx - menuHeight).coerceAtLeast(-spaceAbove)
+        }
     }
 
     /**

@@ -115,6 +115,29 @@ object LanguageCycle {
 }
 
 /**
+ * T15 (Opus option H): pure insets seam of [VoiceKeyboardService.onComputeInsets] —
+ * fills an [InputMethodService.Insets] with the LatinIME pattern values:
+ * contentTopInsets = visibleTopInsets = [keyboardTop] (the headroom band above is
+ * NOT IME content — app text may run behind it), touchableInsets = REGION with
+ * (0, keyboardTop, width, rootBottom): touches above the keyboard (in the headroom)
+ * pass through to the app. Separated as a top-level function so the values are
+ * testable WITHOUT a running service (Robolectric: ImeRootViewLayoutTest —
+ * onComputeInsets delegates 1:1 with the real ImeRootView layout values).
+ */
+internal fun applyImeInsets(
+    insets: InputMethodService.Insets,
+    keyboardTop: Int,
+    width: Int,
+    rootBottom: Int,
+): InputMethodService.Insets {
+    insets.contentTopInsets = keyboardTop
+    insets.visibleTopInsets = keyboardTop
+    insets.touchableInsets = InputMethodService.Insets.TOUCHABLE_INSETS_REGION
+    insets.touchableRegion.set(0, keyboardTop, width, rootBottom)
+    return insets
+}
+
+/**
  * The IME service: owns the InputConnection access, creates ImeRootView
  * and since M4c-2 wires the dictation operation (push-to-talk via the
  * mic key of the status row).
@@ -354,6 +377,21 @@ class VoiceKeyboardService : InputMethodService(), KeyboardView.Listener {
 
     override fun onCreate() {
         super.onCreate()
+        // T15 fix (emu 5564 re-measure, PLAN_T13_T15.md): the IME window/decor paints
+        // the theme windowBackground (Theme.VoiceKeyboard) over the WHOLE window —
+        // also over the transparent T15 headroom band above the keyboard (our root
+        // leaves it free: InsetDrawable + paddingTop, stack below paddingTop;
+        // structural proof in ImeRootViewLayoutTest). The band must show the APP
+        // (idle luminance 1296..1472 == app background, no head bar).
+        // RUNTIME-ONLY (no theme/manifest change — SetupActivity shares
+        // Theme.VoiceKeyboard and keeps its background). API choice:
+        // Window.setBackgroundDrawable — canonical, assigns the decor background
+        // even BEFORE the decor is inflated (decorView.background would need the
+        // decor to exist). getWindow() creates the IME Dialog lazily; the framework
+        // reuses the same instance.
+        getWindow()?.window?.setBackgroundDrawable(
+            android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT),
+        )
         // S12-01-FIX: pass DEVICE RAM (ActivityManager.totalMem) to the ASR
         // config — not the Java heap (regression S12-01: maxMemory triggered
         // the 2-GB capping on every phone ⇒ intra=2 instead of 4).
@@ -434,6 +472,35 @@ class VoiceKeyboardService : InputMethodService(), KeyboardView.Listener {
         view.debugButton.setOnClickListener { onDebugInfoRequested() }
         rootView = view
         return view
+    }
+
+    /**
+     * T15 (Opus option H, LatinIME pattern — docs/PLAN_T13_T15.md step 3): the IME
+     * window is headroomPx taller than the keyboard (ImeRootView paddingTop, band
+     * transparent via InsetDrawable). This override tells the framework where the
+     * keyboard REALLY begins, so the app keeps its touches and gestures in the
+     * headroom band:
+     *  - contentTopInsets = visibleTopInsets = keyboard top ([ImeRootView.keyboardTopInWindow]):
+     *    the area ABOVE is not counted as IME content — the app text may run behind it.
+     *  - touchableInsets = TOUCHABLE_INSETS_REGION with region (0, keyboardTop,
+     *    width, root bottom): touches in the headroom pass through to the app,
+     *    the gesture stays in the window it started in.
+     * No super call (deliberately): the default implementation derives the values
+     * from the window decor — ALL fields are set here, nothing is left default.
+     * [rootView] == null (before onCreateInputView): framework default via super.
+     */
+    override fun onComputeInsets(outInsets: InputMethodService.Insets) {
+        val root = rootView
+        if (root == null) {
+            super.onComputeInsets(outInsets)
+            return
+        }
+        applyImeInsets(
+            insets = outInsets,
+            keyboardTop = root.keyboardTopInWindow(),
+            width = root.width,
+            rootBottom = root.bottom,
+        )
     }
 
     override fun onStartInput(info: EditorInfo, restarting: Boolean) {

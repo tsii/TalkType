@@ -5,6 +5,25 @@ HANDOFF.md, state/progress.md and the review documents; kept current from now on
 `versionCode` in parentheses. APKs older than the current dist rotation are removed
 from `dist/` (checksums of the last rotations: `dist/SHA256SUMS-*.txt`).
 
+## [0.1.43] — 2026-11-04 (44) — long-press popups above the finger, 6 words/s
+- **T15 popup headroom** (Opus 5.5 design, option H): the IME window gained a
+  transparent 64 dp headroom band above the keyboard (`onComputeInsets` LatinIME
+  pattern: content/visible insets at the keyboard top, touchable region keyboard-only
+  — touches above pass through to the app, gestures stay in the window). Long-press
+  menus now open **above the pressed key**, into the app area (stock behaviour),
+  never inline under the finger. Two follow-up fixes found on the emulator: theme
+  windowBackground painted the band (runtime transparent window background) and
+  `drawColor` filled the unclipped window (bounded `drawRect`). Robolectric
+  LongPressMenuTest 57/0 + ImeRootViewLayoutTest 16/0; release-build emulator
+  evidence + planner acceptance loop in `docs/EVIDENCE_T15_OVERLAY.md`.
+- **T14 word backspace 3 → 6 words/s** (hold > 2 s, period 167 ms).
+- **T16 layout rollback** (user decision): the T13 experiment (letter row centered
+  under home-row centers, period beside space) was short-lived — assets + 3 layout
+  tests restored byte-identical to 0.1.42, period key stays **between M and ⏎**
+  (T11 variant B). `tools/rebuild_r2_t13.py` kept, marked deprecated.
+- Planner/verifier: Claude Opus 5.5 (`docs/PLAN_T13_T15.md`, T15 acceptance
+  iteration 2). Tests **626 debug + 591 release = 1217/0**.
+
 ## [0.1.42] — 2026-11-03 (43) — new letter row & symbol page + word backspace
 - **T11 letter row rebuilt** (variant B, user choice): 8 equal keys (102 px) —
   y x c v b n m + **new period key before ⏎** (F54 menu moved up with it) — evenly

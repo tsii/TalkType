@@ -11,7 +11,7 @@ enum class BackspaceRepeatMode { CHARACTER, WORD }
  *    [REPEAT_PERIOD_MS] = 70 ms (target range 60–80 ms).
  *  - [tick]: timer firing — mode of the firing (null = none): CHARACTER while
  *    held < [WORD_THRESHOLD_MS] = 2000 ms; from the threshold on WHOLE WORDS
- *    every [WORD_PERIOD_MS] = 333 ms (3 words/s) — after 2000 ms NO character
+ *    every [WORD_PERIOD_MS] = 167 ms (6 words/s) — after 2000 ms NO character
  *    tick fires anymore, the first WORD tick lands EXACTLY at the threshold.
  *    If the timer lags behind, nothing is caught up (at most one delete per firing).
  *  - [cancel]: UP/CANCEL/detach/editor change — deterministically ended, no
@@ -74,7 +74,7 @@ class BackspaceRepeat {
         /** B2w: from this held duration on the repeat deletes WHOLE WORDS. */
         const val WORD_THRESHOLD_MS = 2000L
 
-        /** B2w: word period — 3 words/s. */
-        const val WORD_PERIOD_MS = 333L
+        /** B2w: word period — 6 words/s. */
+        const val WORD_PERIOD_MS = 167L
     }
 }

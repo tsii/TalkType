@@ -21,7 +21,7 @@ import org.junit.Test
  *     grapheme-cluster/fallback path.
  *  6. B2w: from 2000 ms held on WHOLE WORDS instead of characters — char ticks
  *     450..1990, then NO char tick anymore; the first word tick EXACTLY at
- *     2000 ms, then every 333 ms (3 words/s); UP stops in word mode too and
+ *     2000 ms, then every 167 ms (6 words/s); UP stops in word mode too and
  *     a fresh gesture starts in char mode again.
  *  7. B2w word boundaries: spaces, line start, only-spaces prefix, cursor
  *     mid-word — pure [backspaceWordLengthOf] + the seam branch
@@ -138,9 +138,9 @@ class BackspaceTest {
         assertEquals(0, e.deleteKeyCalls)
     }
 
-    // B2w red test 6: switch point 2000 ms — char ticks 450..1990 (70 grid),
+    // B2w/T14 red test 6: switch point 2000 ms — char ticks 450..1990 (70 grid),
     // then NO char tick anymore; the FIRST word tick EXACTLY at 2000 ms,
-    // then every 333 ms (3 words/s).
+    // then every 167 ms (6 words/s).
     @Test fun `B2w after 2000ms whole words - first word tick exactly at the threshold`() {
         val r = BackspaceRepeat()
         assertTrue(r.down(0))
@@ -166,12 +166,17 @@ class BackspaceTest {
             chars.count { it >= BackspaceRepeat.WORD_THRESHOLD_MS },
         )
         assertEquals(
-            "word ticks: first EXACTLY at 2000, then every 333 ms (3 words/s)",
-            listOf(2000L, 2333L, 2666L, 2999L),
+            "word ticks: first EXACTLY at 2000, then every 167 ms (6 words/s)",
+            listOf(2000L, 2167L, 2334L, 2501L, 2668L, 2835L),
             words,
         )
+        assertEquals(
+            "rate window [2000,3000): EXACTLY 6 word ticks (next one at 3002)",
+            6,
+            words.count { it >= 2000L && it < 3000L },
+        )
         r.cancel() // UP in word mode: deterministic stop
-        assertNull("after UP no further word tick", r.tick(3332))
+        assertNull("after UP no further word tick (next would be 3002)", r.tick(3002))
     }
 
     // B2w red test 7: stop in word mode; re-arm starts FRESH in char mode.
@@ -187,6 +192,17 @@ class BackspaceTest {
         assertEquals(BackspaceRepeatMode.CHARACTER, r.tick(10_450))
         assertEquals("before the threshold still char mode", BackspaceRepeatMode.CHARACTER, r.tick(10_520))
         assertEquals("word again only after 2000 ms", BackspaceRepeatMode.WORD, r.tick(12_000))
+        // T14 lag case: if the timer lags (first firing at 2500), NOTHING is
+        // caught up — the next word tick follows after 167 ms.
+        val lag = BackspaceRepeat()
+        assertTrue(lag.down(0))
+        assertEquals(
+            "lagged firing (2500 > threshold 2000) becomes a word tick",
+            BackspaceRepeatMode.WORD,
+            lag.tick(2500),
+        )
+        assertEquals("lag case: nextDelayMs(2500) == 167", 167L, lag.nextDelayMs(2500))
+        lag.cancel()
     }
 
     // B2w red test 8: word boundaries — pure length logic (spaces, line start,

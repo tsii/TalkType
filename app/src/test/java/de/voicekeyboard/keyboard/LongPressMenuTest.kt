@@ -573,4 +573,85 @@ class LongPressMenuTest {
         assertEquals(265, LongPressMenu.menuTopPx(432, 146, 21, 150, 3, true))
         assertEquals(682, LongPressMenu.menuTopPx(1000, 147, 21, 150, 1, false))
     }
+
+    // ---- T15 (Opus option H): popup ALWAYS above the finger — window headroom ----
+    // Real device geometry @2.625: rowH=144, menuH=147, gap=21, band=126 (48 dp),
+    // headroom=168 (64 dp = gap 21 + menuH 147 — the r0 menu fits COMPLETELY).
+    // spaceAbove = statusBandPx + headroomPx = 294.
+
+    // (1) r0: TRUE above position whenever it lies inside band+headroom — the
+    //     menu no longer sits on/in the pressed row, but at −168 (log evidence:
+    //     "popup-open top=-168"), with the 8-dp gap above the key.
+    @Test fun `T15 r0 with headroom - true above position minus 168, fully inside headroom`() {
+        // debug (band 126 + headroom 168) and release (headroom alone) agree: −168.
+        assertEquals(-168, LongPressMenu.menuTopPx(
+            0, 147, 21, 144, 0, false, statusBandPx = 126, headroomPx = 168))
+        assertEquals(-168, LongPressMenu.menuTopPx(
+            0, 147, 21, 144, 0, false, statusBandPx = 0, headroomPx = 168))
+        // NOT the T5 band zone (−126, would cover the top 21 px of r0 — root cause R3):
+        org.junit.Assert.assertNotEquals(-126, LongPressMenu.menuTopPx(
+            0, 147, 21, 144, 0, false, statusBandPx = 126, headroomPx = 168))
+    }
+
+    // (2) acceptance invariant for r0/r1/r2 with headroom=168: menu bottom edge
+    //     NEVER below the pressed key's top minus gap (never below the finger),
+    //     menu top edge NEVER above −spaceAbove (never outside the window).
+    @Test fun `T15 r0-r1-r2 invariant with headroom 168 - above the finger, inside spaceAbove`() {
+        val band = 126
+        val headroom = 168
+        val spaceAbove = band + headroom // 294
+        val rowH = 144
+        val menuH = 147
+        val gap = 21
+        for ((row, keyTop) in listOf(0 to 0, 1 to rowH, 2 to 2 * rowH)) {
+            val top = LongPressMenu.menuTopPx(
+                keyTop, menuH, gap, rowH, row, false,
+                statusBandPx = band, headroomPx = headroom,
+            )
+            assertTrue("r$row: top=$top never above -(band+headroom)", top >= -spaceAbove)
+            assertTrue(
+                "r$row: menu bottom edge (top=$top) <= keyTop-gap — never below the finger",
+                top + menuH <= keyTop - gap,
+            )
+        }
+    }
+
+    // (3) mid rows rise into band+headroom instead of covering row 0; footer keeps
+    //     its rule (directly above the key) and clamps at −spaceAbove.
+    @Test fun `T15 mid rows and footer - clamp to minus spaceAbove instead of 0`() {
+        // r1 (keyTop 144): 144-144-21-147 = -168 — the SAME band+headroom span
+        // as r0 (row 1 is exactly one row lower, the menu one row higher)
+        assertEquals(-168, LongPressMenu.menuTopPx(
+            144, 147, 21, 144, 1, false, statusBandPx = 126, headroomPx = 168))
+        // r2 (keyTop 288): 288-144-21-147 = -24
+        assertEquals(-24, LongPressMenu.menuTopPx(
+            288, 147, 21, 144, 2, false, statusBandPx = 126, headroomPx = 168))
+        // footer (keyTop 432): directly above the key — positive, as before
+        assertEquals(432 - 21 - 147, LongPressMenu.menuTopPx(
+            432, 147, 21, 144, 3, true, statusBandPx = 126, headroomPx = 168))
+        // giant menu clamps at −spaceAbove (never outside the window):
+        assertEquals(-294, LongPressMenu.menuTopPx(
+            50, 400, 21, 144, 3, true, statusBandPx = 126, headroomPx = 168))
+        assertEquals(-294, LongPressMenu.menuTopPx(
+            50, 400, 21, 144, 1, false, statusBandPx = 126, headroomPx = 168))
+    }
+
+    // (4) regression protection: headroomPx = 0 (default) ⇒ the r0 paths stay
+    //     byte-identical to the old behavior (T5 band zone / T1 two-zone rule);
+    //     without band the mid/footer clamp stays 0 as before.
+    @Test fun `T15 headroom 0 - r0 paths byte-identical to the old behavior`() {
+        // r0 band zone as in T5 (headroom 0 ⇒ band zone keeps priority for menuH 147):
+        assertEquals(-126, LongPressMenu.menuTopPx(
+            0, 147, 21, 150, 0, false, statusBandPx = 126, rowBelowTop = 144, headroomPx = 0))
+        // r0 without band as in T1 (zone A / zone B edge):
+        assertEquals(232, LongPressMenu.menuTopPx(400, 147, 21, 150, 0, false, headroomPx = 0))
+        assertEquals(0, LongPressMenu.menuTopPx(0, 147, 21, 150, 0, false, headroomPx = 0))
+        // mid/footer clamp at 0 (spaceAbove = 0 without band):
+        assertEquals(0, LongPressMenu.menuTopPx(100, 147, 21, 150, 1, false, headroomPx = 0))
+        assertEquals(0, LongPressMenu.menuTopPx(50, 146, 10, 144, 3, true, headroomPx = 0))
+        assertEquals(265, LongPressMenu.menuTopPx(432, 146, 21, 150, 3, true, headroomPx = 0))
+        // band WITHOUT headroom: mid row clamps at −band (T15 clamp, band known):
+        assertEquals(-126, LongPressMenu.menuTopPx(
+            50, 400, 21, 144, 1, false, statusBandPx = 126, headroomPx = 0))
+    }
 }

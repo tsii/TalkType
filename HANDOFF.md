@@ -1,6 +1,35 @@
 # HANDOFF — TalkType (formerly Voice-Keyboard) (project root, checkpoint for the next phase)
 
-**Status:** 2026-11-03 ~21:4x UTC · **Delivered version: v0.1.42 / versionCode 43** (T11 letter-row boundary grid + period key + wide space, T12 symbol page, T11b word backspace >2s @3 words/s; review P0/P1=0; 1199/0 tests).
+**Status:** 2026-11-04 ~14:2x UTC · **Built & waiting for user Go: v0.1.45 / versionCode 46** —
+T19 version label in Setup header (shared AppVersion reader; emu-proven
+'TalkType 0.1.45 (46) · debug'); T20 network-revoke invite (one card per model →
+Android App-Details deep link, old E2 in-app switch removed, honest privacy copy);
+T21 notifications OPTIONAL for dictation after GREEN measurement (3×60 s revoked +
+2×60 s grant control clean on api36; F28c root cause = app silence guard, not OS;
+manifest keeps POST_NOTIFICATIONS for download progress; F28c tests inverted with
+measurement reference). Tests **673/0 debug + 638/0 release = 1311/0**; review
+`docs/REVIEW_V0145.md` P0/P1=0 (VK-1/VK-2 fixed pre-build, VK-3 documented);
+dist `talktype-0.1.45.apk` sha256 `082fa82f2c8e…` + diag `42e3e9db2638…`; emu duty
+on emulator-5566 PASS for all 0.1.45 code paths (version line, card+deep link,
+E2 switch gone, keyboard/insets smoke). AVD 5566 intermittently ghosts the IME
+window under load — remedy tts->vk re-switch; 0.1.45 touches no KeyboardView code.
+Before that v0.1.44 / versionCode 45 —
+Enter semantics (multiline newline, AOSP-correct UNSPECIFIED handling), fullscreen
+window disabled + insets anchored at stack bottom, nav-inset visibility-robust height,
+VK-INSETS evidence log, hardened DictationHoldGateTest; tests **641/0 + 606/0 = 1247/0**;
+dist `talktype-0.1.44.apk` sha256 `96e776dda158…` + diag `002187884381…`; review
+`docs/REVIEW_V0144.md` P0/P1=0; **PUSHED to https://github.com/tsii/TalkType main
+(`52d2493`, ls-remote verified after user-side deploy-key fix)**; INSTALLED on user
+phone (GrapheneOS, versionName confirmed, adb port 35255 then — port rotates).
+**In work: v0.1.45 / vc46** per `docs/PLAN_V0145.md` (planner Opus 5.5): T19 version
+label in Setup (DONE, emu-proven), T20 network-revoke invite card opening system app
+settings via deep link + old E2 in-app switch retired (policy DONE 9/9, UI building),
+T21 POST_NOTIFICATIONS measurement GREEN (60 s dictation survives revocation; historic
+F28c = app silence guard, not OS) → dictation requirement shrinks to RECORD_AUDIO,
+manifest keeps the permission for download progress. Emulator home moved to
+**emulator-5566** (AVD vk-api36; 5564 taken by another project). Ops lessons in
+`docs/PLAN_V0145.md` §T21a (no force-stop during measurement; mic logs VK-SESS only).
+Before that v0.1.42 / versionCode 43 (T11 letter-row boundary grid + period key + wide space, T12 symbol page, T11b word backspace >2s @3 words/s; review P0/P1=0; 1199/0 tests).
 Before that v0.1.41 / versionCode 42 — TalkType (product renamed: app label centralized via @string/app_name = TalkType, README/HANDOFF titles, dist pattern talktype-<ver>.apk; GitHub repo now tsii/TalkType. Tests **613/0 + 578/0 = 1191/0**; dist 0.1.41 `6b2a7327…`/diag `a7535bdc…`; installed on user phone, label TalkType).
 Before that v0.1.40 / versionCode 41 (English UI language across app + repo; docs fully translated incl. last German fragments; repo sanitized for public release: git-grep internal-endpoint/alias/home-path/device-id patterns = 0. Tests **613/0 + 578/0 = 1191/0**; dist 0.1.40 `94111cf5…`/diag `561fb1ad…`. History rewritten (filter-repo, force-push done)).
 Before that v0.1.39 / versionCode 40 (REPO TRANSLATED DE→EN: ~101 markdown + ~150 Kotlin comment files + test assertion messages; UI strings/literals/logic unchanged German. NEW ADAPTIVE APP ICON shield+waveform (design sipgate-ultra, user choice) incl. monochrome layer. T10: auto space after dictation ending on punctuation (trail_sp field, TrailingSpaceTest 9/0). Tests **613/0 + 578/0 = 1191/0**; dist 0.1.39 `ac9c8341…`/diag `41a369f8…`. Translator preference qwen-38-flash-next; coder primacy glm-5.3-verda (user order).

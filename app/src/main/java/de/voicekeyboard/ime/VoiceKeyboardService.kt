@@ -1173,6 +1173,11 @@ class VoiceKeyboardService : InputMethodService(), KeyboardView.Listener {
             // technology stage); sentence pauses cut softly at sentence ends (rule a).
             // Gate-independent: the auto-stop (F43) stays separate from the segmenter.
             segmentFinalizeMs = 35_000,
+            // T21a (v0.1.45, measurement bridge): debug build + operator switch
+            // (Settings.Global "vk_skip_notif_gate" == 1) -> the coordinator's
+            // ERR_SILENT start watchdog is bypassed so the OS-FGS layer is
+            // measurable on a dead mic source. Release: always false (stock).
+            silentGuardBypassed = { bypassSilentGuard(this) },
             // C-2/C-4: load in the coordinator. Important: the store folder itself is
             // NOT the model directory — the files live in
             // versions/<active>. The engine checks directly for vocab.txt and
@@ -1366,12 +1371,19 @@ class VoiceKeyboardService : InputMethodService(), KeyboardView.Listener {
     // ---- Permissions (order: grant → FGS → start) ----
 
     private fun ensurePermissions(): Boolean {
-        // F28c: API-level dependent — from 33 POST_NOTIFICATIONS belongs to the
-        // dictation conditions (FGS type microphone without it: the system can
-        // stop the recording silently, export #2). If it is missing: no silent
-        // start, but a visible error with a reason (new string).
+        // T21b (measurement 2026-11-04, PLAN_V0145 §T21b): POST_NOTIFICATIONS is
+        // NEVER a dictation condition (3x60 s revoked + 2x60 s granted clean on
+        // api36 — the F28c cause was the app-side silence guard, not the OS).
+        // Only the microphone gates the start; the notification stays optional
+        // (Setup asks once; download-progress UX + recording notice).
         val apiLevel = android.os.Build.VERSION.SDK_INT
+        // T21a (v0.1.45, measurement bridge — stays as debug-only measurement
+        // technique): operator switch "vk_skip_notif_gate" == 1. Historically
+        // it dropped POST_NOTIFICATIONS from the start decision; since T21b the
+        // notification is never required, so the flag cannot change the decision.
+        val bypassNotif = bypassNotifGate(this)
         val required = DictationPermissions.requiredForApi(apiLevel)
+            .filterNot { bypassNotif && it in DictationPermissions.OPTIONAL_IN_ORDER }
         val granted = required
             .filter { checkSelfPermission(it) == android.content.pm.PackageManager.PERMISSION_GRANTED }
             .toSet()
@@ -1385,7 +1397,7 @@ class VoiceKeyboardService : InputMethodService(), KeyboardView.Listener {
             .filter { prefs.getBoolean(PERMISSION_DENIED_FOREVER_PREFIX + it, false) }
             .toSet()
         return when (
-            val decision = DictationPermissions.nextStep(granted, permanentlyDenied, apiLevel)
+            val decision = DictationPermissions.nextStep(granted, permanentlyDenied, apiLevel, bypassNotif)
         ) {
             DictationPermissions.Decision.Ready -> true
             is DictationPermissions.Decision.Ask -> {
@@ -1400,7 +1412,7 @@ class VoiceKeyboardService : InputMethodService(), KeyboardView.Listener {
                     this, REQUEST_DICTATION_PERMISSIONS, intent,
                     android.app.PendingIntent.FLAG_IMMUTABLE,
                 ).send()
-                postEvent(StatusEvent.Error(getString(permissionErrorRes(decision.permission))))
+                postEvent(StatusEvent.Error(getString(R.string.dictation_error_permission_mic)))
                 false
             }
             is DictationPermissions.Decision.PermanentlyDenied -> {
@@ -1415,28 +1427,16 @@ class VoiceKeyboardService : InputMethodService(), KeyboardView.Listener {
                 } catch (e: Exception) {
                     Log.i(TAG, "settings intent failed: ${e.javaClass.simpleName}")
                 }
-                // F28c: the notification keeps its reason (contains the
-                // settings hint), the mic the established settings text.
+                // C-3 (T21b): only the microphone can reach this branch — the
+                // established settings text (the notification-specific reason is
+                // gone with the F28c gate).
                 postEvent(StatusEvent.Error(getString(
-                    if (decision.permission == android.Manifest.permission.POST_NOTIFICATIONS) {
-                        R.string.dictation_error_permission_notification
-                    } else {
-                        R.string.dictation_error_permission_settings
-                    },
+                    R.string.dictation_error_permission_settings,
                 )))
                 false
             }
         }
     }
-
-    /** F28c: error text per missing permission — the notification has its own
-     *  reason (export #2: silent stop of the recording), the mic the established one. */
-    private fun permissionErrorRes(permission: String): Int =
-        if (permission == android.Manifest.permission.POST_NOTIFICATIONS) {
-            R.string.dictation_error_permission_notification
-        } else {
-            R.string.dictation_error_permission_mic
-        }
 
     // ---- FGS (before the first recording start) ----
 

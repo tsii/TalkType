@@ -1,7 +1,26 @@
 - **Flaky lineage update (2026-11-04):** DictationHoldGateTest hardened: root cause was an abort race in runCorpus (stop() sets active=false before async reason 'final' lands), not the wall window; loop now breaks on source-end only for gate=true and on !isActive only with a recorded reason; windows 20s->60s/15s->45s. Green debug+release under load 14-37.
 # Next tasks (order)
 
-**Status 2026-11-03 · v0.1.41 / versionCode 42 (TalkType) delivered (English UI, sanitized repo)** (11:00): repo translated DE→EN (docs + comments + assertion messages; UI stays German), new adaptive shield+waveform icon, T10 auto-space after dictation-ending punctuation; tests **613/0 + 578/0 = 1191/0**; next build **41 / 0.1.40**.md` P0/P1=0 Push YES; next build **41 / 0.1.40**.
+**Status 2026-11-04 · v0.1.44 / versionCode 45 DELIVERED + PUSHED + ON PHONE.**
+Commit `52d2493` pushed to **https://github.com/tsii/TalkType** main (verified
+`git ls-remote` == local, 13:5x UTC after a temporary deploy-key rejection was
+fixed user-side; the Push chapter is CLOSED). Tests 641/0 debug + 606/0 release =
+**1247/0**; dist `talktype-0.1.44.apk` `96e776dd…` + diag `00218788…`; installed on
+user phone (Pixel 10 Pro XL, GrapheneOS, adb port 35255 at install time).
+**IN PROGRESS v0.1.45 / vc46** (plan `docs/PLAN_V0145.md`, planner Opus 5.5):
+T19 version label DONE (emu-proven 'TalkType 0.1.44 (45) · debug' in Setup head);
+T20a NetworkInvitePolicy DONE (9/9; finding: no metered/WLAN gating existed);
+T21a measurement CLOSED GREEN — 3x60 s dictation with POST_NOTIFICATIONS REVOKED
+ran clean on api36 emulator + 2x60 s grant control identical; F28c root cause was
+the app-side silence guard (audio_error:silence ~2 s), NOT the OS; T20b (revoke
+invite card -> system settings deep link, old E2 switch removed) and T21b
+(notif leaves requiredForApi, manifest keeps it) in build; then vc46 bump, full
+tests, review (cortecs), emu duty program on **emulator-5566** (5564 is another
+project's now), CHANGELOG, dist rotation, user Go.
+
+0. (was: next-build notes) next build **46 / 0.1.45**.
+
+1. (archive) Phone evidence 0.1.38 — superseded by later releases.
 
 1. **Phone evidence 0.1.38 (highest priority):** hold run 60–90 s (open — the field test
    ended with michold_cancel; tap chain 2× PASSED 22:30 /tmp/vk_phone_e3.log), 🐞 export

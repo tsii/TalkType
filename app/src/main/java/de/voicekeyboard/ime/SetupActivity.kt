@@ -9,7 +9,6 @@ import android.os.Bundle
 import android.provider.Settings
 import android.widget.Button
 import android.widget.ProgressBar
-import android.widget.Switch
 import android.widget.TextView
 import androidx.activity.ComponentActivity
 import androidx.activity.result.contract.ActivityResultContracts
@@ -20,6 +19,7 @@ import de.voicekeyboard.model.DownloadPolicy
 import de.voicekeyboard.model.ModelDownloadService
 import de.voicekeyboard.model.ModelStore
 import de.voicekeyboard.model.ModelStatus
+import de.voicekeyboard.model.NetworkInvitePolicy
 import java.io.File
 
 /**
@@ -37,18 +37,28 @@ import java.io.File
 class SetupActivity : ComponentActivity() {
 
     private lateinit var stateView: TextView
+    private lateinit var versionView: TextView
     private lateinit var fileInfoView: TextView
     private lateinit var progress: ProgressBar
     private lateinit var startButton: Button
     private lateinit var cancelButton: Button
-    private lateinit var networkSwitch: Switch
+    private lateinit var netInviteCard: android.widget.LinearLayout
     private lateinit var openSettingsButton: Button
     private lateinit var permissionsHint: TextView
 
     private val prefs by lazy { getSharedPreferences(PERMISSION_PREFS, MODE_PRIVATE) }
 
-    /** E2: network switch — default on until setup (READY) is completed. */
-    private fun networkFlagKey(): String = "network_for_downloads"
+    /** T19 (v0.1.45): debug flag as an injectable seam (T9-style
+     *  ApplicationInfo.FLAG_DEBUGGABLE read via the application info);
+     *  null -> read the flag from the package. */
+    internal var debugBuildOverride: Boolean? = null
+
+    private fun isDebugBuild(): Boolean = debugBuildOverride
+        ?: ((applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0)
+
+    /** T20b test seam: controller state for the invite-card decision;
+     *  null -> the real state (live controller or cold-start store READY). */
+    internal var inviteStateOverride: DownloadController.State? = null
 
     private val permissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -62,11 +72,15 @@ class SetupActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.setup_activity)
         stateView = findViewById(R.id.setup_state)
+        // T19 (v0.1.45): version label via the ONE shared read path
+        // (AppVersion.read — same source as the debug export).
+        versionView = findViewById(R.id.setup_version)
+        versionView.text = AppVersion.versionLabel(AppVersion.read(this), isDebugBuild())
         fileInfoView = findViewById(R.id.setup_file_info)
         progress = findViewById(R.id.setup_progress)
         startButton = findViewById(R.id.setup_download_start)
         cancelButton = findViewById(R.id.setup_download_cancel)
-        networkSwitch = findViewById(R.id.setup_network_switch)
+        netInviteCard = findViewById(R.id.setup_net_invite)
         openSettingsButton = findViewById(R.id.setup_open_settings)
         permissionsHint = findViewById(R.id.setup_permissions_hint)
 
@@ -75,9 +89,14 @@ class SetupActivity : ComponentActivity() {
         findViewById<Button>(R.id.setup_request_permissions).setOnClickListener { requestPermissionsNow() }
         openSettingsButton.setOnClickListener { openSystemSettings() }
 
-        networkSwitch.setOnCheckedChangeListener { _, checked ->
-            prefs.edit().putBoolean(networkFlagKey(), checked).apply()
+        // T20b (PLAN_V0145, binding): the app NEVER revokes/touches the network
+        // itself — the E2 in-app switch is GONE. ONE invite card offers the
+        // SYSTEM-level revoke, exactly once per model set (NetworkInvitePolicy).
+        findViewById<Button>(R.id.setup_net_invite_button).setOnClickListener {
+            markNetInviteShown()
+            openNetworkRevokeSettings()
         }
+        findViewById<Button>(R.id.setup_net_invite_later).setOnClickListener { markNetInviteShown() }
 
         buildLanguageSection()
 
@@ -138,14 +157,14 @@ class SetupActivity : ComponentActivity() {
             }
             container.addView(box)
         }
-        // insert the section behind the title (before the model status)
-        layoutRoot.addView(container, 1)
+        // insert the section behind the version line (T19) and before the
+        // model status: setup_title(0), setup_version(1), language(2)
+        layoutRoot.addView(container, 2)
     }
 
     override fun onResume() {
         super.onResume()
-        // returning user: read the network switch + status fresh
-        networkSwitch.isChecked = prefs.getBoolean(networkFlagKey(), defaultNetworkEnabled())
+        // returning user: read the status fresh (the E2 network switch is gone, T20b)
         refreshUi()
     }
 
@@ -160,15 +179,21 @@ class SetupActivity : ComponentActivity() {
         val store = ModelStore(File(filesDir, MODEL_DIR_NAME))
         val status = store.status()
         val decision = DownloadPolicy.decide(
-            networkEnabled = networkSwitch.isChecked,
+            // T20b: the E2 in-app switch is removed — the app never gates the
+            // network itself. If the user revoked INTERNET at the system level,
+            // the download fails with the known "netz" error (D1 taxonomy).
+            networkEnabled = true,
             freeBytes = filesDir.usableSpace,
             status = status,
         )
         when (decision) {
             is DownloadPolicy.Decision.AlreadyReady -> render(null)
-            is DownloadPolicy.Decision.NetworkDisabled -> {
-                stateView.text = getString(R.string.setup_network_disabled)
-            }
+            // T20b: unreachable in the Setup (networkEnabled always true — the
+            // E2 switch is gone). If it ever fires, the generic network error
+            // is the honest fallback: a system-level INTERNET revoke shows up
+            // here as "network unavailable", not as a switch hint.
+            is DownloadPolicy.Decision.NetworkDisabled ->
+                stateView.text = getString(R.string.setup_error_network)
             is DownloadPolicy.Decision.InsufficientSpace -> {
                 stateView.text = getString(R.string.setup_error_space)
             }
@@ -233,11 +258,13 @@ class SetupActivity : ComponentActivity() {
 
     // ---- UI state ----
 
-    private fun defaultNetworkEnabled(): Boolean =
-        ModelStore(File(filesDir, MODEL_DIR_NAME)).status() != ModelStatus.READY
-
     private fun refreshUi() {
         render(ModelDownloadService.controller?.state)
+        // T20b: re-evaluate the invite card for the CURRENT state — covers the
+        // cold start (controller null, store READY ⇒ invite once) and the
+        // returning user. render(null) itself must NOT re-evaluate (its
+        // Idle recursion would wrongly hide the card again).
+        updateNetInviteCard()
         openSettingsButton.visibility =
             if (anyPermissionDeniedForever()) android.view.View.VISIBLE else android.view.View.GONE
         if (anyPermissionDeniedForever()) {
@@ -247,8 +274,63 @@ class SetupActivity : ComponentActivity() {
         }
     }
 
+    // ---- T20b: one-time network-revoke invite (PLAN_V0145, binding) ----
+
+    /** Observed controller state for the invite decision: the override (test
+     *  seam), else the live controller, else the cold-start derivation
+     *  (process gone: store READY counts as Ready — invite shows once). */
+    private fun inviteState(): DownloadController.State? {
+        inviteStateOverride?.let { return it }
+        ModelDownloadService.controller?.state?.let { return it }
+        return if (ModelStore(File(filesDir, MODEL_DIR_NAME)).status() == ModelStatus.READY) {
+            DownloadController.State.Ready
+        } else null
+    }
+
+    /** Card visibility from [NetworkInvitePolicy.shouldShowInvite] — exactly
+     *  once per model set; the passed render state takes precedence. */
+    private fun updateNetInviteCard(state: DownloadController.State? = null) {
+        val s = state ?: inviteState()
+        val show = s != null && NetworkInvitePolicy.shouldShowInvite(
+            s,
+            ModelStore(File(filesDir, MODEL_DIR_NAME)).manifestSetId(),
+            prefs.getString(NET_INVITE_SHOWN_FOR_KEY, null),
+        )
+        netInviteCard.visibility =
+            if (show) android.view.View.VISIBLE else android.view.View.GONE
+    }
+
+    /** (b2) Both buttons persist shown_for = modelSetId (pure [markShown]). */
+    private fun markNetInviteShown() {
+        prefs.edit()
+            .putString(
+                NET_INVITE_SHOWN_FOR_KEY,
+                NetworkInvitePolicy.markShown(ModelStore(File(filesDir, MODEL_DIR_NAME)).manifestSetId()),
+            )
+            .apply()
+        updateNetInviteCard()
+    }
+
+    /** Direct app-details deep link (fallback: plain system settings); the
+     *  revoke itself happens ONLY at the system level — the app has no
+     *  in-app network control (E2 switch removed). */
+    private fun openNetworkRevokeSettings() {
+        val intent = Intent(
+            NetworkInvitePolicy.inviteIntentAction(),
+            Uri.fromParts("package", packageName, null),
+        )
+        try {
+            startActivity(intent)
+        } catch (e: android.content.ActivityNotFoundException) {
+            startActivity(Intent(NetworkInvitePolicy.fallbackIntentAction()))
+        }
+    }
+
     /** Renders the controller state (null = derive from the store status). */
     private fun render(state: DownloadController.State?) {
+        // T20b: the invite card follows every OBSERVER state transition
+        // (post-download Ready run); null goes through refreshUi above.
+        if (state != null) updateNetInviteCard(state)
         when (state) {
             is DownloadController.State.Downloading -> {
                 stateView.text = getString(R.string.setup_state_downloading) +
@@ -278,11 +360,6 @@ class SetupActivity : ComponentActivity() {
                 fileInfoView.visibility = android.view.View.GONE
                 startButton.visibility = android.view.View.GONE
                 cancelButton.visibility = android.view.View.GONE
-                // E2: after READY turn the network off automatically + confirm policy (d)
-                if (DownloadPolicy.shouldTurnNetworkOff(ModelStatus.READY)) {
-                    prefs.edit().putBoolean(networkFlagKey(), false).apply()
-                    networkSwitch.isChecked = false
-                }
             }
             is DownloadController.State.Cancelled -> {
                 stateView.text = getString(R.string.setup_state_cancelled)
@@ -334,5 +411,9 @@ class SetupActivity : ComponentActivity() {
         private const val PERMISSION_PREFS = "vk_permissions"
         private const val DENIED_FOREVER_PREFIX = "denied_forever_"
         private const val MODEL_DIR_NAME = "models"
+
+        /** T20b: persistence key of the one-time network-revoke invite
+         *  (value = modelSetId; "Later" and settings click both set it). */
+        private const val NET_INVITE_SHOWN_FOR_KEY = "net_invite_shown_for"
     }
 }

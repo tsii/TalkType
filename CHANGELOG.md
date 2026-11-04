@@ -5,6 +5,31 @@ HANDOFF.md, state/progress.md and the review documents; kept current from now on
 `versionCode` in parentheses. APKs older than the current dist rotation are removed
 from `dist/` (checksums of the last rotations: `dist/SHA256SUMS-*.txt`).
 
+## [0.1.45] — 2026-11-04 (46) — version label, network-revoke invite, notifications optional
+Dist: release `082fa82f2c8e787a8f2e45861c70bbbc71814853d8b388430a443cfafb8ff258`,
+diag-debug `42e3e9db263869afa4ab2cca6bf572c8387c94a85dae874b6319c93580bdcc52`.
+Tests debug **673/0** + release **638/0** = **1311/0**; review
+`docs/REVIEW_V0145.md` P0/P1=0 (P2 VK-1/VK-2 fixed pre-build, VK-3 documented).
+- **T19 version label**: Setup header shows `TalkType <versionName> (<versionCode>)`
+  (debug appends `· debug`) from ONE shared `AppVersion.read` reader, now also used
+  by the 🐞 debug export. Emu-proven `TalkType 0.1.45 (46) · debug`.
+- **T20 network-revoke invite** (user clarification 2026-11-04): the app never
+  touches the network after the model download; ONE card per downloaded model in
+  Setup offers `Revoke network permission`, opening the Android system App-Details
+  page directly (`ACTION_APPLICATION_DETAILS_SETTINGS`, `package:` data —
+  ShadowIntent-proven, emu-proven: SpaActivity opened, card then hidden forever;
+  `Later` also silences per model). Old E2 in-app network switch removed
+  (`setup_network_switch`, `DownloadPolicy.shouldTurnNetworkOff` retired); privacy
+  copy now honest about system-side revoke; manifest comment revised (ACCESS_NETWORK_STATE
+  comes from the onnxruntime AAR, unused by our code).
+- **T21 notifications optional (measured)**: `docs/PLAN_V0145.md` §T21a protocol —
+  3×60 s dictation with POST_NOTIFICATIONS REVOKED ran clean on api36 (silent-guard
+  and notif gate bridged debug-only), 2×60 s grant control identical. F28c's
+  “recording dies” reproduces as our OWN silence guard (`audio_error:silence` ~2 s),
+  not the OS. Dictation now requires RECORD_AUDIO only; POST_NOTIFICATIONS stays
+  optional (setup ask, download-progress UX) and in the manifest. F28c tests
+  inverted with measurement reference; obsolete error string removed.
+
 ## [0.1.44] — 2026-11-04 (45) — Enter fixes + keyboard-height robustness
 Dist: release `96e776dda1584c76169b4e5e002f794a18f9bd1cad2360b354a40e3efe477e2d`,
 diag-debug `00218788438132a79f01b17372db69a97350d57e055ee0e59a78605a75aad40a`.

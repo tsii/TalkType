@@ -45,13 +45,6 @@ class DownloadPolicyTest {
         )
     }
 
-    // (d) when READY the UI should turn the network switch off
-    @Test fun readyTurnsNetworkOff() {
-        assertTrue(DownloadPolicy.shouldTurnNetworkOff(ModelStatus.READY))
-        assertFalse(DownloadPolicy.shouldTurnNetworkOff(ModelStatus.ABSENT))
-        assertFalse(DownloadPolicy.shouldTurnNetworkOff(ModelStatus.DOWNLOADING))
-    }
-
     // (e) error classes → short user-text keys
     @Test fun errorClassesMapToUserKeys() {
         assertEquals("netz", DownloadPolicy.userMessageKey(ModelError.Network("timeout")))

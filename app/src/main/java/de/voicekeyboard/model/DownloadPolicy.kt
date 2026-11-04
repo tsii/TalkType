@@ -11,8 +11,11 @@ package de.voicekeyboard.model
  *     + reserve; replaces the 3-GB plausibility from DESIGN with the
  *     binding value from SETUP_UI_DECISIONS.md E3).
  * (c) Already READY → no start (L6).
- * (d) On READY → network switch automatically off (return [turnNetworkOff]).
  * (e) Error classes → short user text keys (netz/hash/platz/abgebrochen).
+ *
+ * T20b (PLAN_V0145): the E2 in-app network switch is GONE — the app never
+ * gates or revokes the network itself. Callers pass networkEnabled = true;
+ * a system-level INTERNET revoke surfaces as the "netz" error class (D1).
  */
 object DownloadPolicy {
 
@@ -25,8 +28,6 @@ object DownloadPolicy {
         data object AlreadyReady : Decision()          // (c) no start
         data object NetworkDisabled : Decision()       // (a) switch off
         data class InsufficientSpace(val freeBytes: Long) : Decision() // (b)
-
-        /** (d) is queried via [shouldTurnNetworkOff], not via this class. */
     }
 
     /** Complete start decision against the store/switch/space state. */
@@ -40,9 +41,6 @@ object DownloadPolicy {
         freeBytes < MIN_FREE_BYTES -> Decision.InsufficientSpace(freeBytes)
         else -> Decision.Start
     }
-
-    /** (d) After a successful setup (READY) the UI should switch the network switch off. */
-    fun shouldTurnNetworkOff(status: ModelStatus): Boolean = status == ModelStatus.READY
 
     /** (e) Error kind → short user text key (never HTTP details, never URLs).
      *  D1 real taxonomy:

@@ -103,6 +103,16 @@ class ModelStore(
 
     fun activeVersion(): String? = activeVersion(ModelVariant.ONNX_CPU)
 
+    /** T20b (PLAN_V0145): stable id of the model SET — sha256 over the manifest
+     *  entries (store names + expected file hashes). No disk access; changes
+     *  exactly when the model set changes. Persistence key of the one-time
+     *  network-revoke invite (NetworkInvitePolicy, Settings key
+     *  "net_invite_shown_for"). */
+    fun manifestSetId(): String =
+        Sha256.ofBytes(
+            manifest.joinToString("\n") { "${it.storeName}:${it.sha256}" }.toByteArray(),
+        )
+
     /** V1: active version ID per variant (old pointer ⇒ variant A). */
     fun activeVersion(variant: ModelVariant): String? =
         if (pointerFile(variant).isFile) {

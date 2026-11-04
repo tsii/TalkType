@@ -9,11 +9,16 @@ import org.junit.Test
  * V16a: the notification permission is PROMOTED, but below api 33 NEVER
  * BLOCKING.
  *
- * F28c (export #2, api 37, notif=no, recording ended silently after 1.0 s):
- * from api 33 POST_NOTIFICATIONS is a dictation condition — the FGS type
- * microphone can be stopped silently by the system without it. The V16a
- * tests below run with the default apiLevel=29 and remain valid; the api-33
- * guard is proven in the test `F28c api33 without notif permission …`.
+ * F28c history: from api 33 POST_NOTIFICATIONS was a dictation condition
+ * (export #2: api 37, notif=no, "recording dead after 1.0 s").
+ * T21a measurement 2026-11-04 (PLAN_V0145 §T21b, binding): 3x60 s revoked
+ * + 2x60 s granted clean on api36 — the OS does NOT stop the FGS mic
+ * without POST_NOTIFICATIONS; the F28c cause was the app-side silence guard
+ * (audio_error:silence), not the OS. POST_NOTIFICATIONS is NEVER a dictation
+ * condition again (V16a semantics at EVERY api level); it stays OPTIONAL
+ * (Setup asks once; the 🐞 export field permPostNotifications stays).
+ * The T21a debug bridges (notifGateBypassed/silentGuardBypassed) remain as
+ * measurement technique.
  *
  * Core error from live operation: REQUIRED_IN_ORDER contained
  * POST_NOTIFICATIONS — if it was missing, nextStep never returned Ready and
@@ -86,44 +91,112 @@ class DictationPermissionsTest {
         assertEquals(listOf(mic), DictationPermissions.REQUIRED_IN_ORDER)
     }
 
-    // F28c (export #2: api 37, notif=no, recording ended silently after 1.0 s):
-    // from api 33 POST_NOTIFICATIONS is a dictation condition. Guard logic:
-    // without it nextStep returns Ask instead of Ready — VoiceKeyboardService
-    // aborts in ensurePermissions() BEFORE startFgs()/AudioRecord.startRecording()
-    // and shows a visible error (new string) instead of starting silently.
-    @Test fun `F28c api33 without notif permission - no start, Ask instead of Ready`() {
-        // mic granted, notification NOT: below api 33 Ready (V16a preserved)
+    // T21b (measurement 2026-11-04: 3x60 s rev + 2x60 s grant clean on api36;
+    // F28c cause was the app-side silence guard (audio_error:silence), NOT
+    // the OS) — INVERTED F28c expectation: the notification NEVER blocks,
+    // at any api level, even when permanently denied.
+    @Test fun `T21b api33 without notif permission - Ready, notif never blocks`() {
+        // mic granted, notification NOT: Ready at every api level
         assertEquals(
             DictationPermissions.Decision.Ready,
             DictationPermissions.nextStep(setOf(mic), emptySet(), 32),
         )
-        // from api 33 with mic OR without: Ask(POST_NOTIFICATIONS) — dictation blocked
         assertEquals(
-            DictationPermissions.Decision.Ask(notif),
+            DictationPermissions.Decision.Ready,
             DictationPermissions.nextStep(setOf(mic), emptySet(), 33),
         )
         assertEquals(
-            DictationPermissions.Decision.Ask(notif),
+            DictationPermissions.Decision.Ready,
             DictationPermissions.nextStep(setOf(mic), emptySet(), 37),
         )
-        // permanently denied: no second dialog, path to the settings
+        // permanently denied notif: STILL Ready — the settings path for the
+        // notification (dictation_error_permission_notification) is gone
         assertEquals(
-            DictationPermissions.Decision.PermanentlyDenied(notif),
+            DictationPermissions.Decision.Ready,
             DictationPermissions.nextStep(setOf(mic), setOf(notif), 33),
         )
-        // with the notification granted: Ready — dictation may start (again)
+        // with the notification granted: Ready as before
         assertEquals(
             DictationPermissions.Decision.Ready,
             DictationPermissions.nextStep(setOf(mic, notif), emptySet(), 33),
         )
-        // isReady reflects the same guard
-        assertFalse("api 33 without notif = not ready", DictationPermissions.isReady(setOf(mic), emptySet(), 33))
-        assertTrue("api 33 with notif = ready", DictationPermissions.isReady(setOf(mic, notif), emptySet(), 33))
-        assertTrue("api 32 without notif = ready (V16a)", DictationPermissions.isReady(setOf(mic), emptySet(), 32))
-        // order: the mic is asked BEFORE the notification (mic missing + api 33)
+        // isReady reflects the same semantics at every level
+        assertTrue("api 33 mic only = ready", DictationPermissions.isReady(setOf(mic), emptySet(), 33))
+        assertTrue("api 37 mic only = ready", DictationPermissions.isReady(setOf(mic), emptySet(), 37))
+        assertTrue("api 32 mic only = ready (V16a)", DictationPermissions.isReady(setOf(mic), emptySet(), 32))
+        // the microphone stays the only condition: missing -> Ask(mic)
         assertEquals(
             DictationPermissions.Decision.Ask(mic),
             DictationPermissions.nextStep(emptySet(), emptySet(), 33),
         )
+    }
+
+    // T21b: requiredForApi is mic-only at EVERY api level (apiLevel parameter
+    // kept for call-site stability; the notif never enters the required set)
+    @Test fun `T21b requiredForApi - only the microphone at every api level`() {
+        for (api in listOf(28, 32, 33, 35, 36)) {
+            assertEquals("api $api", listOf(mic), DictationPermissions.requiredForApi(api))
+            assertFalse(
+                "api $api: POST_NOTIFICATIONS not in the required set",
+                notif in DictationPermissions.requiredForApi(api),
+            )
+        }
+    }
+
+    // ==================================================================
+    // T21a (v0.1.45, measurement bridge, PLAN_V0145 §T21a): on the DEBUG
+    // build the F28c app gate may release POST_NOTIFICATIONS so that the
+    // OS behavior (FGS mic alive/dead) can be measured with the permission
+    // revoked. Release is NEVER bypassed — the pure matrix pins that.
+    // ==================================================================
+
+    // (1) pure matrix: debuggable AND setting exactly 1
+    @Test fun `T21a notifGateBypassed matrix - only debuggable AND setting 1`() {
+        // release (debuggable=false): NEVER bypassed, regardless of the setting
+        assertFalse(DictationPermissions.notifGateBypassed(debuggable = false, setting = 0))
+        assertFalse(DictationPermissions.notifGateBypassed(debuggable = false, setting = 1))
+        assertFalse(DictationPermissions.notifGateBypassed(debuggable = false, setting = 2))
+        // debug: ONLY setting == 1 bypasses
+        assertTrue("debug + setting 1 = bypass", DictationPermissions.notifGateBypassed(debuggable = true, setting = 1))
+        assertFalse("debug + setting 0 = no bypass", DictationPermissions.notifGateBypassed(debuggable = true, setting = 0))
+        assertFalse("debug + setting 2 = no bypass", DictationPermissions.notifGateBypassed(debuggable = true, setting = 2))
+    }
+
+    // (2) T21b: with POST_NOTIFICATIONS never required, the bypass parameter is
+    // IRRELEVANT for the decision (the debug bridge stays as measurement
+    // technique and must not change the outcome) — mic stays the only condition.
+    @Test fun `T21b decision api35 mic only - Ready regardless of the bypass parameter`() {
+        val granted = setOf(mic) // RECORD_AUDIO only, notification revoked
+        for (bypass in listOf(false, true)) {
+            assertEquals(
+                "bypass=$bypass: dictation may start",
+                DictationPermissions.Decision.Ready,
+                DictationPermissions.nextStep(granted, emptySet(), 35, bypassNotif = bypass),
+            )
+            // bypass releases ONLY the notification, never the microphone:
+            assertEquals(
+                "bypass=$bypass: mic stays mandatory",
+                DictationPermissions.Decision.Ask(mic),
+                DictationPermissions.nextStep(emptySet(), emptySet(), 35, bypassNotif = bypass),
+            )
+            assertTrue(
+                DictationPermissions.isReady(granted, emptySet(), 35, bypassNotif = bypass),
+            )
+        }
+    }
+
+    // T21a measurement bridge, part 2 (silent guard): the app's own ERR_SILENT
+    // start watchdog aborts a dead mic source (emulator -no-audio) after ~3 s —
+    // BEFORE the OS-FGS layer is observable. Debug-only bypass via the SAME
+    // operator switch (vk_skip_notif_gate): one switch arms the whole bridge.
+    @Test fun `T21a silentGuardBypassed matrix - only debuggable AND setting 1`() {
+        // release (debuggable=false): NEVER bypassed, regardless of the setting
+        assertFalse(DictationPermissions.silentGuardBypassed(debuggable = false, setting = 0))
+        assertFalse(DictationPermissions.silentGuardBypassed(debuggable = false, setting = 1))
+        assertFalse(DictationPermissions.silentGuardBypassed(debuggable = false, setting = 2))
+        // debug: ONLY setting == 1 bypasses
+        assertTrue("debug + setting 1 = bypass", DictationPermissions.silentGuardBypassed(debuggable = true, setting = 1))
+        assertFalse("debug + setting 0 = no bypass", DictationPermissions.silentGuardBypassed(debuggable = true, setting = 0))
+        assertFalse("debug + setting 2 = no bypass", DictationPermissions.silentGuardBypassed(debuggable = true, setting = 2))
     }
 }

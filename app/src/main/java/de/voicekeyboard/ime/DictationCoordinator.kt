@@ -71,6 +71,21 @@ class DictationCoordinator(
      */
     private val segmentFinalizeMs: Long = 0,
 
+    /** T21a (v0.1.45, measurement bridge, PLAN_V0145 §T21a): debug-only bypass
+     *  of the ERR_SILENT start watchdog — on a dead mic source (emulator
+     *  -no-audio) the app-side abort (~3 s) fired before the OS-FGS layer was
+     *  observable. TRUE = the ERR_SILENT abort is SKIPPED (session keeps
+     *  running); OTHER codes (ERR_STALL, real audio_error) abort normally.
+     *  Production wires [de.voicekeyboard.ime.bypassSilentGuard]; default
+     *  false = stock (all existing tests unchanged). */
+    private val silentGuardBypassed: () -> Boolean = { false },
+
+    /** VK-SESS line sink for the [silentGuardBypassed] branch — numbers only
+     *  (rule 9). Injectable so JVM tests don't touch android.util.Log;
+     *  production default: logcat tag VK-SESS (read via `logcat -d -s VK-SESS`). */
+    private val sessLog: (String) -> Unit =
+        { line -> android.util.Log.i("VK-SESS", line) },
+
     /** F28b1: monotonic clock (ms) for the stall watchdog — injectable for
      *  deterministic unit tests; production: nanoTime (no wall-clock jump,
      *  no deep sleep). */
@@ -604,8 +619,18 @@ class DictationCoordinator(
                 if (capBlocks > 0 && !everLoud &&
                     (nowMs() - lastLoudAtMs) > SILENT_START_LIMIT_MS
                 ) {
-                    errorListener.onError(ERR_SILENT, "no_signal")
-                    return
+                    if (silentGuardBypassed()) {
+                        // T21a measurement bridge: skip the ERR_SILENT abort so
+                        // the OS-FGS layer (mic alive/dead without notification
+                        // permission) stays observable on a dead mic source.
+                        // Reset the start window: the watchdog must not re-fire
+                        // on every loop pass. Numbers only (rule 9).
+                        sessLog("cause=silent_bypass cap_blocks=$capBlocks")
+                        lastLoudAtMs = nowMs()
+                    } else {
+                        errorListener.onError(ERR_SILENT, "no_signal")
+                        return
+                    }
                 }
                 // F43: silence AFTER speech started (≥ TRAILING_SILENCE_MS since the
                 // last loud block) → AUTOMATIC regular ending via

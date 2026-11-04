@@ -554,6 +554,76 @@ class DictationCoordinatorTest {
         shutdown(scope)
     }
 
+    // ==================================================================
+    // T21a (v0.1.45, measurement bridge, PLAN_V0145 §T21a): debug-only bypass
+    // of the ERR_SILENT start watchdog. On a dead mic source (emulator
+    // -no-audio) the app-side abort (~3 s) fired BEFORE the OS-FGS layer was
+    // observable. With [silentGuardBypassed] active the coordinator must NOT
+    // abort on ERR_SILENT — the session keeps RECORDING. Other codes (ERR_STALL,
+    // real audio_error) abort NORMALLY. Production wires the flag from the
+    // operator switch (DictationPermissions.silentGuardBypassed).
+    // ==================================================================
+
+    @Test fun `T21a silent bypass - ERR_SILENT skipped, session keeps recording`() {
+        val base = 1_000_000L
+        val now = AtomicLong(base)
+        val src = StallTestSource(deliver = true, stepMs = 500, silent = true, advance = { now.addAndGet(it) })
+        val scope = newScope()
+        val sessLines = CopyOnWriteArrayList<String>()
+        val c = DictationCoordinator(
+            scope, { src }, { FakeAsrEngine() }, FakeSink(),
+            nowMs = { now.get() },
+            silentGuardBypassed = { true },
+            sessLog = { sessLines.add(it) },
+        )
+        val aborts = CopyOnWriteArrayList<String>()
+        c.onAborted = { aborts.add(it) }
+        assertTrue(c.start())
+        // 20 reads = 10 s on the virtual clock: at least 3 start windows (3 s
+        // each) elapsed — the stock would have aborted after the FIRST one
+        // (see the F34 test above).
+        val deadline = System.currentTimeMillis() + 3000
+        while ((c.state != DictationState.RECORDING || c.capBlocks() < 20) &&
+            System.currentTimeMillis() < deadline
+        ) {
+            Thread.sleep(5)
+        }
+        assertEquals("no abort despite silence (bypass active)", "-", c.lastAbortReason)
+        assertTrue("onAborted never fired", aborts.isEmpty())
+        assertEquals("session keeps RECORDING", DictationState.RECORDING, c.state)
+        assertTrue("the VK-SESS bypass line was logged", sessLines.isNotEmpty())
+        assertTrue(
+            "VK-SESS line: cause=silent_bypass, numbers only (rule 9): $sessLines",
+            sessLines.all { it.startsWith("cause=silent_bypass ") },
+        )
+        c.stop()
+        shutdown(scope)
+    }
+
+    @Test fun `T21a silent bypass does not swallow ERR_STALL - dead source still aborts`() {
+        val base = 1_000_000L
+        val now = AtomicLong(base)
+        val src = StallTestSource(deliver = false, stepMs = 1000, advance = { now.addAndGet(it) })
+        val scope = newScope()
+        val c = DictationCoordinator(
+            scope, { src }, { FakeAsrEngine() }, FakeSink(),
+            nowMs = { now.get() },
+            silentGuardBypassed = { true },
+            sessLog = { },
+        )
+        val aborts = CopyOnWriteArrayList<String>()
+        c.onAborted = { aborts.add(it) }
+        assertTrue(c.start())
+        val deadline = System.currentTimeMillis() + 3000
+        while (c.lastAbortReason != "audio_error:stall" && System.currentTimeMillis() < deadline) {
+            Thread.sleep(5)
+        }
+        assertEquals("stall still aborts despite the silent bypass", "audio_error:stall", c.lastAbortReason)
+        assertEquals("onAborted fires exactly once with the reason", listOf("audio_error:stall"), aborts)
+        assertEquals("session is IDLE", DictationState.IDLE, c.state)
+        shutdown(scope)
+    }
+
     // A1 (PLAN_V0133 §1, red test 1): cold start — engine.load() advances the
     // injected clock by 4,500 ms (model load), src.start() is successful,
     // the first PCM buffer only arrives 100 ms later. The watchdog baselines

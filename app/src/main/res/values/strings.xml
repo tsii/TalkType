@@ -7,7 +7,6 @@
     <string name="setup_download_cancel">Cancel</string>
     <string name="setup_open_settings">Open system settings</string>
 
-    <string name="setup_network_switch">Allow network for downloads</string>
     <string name="setup_state_ready">Model active – voice feature unlocked.</string>
     <string name="setup_state_absent">No model installed. Download it once; afterwards the keyboard works fully offline.</string>
     <string name="setup_state_downloading">Loading model …</string>
@@ -30,15 +29,19 @@
     <string name="setup_request_permissions">Grant permissions</string>
     <string name="setup_permissions_denied_forever">Permission permanently denied. It can only be granted in the system settings.</string>
 
-    <string name="setup_network_disabled">Network access is disabled — enable the switch</string>
+    <!-- T20b (PLAN_V0145): one-time system-level network-revoke invite after the
+         download. The app never touches the network by itself afterwards. -->
+    <string name="setup_net_invite_title">Revoke network permission</string>
+    <string name="setup_net_invite_body">The model download is complete — the app no longer accesses the network on its own. If you want, you can revoke the app’s network permission here in the Android system settings; the keyboard keeps working fully offline.</string>
+    <string name="setup_net_invite_button">Revoke network permission</string>
+    <string name="setup_net_invite_later">Later</string>
 
-    <string name="setup_privacy_text">Your speech and your text stay on this device. The app uses the network exclusively for the one-time download of the speech recognition model (approx. 671 MB) from the specified address; there is no telemetry, no accounts and no cloud recognition. After the download the app automatically disables its download switch; no further network access takes place. You can re-enable the switch at any time or revoke the network permission for the app entirely in the Android settings — the keyboard keeps working unchanged, offline. Without an installed model the keyboard stays usable, the voice feature is disabled.</string>
+    <string name="setup_privacy_text">Your speech and your text stay on this device. The app uses the network exclusively for the one-time download of the speech recognition model (approx. 671 MB) from the specified address; there is no telemetry, no accounts and no cloud recognition. After that download the app no longer accesses the network on its own. You can revoke the app’s network permission entirely in the Android system settings — the keyboard keeps working unchanged, offline. Without an installed model the keyboard stays usable, the voice feature is disabled.</string>
 
     <!-- E5 (ERROR_UX_DECISIONS.md): dictation error texts ≤ 45 characters, never raw codes -->
     <string name="dictation_error_audio_start">Audio start failed – try again</string>
     <string name="dictation_error_permission">Microphone permission missing</string>
     <string name="dictation_error_permission_mic">Microphone access needed – without it no dictation</string>
-    <string name="dictation_error_permission_notification">Notification access needed – otherwise the system can stop the recording (enable in system settings)</string>
     <string name="dictation_error_permission_settings">Permission needed – enable in system settings</string>
     <string name="dictation_starting">Starting recording…</string>
     <!-- F13a: start deadline expired (B1/A1) — the user gets an action option,

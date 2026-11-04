@@ -4,11 +4,12 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
-import android.content.pm.PackageManager
+import android.content.pm.ApplicationInfo
 import android.os.Build
 import android.util.Log
 import de.voicekeyboard.asr.AsrThreadConfig
 import de.voicekeyboard.ime.AndroidPermissionsRequester
+import de.voicekeyboard.ime.AppVersion
 import de.voicekeyboard.ime.DictationCoordinator
 import de.voicekeyboard.model.ModelStore
 import de.voicekeyboard.model.ModelVariant
@@ -53,19 +54,14 @@ class DebugInfoCollector(private val context: Context) {
         /** AP7-W1: rejected foreign resets of the hold gate (W1b evidence). */
         gateForeignResets: Int? = null,
     ): DebugSnapshot {
-        val (versionName, versionCode) = try {
-            val info = context.packageManager.getPackageInfo(context.packageName, 0)
-            (info.versionName ?: "") to if (Build.VERSION.SDK_INT >= 28) {
-                info.longVersionCode.toInt()
-            } else {
-                @Suppress("DEPRECATION")
-                info.versionCode
-            }
-        } catch (e: PackageManager.NameNotFoundException) {
-            Log.w(TAG, "package info unavailable") // no export text in the log
-            null to null
-        }
-        val debugBuild = (context.applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0
+        // T19 (v0.1.45): ONE shared version read path — the Setup header and
+        // this export use the same [AppVersion.read] (PackageManager; no
+        // BuildConfig in this module). The export FORMAT stays in
+        // [DebugInfoFormatter] (unchanged): name if non-empty, code as Int.
+        val version = AppVersion.read(context)
+        val versionName = version.name
+        val versionCode = if (version.code > 0) version.code.toInt() else null
+        val debugBuild = (context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
         // Byte sum over the active variant — numbers only, no file names/paths.
         val modelFiles = try {
             modelStore.modelDir(modelVariant).listFiles()

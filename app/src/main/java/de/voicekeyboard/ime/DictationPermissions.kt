@@ -1,5 +1,9 @@
 package de.voicekeyboard.ime
 
+import android.content.Context
+import android.content.pm.ApplicationInfo
+import android.provider.Settings
+
 /**
  * Pure decision logic for dictation permissions (framework-free, JVM-testable):
  * which permissions are missing, in which order they are asked for and what to do
@@ -24,24 +28,40 @@ object DictationPermissions {
 
     /**
      * Optional permissions (V16a): ask once in the SetupActivity.
-     * F28c: from api 33 POST_NOTIFICATIONS is NO longer a pure display permission:
-     * without it the system can silently stop the FGS type microphone
-     * (export #2: api 37, notif=no, recording dead after 1.0 s) — hence in
-     * [requiredForApi].
+     * T21b (measurement 2026-11-04, PLAN_V0145 §T21b): 3x60 s revoked + 2x60 s
+     * granted clean on api36 — the OS does NOT stop the FGS mic without
+     * POST_NOTIFICATIONS; the F28c cause was the app-side silence guard
+     * (audio_error:silence), not the OS. The notification is PURELY optional
+     * (download-progress UX + recording notice), NEVER a dictation condition.
      */
     val OPTIONAL_IN_ORDER = listOf(
         android.Manifest.permission.POST_NOTIFICATIONS,
     )
 
-    /** Api level from which the FGS type microphone makes the notification
-     *  permission a dictation condition (F28c; POST_NOTIFICATIONS exists from 33). */
-    const val NOTIF_REQUIRED_SINCE_API = 33
+    /** T21a (v0.1.45, measurement bridge): operator switch in Settings.Global —
+     *  set on the device via `adb shell settings put global vk_skip_notif_gate 1`. */
+    const val NOTIF_GATE_BYPASS_SETTING = "vk_skip_notif_gate"
 
-    /** F28c: dictation conditions as a function of the api level — below 33 only
-     *  the microphone (V16a), from 33 additionally the notification permission. */
-    fun requiredForApi(apiLevel: Int): List<String> =
-        if (apiLevel >= NOTIF_REQUIRED_SINCE_API) REQUIRED_IN_ORDER + OPTIONAL_IN_ORDER
-        else REQUIRED_IN_ORDER
+    /** T21a: PURE bypass decision — debug build (FLAG_DEBUGGABLE) AND the
+     *  operator switch exactly 1. Release is NEVER bypassed. Test target
+     *  for the matrix; the Android facts come from [bypassNotifGate]. */
+    fun notifGateBypassed(debuggable: Boolean, setting: Int): Boolean =
+        debuggable && setting == 1
+
+    /** T21a measurement bridge, part 2 (silent guard): the SAME operator switch
+     *  ([NOTIF_GATE_BYPASS_SETTING]) also arms the bypass of the app's own
+     *  ERR_SILENT start watchdog (DictationCoordinator) — on a dead mic source
+     *  (emulator -no-audio) it aborted after ~3 s, BEFORE the OS-FGS layer was
+     *  observable. Same semantics: debug build AND setting exactly 1; release
+     *  NEVER. Android facts: [bypassSilentGuard]. */
+    fun silentGuardBypassed(debuggable: Boolean, setting: Int): Boolean =
+        debuggable && setting == 1
+
+    /** T21b (measurement 2026-11-04, binding): dictation condition is the
+     *  microphone ONLY at EVERY api level (V16a semantics restored). The
+     *  apiLevel parameter stays for call-site stability; POST_NOTIFICATIONS
+     *  never enters the required set (optional — [OPTIONAL_IN_ORDER]). */
+    fun requiredForApi(apiLevel: Int): List<String> = REQUIRED_IN_ORDER
 
     sealed class Decision {
         /** Everything present — the dictation may start. */
@@ -61,17 +81,25 @@ object DictationPermissions {
      *
      * @param granted     currently granted permissions (set)
      * @param permanentlyDenied permissions the user has denied "never again"
-     * @param apiLevel    device api level; default 29 = V16a semantics (display
-     *                    never blocks). From [NOTIF_REQUIRED_SINCE_API],
-     *                    POST_NOTIFICATIONS becomes a dictation condition (F28c).
+     * @param apiLevel    device api level; T21b: does NOT change the required
+     *                    set (mic only at every level) — kept for call-site
+     *                    stability.
+     * @param bypassNotif T21a measurement bridge (debug-only, see
+     *                    [bypassNotifGate]): historical parameter — the
+     *                    notification is never required, so it cannot change
+     *                    the decision; it stays as measurement technique.
      * @return next step in the order of [requiredForApi]
      */
     fun nextStep(
         granted: Set<String>,
         permanentlyDenied: Set<String>,
         apiLevel: Int = 29,
+        bypassNotif: Boolean = false,
     ): Decision {
-        for (permission in requiredForApi(apiLevel)) {
+        val required =
+            if (bypassNotif) requiredForApi(apiLevel).filterNot { it in OPTIONAL_IN_ORDER }
+            else requiredForApi(apiLevel)
+        for (permission in required) {
             if (permission in granted) continue
             return if (permission in permanentlyDenied) {
                 Decision.PermanentlyDenied(permission)
@@ -82,9 +110,52 @@ object DictationPermissions {
         return Decision.Ready
     }
 
-    /** Short form: is dictation possible without further dialogs? (F28c: depends on the api level.) */
-    fun isReady(granted: Set<String>, permanentlyDenied: Set<String> = emptySet(), apiLevel: Int = 29): Boolean =
-        nextStep(granted, permanentlyDenied, apiLevel) is Decision.Ready
+    /** Short form: is dictation possible without further dialogs? (T21b: mic only
+     *  at every api level; T21a: bypassNotif cannot change the decision.) */
+    fun isReady(
+        granted: Set<String>,
+        permanentlyDenied: Set<String> = emptySet(),
+        apiLevel: Int = 29,
+        bypassNotif: Boolean = false,
+    ): Boolean =
+        nextStep(granted, permanentlyDenied, apiLevel, bypassNotif) is Decision.Ready
+}
+
+/** T21a (v0.1.45, measurement bridge, PLAN_V0145 §T21a): Android thin layer of
+ *  the debug-only bypass — TRUE only when the app is debuggable
+ *  (ApplicationInfo.FLAG_DEBUGGABLE, same seam as the T9 status band) AND
+ *  the operator switch [DictationPermissions.NOTIF_GATE_BYPASS_SETTING] in
+ *  Settings.Global is exactly 1. Lets the OS behavior (FGS mic alive/dead
+ *  without POST_NOTIFICATIONS) be measured on a debug build; production is
+ *  never bypassed. */
+fun bypassNotifGate(context: Context): Boolean {
+    val debuggable =
+        (context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
+    if (!debuggable) return false // release: never, before any Settings read
+    val setting = Settings.Global.getInt(
+        context.contentResolver,
+        DictationPermissions.NOTIF_GATE_BYPASS_SETTING,
+        0,
+    )
+    return DictationPermissions.notifGateBypassed(debuggable, setting)
+}
+
+/** T21a measurement bridge, part 2: Android thin layer of the SILENT guard
+ *  bypass — same pattern as [bypassNotifGate] (debug build via
+ *  ApplicationInfo.FLAG_DEBUGGABLE + the operator switch
+ *  [DictationPermissions.NOTIF_GATE_BYPASS_SETTING] == 1). Wires the
+ *  DictationCoordinator ERR_SILENT watchdog bypass; production is never
+ *  bypassed. */
+fun bypassSilentGuard(context: Context): Boolean {
+    val debuggable =
+        (context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
+    if (!debuggable) return false // release: never, before any Settings read
+    val setting = Settings.Global.getInt(
+        context.contentResolver,
+        DictationPermissions.NOTIF_GATE_BYPASS_SETTING,
+        0,
+    )
+    return DictationPermissions.silentGuardBypassed(debuggable, setting)
 }
 
 /** Android thin layer: issues the request on behalf of the visible activity/IME. */

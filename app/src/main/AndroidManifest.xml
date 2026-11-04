@@ -2,17 +2,22 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
-    <!-- E2 (SETUP_UI_DECISIONS.md): INTERNET + ACCESS_NETWORK_STATE stay permanently
-         in the manifest — the only network access is the one-time model download
-         (the ORT AAR inserts both anyway). The app-internal network switch prevents
-         requests after setup; the telemetry provider removal (below) STAYS. -->
+    <!-- T20 (PLAN_V0145, binding clarification): INTERNET stays in the manifest —
+         the ONLY network access is the one-time model download. The app never
+         revokes or touches the network itself; the user can revoke the network
+         permission at the SYSTEM level (app info) — the app then stays offline.
+         ACCESS_NETWORK_STATE is still merged in from the onnxruntime AAR; our
+         code never uses it — left in place (tools:node remove rejected as noise).
+         The telemetry provider removal (below) STAYS. -->
     <uses-permission android:name="android.permission.INTERNET" />
-    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
     <!-- Audio capture (stage 4): RECORD_AUDIO for the recording,
          FOREGROUND_SERVICE(_MICROPHONE) for the FGS type microphone
-         (TECH_FACTS §4.1: hard requirement from targetSdk 34),
-         POST_NOTIFICATIONS for the visible recording indication (API 33+). -->
+         (TECH_FACTS §4.1: hard requirement from targetSdk 34).
+         T21b (PLAN_V0145, measurement 2026-11-04): POST_NOTIFICATIONS is
+         OPTIONAL — download-progress UX + recording notice; the OS does NOT
+         stop the FGS mic without it (api36 field evidence), so it never gates
+         the dictation. -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />

@@ -18,6 +18,14 @@
             android:textStyle="bold" />
 
         <TextView
+            android:id="@+id/setup_version"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:text=""
+            android:textSize="13sp" />
+
+        <TextView
             android:id="@+id/setup_state"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -57,13 +65,48 @@
             android:text="@string/setup_download_cancel"
             android:visibility="gone" />
 
-        <Switch
-            android:id="@+id/setup_network_switch"
+        <!-- T20b (PLAN_V0145): one-time system-level network-revoke invite.
+             The app NEVER revokes/touches the network itself; the card offers
+             the direct app-details deep link. Visibility is set in code
+             (NetworkInvitePolicy.shouldShowInvite). -->
+        <LinearLayout
+            android:id="@+id/setup_net_invite"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="16dp"
-            android:text="@string/setup_network_switch" />
+            android:orientation="vertical"
+            android:visibility="gone">
 
+            <TextView
+                android:id="@+id/setup_net_invite_title"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/setup_net_invite_title"
+                android:textSize="15sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/setup_net_invite_body"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:text="@string/setup_net_invite_body"
+                android:textSize="13sp" />
+
+            <Button
+                android:id="@+id/setup_net_invite_button"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:text="@string/setup_net_invite_button" />
+
+            <Button
+                android:id="@+id/setup_net_invite_later"
+                style="?android:attr/borderlessButtonStyle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/setup_net_invite_later" />
+        </LinearLayout>
         <Button
             android:id="@+id/setup_request_permissions"
             android:layout_width="match_parent"

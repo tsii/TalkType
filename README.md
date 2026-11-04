@@ -4,7 +4,7 @@ Android keyboard (IME) for GrapheneOS: **type in 15 languages** and **dictate of
 without Google services, without network access at runtime, without dictionaries or autocorrect.
 
 <p align="center">
-  <img src="docs/img/tastatur-0.1.43.png" alt="TalkType — QWERTZ keyboard (15 languages, period key beside Enter, dark)" width="720">
+  <img src="docs/img/tastatur-0.1.43.png" alt="TalkType — QWERTY keyboard (15 languages, period key beside Enter, dark)" width="720">
 </p>
 
 ## What it can do

@@ -1,10 +1,13 @@
 package de.voicekeyboard.debug
 
 import android.app.Activity
+import android.os.Build
 import android.os.Bundle
 import android.text.InputType
 import android.view.Gravity
 import android.view.WindowInsets
+import android.view.WindowInsetsController
+import android.widget.Button
 import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.LinearLayout
@@ -43,6 +46,30 @@ class DebugInputActivity : Activity() {
             text = "Debug-Eingabefeld"
             textSize = 14f
         })
+        // T18 measurement switch (PLAN_T18_HEIGHT steps B/C): hides/shows the
+        // system navigation bars via WindowInsetsController — browser-analogue,
+        // transient by swipe. API 29 devices have no controller (emu is 35).
+        fun setNavBars(hidden: Boolean) {
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return
+            val controller = window.insetsController ?: return
+            controller.systemBarsBehavior =
+                WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            if (hidden) {
+                controller.hide(WindowInsets.Type.navigationBars())
+            } else {
+                controller.show(WindowInsets.Type.navigationBars())
+            }
+        }
+        val navToggle = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        navToggle.addView(Button(this).apply {
+            text = "Hide nav bars"
+            setOnClickListener { setNavBars(true) }
+        }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        navToggle.addView(Button(this).apply {
+            text = "Show nav bars"
+            setOnClickListener { setNavBars(false) }
+        }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        root.addView(navToggle)
         val field = EditText(this).apply {
             hint = "Hier tippen …"
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE

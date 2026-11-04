@@ -7,6 +7,7 @@ import android.util.Log
 import android.view.KeyEvent
 import android.view.View
 import android.view.inputmethod.EditorInfo
+import android.view.inputmethod.InputConnection
 import de.voicekeyboard.R
 import de.voicekeyboard.asr.ParakeetAsrEngine
 import de.voicekeyboard.audio.AudioLevelListener
@@ -119,22 +120,47 @@ object LanguageCycle {
  * fills an [InputMethodService.Insets] with the LatinIME pattern values:
  * contentTopInsets = visibleTopInsets = [keyboardTop] (the headroom band above is
  * NOT IME content — app text may run behind it), touchableInsets = REGION with
- * (0, keyboardTop, width, rootBottom): touches above the keyboard (in the headroom)
- * pass through to the app. Separated as a top-level function so the values are
- * testable WITHOUT a running service (Robolectric: ImeRootViewLayoutTest —
- * onComputeInsets delegates 1:1 with the real ImeRootView layout values).
+ * (0, keyboardTop, width, keyboardBottom): touches above the keyboard (in the
+ * headroom) pass through to the app. T15b (Chrome-Enter-Bug 0.1.43): [keyboardBottom]
+ * = STACK bottom ([ImeRootView.keyboardBottomInWindow]), NOT root.bottom — in
+ * fullscreen/resize states the root is almost display-tall and a region ending
+ * at root.bottom put the keyboard's footer/Enter row touch-dead. Separated as a
+ * top-level function so the values are testable WITHOUT a running service.
  */
 internal fun applyImeInsets(
     insets: InputMethodService.Insets,
     keyboardTop: Int,
+    keyboardBottom: Int,
     width: Int,
-    rootBottom: Int,
 ): InputMethodService.Insets {
     insets.contentTopInsets = keyboardTop
     insets.visibleTopInsets = keyboardTop
     insets.touchableInsets = InputMethodService.Insets.TOUCHABLE_INSETS_REGION
-    insets.touchableRegion.set(0, keyboardTop, width, rootBottom)
+    insets.touchableRegion.set(0, keyboardTop, width, keyboardBottom)
     return insets
+}
+
+/**
+ * T17 (Enter in multiline fields, REVIEW_STAGE1 VK-08; VK-R1 Review V0.1.44):
+ * pure seam of [VoiceKeyboardService.performEditorAction] — mirrors AOSP
+ * (LatinIME / InputMethodService.sendDefaultEditorAction): only a null
+ * EditorInfo, IME_ACTION_NONE, MULTILINE input or IME_FLAG_NO_ENTER_ACTION mean
+ * NEWLINE; every other action — including IME_ACTION_UNSPECIFIED (0), the
+ * editor's DEFAULT action — is routed to the app via performEditorAction.
+ * Top-level so the EditorInfo matrix is testable WITHOUT a running service
+ * (EditorActionEnterTest).
+ */
+internal fun applyEnterKey(ic: InputConnection, info: EditorInfo?) {
+    val action = info?.imeOptions?.and(EditorInfo.IME_MASK_ACTION) ?: EditorInfo.IME_ACTION_NONE
+    val treatAsNewline = info == null ||
+        action == EditorInfo.IME_ACTION_NONE ||
+        (info.inputType and EditorInfo.TYPE_TEXT_FLAG_MULTI_LINE) != 0 ||
+        (info.imeOptions and EditorInfo.IME_FLAG_NO_ENTER_ACTION) != 0
+    if (treatAsNewline) {
+        ic.commitText("\n", 1)
+    } else {
+        ic.performEditorAction(action)
+    }
 }
 
 /**
@@ -475,6 +501,17 @@ class VoiceKeyboardService : InputMethodService(), KeyboardView.Listener {
     }
 
     /**
+     * T15b (Chrome-Enter-Bug 0.1.43, measured corrupt state "Requested w=1080
+     * h=2204" + contentTopInsets=1371 + touchableRegion ending 700 px under the
+     * keyboard): this product has NO extract/fullscreen UI (no ExtractEditText
+     * usage; status band/mic/design presuppose the normal window). Fullscreen
+     * evaluation made the IME window almost display-tall and our onComputeInsets
+     * anchored the region at that oversized root — footer + Enter row became
+     * touch-dead. Unconditional false suppresses the h=2204 case completely.
+     */
+    override fun onEvaluateFullscreenMode(): Boolean = false
+
+    /**
      * T15 (Opus option H, LatinIME pattern — docs/PLAN_T13_T15.md step 3): the IME
      * window is headroomPx taller than the keyboard (ImeRootView paddingTop, band
      * transparent via InsetDrawable). This override tells the framework where the
@@ -483,23 +520,26 @@ class VoiceKeyboardService : InputMethodService(), KeyboardView.Listener {
      *  - contentTopInsets = visibleTopInsets = keyboard top ([ImeRootView.keyboardTopInWindow]):
      *    the area ABOVE is not counted as IME content — the app text may run behind it.
      *  - touchableInsets = TOUCHABLE_INSETS_REGION with region (0, keyboardTop,
-     *    width, root bottom): touches in the headroom pass through to the app,
+     *    width, keyboardBottom): touches in the headroom pass through to the app,
      *    the gesture stays in the window it started in.
-     * No super call (deliberately): the default implementation derives the values
-     * from the window decor — ALL fields are set here, nothing is left default.
-     * [rootView] == null (before onCreateInputView): framework default via super.
+     * T15b hardening (both bugs measured on Chrome):
+     *  - super FIRST — its values stay untouched as the fallback (no more blind
+     *    overwrite with root-derived numbers).
+     *  - Guard: no laid-out root with a real keyboard surface (root.height == 0,
+     *    stack bottom <= top — e.g. fullscreen/resize or before the first layout)
+     *    ⇒ super values stand, no insets corruption.
+     *  - Region/insets anchored at the STACK ([keyboardTopInWindow]/
+     *    [ImeRootView.keyboardBottomInWindow]), NOT at root.bottom.
      */
     override fun onComputeInsets(outInsets: InputMethodService.Insets) {
-        val root = rootView
-        if (root == null) {
-            super.onComputeInsets(outInsets)
-            return
-        }
+        super.onComputeInsets(outInsets)
+        val root = rootView ?: return
+        if (!root.keyboardSurfaceValid) return
         applyImeInsets(
             insets = outInsets,
             keyboardTop = root.keyboardTopInWindow(),
+            keyboardBottom = root.keyboardBottomInWindow(),
             width = root.width,
-            rootBottom = root.bottom,
         )
     }
 
@@ -611,6 +651,19 @@ class VoiceKeyboardService : InputMethodService(), KeyboardView.Listener {
 
     override fun onStartInputView(info: EditorInfo, restarting: Boolean) {
         super.onStartInputView(info, restarting)
+        // T18: re-request insets at EVERY show — the insets listener fires only
+        // on CHANGE, so a stale 0 (app temporarily hid the nav bars) survives
+        // until the view is re-created; requestApplyInsets closes the visibility
+        // race and late insets (PLAN_T18_HEIGHT §2).
+        rootView?.requestApplyInsets()
+        // T18-A evidence line (rule 9: numbers ONLY): start state next to the
+        // apply state of the same tag — the comparison proves the nav-padding cause.
+        rootView?.let {
+            Log.i(
+                INSETS_LOG_TAG,
+                insetsEvidenceLine("start", it.rootWindowInsets, it.paddingBottom, it.height),
+            )
+        }
         // W1 (vc34, debugger recommendation): prewarm the engine at the
         // FIRST visible appearance of the IME — single flight in the coordinator; load() needs neither
         // mic nor FGS. Exactly ONCE per lifetime ([preloadTried], pure
@@ -1810,13 +1863,11 @@ class VoiceKeyboardService : InputMethodService(), KeyboardView.Listener {
 
     private fun performEditorAction(info: EditorInfo?) {
         val ic = currentInputConnection ?: return
-        val action = info?.imeOptions?.and(EditorInfo.IME_MASK_ACTION) ?: EditorInfo.IME_ACTION_NONE
-        if (action != EditorInfo.IME_ACTION_NONE) {
-            ic.performEditorAction(action)
-        } else {
-            ic.sendKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_ENTER))
-            ic.sendKeyEvent(KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_ENTER))
-        }
+        // T17: Enter resolution via the pure seam — AOSP LatinIME behavior:
+        // multiline (or no concrete action or IME_FLAG_NO_ENTER_ACTION) =
+        // NEWLINE, the keyboard stays open; only a single-line field with a
+        // concrete action routes performEditorAction to the app.
+        applyEnterKey(ic, info)
     }
 
     /** UTF-16 units of the last complete grapheme cluster at the end of the string. */

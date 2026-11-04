@@ -6,10 +6,13 @@ import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.GradientDrawable
 import android.graphics.drawable.InsetDrawable
 import android.graphics.drawable.LayerDrawable
+import android.os.Build
 import android.util.AttributeSet
+import android.util.Log
 import android.view.Gravity
 import android.view.View
 import android.view.ViewOutlineProvider
+import android.view.WindowInsets
 import android.widget.Button
 import android.widget.FrameLayout
 import android.widget.LinearLayout
@@ -36,6 +39,64 @@ import kotlin.math.roundToInt
  * footer; EmojiPanel height=0 + weight 1 — the layout manager distributes.
  * System navigation insets are set ONCE as bottom root padding.
  */
+
+/** T18-A: tag of the insets evidence lines (numbers only, rule 9). */
+internal const val INSETS_LOG_TAG = "VK-INSETS"
+
+/**
+ * T18-A evidence line (rule 9: numbers ONLY — never text/content): "vis" is the
+ * visibility-dependent nav value the current padding uses, "ign" the nav value
+ * IGNORING visibility, "tap" the tappable-element value, "gest"/"sysWin" the raw
+ * sources, "pad" the applied bottom root padding, "h" the view height. Both
+ * events (ev=apply at insets delivery, ev=start at onStartInputView) together
+ * prove whether the nav padding followed a temporarily hidden bar (T18 cause).
+ */
+internal fun insetsEvidenceLine(ev: String, insets: WindowInsets?, pad: Int, h: Int): String {
+    val gest = insets?.systemGestureInsets?.bottom ?: -1
+    val sysWin = insets?.systemWindowInsetBottom ?: -1
+    val ign = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && insets != null) {
+        insets.getInsetsIgnoringVisibility(WindowInsets.Type.navigationBars()).bottom
+    } else {
+        -1
+    }
+    val tap = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && insets != null) {
+        insets.getInsets(WindowInsets.Type.tappableElement()).bottom
+    } else {
+        -1
+    }
+    val vis = maxOf(gest, sysWin)
+    return "ev=$ev vis=$vis ign=$ign tap=$tap gest=$gest sysWin=$sysWin pad=$pad h=$h"
+}
+
+/**
+ * T18 (PLAN_T18_HEIGHT): bottom navigation inset for the root padding — PURE
+ * function (unit-testable without a laid-out view; the listener below passes
+ * the same density source as the old cap logic: v.resources.displayMetrics).
+ * API>=30: derived from getInsetsIgnoringVisibility(navigationBars) +
+ * tappableElement, so a TRANSIENT hidden system bar (browser fullscreen) keeps
+ * the footer OUT of the IME-switch strip — the old visibility-dependent sources
+ * (systemGestureInsets/systemWindowInsetBottom) reported 0 there and the
+ * stale 0 persisted until view re-creation (user screenshots).
+ * API<30: fallback as before (gest/sysWin, visibility-dependent).
+ * P0-0.1.20 cap kept: the bottom root padding is the ONLY mechanism that can
+ * push/compress the status row — never more than 120 dp (the cap applies only
+ * to the padding, the insets delivery stays untouched).
+ */
+internal fun navBottomPx(insets: WindowInsets?, density: Float): Int {
+    val raw = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && insets != null) {
+        maxOf(
+            insets.getInsetsIgnoringVisibility(WindowInsets.Type.navigationBars()).bottom,
+            insets.getInsets(WindowInsets.Type.tappableElement()).bottom,
+        )
+    } else {
+        maxOf(
+            insets?.systemGestureInsets?.bottom ?: 0,
+            insets?.systemWindowInsetBottom ?: 0,
+        )
+    }
+    return raw.coerceAtMost((120 * density).roundToInt())
+}
+
 class ImeRootView @JvmOverloads constructor(
     context: Context,
     attrs: AttributeSet? = null,
@@ -269,16 +330,17 @@ class ImeRootView @JvmOverloads constructor(
         // The integration contract follows from that: root offer H → keyboard child
         // receives H − nav − 48 dp and scales ALL rows into exactly this budget.
         setOnApplyWindowInsetsListener { v, insets ->
-            val nav = insets.systemGestureInsets.bottom
-                .coerceAtLeast(insets.systemWindowInsetBottom)
-            // P0-0.1.20: INSET ANOMALY cap — a similarly large bottom system inset
-            // (newer OS, IME in its own process) must never squeeze the whole stack:
-            // the bottom root padding is the ONLY mechanism that can push/compress
-            // the status row (48 dp) from above. The cap applies ONLY to the
-            // padding (the height subtraction stays exactly once), not to the
-            // insets delivery.
-            val navCapped = nav.coerceAtMost((120 * v.resources.displayMetrics.density).toInt())
+            // T18 (PLAN_T18_HEIGHT): navBottomPx derives the padding ignoring the
+            // VISIBILITY of the system bars (API>=30) — a transient hidden bar
+            // (browser fullscreen) must not pull the footer into the IME-switch
+            // strip. The height subtraction stays EXACTLY ONCE (this setPadding
+            // is the one place, see T21/S2 above); the 120-dp cap lives in
+            // navBottomPx.
+            val navCapped = navBottomPx(insets, v.resources.displayMetrics.density)
             v.setPadding(v.paddingLeft, v.paddingTop, v.paddingRight, navCapped)
+            // T18-A: evidence line — "pad" mirrors the value applied above
+            // (format unchanged, numbers only).
+            Log.i(INSETS_LOG_TAG, insetsEvidenceLine("apply", insets, navCapped, v.height))
             insets
         }
     }
@@ -302,6 +364,24 @@ class ImeRootView @JvmOverloads constructor(
      * the headroom above (0 until this value) pass through to the app.
      */
     fun keyboardTopInWindow(): Int = top + stack.top
+
+    /**
+     * T15b (Chrome-Enter-Bug 0.1.43): BOTTOM edge of the keyboard surface in
+     * WINDOW coordinates — anchored at the STACK bottom, NOT at root.bottom: in
+     * fullscreen/resize states (window 2204 px) the root was almost display-tall
+     * and the touchableRegion ended 700 px under the keyboard (footer + Enter
+     * touch-dead). The stack bottom always describes the real keyboard surface,
+     * regardless of window padding/overhang.
+     */
+    fun keyboardBottomInWindow(): Int = top + stack.bottom
+
+    /**
+     * T15b: guard for onComputeInsets — true only if the root is laid out with a
+     * REAL keyboard surface (stack bottom > stack top). Otherwise (before the
+     * first layout, height 0, or stack collapsed) the super insets values stay.
+     */
+    val keyboardSurfaceValid: Boolean
+        get() = isLaidOut && height > 0 && stack.bottom > stack.top
 
     /** Keyboard mode (idempotent): emoji block GONE, keyboard VISIBLE; no MotionEvent forwarding. */
     fun hideEmojiPanel() {

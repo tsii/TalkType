@@ -5,6 +5,29 @@ HANDOFF.md, state/progress.md and the review documents; kept current from now on
 `versionCode` in parentheses. APKs older than the current dist rotation are removed
 from `dist/` (checksums of the last rotations: `dist/SHA256SUMS-*.txt`).
 
+## [0.1.44] — 2026-11-04 (45) — Enter fixes + keyboard-height robustness
+Dist: release `96e776dda1584c76169b4e5e002f794a18f9bd1cad2360b354a40e3efe477e2d`,
+diag-debug `00218788438132a79f01b17372db69a97350d57e055ee0e59a78605a75aad40a`.
+- **T15b fullscreen window**: `onEvaluateFullscreenMode=false` (no extract UI in
+  this product) and the touchable region now anchors to the keyboard stack bottom
+  instead of the root bottom. Chrome search/tab-transition state previously grew
+  the IME window (h≈2204) and left the footer row touch-dead. Emulator verified:
+  corrupt window size gone, footer tappable live (VK-HIT).
+- **T17 Enter**: multiline fields (e-mail body) now insert a line break and keep
+  the keyboard open; single-line action fields (URL/search) still fire the editor
+  action. Pure seam `applyEnterKey(ic, info)`: newline when info null, action
+  NONE/UNSPECIFIED, TYPE_TEXT_FLAG_MULTI_LINE set, or IME_FLAG_NO_ENTER_ACTION;
+  otherwise performEditorAction. AOSP LatinIME rationale (review VK-R1: UNSPECIFIED
+  is the default action, NOT a newline — fixed pre-release). EditorActionEnterTest
+  7/0; emulator: Chrome URL loads + closes, multiline field gets \n with
+  mInputShown=true.
+- **T18 keyboard height**: nav-bottom padding now derived via
+  `insetsIgnoringVisibility(navigationBars)`/`tappableElement` (visibility-robust;
+  stale 0 when an app transiently hides system bars caused the footer to sit in
+  the IME-switch strip — user screenshots) + `requestApplyInsets` on every
+  `onStartInputView`. Numbers-only `VK-INSETS` evidence log (release-safe) and a
+  Hide/Show-nav-bars switch in the debug bench (T18-A).
+
 ## [0.1.43] — 2026-11-04 (44) — long-press popups above the finger, 6 words/s
 Dist: release `2735a99f05f9cbc443e5a09d10611ae31a51f9151fed9570346e945e67e14d20`,
 diag-debug `14056297048c21e9c6ebf3e45d26e19bc35a512c7654ad844d2df67529edcc72`.

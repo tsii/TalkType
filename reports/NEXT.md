@@ -1,3 +1,4 @@
+- **Flaky lineage update (2026-11-04):** DictationHoldGateTest hardened: root cause was an abort race in runCorpus (stop() sets active=false before async reason 'final' lands), not the wall window; loop now breaks on source-end only for gate=true and on !isActive only with a recorded reason; windows 20s->60s/15s->45s. Green debug+release under load 14-37.
 # Next tasks (order)
 
 **Status 2026-11-03 · v0.1.41 / versionCode 42 (TalkType) delivered (English UI, sanitized repo)** (11:00): repo translated DE→EN (docs + comments + assertion messages; UI stays German), new adaptive shield+waveform icon, T10 auto-space after dictation-ending punctuation; tests **613/0 + 578/0 = 1191/0**; next build **41 / 0.1.40**.md` P0/P1=0 Push YES; next build **41 / 0.1.40**.

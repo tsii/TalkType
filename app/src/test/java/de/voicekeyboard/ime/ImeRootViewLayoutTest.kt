@@ -5,10 +5,12 @@ import android.content.pm.ApplicationInfo
 import android.content.res.Configuration
 import android.graphics.Bitmap
 import android.graphics.Canvas
+import android.graphics.Insets
 import android.graphics.Rect
 import android.graphics.RectF
 import android.inputmethodservice.InputMethodService
 import android.view.View
+import android.view.WindowInsets
 import android.widget.Button
 import android.widget.LinearLayout
 import de.voicekeyboard.dictation.DictationState
@@ -443,11 +445,12 @@ class ImeRootViewLayoutTest {
         applyImeInsets(
             insets = insets,
             keyboardTop = view.keyboardTopInWindow(),
+            keyboardBottom = view.keyboardBottomInWindow(),
             width = view.width,
-            rootBottom = view.bottom,
         )
 
         val top = view.keyboardTopInWindow()
+        val bottom = view.keyboardBottomInWindow()
         assertEquals("contentTopInsets = keyboard top", top, insets.contentTopInsets)
         assertEquals("visibleTopInsets = keyboard top", top, insets.visibleTopInsets)
         assertEquals(
@@ -456,13 +459,84 @@ class ImeRootViewLayoutTest {
             insets.touchableInsets,
         )
         assertEquals(
-            "touchableRegion = (0, keyboardTop, width, rootBottom) — keyboard only",
-            Rect(0, top, view.width, view.bottom),
+            "touchableRegion = (0, keyboardTop, width, keyboardBottom) — keyboard only",
+            Rect(0, top, view.width, bottom),
             insets.touchableRegion.bounds,
         )
         // headroom strip (0 until top) lies OUTSIDE the region: app touches there
         // reach the app (acceptance: touch-through 30 dp above the keyboard).
         assertTrue("region top edge is below the headroom strip", insets.touchableRegion.bounds.top > 0)
+    }
+
+    /**
+     * T15b (Chrome-Enter-Bug 0.1.43): EXTENDED window — the root is taller than the
+     * stack (imitation of the measured "Requested w=1080 h=2204" fullscreen state,
+     * here via extra bottom padding = window overhang below the keyboard). The
+     * region MUST end at the STACK bottom — NOT at root.bottom (old behavior:
+     * footer + Enter row below the region = touch-dead).
+     */
+    @Test
+    fun `T15b extended window - region ends at stack bottom, not root bottom`() {
+        val view = buildRoot()
+        val overhang = (120 * app.resources.displayMetrics.density).toInt()
+        // root taller than the keyboard surface: extra bottom padding = window overhang
+        view.setPadding(0, view.headroomPx, 0, overhang)
+        view.measure(
+            View.MeasureSpec.makeMeasureSpec(1080, View.MeasureSpec.EXACTLY),
+            View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED),
+        )
+        view.layout(0, 0, view.measuredWidth, view.measuredHeight)
+
+        val top = view.keyboardTopInWindow()
+        val bottom = view.keyboardBottomInWindow()
+        assertTrue("test precondition: root overhang below the stack", view.bottom > bottom)
+        assertTrue("stack surface is real", view.keyboardSurfaceValid)
+
+        val insets = InputMethodService.Insets()
+        applyImeInsets(insets = insets, keyboardTop = top, keyboardBottom = bottom, width = view.width)
+
+        assertEquals(
+            "region ends at the STACK bottom — the overhang is NOT touchable",
+            Rect(0, top, view.width, bottom),
+            insets.touchableRegion.bounds,
+        )
+        assertTrue(
+            "region bottom < root bottom (footer/Enter stay INSIDE the region)",
+            insets.touchableRegion.bounds.bottom < view.bottom,
+        )
+    }
+
+    /**
+     * T15b: guard — an UNLAID-OUT root (before layout) or a collapsed stack keeps
+     * the super insets values; onComputeInsets returns early
+     * ([ImeRootView.keyboardSurfaceValid]).
+     */
+    @Test
+    fun `T15b not laid out - keyboardSurfaceValid false, super insets stand`() {
+        val fresh = buildRoot()
+        assertFalse("fresh root: not laid out ⇒ invalid", fresh.keyboardSurfaceValid)
+
+        val collapsed = buildRoot()
+        collapsed.measure(
+            View.MeasureSpec.makeMeasureSpec(1080, View.MeasureSpec.EXACTLY),
+            View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.EXACTLY),
+        )
+        collapsed.layout(0, 0, collapsed.measuredWidth, collapsed.measuredHeight)
+        assertFalse(
+            "height-0 offer: root/stack collapsed ⇒ invalid (super values stand)",
+            collapsed.keyboardSurfaceValid,
+        )
+    }
+
+    /**
+     * T15b: this product has NO extract/fullscreen UI — the fullscreen evaluation
+     * (which made the IME window 2204 px tall, root cause of the corrupt insets
+     * state with touch-dead Enter row) is unconditionally off.
+     */
+    @Test
+    fun `T15b fullscreen mode suppressed - no extract UI, window stays keyboard-tall`() {
+        val service = Robolectric.buildService(VoiceKeyboardService::class.java).get()
+        assertFalse("onEvaluateFullscreenMode = false", service.onEvaluateFullscreenMode())
     }
 
     /**
@@ -529,6 +603,97 @@ class ImeRootViewLayoutTest {
         assertTrue(
             "surface fill = exactly the view bounds (no full-canvas drawColor)",
             fullFill,
+        )
+    }
+
+    // ==================================================================
+    // T18 (PLAN_T18_HEIGHT): the nav bottom padding ignores the VISIBILITY
+    // of the system bars — a transient hidden bar (browser fullscreen/scroll)
+    // must not pull the footer row into the IME-switch strip.
+    // navBottomPx() is the ONE seam the setOnApplyWindowInsetsListener uses.
+    // ==================================================================
+
+    /**
+     * Nav-bar test insets (real AOSP WindowInsets.Builder, verified against the
+     * SDK-35 framework Robolectric runs on): "vis" = getInsets(navigationBars)
+     * (visibility-dependent — what 0.1.43 padded with), "ign" =
+     * getInsetsIgnoringVisibility(navigationBars) (the T18 fix source).
+     */
+    private fun navInsets(vis: Int, ign: Int): WindowInsets =
+        WindowInsets.Builder()
+            .setInsets(WindowInsets.Type.navigationBars(), Insets.of(0, 0, 0, vis))
+            .setInsetsIgnoringVisibility(
+                WindowInsets.Type.navigationBars(),
+                Insets.of(0, 0, 0, ign),
+            )
+            .setVisible(WindowInsets.Type.navigationBars(), vis > 0)
+            .build()
+
+    /**
+     * User phone (PLAN_T18_HEIGHT measurement): 420 dpi → density 2.625 — the
+     * 120-dp cap is 315 px there, so the REAL nav value 132 px passes UNCAPPED.
+     * (Robolectric default is 160 dpi/density 1.0 — its cap 120 px would clamp 132;
+     * navBottomPx takes the density as a parameter exactly so tests can pin it.)
+     */
+    private val deviceDensity = 2.625f
+
+    @Test
+    fun `T18 navBottomPx - nav bar VISIBLE 132 - padding 132`() {
+        assertEquals(132, navBottomPx(navInsets(vis = 132, ign = 132), deviceDensity))
+    }
+
+    @Test
+    fun `T18 navBottomPx - transient hidden bar (vis 0, ign 132) - padding stays 132`() {
+        // DER Fix-Fall (user screenshots): 0.1.43 padded with max(gest, sysWin) = 0
+        // here — the footer rounded into the system IME-switch strip.
+        assertEquals(132, navBottomPx(navInsets(vis = 0, ign = 132), deviceDensity))
+    }
+
+    @Test
+    fun `T18 navBottomPx - null insets and empty insets - padding 0`() {
+        assertEquals("null insets -> 0", 0, navBottomPx(null, deviceDensity))
+        assertEquals(
+            "empty insets (all NONE) -> 0",
+            0,
+            navBottomPx(WindowInsets.Builder().build(), deviceDensity),
+        )
+    }
+
+    @Test
+    fun `T18 navBottomPx - anomaly 400 - capped at 120dp (P0 cap kept)`() {
+        // P0-0.1.20 INSET ANOMALY cap: a similarly large bottom system inset must
+        // never squeeze the whole stack — the cap moved INTO navBottomPx unchanged.
+        assertEquals("400 at Robolectric density 1.0 -> cap 120 px",
+            120, navBottomPx(navInsets(vis = 400, ign = 400), 1.0f))
+        assertEquals("400 at device density 2.625 -> cap 120 dp = 315 px",
+            (120 * deviceDensity).roundToInt(),
+            navBottomPx(navInsets(vis = 400, ign = 400), deviceDensity))
+    }
+
+    /**
+     * T18 late insets at a REAL ImeRootView (the listener path, dispatched like
+     * the framework does): first insets 0 (bar hidden), then ignoring-visibility
+     * 132 — the root bottom padding follows WITHOUT an IME switch.
+     * The listener reads the density from the view resources: @Config(qualifiers)
+     * pins the USER PHONE density (420 dpi → 2.625, cap 315 px) so the REAL nav
+     * value 132 px passes uncapped — at the Robolectric default (160 dpi) the
+     * cap 120 px would clamp it.
+     */
+    @Test
+    @Config(qualifiers = "420dpi")
+    fun `T18 late insets at the root - first 0, then ign 132 - paddingBottom 132`() {
+        assertEquals("precondition: 420 dpi qualifier active (density 2.625)",
+            2.625f, app.resources.displayMetrics.density, 0.0001f)
+
+        val view = buildRoot()
+        view.dispatchApplyWindowInsets(WindowInsets.Builder().build())
+        assertEquals("no nav inset: padding 0", 0, view.paddingBottom)
+
+        view.dispatchApplyWindowInsets(navInsets(vis = 0, ign = 132))
+        assertEquals(
+            "transient hidden bar: padding follows ign 132",
+            132,
+            view.paddingBottom,
         )
     }
 }

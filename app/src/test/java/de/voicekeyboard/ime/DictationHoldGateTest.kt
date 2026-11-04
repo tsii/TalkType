@@ -147,17 +147,27 @@ class DictationHoldGateTest {
             autoStopSuppressed = { suppressed },
         )
         assertTrue("start must succeed", c.start())
-        val deadline = System.currentTimeMillis() + 20_000
+        // Wall-clock window generous: VClock ticks share Dispatchers.Default with a
+        // loaded host; starvation, not logic (see reports/NEXT.md lastflaky lineage).
+        val deadline = System.currentTimeMillis() + 60_000
         while (System.currentTimeMillis() < deadline) {
             Thread.sleep(5)
             if (c.lastAbortReason == "final") break // auto final (gate=false) or explicit stop
-            if (c.audioSeconds >= 9.99) break // source end: 5 ticks fed (11-s corpus)
-            if (!c.isActive) break // kill path (must not happen here)
+            // Source-end break ONLY for the CLOSED gate (gate=true runs to the 11-s
+            // corpus end). With gate=false the ASYNC final can lag this poll: stop()
+            // flips active immediately, the "final" reason follows from the scope
+            // worker (consumer join + final decode) — so neither audio_s >= 9.99
+            // nor !isActive may preempt the "final" wait. A REAL kill always
+            // records a reason first, so inactive + "-" = finalization in
+            // flight, not an abort. Starvation, not logic (see reports/NEXT.md
+            // lastflaky lineage).
+            if (suppressed && c.audioSeconds >= 9.99) break // source end: 5 ticks fed (11-s corpus)
+            if (!c.isActive && c.lastAbortReason != "-") break // kill path (reason recorded)
         }
         return Ctx(c, engine, sink, scope)
     }
 
-    private fun awaitReason(c: DictationCoordinator, expected: String, timeoutMs: Long = 15_000) {
+    private fun awaitReason(c: DictationCoordinator, expected: String, timeoutMs: Long = 45_000) {
         val deadline = System.currentTimeMillis() + timeoutMs
         while (c.lastAbortReason != expected && System.currentTimeMillis() < deadline) {
             Thread.sleep(5)

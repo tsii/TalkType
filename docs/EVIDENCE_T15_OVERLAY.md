@@ -107,8 +107,10 @@ nothing, keyboard closed, Chrome activated suggestion "eé" (page became
    - `VK-HIT popup-open cells=7 left=68 top=-25` -> popup absolute 1573..1727
   (menu height 154 px at density 2.75; the 147 px figure is density 2.625),
      x 68..1080; r1/r2/pressed key untouched; covers headroom + r0 only.
-   - release Chrome run measured body 1578..1732 (keyboard height differs,
-     same rule, planner's expected top≈-26 matches the -25/-26 spread).
+   - release Chrome run measured body 1578..1732 => top=-26 => rowH≈150 —
+     essentially the same row height as debug (the earlier "flatter keyboard /
+     ~140 px rows" remark was wrong: 140 px would imply top ≈ -36, i.e.
+     1568..1722, which was not measured). Planner's expected top≈-26 matches.
 5. Slide to `,`: tap committed `.` (field "."), then DOWN(897,1975)/0.8s/
    MOVE(150,1650)/UP(150,1650) -> `popup-commit cell=0` -> field ".," — cell 0
    committed by slide.

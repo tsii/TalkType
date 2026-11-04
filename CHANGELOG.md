@@ -6,6 +6,8 @@ HANDOFF.md, state/progress.md and the review documents; kept current from now on
 from `dist/` (checksums of the last rotations: `dist/SHA256SUMS-*.txt`).
 
 ## [0.1.43] — 2026-11-04 (44) — long-press popups above the finger, 6 words/s
+Dist: release `2735a99f05f9cbc443e5a09d10611ae31a51f9151fed9570346e945e67e14d20`,
+diag-debug `14056297048c21e9c6ebf3e45d26e19bc35a512c7654ad844d2df67529edcc72`.
 - **T15 popup headroom** (Opus 5.5 design, option H): the IME window gained a
   transparent 64 dp headroom band above the keyboard (`onComputeInsets` LatinIME
   pattern: content/visible insets at the keyboard top, touchable region keyboard-only

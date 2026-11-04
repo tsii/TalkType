@@ -62,3 +62,55 @@ v43_full.log (target: all green).
   accepted by design (T5 band zone predates T15, popups used the band before).
 - Slide-to-cell on a REAL touch (finger) cannot be simulated by adb swipe while
   popup open; commit-on-release path proven by logs.
+
+---
+
+# Iteration 2 (2026-11-04, release APK vc44 + debug vc44, emu 5564)
+Planner rejected iteration 1 (release unmeasured, M5/M6 missing, one mislabel).
+All M items re-measured; verdict received: **T15 ACCEPTED** (iteration 2),
+R1 required before shipping 0.1.43.
+
+## M1+M2 release, Chrome URL bar (no status band)
+Keyboard visible top y=1604 (window 1080x912+176 headroom, content/visible
+insets 176, touchable SkRegion((0,176,1080,912))). Long-press r0 `e`:
+popup body 1428..1580 = exactly keyboardTop-176 .. keyboardTop-24 — fully inside
+the headroom, 24 px above the keyboard, pressed row untouched. Headroom rows in
+the same screenshot show the APP's own content (min luminance 28 = dark text
+pixels, max 251) — band is transparent, no keyboard tint.
+
+## M3 debug dock bar (browser analogue)
+Bottom-docked EditText [33,1348][1047,1472]; r0 popup overlapped its rows
+1428..1472 visibly; touch/focus of the bar while keyboard open intact.
+
+## M4 — superseded by user rollback T16 (period key removed from footer;
+period lives in r2 again as of v0.1.43). Equivalent measured in R1 below.
+
+## M5 slide-to-cell (release Chrome, exact field contents)
+omnibox "eé" -> DOWN(270,1684) hold 0.7s -> MOVE(100,1514) -> UP(100,1510)
+=> field "eéé" (accent committed via slide, no bare e). Negative control:
+release below the popup commits the base key, not a cell.
+
+## M6 touch pass-through (release Chrome)
+Keyboard open, tap (540,1480) inside headroom: 0 VK-HIT lines, IME consumed
+nothing, keyboard closed, Chrome activated suggestion "eé" (page became
+"eé - Google Suche"). Touch went to the app.
+
+# R1 — shipping artifact verification (release app-release.apk vc44)
+1. Built from T16+T14+T15 tree; unit tests debug+release 1217/0; BUILD SUCCESSFUL.
+2. Identity: for all 14 non-ru assets, sha256 of assets/layouts/<id>.json inside
+   the APK == `git show 7b1ddf4:...` (14/14 match; protocol: unzip + sha256sum).
+3. Footer without period: byte-identical layout JSON to v0.1.42 (T11 variant B).
+4. Real values from a debug run (logcat + drawnKeys rect, replaces earlier
+   assumption — row height is 151 px in debug, NOT 176):
+   - `VK-HIT id=period rect=<845,302,947,453> view=1080x604` (keyboardView top
+     1598 -> r2 rows 1900..2051; keyboard visible top 1472 incl. 126 px debug band)
+   - `VK-HIT popup-open cells=7 left=68 top=-25` -> popup absolute 1573..1720,
+     x 68..1080; r1/r2/pressed key untouched; covers headroom + r0 only.
+   - release Chrome run measured body 1578..1732 (keyboard height differs,
+     same rule, planner's expected top≈-26 matches the -25/-26 spread).
+5. Slide to `,`: tap committed `.` (field "."), then DOWN(897,1975)/0.8s/
+   MOVE(150,1650)/UP(150,1650) -> `popup-commit cell=0` -> field ".," — cell 0
+   committed by slide.
+Release notes: docs unchanged for r1 (151 px rows: r1 1749..1900, r2 1900..2051
+in debug coordinates; release Chrome rows ~140 px because the keyboard is
+shorter there).

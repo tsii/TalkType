@@ -104,13 +104,13 @@ nothing, keyboard closed, Chrome activated suggestion "eé" (page became
    assumption — row height is 151 px in debug, NOT 176):
    - `VK-HIT id=period rect=<845,302,947,453> view=1080x604` (keyboardView top
      1598 -> r2 rows 1900..2051; keyboard visible top 1472 incl. 126 px debug band)
-   - `VK-HIT popup-open cells=7 left=68 top=-25` -> popup absolute 1573..1720,
+   - `VK-HIT popup-open cells=7 left=68 top=-25` -> popup absolute 1573..1727
+  (menu height 154 px at density 2.75; the 147 px figure is density 2.625),
      x 68..1080; r1/r2/pressed key untouched; covers headroom + r0 only.
    - release Chrome run measured body 1578..1732 (keyboard height differs,
      same rule, planner's expected top≈-26 matches the -25/-26 spread).
 5. Slide to `,`: tap committed `.` (field "."), then DOWN(897,1975)/0.8s/
    MOVE(150,1650)/UP(150,1650) -> `popup-commit cell=0` -> field ".," — cell 0
    committed by slide.
-Release notes: docs unchanged for r1 (151 px rows: r1 1749..1900, r2 1900..2051
-in debug coordinates; release Chrome rows ~140 px because the keyboard is
-shorter there).
+Row edges convention: always logged from drawnKeys rects (VK-HIT), never
+derived from assumed budgets — lesson recorded by the planner after M4/R1.

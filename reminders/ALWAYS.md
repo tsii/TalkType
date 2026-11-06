@@ -8,6 +8,6 @@
 6. **No write-only without verification.** On Gradle blockage: schedule verification via `schedule_task` within ≤ 5 min and mark the task as `UNVERIFIED`.
 7. **After "force-terminated / synthetic result":** do not delegate anything new — first `get_result`, then target/actual on the file system, then verify yourself, then adopt/`steer`/`stop`. `stop`/`steer` individually per tool block.
 8. **Slot budget ≤ 6 live subagents**; recycling via `steer` on `done` sessions; release finished sessions via dismiss.
-9. **Privacy:** no audio or text content in logs; no network access except the model download; no autocorrect/dictionaries in v1.
+9. **Privacy:** no audio or text content in logs; no network access except the model download; no autocorrect/dictionaries in v1 — refinement 2026-11-05: the typing-suggestion row is SUGGESTION-ONLY (wand press required, undoable, no learning, no persistence, lists static CC-BY-SA; full text PLAN_V0147 §0).
 10. **No `git commit`, no push to main, no deploy** without explicit approval by the user.
 11. **ALL subagents ALWAYS in the background** (user command 2026-11-01): start every delegation/session with `persist=true` as a background conversation, never wait blocking in your own turn; collect results at the pulse (`get_result`/file), update the alarm state.

@@ -65,6 +65,154 @@
             android:text="@string/setup_download_cancel"
             android:visibility="gone" />
 
+        <!-- T22h (PLAN_V0146 §3): dictation model selection — one card per set
+             (Parakeet recommended / Qwen experimental; LITERT debug-only and
+             hidden). Card states are driven in code (renderModelCards). -->
+        <TextView
+            android:id="@+id/setup_model_section_title"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="24dp"
+            android:text="@string/model_section_title"
+            android:textSize="16sp"
+            android:textStyle="bold" />
+
+        <LinearLayout
+            android:id="@+id/setup_card_parakeet"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/setup_parakeet_title"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/model_parakeet_title"
+                android:textSize="15sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/setup_parakeet_body"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:text="@string/model_parakeet_body"
+                android:textSize="13sp" />
+
+            <TextView
+                android:id="@+id/setup_parakeet_status"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:textSize="13sp" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal">
+
+                <Button
+                    android:id="@+id/setup_parakeet_select"
+                    style="?android:attr/borderlessButtonStyle"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="@string/model_select" />
+
+                <Button
+                    android:id="@+id/setup_parakeet_download"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="@string/model_download" />
+
+                <Button
+                    android:id="@+id/setup_parakeet_delete"
+                    style="?android:attr/borderlessButtonStyle"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="@string/model_delete" />
+            </LinearLayout>
+
+            <ProgressBar
+                android:id="@+id/setup_parakeet_progress"
+                style="?android:attr/progressBarStyleHorizontal"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:max="1000"
+                android:visibility="gone" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/setup_card_qwen"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/setup_qwen_title"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/model_qwen_title"
+                android:textSize="15sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/setup_qwen_body"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:text="@string/model_qwen_body"
+                android:textSize="13sp" />
+
+            <TextView
+                android:id="@+id/setup_qwen_status"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:textSize="13sp" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal">
+
+                <Button
+                    android:id="@+id/setup_qwen_select"
+                    style="?android:attr/borderlessButtonStyle"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="@string/model_select" />
+
+                <Button
+                    android:id="@+id/setup_qwen_download"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="@string/model_download" />
+
+                <Button
+                    android:id="@+id/setup_qwen_delete"
+                    style="?android:attr/borderlessButtonStyle"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="@string/model_delete" />
+            </LinearLayout>
+
+            <ProgressBar
+                android:id="@+id/setup_qwen_progress"
+                style="?android:attr/progressBarStyleHorizontal"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:max="1000"
+                android:visibility="gone" />
+        </LinearLayout>
+
         <!-- T20b (PLAN_V0145): one-time system-level network-revoke invite.
              The app NEVER revokes/touches the network itself; the card offers
              the direct app-details deep link. Visibility is set in code

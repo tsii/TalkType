@@ -12,6 +12,7 @@ import android.view.View
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import android.view.accessibility.AccessibilityNodeProvider
+import de.voicekeyboard.correct.AllLanguagesLabel
 import de.voicekeyboard.layouts.CaseMapper
 import de.voicekeyboard.layouts.KeyActions
 import de.voicekeyboard.layouts.KeyKind
@@ -194,8 +195,9 @@ class KeyboardView @JvmOverloads constructor(
 
     // ---- F22 (D12): long-press menu — adapter state, geometry via LongPressMenu ----
 
-    /** Open while the selection grid is shown; null = no menu. */
-    private class LongPressPopup(
+    /** Open while the selection grid is shown; null = no menu.
+     *  T23l: internal — Robolectric view tests (GlobeLongpressModeTest). */
+    internal class LongPressPopup(
         val key: KeyboardModel.MeasuredKey,
         val glyphs: List<String>,
         val cells: Int,
@@ -207,10 +209,37 @@ class KeyboardView @JvmOverloads constructor(
         val padPx: Int,
         /** F24e0: optional action cells (indexed in parallel to glyphs); empty = all text. */
         val actionCells: List<String> = emptyList(),
+        /** T23l (§14.2): language-MODE popup (globe long-press) — cells are labels:
+         *  0 = CURRENT (endonym), 1 = ALL_ACTIVE (device-language label). */
+        val langMode: Boolean = false,
+        /** T23l: label cells can be wider than tall — width for geometry/hit. */
+        val cellWidthPx: Int = cellPx,
+        /** T23l: cell height (== the character-menu cell for the mode popup). */
+        val cellHeightPx: Int = cellPx,
+        /** T23l: disabled cell (single active language, E9.1 rule 4) — never
+         *  selectable; carries the hint as its title. -1 = none. */
+        val langDisabledCell: Int = -1,
     )
 
-    private var popup: LongPressPopup? = null
-    private var popupSelected = -1
+    // T23l (§14.2/§14.6): seams like T23f — the view never touches prefs; the
+    // service injects the readers; the commit goes to the settable callback.
+    /** true = ALL_ACTIVE (§14.4 space label); default CURRENT. */
+    var typingLangModeSupplier: () -> Boolean = { false }
+    /** true = only ONE active language -> second popup cell disabled (E9.1 rule 4). */
+    var singleActiveLanguageSupplier: () -> Boolean = { false }
+    /** Popup selection dispatch: false = CURRENT, true = ALL_ACTIVE (§14.2). */
+    var onLangModeSelect: ((allLanguages: Boolean) -> Unit)? = null
+
+    /** T23l: test seam for the long-press TIMER — unattached views queue
+     *  postDelayed on the static run queue (Robolectric fires nothing there);
+     *  the view tests fire the captured opener deterministically. Production:
+     *  null -> postDelayed(LONG_PRESS_MS) as before. */
+    internal var longPressSchedule: (() -> Unit) -> Unit = {
+        postDelayed(longPressRunnable, KeyboardTheme.LONG_PRESS_MS)
+    }
+
+    internal var popup: LongPressPopup? = null
+    internal var popupSelected = -1
     private var armedKey: KeyboardModel.MeasuredKey? = null
     private var armedLayer: String = ""
     private var downX = 0f
@@ -278,11 +307,26 @@ class KeyboardView @JvmOverloads constructor(
         // remeasure with an identical stamp (IME layout pass while the gesture
         // is held) must not kill the arming — otherwise a swing into the menu row
         // can never open the palette (device finding F24e5d).
-        val stamp = "$activeLayerName|$widthPx|${fit?.viewHeightPx}"
-        if (stamp != modelStamp) {
-            modelStamp = stamp
-            discardLongPress()
+        // VK-9 (EMU_DUTY_V0147_ADDENDUM §5): the stamp must capture EVERY model
+        // input — layer, width, fit height AND the ASSET IDENTITY (setLayout
+        // swaps the asset at an otherwise unchanged stamp; without the id the
+        // early return below would keep the OLD layout after a language
+        // switch). The stamp is COMPLETE: the remaining model inputs
+        // (desiredRowHeightPx/rowGapPx/keyGapPx/density, fit internals) are
+        // derived deterministically from exactly these values.
+        val stamp = "${asset.id}|$activeLayerName|$widthPx|${fit?.viewHeightPx}"
+        if (stamp == modelStamp) {
+            // VK-9 FIX variant B (lower risk than a rect-compare UP gate):
+            // the IDENTICAL measure pass keeps the model INSTANCE — the
+            // object-identity gates (UP commit `key === pressedKey`, pressed
+            // drawing, armedKey/popup references) stay intact when an IME
+            // relayout (suggestion-row publish every ~300 ms!) races a held
+            // tap, and the pointless per-publish rebuild disappears.
+            if (widthPx > 0) lastModelWidth = widthPx
+            return
         }
+        modelStamp = stamp
+        discardLongPress()
         if (widthPx > 0) lastModelWidth = widthPx
         val layer = asset.layers[activeLayerName] ?: asset.layers.getValue("base")
         model = KeyboardModel(
@@ -394,6 +438,10 @@ class KeyboardView @JvmOverloads constructor(
         model?.keyAt(x, y)
             ?.takeIf { it.bottom <= height + 0.5f }
             ?.takeIf { it.kind != "margin" } // F27a1/a2: MARGIN = pure width, no touch
+
+    /** T23l: test seam — measured key by id (GlobeLongpressModeTest). */
+    internal fun keyOf(id: String): KeyboardModel.MeasuredKey? =
+        model?.keys?.firstOrNull { it.id == id }
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
@@ -520,6 +568,33 @@ class KeyboardView @JvmOverloads constructor(
         return LongPressMenu.withHint(src.alternates, src.hint, LongPressMenu.MAX_CELLS)
     }
 
+    /** T23l (§14.2): popup labels — cell 0 endonym CURRENT, cell 1 ALL_ACTIVE
+     *  in the DEVICE language; single active language: E9.1 hint instead,
+     *  disabled (no dead clicking). */
+    private fun langModeLabels(): List<String> = listOf(
+        de.voicekeyboard.ime.LanguageCycle.endonym(
+            layout?.language?.tag?.lowercase() ?: "de-de",
+        ),
+        if (singleActiveLanguageSupplier()) {
+            context.getString(de.voicekeyboard.R.string.language_switch_single_active)
+        } else {
+            AllLanguagesLabel.resolve(deviceLocaleTag())
+        },
+    )
+
+    /** T23l: the device display locale tag (§14.4 — re-resolved per call, so
+     *  config changes take effect at the next draw). */
+    private fun deviceLocaleTag(): String =
+        context.resources.configuration.locales[0].toLanguageTag()
+
+    /** T23l: measured width of the label cells (min = square character cell). */
+    private fun langCellWidthPx(labels: List<String>): Int {
+        val padPx = (KeyboardTheme.POPUP_PAD_DP * density).roundToInt()
+        val base = (KeyboardTheme.POPUP_CELL_DP * density).roundToInt()
+        val ink = labels.maxOf { popupGlyphPaint.measureText(it) }.toInt()
+        return maxOf(base, ink + 2 * padPx)
+    }
+
     private fun openPopupIfArmed() {
         val key = armedKey ?: return
         // Generation/pointer guard (§2): layer switched or gesture aborted
@@ -543,17 +618,20 @@ class KeyboardView @JvmOverloads constructor(
             armedKey = null
             return
         }
-        val glyphs = alternatesOf(key)
+        val langMode = key.kind == "action" && key.value == KeyActions.LANGUAGE
+        val glyphs = if (langMode) langModeLabels() else alternatesOf(key)
         if (glyphs.isEmpty()) {
             armedKey = null
             return
         }
-        val n = LongPressMenu.cellCount(glyphs)
+        val n = if (langMode) glyphs.size else LongPressMenu.cellCount(glyphs)
+        // T23l: cellPx stays the HEIGHT; label cells get a measured width.
         val cellPx = (KeyboardTheme.POPUP_CELL_DP * density).roundToInt()
+        val cellWidthPx = if (langMode) langCellWidthPx(glyphs) else cellPx
         val padPx = (KeyboardTheme.POPUP_PAD_DP * density).roundToInt()
         val menuH = popupHeightPx // F22-L: identical dimensions as the arming zone
         val gapPx = popupGapPx
-        val menuW = LongPressMenu.menuWidthPx(cellPx, n, padPx)
+        val menuW = LongPressMenu.menuWidthPx(cellWidthPx, n, padPx)
         // If the complete geometry does not fit into the view clip: the menu does NOT
         // open (D12 §1; the flip fallback of the top row is a separate acceptance point).
         if (width <= 0 || height <= 0 || menuW > width) {
@@ -563,7 +641,7 @@ class KeyboardView @JvmOverloads constructor(
         // T7 (v0.1.37): popup-left from the SET of cells — default
         // centering over the base key, then clamping to both view edges
         // (menuLeftClamped), so that NO cell runs outside the view.
-        val left = LongPressMenu.menuLeftClamped(n, key.centerX.toInt(), cellPx, width, padPx)
+        val left = LongPressMenu.menuLeftClamped(n, key.centerX.toInt(), cellWidthPx, width, padPx)
         // F28a2: row position + footer row + status row height — row 0: T1
         // two-zone rule (zone A above the key, entirely inside the view; otherwise
         // zone B: edge top=0 — NEVER below the key, user finding vc34); footer row:
@@ -607,7 +685,13 @@ class KeyboardView @JvmOverloads constructor(
         // glyphs — a possible hint always lies BEHIND the action values);
         // only as many cells as the menu really shows.
         val actionCells = sourceKeys[key.id]?.cellActions?.take(n) ?: emptyList()
-        popup = LongPressPopup(key, glyphs.take(n), n, left, top, menuW, menuH, cellPx, padPx, actionCells)
+        popup = LongPressPopup(
+            key, glyphs.take(n), n, left, top, menuW, menuH, cellPx, padPx, actionCells,
+            langMode = langMode,
+            cellWidthPx = cellWidthPx,
+            cellHeightPx = cellPx,
+            langDisabledCell = if (langMode && singleActiveLanguageSupplier()) 1 else -1,
+        )
         // T5 (vc37): if the menu protrudes over the view's top edge into the STATUS BAND, the
         // view lifts BRIEFLY over the statusRow (F34: elevation 1f) — otherwise
         // the palette would stay Z-hidden behind the bar in the band (F54 family).
@@ -634,11 +718,11 @@ class KeyboardView @JvmOverloads constructor(
      * hit an alternate (D12 §6 paddingIsNotACharacter).
      */
     private fun popupCellAt(p: LongPressPopup, x: Float, y: Float): Int {
-        if (y < p.top + p.padPx || y >= p.top + p.padPx + p.cellPx) return -1
-        val idx = LongPressMenu.pick((x - (p.left + p.padPx)).toInt(), p.cellPx + p.padPx, p.cells)
+        if (y < p.top + p.padPx || y >= p.top + p.padPx + p.cellHeightPx) return -1
+        val idx = LongPressMenu.pick((x - (p.left + p.padPx)).toInt(), p.cellWidthPx + p.padPx, p.cells)
         if (idx < 0) return -1
-        val cellLeft = (p.left + p.padPx).toFloat() + idx * (p.cellPx + p.padPx)
-        return if (x >= cellLeft && x < cellLeft + p.cellPx) idx else -1
+        val cellLeft = (p.left + p.padPx).toFloat() + idx * (p.cellWidthPx + p.padPx)
+        return if (x >= cellLeft && x < cellLeft + p.cellWidthPx) idx else -1
     }
 
     /**
@@ -660,7 +744,9 @@ class KeyboardView @JvmOverloads constructor(
         ) {
             return -1
         }
-        return popupCellAt(p, x, y)
+        val cell = popupCellAt(p, x, y)
+        // T23l: the disabled hint cell is never selectable.
+        return if (cell == p.langDisabledCell) -1 else cell
     }
 
     /**
@@ -670,6 +756,12 @@ class KeyboardView @JvmOverloads constructor(
      * of the service) — drawing, thresholds and cellWins stay untouched.
      */
     private fun commitAlternate(p: LongPressPopup, cell: Int) {
+        // T23l (§14.2): mode dispatch — cell 0 CURRENT, cell 1 ALL_ACTIVE; the
+        // disabled hint cell never reaches a commit (selection stays -1).
+        if (p.langMode) {
+            onLangModeSelect?.invoke(cell == 1)
+            return
+        }
         val action = LongPressMenu.cellAction(cell, p.actionCells)
         // F24e3 MEASURABILITY (rule 9: cell index + action name from the allowlist or "-",
         // no glyph, no field content). Debug build only.
@@ -702,17 +794,23 @@ class KeyboardView @JvmOverloads constructor(
         if (popupRadius > 0f) canvas.drawRoundRect(rect, popupRadius, popupRadius, popupPaint)
         else canvas.drawRect(rect, popupPaint)
         for (i in 0 until p.cells) {
-            val cellLeft = (p.left + p.padPx).toFloat() + i * (p.cellPx + p.padPx)
+            val cellLeft = (p.left + p.padPx).toFloat() + i * (p.cellWidthPx + p.padPx)
             val selected = i == popupSelected
-            if (selected) {
+            val disabled = p.langMode && i == p.langDisabledCell
+            if (selected && !disabled) {
                 // Highlight inside the menu's outer edge (D12 §1: clips, no border).
                 popupPaint.color = palette.accent
-                rect.set(cellLeft, (p.top + p.padPx).toFloat(), cellLeft + p.cellPx, (p.top + p.padPx + p.cellPx).toFloat())
+                rect.set(cellLeft, (p.top + p.padPx).toFloat(), cellLeft + p.cellWidthPx, (p.top + p.padPx + p.cellHeightPx).toFloat())
                 canvas.drawRect(rect, popupPaint)
             }
-            popupGlyphPaint.color = if (selected) palette.micRecordingGlyph else palette.textPrimary
-            val cx = cellLeft + p.cellPx / 2f
-            val cy = (p.top + p.padPx).toFloat() + p.cellPx / 2f
+            // T23l: the disabled hint cell is dimmed (no dead clicking, E9.1 rule 4).
+            popupGlyphPaint.color = when {
+                disabled -> palette.textSecondary
+                selected -> palette.micRecordingGlyph
+                else -> palette.textPrimary
+            }
+            val cx = cellLeft + p.cellWidthPx / 2f
+            val cy = (p.top + p.padPx).toFloat() + p.cellHeightPx / 2f
             val base = cy - (popupGlyphPaint.ascent() + popupGlyphPaint.descent()) / 2f
             // P0 (2026-11-01): the three action glyphs in the menu come from the
             // PATH EXPORT — no font glyph (⌫ would be tofu on the device).
@@ -834,7 +932,7 @@ class KeyboardView @JvmOverloads constructor(
         for (path in paths) canvas.drawPath(path, p)
     }
 
-    private fun displayLabel(key: KeyboardModel.MeasuredKey): String {
+    internal fun displayLabel(key: KeyboardModel.MeasuredKey): String {
         val src = sourceKeys[key.id]
         if (src?.kind == KeyKind.ACTION) {
             return when (src.value) {
@@ -845,12 +943,19 @@ class KeyboardView @JvmOverloads constructor(
                     // („Deutsch", „English (US)", „Polski" …). The source is the EXISTING
                     // endonym table LanguageCycle.ENDONYMS — no new table;
                     // resolved via SpaceLabelRule (non-whitespace wins).
-                    de.voicekeyboard.layouts.SpaceLabelRule.resolve(
-                        layout?.language?.tag?.lowercase()
-                            ?.let { de.voicekeyboard.ime.LanguageCycle.endonym(it) }
-                            ?: src.label,
-                        context.getString(de.voicekeyboard.R.string.key_space_label),
-                    )
+                    // T23l (§14.4): ALL_ACTIVE — the label becomes the DEVICE-language
+                    // all-languages label (AllLanguagesLabel, resolved per draw —
+                    // config changes take effect at the next draw).
+                    if (typingLangModeSupplier()) {
+                        AllLanguagesLabel.resolve(deviceLocaleTag())
+                    } else {
+                        de.voicekeyboard.layouts.SpaceLabelRule.resolve(
+                            layout?.language?.tag?.lowercase()
+                                ?.let { de.voicekeyboard.ime.LanguageCycle.endonym(it) }
+                                ?: src.label,
+                            context.getString(de.voicekeyboard.R.string.key_space_label),
+                        )
+                    }
                 KeyActions.SHIFT -> if (capsLock) "⇪" else "⇧"
                 KeyActions.CAPS -> "⇪"
                 else -> src.label
@@ -929,9 +1034,14 @@ class KeyboardView @JvmOverloads constructor(
                     scheduleBackspaceRepeat()
                 }
                 // F22 (D12 §2): arming ONLY for text keys with alternates —
-                // Mic/Caps/Enter/Delete/?123/Globe/Emoji/Space are ACTIONs and
-                // stay on their existing path (Mic hold gesture, DOUBLE_TAP 350).
-                if (down != null && down.kind == "text" && alternatesOf(down).isNotEmpty()) {
+                // Mic/Caps/Enter/Delete/?123/Emoji/Space are ACTIONs and stay on
+                // their existing path (Mic hold gesture, DOUBLE_TAP 350).
+                // T23l (§14.2): PLUS the globe — the ONLY action key that arms a
+                // long-press (language-mode popup, same threshold LONG_PRESS_MS).
+                val langArm = down != null && down.kind == "action" && down.value == KeyActions.LANGUAGE
+                if (down != null &&
+                    ((down.kind == "text" && alternatesOf(down).isNotEmpty()) || langArm)
+                ) {
                     armedKey = down
                     armedLayer = activeLayerName
                     downX = event.x
@@ -941,8 +1051,14 @@ class KeyboardView @JvmOverloads constructor(
                     // MOVE zone uses EXCLUSIVELY these two values.
                     val cellPx = (KeyboardTheme.POPUP_CELL_DP * density).roundToInt()
                     val padPx = (KeyboardTheme.POPUP_PAD_DP * density).roundToInt()
+                    // T23l: the mode popup's label cells are WIDER than tall —
+                    // the zone uses the real palette (labels measured once).
+                    val langLabels = if (langArm) langModeLabels() else emptyList()
+                    val cellWidthPx = if (langArm) langCellWidthPx(langLabels) else cellPx
+                    val zoneCells = if (langArm) langLabels.size
+                        else LongPressMenu.cellCount(alternatesOf(down))
                     val menuW = LongPressMenu.menuWidthPx(
-                        cellPx, LongPressMenu.cellCount(alternatesOf(down)), padPx,
+                        cellWidthPx, zoneCells, padPx,
                     )
                     if (width > 0 && menuW <= width) {
                         armedMenuWidthPx = menuW
@@ -950,8 +1066,8 @@ class KeyboardView @JvmOverloads constructor(
                         // (menuLeftClamped) — the arming zone is the ACTUAL
                         // palette, never the unclamped nominal center.
                         armedMenuLeftPx = LongPressMenu.menuLeftClamped(
-                            LongPressMenu.cellCount(alternatesOf(down)),
-                            down.centerX.toInt(), cellPx, width, padPx,
+                            zoneCells,
+                            down.centerX.toInt(), cellWidthPx, width, padPx,
                         )
                     } else {
                         armedMenuWidthPx = -1
@@ -967,7 +1083,9 @@ class KeyboardView @JvmOverloads constructor(
                             "popup-zone left=$armedMenuLeftPx w=$armedMenuWidthPx min=$zMin max=$zMax",
                         )
                     }
-                    postDelayed(longPressRunnable, KeyboardTheme.LONG_PRESS_MS)
+                    // T23l: scheduling over the seam (production: postDelayed —
+                    // the same threshold as the character menus, §14.2).
+                    longPressSchedule { longPressRunnable.run() }
                 }
                 // D10 remainder §1: DOWN on the footer-row Mic starts the hold gesture —
                 // EXCLUSIVELY THIS pointer owns it; a later second
@@ -1107,7 +1225,11 @@ class KeyboardView @JvmOverloads constructor(
                         when {
                             cell >= 0 -> commitAlternate(openPopup, cell) // a real slide
                             isInsideKey(openPopup.key, event.x, event.y) ->
-                                handleKey(openPopup.key, event.eventTime) // base character exactly once
+                                if (openPopup.langMode) {
+                                    Unit // T23l: globe long-press consumed — no tap action
+                                } else {
+                                    handleKey(openPopup.key, event.eventTime) // base character exactly once
+                                }
                             else -> Unit // abort: 0 characters, no "last hit"
                         }
                     }
@@ -1129,6 +1251,15 @@ class KeyboardView @JvmOverloads constructor(
                         !(key.kind == "action" && key.value == KeyActions.BACKSPACE)
                     ) {
                         handleKey(key, event.eventTime) // B2: backspace already fired at DOWN
+                    } else if (key != null && debuggable()) {
+                        // VK-9 observability (rule 9: ids/numbers only): the UP
+                        // hit a VALID key but the identity gate did not match —
+                        // a model rotation raced the held tap (stamp change).
+                        android.util.Log.d(
+                            "VK-HIT",
+                            "hit-drop=identity id=${key.id} pressed=${pressedKey?.id ?: "none"} " +
+                                "stamp=<${key.left.toInt()},${key.top.toInt()},${key.right.toInt()},${key.bottom.toInt()}>",
+                        )
                     }
                 }
                 pressedKey = null

@@ -22,6 +22,15 @@ object DownloadPolicy {
     /** E3: at least 2.5 GB free before the first byte (model + reserve). */
     const val MIN_FREE_BYTES: Long = 2_500_000_000L
 
+    /** T22d (PLAN_V0146 §2): reserve ON TOP of the model bytes per set — the
+     *  parts→staging move is a rename on the same file system, but the parts
+     *  coexist with the active version while downloading. */
+    const val SET_RESERVE_BYTES: Long = 1_500_000_000L
+
+    /** T22d (PLAN_V0146 §2): total device RAM required to OFFER the QWEN
+     *  download (RAM gate is Qwen-only; A/B have no RAM gate). */
+    const val QWEN_MIN_TOTAL_RAM_BYTES: Long = 8L * 1024 * 1024 * 1024
+
     /** Start decision for the setup UI. */
     sealed class Decision {
         data object Start : Decision()
@@ -40,6 +49,68 @@ object DownloadPolicy {
         !networkEnabled -> Decision.NetworkDisabled
         freeBytes < MIN_FREE_BYTES -> Decision.InsufficientSpace(freeBytes)
         else -> Decision.Start
+    }
+
+    /** T22d (PLAN_V0146 §2): space requirement of a model set. Unsupported =
+     *  set not usable: empty manifest ("modell nicht freigeschaltet") or —
+     *  VK-2 — no pinned base URL yet ("not enabled yet", server host is
+     *  pinned at upload time). Structurally no download possible. */
+    sealed class SpaceNeed {
+        data class Required(val bytes: Long) : SpaceNeed()
+        data class Unsupported(val reason: String = REASON_NOT_UNLOCKED) : SpaceNeed()
+
+        companion object {
+            /** empty manifest list (no contract yet). */
+            const val REASON_NOT_UNLOCKED = "modell nicht freigeschaltet"
+
+            /** VK-2: base URL empty — server host not pinned yet. */
+            const val REASON_NOT_ENABLED = "not enabled yet"
+        }
+    }
+
+    /** T22d: model bytes + [SET_RESERVE_BYTES]; [manifest] injectable so tests
+     *  can pin a future QWEN list; [baseUrl] injectable (VK-2: empty = not
+     *  enabled — production default = the pinned URL of the variant). */
+    fun spaceNeedFor(
+        variant: ModelVariant,
+        manifest: List<ModelFile> = ModelManifest.forVariant(variant),
+        baseUrl: String = ModelManifest.baseUrlFor(variant),
+    ): SpaceNeed = when {
+        manifest.isEmpty() -> SpaceNeed.Unsupported()
+        baseUrl.isEmpty() -> SpaceNeed.Unsupported(SpaceNeed.REASON_NOT_ENABLED)
+        else -> SpaceNeed.Required(manifest.sumOf { it.sizeBytes } + SET_RESERVE_BYTES)
+    }
+
+    /** T22d: effective free-space floor per set = max(MIN_FREE_BYTES, need).
+     *  A stays NUMERICALLY UNCHANGED: 670.6 MB + 1.5 GB < 2.5 GB ⇒ the E3
+     *  floor of [decide] keeps its exact old numbers. null = set unsupported. */
+    fun requiredFreeBytes(
+        variant: ModelVariant,
+        manifest: List<ModelFile> = ModelManifest.forVariant(variant),
+        baseUrl: String = ModelManifest.baseUrlFor(variant),
+    ): Long? =
+        when (val need = spaceNeedFor(variant, manifest, baseUrl)) {
+            is SpaceNeed.Unsupported -> null
+            is SpaceNeed.Required -> maxOf(MIN_FREE_BYTES, need.bytes)
+        }
+
+    /** T22d (PLAN_V0146 §2): may the UI OFFER the download of [variant]?
+     *  A (and debug-only B): always — no RAM gate, only the space floor.
+     *  QWEN: only with a pinned manifest (not empty) AND a pinned base URL
+     *  (VK-2) AND total RAM >= [QWEN_MIN_TOTAL_RAM_BYTES], plus the space floor. */
+    fun canOfferSet(
+        variant: ModelVariant,
+        totalRamBytes: Long,
+        freeBytes: Long,
+        manifest: List<ModelFile> = ModelManifest.forVariant(variant),
+        baseUrl: String = ModelManifest.baseUrlFor(variant),
+    ): Boolean {
+        val floor = requiredFreeBytes(variant, manifest, baseUrl) ?: return false // not unlocked/not enabled
+        if (freeBytes < floor) return false
+        return when (variant) {
+            ModelVariant.QWEN3_ASR -> totalRamBytes >= QWEN_MIN_TOTAL_RAM_BYTES
+            else -> true // plan §2: "RAM gate (Qwen only)"
+        }
     }
 
     /** (e) Error kind → short user text key (never HTTP details, never URLs).

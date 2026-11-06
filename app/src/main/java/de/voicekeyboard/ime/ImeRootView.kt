@@ -6,7 +6,14 @@ import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.GradientDrawable
 import android.graphics.drawable.InsetDrawable
 import android.graphics.drawable.LayerDrawable
+import android.graphics.Typeface
 import android.os.Build
+import android.text.InputType
+import android.text.SpannableString
+import android.text.Spanned
+import android.text.TextUtils
+import android.text.style.StyleSpan
+import android.text.style.UnderlineSpan
 import android.util.AttributeSet
 import android.util.Log
 import android.view.Gravity
@@ -15,9 +22,11 @@ import android.view.ViewOutlineProvider
 import android.view.WindowInsets
 import android.widget.Button
 import android.widget.FrameLayout
+import android.widget.ImageButton
 import android.widget.LinearLayout
 import android.widget.TextView
 import de.voicekeyboard.R
+import de.voicekeyboard.correct.RegionReplacer
 import de.voicekeyboard.keyboard.EmojiPanelView
 import de.voicekeyboard.keyboard.KeyboardPalette
 import de.voicekeyboard.keyboard.KeyboardTheme
@@ -42,6 +51,30 @@ import kotlin.math.roundToInt
 
 /** T18-A: tag of the insets evidence lines (numbers only, rule 9). */
 internal const val INSETS_LOG_TAG = "VK-INSETS"
+
+/** T23f (§6): alpha of the suggestion text while NO suggestion exists (dimmed). */
+private const val DIMMED_ALPHA = 0.4f
+
+/**
+ * T23f (PLAN_V0147 §6): pure field eligibility for the correction row —
+ * TYPE_CLASS_TEXT minus password/web-password/visible-password/URI/e-mail
+ * variants minus NO_SUGGESTIONS; other classes (numeric/phone/datetime/NULL)
+ * are never eligible. Pure and top-level for the Robolectric matrix test.
+ */
+internal fun isCorrectionFieldEligible(inputType: Int): Boolean {
+    if (inputType and InputType.TYPE_MASK_CLASS != InputType.TYPE_CLASS_TEXT) return false
+    val variation = inputType and InputType.TYPE_MASK_VARIATION
+    if (variation == InputType.TYPE_TEXT_VARIATION_PASSWORD ||
+        variation == InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD ||
+        variation == InputType.TYPE_TEXT_VARIATION_WEB_PASSWORD ||
+        variation == InputType.TYPE_TEXT_VARIATION_WEB_EMAIL_ADDRESS ||
+        variation == InputType.TYPE_TEXT_VARIATION_URI ||
+        variation == InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS
+    ) {
+        return false
+    }
+    return inputType and InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS == 0
+}
 
 /**
  * T18-A evidence line (rule 9: numbers ONLY — never text/content): "vis" is the
@@ -111,6 +144,35 @@ class ImeRootView @JvmOverloads constructor(
     /** T9 (v0.1.38): the status row as a whole — visible in DEBUG only (see init);
      *  the visibility is accessible to tests without going over micButton.parent. */
     val statusRow: LinearLayout
+
+    // ============================================================ T23f (§6)
+    /** Correction row content (release): suggestion text, single line, START-ellipsized. */
+    val correctionText: TextView
+    /** Magic wand (§6, vector ic_wand — no emoji, minSdk 29): 48 dp wide, rightmost. */
+    val wandButton: ImageButton
+    /** Setup switch "Typing suggestions" (pref corr_row_enabled) — read via THIS
+     *  supplier; the view never touches prefs (T23g injects the reader). */
+    var typingSuggestionsSupplier: () -> Boolean = { true } // default ON (§6)
+
+    /** T23l (§14.6): ALL_ACTIVE prefix tag ("DE") in front of the suggestion —
+     *  the endonym moves from the space bar to the correction row; empty = off. */
+    private var correctionPrefix: String = ""
+
+    /** REVIEW_V0147 VK-2: the last setCorrection pair — the undo glyph must keep
+     *  the wand CLICKABLE even after the row cleared (the only undo window
+     *  lies between APPLY and the next keystroke, §5). */
+    private var lastHasSuggestion = false
+    private var lastEnabled = false
+    /** Wand-press dispatch for T23g: APPLY or UNDO (undo glyph mode). */
+    var onWandPress: ((RegionReplacer.WandPress) -> Unit)? = null
+
+    /** T23f: eligibility of the CURRENT field (set by the service via setFieldInputType). */
+    private var correctionFieldEligible: Boolean = false
+    /** T23f: undo glyph mode (wand rotated + undo content description). */
+    private var wandUndoMode: Boolean = false
+    /** T9: FLAG_DEBUGGABLE read ONCE — debug keeps status text + 🎤 + 🐞 in the row. */
+    private val debugStatusRow: Boolean =
+        (context.applicationInfo?.flags ?: 0) and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE != 0
     val keyboardView: KeyboardView
     val emojiPanel: EmojiPanelView
 
@@ -203,54 +265,85 @@ class ImeRootView @JvmOverloads constructor(
             )
         }
 
-        // T9 (v0.1.38): status row DEBUG ONLY — in the release (FLAG_DEBUGGABLE missing)
-        // the statusRow stays GONE: status text + 🎤 + 🐞 occupy NO layout
-        // space, the keyboard receives the full height budget. Injectable seam:
-        // context.applicationInfo.flags, read ONCE (Robolectric tests control
-        // the bit). Service updates (statusText.text, micButton.isEnabled/
-        // isActivated) are pure property sets on still-attached views —
-        // safe while GONE, no guard needed (checked: VoiceKeyboardService
-        // :1537/1550/1552 and syncMicUi :921). T5 band overlay: without a visible
-        // statusRow the KeyboardView sits at the stack's top edge (top = 0) ⇒
-        // statusBandPx = 0 ⇒ menuTopForStatusBand falls back to the T1 two-zone rule
-        // (existing fallback).
-        val debugStatusRow =
-            (context.applicationInfo?.flags ?: 0) and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE != 0
+        // T9 (v0.1.38): the debug flag lives in the FIELD debugStatusRow (T23f).
+        //
+        // T23f (PLAN_V0147 §6): the statusRow slot IS the correction row now —
+        // release: 40 dp, visible iff field eligible + setup switch (see
+        // refreshCorrectionRowVisibility); the debug block (status text + 🎤 +
+        // 🐞, 48 dp) stays LEFT of the correction content in DEBUG.
+        val rowHeightPx = ((if (debugStatusRow) 48 else 40) * density).roundToInt()
+
+        correctionText = TextView(context).apply {
+            text = ""
+            textSize = 14f
+            setSingleLine(true)
+            ellipsize = TextUtils.TruncateAt.START // §6: single line, START
+            setTextColor(palette.textPrimary)
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding((8 * density).toInt(), 0, (8 * density).toInt(), 0)
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f)
+            visibility = GONE // shown by refreshCorrectionRowVisibility()
+        }
+
+        wandButton = ImageButton(context).apply {
+            setImageResource(R.drawable.ic_wand)
+            imageTintList = android.content.res.ColorStateList.valueOf(palette.textFunctional)
+            background = ColorDrawable(palette.background) // no foreign relief theme
+            contentDescription = context.getString(R.string.wand_apply_correction)
+            setPadding(0, 0, 0, 0)
+            // §6: 48x48 wand — inside the 40-dp release row the height follows
+            // the row (MATCH_PARENT); in DEBUG (48-dp row) it is the full square.
+            layoutParams = LinearLayout.LayoutParams(
+                (48 * density).toInt(),
+                LinearLayout.LayoutParams.MATCH_PARENT,
+            )
+            visibility = GONE
+            setOnClickListener {
+                onWandPress?.invoke(
+                    if (wandUndoMode) RegionReplacer.WandPress.UNDO else RegionReplacer.WandPress.APPLY,
+                )
+            }
+        }
 
         statusRow = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             // T21/S2 height budget (DESIGN_STOCK_LOOK §3): THIS row block is the
-            // ONE place where the status row enters the height budget —
-            // explicit 48-dp height (not "accidentally" pulled in via the debug
-            // button). The vertical stack below measures the statusRow first and
-            // subtracts its height from the KeyboardView's child MeasureSpec
+            // ONE place where the status/correction row enters the height budget —
+            // explicit height (48 dp debug incl. the 48-dp debug buttons, 40 dp
+            // release per §6), NOT "accidentally" pulled in via a child. The
+            // vertical stack below measures the row first and subtracts its
+            // height from the KeyboardView's child MeasureSpec
             // (LinearLayout.onMeasure → measureChildBeforeLayout); KeyboardView
             // therefore computes with statusLinePx = 0 — EXACTLY ONCE, no double subtraction.
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
-                (48 * density).toInt(),
+                rowHeightPx,
             )
             // S4: 1-dp separator line BELOW the bar (spec §1: separator lines 1 dp
             // below the status bar — the only fixed line, consistent also in the
-            // emoji view). As a background layer WITHIN the 48 dp so that the
+            // emoji view). As a background layer WITHIN the row height so that the
             // subtraction chain (key budget) does not change again — no additional
             // stack child, no measurement change.
             val fill = GradientDrawable().apply { setColor(palette.background) }
             val line = GradientDrawable().apply { setColor(palette.separator) }
             background = LayerDrawable(arrayOf(fill, line)).apply {
-                setLayerInset(1, 0, (48 * density).toInt() - (1 * density).toInt().coerceAtLeast(1), 0, 0)
+                setLayerInset(1, 0, rowHeightPx - (1 * density).toInt().coerceAtLeast(1), 0, 0)
             }
             addView(statusText)
             addView(micButton)
-            addView(debugButton) // P0: right, fixed in the row (no dynamic addView)
-            // T9 (vc39): release ⇒ GONE (no layout space); debug ⇒ as before (VISIBLE).
-            // T9b hardening (vc39 evidence run, review follow-up): the mode switchers
-            // showEmojiPanel()/hideEmojiPanel() touch ONLY keyboardView/emojiBlock —
-            // never statusRow; the service sets no visibility at all. So that no
-            // future switcher pulls the release row back, the setting here remains
-            // the only place and is enforced by a test (ImeRootViewLayoutTest:
-            // the release test checks GONE in keyboard AND emoji mode incl. roundtrip).
+            addView(debugButton) // P0: fixed row child (T23f: LEFT of the wand)
+            addView(correctionText) // T23f: suggestion text (§6 left)
+            addView(wandButton) // T23f: wand rightmost (§6 right)
+            // T9 (vc39): release ⇒ debug children GONE; the ROW visibility is
+            // the ONE place (T23f): DEBUG always VISIBLE (stock), release only
+            // with eligible field + setup switch (GONE keeps the full height
+            // budget + T1 two-zone fallback for the band overlay).
+            if (!debugStatusRow) {
+                statusText.visibility = GONE
+                micButton.visibility = GONE
+                debugButton.visibility = GONE
+            }
             visibility = if (debugStatusRow) VISIBLE else GONE
         }
 
@@ -343,6 +436,110 @@ class ImeRootView @JvmOverloads constructor(
             Log.i(INSETS_LOG_TAG, insetsEvidenceLine("apply", insets, navCapped, v.height))
             insets
         }
+    }
+
+    // ============================================================ T23f (§6)
+
+    /**
+     * T23f: the service feeds the CURRENT field's input type; the row shows
+     * only for eligible fields AND setup switch (typingSuggestionsSupplier).
+     * Not-eligible/GONE keeps the keyboard's full height budget (T1 two-zone
+     * fallback for the long-press band; VK-INSETS untouched).
+     */
+    fun setFieldInputType(inputType: Int) {
+        correctionFieldEligible = isCorrectionFieldEligible(inputType)
+        refreshCorrectionRowVisibility()
+    }
+
+    /**
+     * Recomputes the row visibility (call after the switch supplier or the
+     * eligibility changed). DEBUG keeps the row (stock) always; the correction
+     * CONTENT itself follows eligibility + switch.
+     */
+    fun refreshCorrectionRowVisibility() {
+        val show = correctionFieldEligible && typingSuggestionsSupplier()
+        correctionText.visibility = if (show) VISIBLE else GONE
+        wandButton.visibility = if (show) VISIBLE else GONE
+        statusRow.visibility = if (debugStatusRow || show) VISIBLE else GONE
+    }
+
+    /**
+     * T23l (§14.6): language prefix tag (e. g. "DE") for ALL_ACTIVE — set
+     * BEFORE/with the next setCorrection; composed as "TAG · suggestion".
+     */
+    fun setCorrectionPrefix(tag: String) {
+        correctionPrefix = tag
+    }
+
+    /**
+     * T23f (§6): row content. [original]/[corrected] = the typed region and
+     * the suggested replacement; words that DIFFER are rendered bold +
+     * underlined (Spannable, index-aligned word diff). No suggestion
+     * ([hasSuggestion] false): text cleared and dimmed, wand disabled.
+     * [enabled] gates the wand action (T23g passes field-eligible && switch &&
+     * dictation idle).
+     */
+    fun setCorrection(
+        original: String?,
+        corrected: String?,
+        hasSuggestion: Boolean,
+        enabled: Boolean,
+    ) {
+        correctionText.text = if (original != null && corrected != null) {
+            val styled = styledCorrection(original, corrected)
+            if (correctionPrefix.isEmpty()) {
+                styled
+            } else {
+                // T23l: prefix + suggestion; the diff spans move along via append.
+                android.text.SpannableStringBuilder(correctionPrefix)
+                    .append(" · ")
+                    .append(styled)
+            }
+        } else {
+            ""
+        }
+        correctionText.alpha = if (hasSuggestion) 1f else DIMMED_ALPHA
+        wandButton.isEnabled = hasSuggestion && enabled
+        lastHasSuggestion = hasSuggestion
+        lastEnabled = enabled
+    }
+
+    /**
+     * T23f (§5): undo glyph mode — wand rotated 180° and the undo content
+     * description while an undo level exists (service feeds hasUndoLevel).
+     * REVIEW_V0147 VK-2: the glyph ALSO re-enables the wand — an undo level
+     * keeps the button clickable even after the row cleared (the only undo
+     * window is between APPLY and the next keystroke).
+     */
+    fun setWandUndoMode(hasUndoLevel: Boolean) {
+        wandUndoMode = hasUndoLevel
+        wandButton.rotation = if (hasUndoLevel) 180f else 0f
+        wandButton.contentDescription = context.getString(
+            if (hasUndoLevel) R.string.wand_undo_correction else R.string.wand_apply_correction,
+        )
+        wandButton.isEnabled = hasUndoLevel || (lastHasSuggestion && lastEnabled)
+    }
+
+    private fun styledCorrection(original: String, corrected: String): SpannableString {
+        val span = SpannableString(corrected)
+        val originalWords = original.split(' ')
+        val correctedWords = corrected.split(' ')
+        if (originalWords.size != correctedWords.size) {
+            // not index-alignable: mark the whole correction
+            span.setSpan(StyleSpan(Typeface.BOLD), 0, span.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+            span.setSpan(UnderlineSpan(), 0, span.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+            return span
+        }
+        var pos = 0
+        for (i in correctedWords.indices) {
+            val word = correctedWords[i]
+            if (word != originalWords[i]) {
+                span.setSpan(StyleSpan(Typeface.BOLD), pos, pos + word.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                span.setSpan(UnderlineSpan(), pos, pos + word.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+            }
+            pos += word.length + 1 // single space separator (split source)
+        }
+        return span
     }
 
     /** Emoji mode (idempotent): keyboard GONE, emoji block VISIBLE. */

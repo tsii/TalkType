@@ -10,6 +10,13 @@ import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputConnection
 import de.voicekeyboard.R
 import de.voicekeyboard.asr.ParakeetAsrEngine
+import de.voicekeyboard.correct.LanguageModePolicy
+import de.voicekeyboard.correct.NeighbourModel
+import de.voicekeyboard.correct.RegionReplacer
+import de.voicekeyboard.correct.TypedRegionTracker
+import de.voicekeyboard.correct.TypingRules
+import de.voicekeyboard.correct.WordCorrector
+import de.voicekeyboard.correct.WordList
 import de.voicekeyboard.audio.AudioLevelListener
 import de.voicekeyboard.audio.AudioRecordSource
 import de.voicekeyboard.audio.AudioRouter
@@ -213,6 +220,12 @@ class VoiceKeyboardService : InputMethodService(), KeyboardView.Listener {
         /** E9.1 rule 7: persistence file vk_layout (MODE_PRIVATE). */
         const val LAYOUT_PREFS = "vk_layout"
         const val KEY_ACTIVE_LANGUAGES = "active_languages"
+        /** T23g (PLAN_V0147 §6): setup switch "Typing suggestions" (default ON). */
+        const val PREF_CORR_ROW_ENABLED = "corr_row_enabled"
+        /** T23g (§14): correction language mode pref ('current' default | 'all'). */
+        const val PREF_CORR_LANG_MODE = "corr_lang_mode"
+        /** T23g (§7): debounce of the region compute between separators. */
+        const val CORR_DEBOUNCE_MS = 300L
         const val KEY_CURRENT_LANGUAGE = "current_language"
     }
 
@@ -368,6 +381,31 @@ class VoiceKeyboardService : InputMethodService(), KeyboardView.Listener {
     @Volatile private var startingUp = false
     @Volatile private var cancelStartRequested = false
 
+    // ==================================================== T23g (PLAN_V0147 §3–§8)
+    /** T23g: the correction wiring — feeds, debounce, wand dispatch. Built in
+     *  onCreate, torn down in onDestroy; null-safe at every feed point. */
+    internal var corrWiring: CorrectionWiring? = null
+    /** T23g (§7): single-thread compute worker (immediate on separator, else
+     *  debounce 300 ms; generation discards stale runs). */
+    private var corrWorker: java.util.concurrent.ExecutorService? = null
+    private var corrScheduler: CorrScheduler? = null
+    /** T23g (§5): selection snapshot for the IC editor adapter (main thread). */
+    private var lastSelStart = -1
+    private var lastSelEnd = -1
+    /**
+     * T23g: lazy word-list registry over the word-list bin assets (worker).
+     * VK-8 (EMU_DUTY_V0147_ADDENDUM, P0): PATH CONTRACT — the registry passes
+     * the COMPLETE asset path ("wordlists/<lang>.bin"); the lambda opens it
+     * VERBATIM. The "wordlists/"-prefix lives ONLY in the registry (one
+     * place); the old lang-based lambda doubled it to
+     * "wordlists/wordlists/<lang>.bin.bin" => FileNotFound => empty map =>
+     * correct() always null ON DEVICE (JVM tests masked it). internal for
+     * the VK-8 registry regression test.
+     */
+    internal val corrRegistry = WordListRegistry { path ->
+        runCatching { assets.open(path).use { it.readBytes() } }.getOrNull()
+    }
+
     /**
      * D10-rest §1: release during the asynchronous start — kind of catching up.
      * UP (false) = stop with finale; ACTION_CANCEL (true) = abort without finale.
@@ -394,6 +432,23 @@ class VoiceKeyboardService : InputMethodService(), KeyboardView.Listener {
     private var preloadTried = false
 
     /**
+     * T22g (PLAN_V0146 §3): deferred model switch — a switch request during a
+     * RUNNING dictation is applied at the idle report (onDictationStopped);
+     * a dictation is NEVER aborted by a switch.
+     */
+    private var pendingSwitch = false
+
+    /**
+     * T22g: id of the model set the CURRENT coordinator's engine belongs to.
+     * null after a switch teardown (lazy rebuild) — the 🐞 field
+     * engine_set_used then falls back to the active set id.
+     */
+    @Volatile private var engineSetUsedId: String? = null
+
+    /** T22g: pref listener on vk_layout/model_variant (registered in onCreate). */
+    private var modelVariantListener: android.content.SharedPreferences.OnSharedPreferenceChangeListener? = null
+
+    /**
      * D10 §3 (b): pre-booked target layout for the NEXT mic DOWN.
      * In working memory only (no sneaky current_language before application,
      * no stale pending after a process restart). It is applied before the start of
@@ -418,6 +473,15 @@ class VoiceKeyboardService : InputMethodService(), KeyboardView.Listener {
         getWindow()?.window?.setBackgroundDrawable(
             android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT),
         )
+        // T22g: switch listener on the model set pref — the PURE decision
+        // ([ModelSwitchPolicy]) runs on every change; a running dictation is
+        // never aborted (Deferred), a not-ready target is rejected (fallback
+        // in buildCoordinator covers hand-bent prefs).
+        modelVariantListener =
+            android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+                if (key == de.voicekeyboard.model.ModelVariant.PREFS_KEY) onModelVariantPrefChanged()
+            }
+        layoutPrefs().registerOnSharedPreferenceChangeListener(modelVariantListener)
         // S12-01-FIX: pass DEVICE RAM (ActivityManager.totalMem) to the ASR
         // config — not the Java heap (regression S12-01: maxMemory triggered
         // the 2-GB capping on every phone ⇒ intra=2 instead of 4).
@@ -430,11 +494,60 @@ class VoiceKeyboardService : InputMethodService(), KeyboardView.Listener {
             errorListener = de.voicekeyboard.audio.AudioErrorListener { _, _ -> updateStatus() }
             routeListener = { updateStatus() }
         }
+        // T23g (PLAN_V0147 §7): correction wiring — single-thread worker + main
+        // handler; the compute provider runs on the worker (list/parse work),
+        // every UI hop goes over postToMain. Seams injected (CorrectionWiringTest).
+        corrWorker = java.util.concurrent.Executors.newSingleThreadExecutor()
+        val corrMain = android.os.Handler(android.os.Looper.getMainLooper())
+        corrScheduler = CorrScheduler(corrWorker!!, corrMain)
+        corrWiring = CorrectionWiring(
+            compute = { region -> corrComputeRegion(region) },
+            editor = {
+                IcCorrectionEditor({ currentInputConnection }, { lastSelStart >= 0 && lastSelStart != lastSelEnd })
+            },
+            dictationIdle = { coordinator?.state == de.voicekeyboard.dictation.DictationState.IDLE },
+            schedule = corrScheduler!!::schedule,
+            cancelScheduled = corrScheduler!!::cancel,
+            postToMain = { corrMain.post(it) },
+            onRowUpdate = { original, corrected, hasSuggestion, enabled ->
+                // T23l (§14.6): in ALL_ACTIVE the endonym moves from the space bar
+                // into the correction row as a prefix tag ("DE").
+                val allActive =
+                    layoutPrefs().getString(PREF_CORR_LANG_MODE, null) == LanguageModePolicy.VALUE_ALL
+                rootView?.setCorrectionPrefix(
+                    if (allActive) currentLanguage().take(2).uppercase() else "",
+                )
+                rootView?.setCorrection(original, corrected, hasSuggestion, enabled)
+            },
+            onUndoMode = { hasUndoLevel -> rootView?.setWandUndoMode(hasUndoLevel) },
+        )
     }
 
     override fun onCreateInputView(): View {
         val view = ImeRootView(this)
         view.keyboardView.listener = this
+        // T23g (PLAN_V0147 §6): correction row wiring — wand dispatch + setup
+        // switch via supplier (the view never touches prefs, T23f seam).
+        view.onWandPress = { action -> corrWiring?.onWandPress(action) }
+        view.typingSuggestionsSupplier = { layoutPrefs().getBoolean(PREF_CORR_ROW_ENABLED, true) }
+        // T23l (PLAN_V0147 §14.2/§14.4/§14.6): globe long-press -> language-mode
+        // popup (view-internal); selection persists corr_lang_mode via the policy
+        // constants; the space label + row prefix follow the pref (suppliers —
+        // the view never touches prefs). Single active language disables the
+        // second popup cell (E9.1 rule 4, no dead clicking).
+        view.keyboardView.typingLangModeSupplier = {
+            layoutPrefs().getString(PREF_CORR_LANG_MODE, null) == LanguageModePolicy.VALUE_ALL
+        }
+        view.keyboardView.singleActiveLanguageSupplier = { activeLanguages().size <= 1 }
+        view.keyboardView.onLangModeSelect = { all ->
+            layoutPrefs().edit()
+                .putString(
+                    PREF_CORR_LANG_MODE,
+                    if (all) LanguageModePolicy.VALUE_ALL else LanguageModePolicy.VALUE_CURRENT,
+                )
+                .apply()
+            view.keyboardView.invalidate() // space label follows immediately
+        }
         // E9.1 rule 5/7: layout comes from current_language (vk_layout),
         // no longer fixed de-de; fallback via loadOrFallback (de-de/en-us).
         view.keyboardView.setLayout(
@@ -546,6 +659,10 @@ class VoiceKeyboardService : InputMethodService(), KeyboardView.Listener {
     override fun onStartInput(info: EditorInfo, restarting: Boolean) {
         super.onStartInput(info, restarting)
         if (restarting) coordinator?.noteRestartInput() // AP3: restart_inputs counter
+        // T23g (§4): editor change (also restarts — the app may have rewritten
+        // text) => typed region invalid; the next onStartInputView re-anchors
+        // (FIELD_START) and onUpdateSelection re-seeds the cursor.
+        corrWiring?.onEditorChange()
         // AP7-E1 (Fable §0.2.5 P1, vc33-T1): the app's restartInput() on our
         // FIRST partial write is NOT an editor change — before, the
         // unheeded restarting=true killed the session (onEditorChanged →
@@ -675,6 +792,12 @@ class VoiceKeyboardService : InputMethodService(), KeyboardView.Listener {
             val c = coordinator ?: buildCoordinator().also { coordinator = it }
             serviceScope.launch { c.preload() }
         }
+        // T23g (PLAN_V0147 §6/§4): eligibility of the CURRENT field + fresh
+        // region anchor (initialSelStart; <0 falls back to 0 in the tracker).
+        rootView?.setFieldInputType(info.inputType)
+        corrWiring?.onFieldStart(info.initialSelStart)
+        // T23l: re-resolve the ALL_ACTIVE space label (pref/config may have changed).
+        rootView?.keyboardView?.invalidate()
         updateStatus()
     }
 
@@ -703,6 +826,14 @@ class VoiceKeyboardService : InputMethodService(), KeyboardView.Listener {
     }
 
     override fun onDestroy() {
+        // T23g: correction worker down with the service (no leaked thread).
+        corrWiring = null
+        corrScheduler = null
+        corrWorker?.shutdownNow()
+        corrWorker = null
+        // T22g: the pref listener goes away with the service.
+        modelVariantListener?.let { layoutPrefs().unregisterOnSharedPreferenceChangeListener(it) }
+        modelVariantListener = null
         // N-3: NO stopDictationIfRunning() (would start a finale worker that
         // is killed immediately) — direct abort+close, order guaranteed.
         coordinator?.abort("ime_destroy")
@@ -721,6 +852,17 @@ class VoiceKeyboardService : InputMethodService(), KeyboardView.Listener {
     ) {
         super.onUpdateSelection(oldSelStart, oldSelEnd, newSelStart, newSelEnd, candidatesStart, candidatesEnd)
         coordinator?.onUpdateSelection(oldSelStart, oldSelEnd, newSelStart, newSelEnd)
+        // T23g (§4): selection feeds for the typed region — own key commits move
+        // the cursor EXACTLY to tracker.expectedCursor (no-op); everything else
+        // re-anchors (cursor move / non-empty selection clear the region).
+        lastSelStart = newSelStart
+        lastSelEnd = newSelEnd
+        val corr = corrWiring
+        if (newSelStart != newSelEnd) {
+            corr?.onNonEmptySelection()
+        } else {
+            corr?.onSelectionMove(newSelStart)
+        }
         // AP1: VK-SESS — report possession loss only on CHANGE (no spam per callback).
         if (ownership.ownershipLost && !sessLostShown) {
             sess("sel lost=1")
@@ -1055,14 +1197,14 @@ class VoiceKeyboardService : InputMethodService(), KeyboardView.Listener {
 
     private fun onDebugInfoRequested() {
         val collector = de.voicekeyboard.debug.DebugInfoCollector(this)
-        val store = de.voicekeyboard.model.ModelStore(java.io.File(filesDir, MODEL_DIR_NAME))
+        val store = modelStore() // T22g: the ONE store of the service
         val permissions = de.voicekeyboard.ime.AndroidPermissionsRequester(
             checkPermission = { checkSelfPermission(it) == android.content.pm.PackageManager.PERMISSION_GRANTED },
             shouldShowRationale = { false }, // the IME does not know the rationale question (C-3 pattern)
         )
         val snapshot = collector.collect(
             modelStore = store,
-            modelVariant = de.voicekeyboard.model.ModelVariant.ONNX_CPU, // V0: only production variant (buildCoordinator)
+            modelVariant = activeModelSet(), // T22g: status/bytes of the CHOSEN set (fallback visible via engine_set_used)
             coordinator = coordinator,
             threadConfig = de.voicekeyboard.asr.AsrThreadConfig.forDevice(
                 Runtime.getRuntime().availableProcessors(),
@@ -1083,6 +1225,25 @@ class VoiceKeyboardService : InputMethodService(), KeyboardView.Listener {
             // coordinator estimate) + rejected foreign resets (W1b evidence).
             gateOpenAtStop = gateOpenAtStopValue,
             gateForeignResets = holdGate.foreignResets,
+            // T22i (PLAN_V0146 §6, 🐞: active_model_set/engine_set_used):
+            // injected providers — the collector itself never touches prefs.
+            // active = pref id (fromId fallback A); engine_set_used stays
+            // identical to the active set until T22f (no Qwen engine yet) —
+            // a later fallback makes the difference between the two visible.
+            activeModelSet = { activeModelSetId() },
+            // T22i/T22g: engine_set_used = the set of the CURRENT coordinator's
+            // engine; after a switch teardown (lazy rebuild) falls back to the
+            // active set id — the fallback stays visible in between.
+            engineSetUsed = { engineSetUsedId ?: activeModelSetId() },
+            // T23h (PLAN_V0147 §8): correction export fields — suppliers (T22i
+            // pattern: the collector never reads prefs) + the CorrCounters
+            // watcher object; codes/counters only, never typed text (rule 9).
+            corrRowEnabled = { layoutPrefs().getBoolean(PREF_CORR_ROW_ENABLED, true) },
+            corrLangMode = {
+                layoutPrefs().getString(PREF_CORR_LANG_MODE, null)
+                    ?: LanguageModePolicy.VALUE_CURRENT
+            },
+            corrCounters = { CorrCounters },
         )
         // Rule 9: the export text is NEVER logged — only format/status.
         val text = de.voicekeyboard.debug.DebugInfoFormatter.format(snapshot)
@@ -1125,9 +1286,17 @@ class VoiceKeyboardService : InputMethodService(), KeyboardView.Listener {
     }
 
     private fun buildCoordinator(): DictationCoordinator {
+        // T22g: the model set of THIS coordinator — pref variant if READY,
+        // otherwise documented fallback A. ONE resolve ([activeVariantReady])
+        // for buildCoordinator AND preload — the two must never diverge.
+        val variant = activeVariantReady()
+        val store = modelStore()
         // D10-rest §3: output counter around the real sink — counts ONLY characters
         // (rule 9), no text content; synchronous on the edit executor (main).
         val sink = CountingSink(InputConnectionSink(connectionProvider = { currentInputConnection }))
+        // T23g (§4): dictation commits end the typed region; the
+        // onUpdateSelection of the framework commit re-anchors the cursor.
+        sink.onDictationCommit = { corrWiring?.onDictationCommit() }
         val routerRef = router
         return DictationCoordinator(
             scope = serviceScope,
@@ -1162,17 +1331,22 @@ class VoiceKeyboardService : InputMethodService(), KeyboardView.Listener {
             engineFactory = {
                 // AP1 (PLAN_C2_FABLE_R2 §1.2): the debug hook may replace the engine
                 // (LatencyStubEngine, real-time clock sleep) — release: null → real.
-                debugEngineFactory?.invoke() ?: ParakeetAsrEngine()
+                // T22g: the real engine comes from the factory per variant (Qwen arm
+                // included); variant is READY-resolved, so usedVariant == variant.
+                debugEngineFactory?.invoke()
+                    ?: de.voicekeyboard.asr.EngineFactory.create(variant, store).engine
             },
             sink = sink,
             tracker = ownership,
             routeObserver = { on -> if (on) routerRef?.startObserving() else routerRef?.stopObserving() },
             // B2 (PLAN §6.3 (c), I3 curve α=38.5 ms/s, superlinear from ~60 s):
-            // segmenter NOW sharp for ALL sessions — the 35-s cap keeps every
-            // decode window ≤ ~37 s ⇒ decode ≈ 1.35 s (below the 1.5-s W of the
-            // technology stage); sentence pauses cut softly at sentence ends (rule a).
+            // Parakeet keeps the 35-s cap (decode ≈ 1.35 s). T22-oom-fix 2:
+            // the QWEN branch segments at 15 s (QwenAsrEngine.MAX_SEGMENT_AUDIO_S
+            // — the ORT-owned KV pool stays ≤ ~156 MB native; a 35-s hold = 3
+            // segments, the text concatenates over the seams as before).
             // Gate-independent: the auto-stop (F43) stays separate from the segmenter.
-            segmentFinalizeMs = 35_000,
+            segmentFinalizeMs =
+                if (variant == de.voicekeyboard.model.ModelVariant.QWEN3_ASR) 15_000L else 35_000L,
             // T21a (v0.1.45, measurement bridge): debug build + operator switch
             // (Settings.Global "vk_skip_notif_gate" == 1) -> the coordinator's
             // ERR_SILENT start watchdog is bypassed so the OS-FGS layer is
@@ -1182,11 +1356,13 @@ class VoiceKeyboardService : InputMethodService(), KeyboardView.Listener {
             // NOT the model directory — the files live in
             // versions/<active>. The engine checks directly for vocab.txt and
             // otherwise throws "vocab.txt missing in model folder" even though the store reports READY.
-            modelDir = de.voicekeyboard.model.ModelStore(
-                java.io.File(filesDir, MODEL_DIR_NAME),
-            ).modelDir(),
+            modelDir = store.modelDir(variant),
             onStopped = { onDictationStopped() }, // C-1: update the UI after the worker finale
         ).also { c ->
+            // T22g: the built coordinator's engine belongs to THIS set — the
+            // 🐞 field engine_set_used shows the fallback (A) if the pref target
+            // was not READY.
+            engineSetUsedId = variant.id
             // Pass the UI route to the outside (display via onRouteChanged below)
             routerRef?.routeListener = { c.onRouteChanged(routeLabel(it)); updateStatus() }
             // A4b (PLAN_V0133 §A4b): after EVERY decode window exactly ONE compact
@@ -1208,9 +1384,13 @@ class VoiceKeyboardService : InputMethodService(), KeyboardView.Listener {
     private inner class CountingSink(private val inner: de.voicekeyboard.editor.EditorSink) :
         de.voicekeyboard.editor.EditorSink {
 
+        /** T23g (§4): service hook AFTER a dictation commit — resets the region. */
+        var onDictationCommit: (() -> Unit)? = null
+
         override fun replaceBeforeCursor(replaceLength: Int, newText: String) {
             inner.replaceBeforeCursor(replaceLength, newText)
             outputCounter.onCommit(newText.length, replaceLength)
+            onDictationCommit?.invoke()
         }
 
         override fun textBeforeCursor(maxChars: Int): CharSequence? = inner.textBeforeCursor(maxChars)
@@ -1279,7 +1459,61 @@ class VoiceKeyboardService : InputMethodService(), KeyboardView.Listener {
         }
         finalResultExpected = false
         updateStatus()
+        // T22g: a DEFERRED model switch is applied NOW — dictation is idle
+        // (the switch request arrived during the running session). The second
+        // check covers the case that the pref has moved BACK to the running
+        // set in the meantime — then there is nothing to switch.
+        if (pendingSwitch) {
+            pendingSwitch = false
+            if (activeModelSet().id != engineSetUsedId) switchNow()
+        }
     }
+
+    /**
+     * T22g (PLAN_V0146 §3): pref change on the model set — pure decision via
+     * [ModelSwitchPolicy]. Apply tears down the coordinator LAZILY (rebuild at
+     * the next show/mic), Deferred waits for the idle report, Rejected only
+     * logs (the UI writes the pref only on READY — hand-bent prefs fall back
+     * in buildCoordinator).
+     */
+    private fun onModelVariantPrefChanged() {
+        val target = activeModelSet()
+        // current = the set the service effectively runs on: the built
+        // coordinator's engine, or the production baseline A before that.
+        val current = engineSetUsedId
+            ?.let { de.voicekeyboard.model.ModelVariant.fromId(it) }
+            ?: de.voicekeyboard.model.ModelVariant.ONNX_CPU
+        val targetReady =
+            modelStore().statusQuick(target) == de.voicekeyboard.model.ModelStatus.READY
+        when (ModelSwitchPolicy.policy(
+            target = target,
+            current = current,
+            targetReady = targetReady,
+            dictationActive = dictationActive(),
+        )) {
+            is ModelSwitchPolicy.Decision.NoOp -> Unit // already the running set
+            is ModelSwitchPolicy.Decision.Rejected ->
+                Log.i("VK-MODEL", "switch_rejected reason=not_ready target=${target.id}")
+            is ModelSwitchPolicy.Decision.Deferred -> pendingSwitch = true
+            is ModelSwitchPolicy.Decision.Apply -> switchNow()
+        }
+    }
+
+    /**
+     * T22g: teardown of the current coordinator — shutdown BEFORE nulling
+     * (A5/W2: exactly ONE engine resident; the old engine sessions close
+     * before a new load can ever run). Rebuild is LAZY via buildCoordinator().
+     */
+    private fun switchNow() {
+        coordinator?.shutdown()
+        coordinator = null
+        engineSetUsedId = null
+    }
+
+    /** T22g: a dictation is active in every non-IDLE state (incl. STARTING). */
+    private fun dictationActive(): Boolean =
+        coordinator?.state != null &&
+            coordinator?.state != de.voicekeyboard.dictation.DictationState.IDLE
 
     /**
      * D10-rest §1: CANCEL of the hold gesture — safe abort without final decode.
@@ -1684,6 +1918,7 @@ class VoiceKeyboardService : InputMethodService(), KeyboardView.Listener {
     override fun onTextInput(text: String) {
         val ic = currentInputConnection ?: return
         ic.commitText(text, 1)
+        corrWiring?.feedText(text) // T23g (§4): typed-region feed (emoji path too)
     }
 
     override fun onAction(action: String) {
@@ -1696,9 +1931,16 @@ class VoiceKeyboardService : InputMethodService(), KeyboardView.Listener {
                 // Repeat AND tap both use THIS branch (KeyboardView calls
                 // onAction(BACKSPACE) again on every repeat firing).
                 backspaceDeleteOnce(inputConnectionEditor())
+                corrWiring?.feedBackspace() // T23g (§4): buffer shrink
             }
-            KeyActions.SPACE -> ic.commitText(" ", 1)
-            KeyActions.ENTER -> performEditorAction(currentInputEditorInfo)
+            KeyActions.SPACE -> {
+                ic.commitText(" ", 1)
+                corrWiring?.feedText(" ") // T23g: separator -> immediate compute
+            }
+            KeyActions.ENTER -> {
+                performEditorAction(currentInputEditorInfo)
+                corrWiring?.feedText("\n") // T23g: separator; action may not commit — verify self-heals
+            }
             KeyActions.CURSOR_LEFT -> ic.sendKeyEvent(
                 KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_DPAD_LEFT),
             ).also { ic.sendKeyEvent(KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_DPAD_LEFT)) }
@@ -1732,15 +1974,58 @@ class VoiceKeyboardService : InputMethodService(), KeyboardView.Listener {
      */
     override fun onBackspaceWord() {
         backspaceDeleteWordOnce(inputConnectionEditor())
+        // T23g (§11 risk: word backspace): the tracker cannot reproduce the
+        // word deletion -> the region goes unanchored; the following
+        // onUpdateSelection re-anchors at the real cursor. Undo window ends.
+        corrWiring?.onBackspaceWord()
     }
 
     // ---- Language switch (E9.1/E9.2, M8b-1) ----
 
     private fun layoutPrefs() = getSharedPreferences(LAYOUT_PREFS, MODE_PRIVATE)
 
-    /** Active languages from vk_layout (ordered, canonical; default de-de,en-us). */
+    /** T22i (PLAN_V0146 §6): id of the active model set from the layout prefs
+     *  (vk_layout/model_variant, fromId with fallback A) — read at export time
+     *  for the 🐞 fields active_model_set/engine_set_used. */
+    /** T22g: active model set from the layout prefs (fromId fallback A). */
+    private fun activeModelSet(): de.voicekeyboard.model.ModelVariant =
+        de.voicekeyboard.model.ModelVariant.fromId(
+            layoutPrefs().getString(de.voicekeyboard.model.ModelVariant.PREFS_KEY, null),
+        )
+
+    /** T22i: id string of the active model set for the 🐞 export. */
+    private fun activeModelSetId(): String = activeModelSet().id
+
+    /** T22g: the ONE model store of this service (root filesDir/models). */
+    private fun modelStore(): de.voicekeyboard.model.ModelStore =
+        de.voicekeyboard.model.ModelStore(java.io.File(filesDir, MODEL_DIR_NAME))
+
+    /**
+     * T22g: ONE resolve for buildCoordinator AND preload — pref variant if
+     * READY, otherwise documented fallback A (hand-bent prefs included).
+     * Codes only (rule 9), never paths.
+     */
+    private fun activeVariantReady(): de.voicekeyboard.model.ModelVariant {
+        val target = activeModelSet()
+        if (target == de.voicekeyboard.model.ModelVariant.ONNX_CPU) return target
+        return if (modelStore().statusQuick(target) == de.voicekeyboard.model.ModelStatus.READY) {
+            target
+        } else {
+            Log.i("VK-MODEL", "switch_fallback target=${target.id} used=onnx-cpu reason=not_ready")
+            de.voicekeyboard.model.ModelVariant.ONNX_CPU
+        }
+    }
+
+    /** Active languages from vk_layout (ordered, canonical; default de-de,en-us).
+     *  T23m (PLAN_V0147 §16): keyboard and globe cycle see ONLY AVAILABLE
+     *  languages ([de.voicekeyboard.keyboard.LanguageAvailability.filterActive]) —
+     *  saved-unavailable choices stay stored (Setup multi-select) but drop out
+     *  of the cycle; current_language falls back to the first available via
+     *  [LanguageCycle.initialLanguage] over the FILTERED actives. */
     private fun activeLanguages(): List<String> =
-        LanguageCycle.parseActive(layoutPrefs().getString(KEY_ACTIVE_LANGUAGES, null))
+        de.voicekeyboard.keyboard.LanguageAvailability.filterActive(
+            LanguageCycle.parseActive(layoutPrefs().getString(KEY_ACTIVE_LANGUAGES, null)),
+        )
 
     /** Current language: current_language if active; else first active (E9.1 rule 7). */
     private fun currentLanguage(): String {
@@ -1793,6 +2078,46 @@ class VoiceKeyboardService : InputMethodService(), KeyboardView.Listener {
             return
         }
         applyLanguage(next)
+    }
+
+    /**
+     * T23g (PLAN_V0147 §3/§14): the compute provider — runs on the SINGLE-THREAD
+     * worker (§7). Mode + language scope per [LanguageModePolicy]; the en-'i'
+     * rule matrix picks the typing-rules language; the neighbour model is
+     * SEEDED from the layout asset (Android has no walk-up file system); the
+     * word lists come from the lazy registry. Never logs text (rule 9), only
+     * [CorrCounters] codes/buckets.
+     * REVIEW_V0147 VK-1 (P0): internal for the seeding test; seeds EVERY
+     * layout this computation's corrector may load — at least the CURRENT
+     * language (WordCorrector loads by layoutId) AND rulesLang.
+     */
+    internal fun corrComputeRegion(region: String): String? {
+        if (region.isBlank()) return null
+        val current = currentLanguage()
+        val actives = activeLanguages()
+        val mode = LanguageModePolicy.modeFromPref(
+            layoutPrefs().getString(PREF_CORR_LANG_MODE, null),
+        )
+        CorrCounters.lang = current
+        CorrCounters.regionLenBucket = CorrCounters.bucketFor(region.length)
+        val rulesLang = if (LanguageModePolicy.appliesEnglishIRule(mode, current, actives)) {
+            "en-us"
+        } else {
+            current
+        }
+        // VK-1 (REVIEW_V0147 P0): seed EVERY layout the corrector of THIS
+        // computation may load — the CURRENT correction language (WordCorrector
+        // loads by layoutId) AND rulesLang. On Android the JVM walk-up loader
+        // would crash the process; the seeding test proves walkUpLoads == 0.
+        for (seedLang in linkedSetOf(current, rulesLang)) {
+            runCatching {
+                assets.open("layouts/$seedLang.json").bufferedReader().use {
+                    NeighbourModel.seed(seedLang, it.readText())
+                }
+            }
+        }
+        val lists = corrRegistry.listsFor(actives + current)
+        return regionCorrection(region, rulesLang, current, lists, mode)
     }
 
     /** D10 §3: one-time short toast (no new line in the diagnostics band). */
@@ -2294,5 +2619,343 @@ internal class HoldGate {
         }
         if (activeGen != 0L) foreignResets++
         return false
+    }
+}
+
+// ====================================================================
+// T23g (PLAN_V0147 §3–§8): correction wiring — top-level, JVM-testable
+// =====================================================================
+
+/** T23g (§8): debug counters — numbers/codes ONLY (rule 9), never typed or
+ *  corrected text. T23h exports them via DebugInfoFormatter; verifyFail
+ *  mirrors RegionReplacer.corrVerifyFail (see the wiring below). */
+object CorrCounters {
+    var rowsShown = 0
+    var applied = 0
+    var undone = 0
+    var computes = 0
+    var verifyFail = 0
+    var lang = ""
+    var regionLenBucket = 0
+
+    fun reset() {
+        rowsShown = 0
+        applied = 0
+        undone = 0
+        computes = 0
+        verifyFail = 0
+        lang = ""
+        regionLenBucket = 0
+    }
+
+    /** T23h (§8): typed-region length bucket for the export —
+     *  0 = empty / 1 = 1-50 / 2 = 51-150 / 3 = 151-500 UTF-16 units. */
+    fun bucketFor(regionLen: Int): Int = when {
+        regionLen <= 0 -> 0
+        regionLen <= 50 -> 1
+        regionLen <= 150 -> 2
+        else -> 3
+    }
+}
+
+/** T23g (§7): separator characters — an immediate compute follows them. */
+private val CORR_SEPARATORS = charArrayOf(' ', '\n', '.', ',', ';', ':', '!', '?')
+
+/**
+ * T23g (§3): region correction pipeline — TypingRules (caps/spacing/repeat,
+ * [rulesLang] per the §14.3 en-'i' matrix) + per-word [WordCorrector] for
+ * words not in the affected lists (mode per [LanguageModePolicy]). Tokens
+ * are rebuilt with their separators; null when NOTHING changed (row dims).
+ * Pure JVM, worker thread, never logs (rule 9).
+ */
+internal fun regionCorrection(
+    region: String,
+    rulesLang: String,
+    correctorLang: String,
+    lists: Map<String, WordList>,
+    mode: LanguageModePolicy.Mode,
+): String? {
+    val ruled = TypingRules.apply(region, rulesLang)
+    val wordMode = when (mode) {
+        LanguageModePolicy.Mode.CURRENT -> WordCorrector.Mode.CURRENT
+        LanguageModePolicy.Mode.ALL_ACTIVE -> WordCorrector.Mode.ALL_ACTIVE
+    }
+    val out = StringBuilder(ruled.length)
+    var i = 0
+    while (i < ruled.length) {
+        val c = ruled[i]
+        if (c.isWhitespace()) {
+            out.append(c)
+            i++
+            continue
+        }
+        var j = i
+        while (j < ruled.length && !ruled[j].isWhitespace()) j++
+        val word = ruled.substring(i, j)
+        // VK-4 (REVIEW_V0147): punctuation islands — strip leading/trailing
+        // non-word characters (the corrector accepts letters + '-'), correct
+        // the CORE, re-attach; pure punctuation and inner punctuation stay
+        // untouched (island protection like the golden harness).
+        val start = word.indexOfFirst { it.isLetter() || it == '-' }
+        val end = (word.indexOfLast { it.isLetter() || it == '-' } + 1)
+        val fixedCore = when {
+            start < 0 -> word // no core: punctuation island stays
+            start == 0 && end == word.length ->
+                WordCorrector.correct(word, correctorLang, lists, wordMode)?.text ?: word
+            else -> {
+                val core = word.substring(start, end)
+                word.substring(0, start) +
+                    (WordCorrector.correct(core, correctorLang, lists, wordMode)?.text ?: core) +
+                    word.substring(end)
+            }
+        }
+        out.append(fixedCore)
+        i = j
+    }
+    val corrected = out.toString()
+    return if (corrected == region) null else corrected
+}
+
+/** T23g (§7): production scheduler — 0-delay runs on the single-thread
+ *  worker; otherwise a main-handler debounce post that hands over to the
+ *  worker. cancel drops the pending post; lagging hand-overs die at the
+ *  generation guard in [CorrectionWiring]. */
+private class CorrScheduler(
+    private val worker: java.util.concurrent.Executor,
+    private val main: android.os.Handler,
+) {
+    private var pending: Runnable? = null
+
+    fun schedule(delayMs: Long, gen: Long, run: () -> Unit) {
+        if (delayMs <= 0) {
+            worker.execute(run)
+        } else {
+            val r = Runnable { worker.execute(run) }
+            pending = r
+            main.postDelayed(r, delayMs) // gen: guard lives in the wiring
+        }
+    }
+
+    fun cancel() {
+        pending?.let { main.removeCallbacks(it) }
+        pending = null
+    }
+}
+
+/** T23g (§5): RegionReplacer.Editor over the live InputConnection (main
+ *  thread; null IC degrades to no-ops — the replacer aborts safely). */
+internal class IcCorrectionEditor(
+    private val ic: () -> InputConnection?,
+    private val nonEmptySelection: () -> Boolean,
+) : RegionReplacer.Editor {
+    override fun beginBatchEdit() {
+        ic()?.beginBatchEdit()
+    }
+
+    override fun deleteSurroundingText(beforeLength: Int, afterLength: Int) {
+        ic()?.deleteSurroundingText(beforeLength, afterLength)
+    }
+
+    override fun commitText(text: String, newCursorPosition: Int) {
+        ic()?.commitText(text, newCursorPosition)
+    }
+
+    override fun endBatchEdit() {
+        ic()?.endBatchEdit()
+    }
+
+    override fun getTextBeforeCursor(length: Int): String? =
+        ic()?.getTextBeforeCursor(length, 0)?.toString()
+
+    override fun hasSelection(): Boolean = nonEmptySelection()
+}
+
+/** T23g: lazy asset registry of the word lists (worker thread; a missing
+ *  bin for an active language simply means: no list for it — rules only). */
+internal class WordListRegistry(private val readAsset: (String) -> ByteArray?) {
+    private val cache = java.util.concurrent.ConcurrentHashMap<String, WordList>()
+
+    fun listsFor(langs: Collection<String>): Map<String, WordList> {
+        for (lang in langs) {
+            if (!cache.containsKey(lang)) {
+                readAsset("wordlists/$lang.bin")?.let { cache[lang] = WordList.load(it) }
+            }
+        }
+        return langs.distinct().mapNotNull { id -> cache[id]?.let { id to it } }.toMap()
+    }
+}
+
+/**
+ * T23g (PLAN_V0147 §4/§7): the correction wiring — every key/commit path feeds
+ * [TypedRegionTracker]; a compute follows IMMEDIATELY on separators, otherwise
+ * debounced [CORR_DEBOUNCE_MS] on the single-thread worker. The generation
+ * counter discards stale computes; the suffix proof (§4) runs on the main
+ * thread BEFORE display; the wand dispatches APPLY/UNDO over [RegionReplacer].
+ * All seams injected (CorrectionWiringTest); NEVER logs text content
+ * (rule 9 — counters only, [CorrCounters]).
+ *
+ * Thread model: feeds/clears/wand run on the MAIN thread (key callbacks);
+ * the region SNAPSHOT is captured on main and handed to the worker, so the
+ * worker never touches the tracker; publish hops back over postToMain and
+ * re-checks generation AND snapshot before touching the row.
+ */
+internal class CorrectionWiring(
+    private val compute: (region: String) -> String?,
+    private val editor: () -> RegionReplacer.Editor?,
+    private val dictationIdle: () -> Boolean,
+    private val schedule: (delayMs: Long, gen: Long, run: () -> Unit) -> Unit,
+    private val cancelScheduled: () -> Unit,
+    private val postToMain: (run: () -> Unit) -> Unit,
+    private val onRowUpdate: (original: String?, corrected: String?, hasSuggestion: Boolean, enabled: Boolean) -> Unit,
+    private val onUndoMode: (hasUndoLevel: Boolean) -> Unit,
+) {
+    val tracker = TypedRegionTracker()
+    val replacer = RegionReplacer(onSuffixMismatch = {
+        tracker.reset(TypedRegionTracker.ResetReason.SUFFIX_MISMATCH)
+        CorrCounters.verifyFail++
+        postToMain { clearRow() }
+    })
+
+    /** Corrected region of the LAST verified compute — what the wand applies. */
+    private var suggestion: String? = null
+
+    /** VK-3 (REVIEW_V0147): the region the suggestion was PUBLISHED for —
+     *  APPLY is bound to it; a buffer change voids the suggestion
+     *  (a feed raced the debounce) instead of replacing newer text. */
+    private var suggestionForRegion: String? = null
+    private var generation = 0L
+
+    // ------------------------------------------------------------- feeds
+
+    /** Text key (incl. emoji path): region grows; undo window ends (§5). */
+    fun feedText(text: String) {
+        if (text.isEmpty()) return
+        replacer.invalidateUndo()
+        onUndoMode(replacer.hasUndoLevel)
+        tracker.onTextInput(text)
+        scheduleCompute(immediate = text.last() in CORR_SEPARATORS)
+    }
+
+    fun feedBackspace() {
+        replacer.invalidateUndo()
+        onUndoMode(replacer.hasUndoLevel)
+        tracker.onBackspace()
+        scheduleCompute(immediate = false)
+    }
+
+    // ------------------------------------------------------------- resets (§4)
+
+    fun onFieldStart(cursorAbs: Int) = resetRegion(TypedRegionTracker.ResetReason.FIELD_START, cursorAbs)
+
+    fun onEditorChange() = resetRegion(TypedRegionTracker.ResetReason.EDITOR_CHANGE, -1)
+
+    fun onDictationCommit() = resetRegion(TypedRegionTracker.ResetReason.DICTATION_COMMIT, -1)
+
+    fun onNonEmptySelection() = resetRegion(TypedRegionTracker.ResetReason.NON_EMPTY_SELECTION, -1)
+
+    fun onSelectionMove(cursorAbs: Int) {
+        if (cursorAbs == tracker.expectedCursor) return // our own key commit
+        resetRegion(TypedRegionTracker.ResetReason.SELECTION_MOVE, cursorAbs)
+    }
+
+    /** §11 (word backspace): region unreproducible -> unanchored; the following
+     *  onUpdateSelection re-anchors at the real cursor. Undo window ends. */
+    fun onBackspaceWord() {
+        replacer.invalidateUndo()
+        onUndoMode(replacer.hasUndoLevel)
+        resetRegion(TypedRegionTracker.ResetReason.SELECTION_MOVE, -1)
+    }
+
+    // ------------------------------------------------------------- wand (§5)
+
+    fun onWandPress(action: RegionReplacer.WandPress) {
+        when (action) {
+            RegionReplacer.WandPress.APPLY -> {
+                val region = tracker.buffer
+                val corrected = suggestion
+                val ed = editor()
+                if (region.isEmpty() || corrected == null || ed == null) return
+                if (region != suggestionForRegion) {
+                    // VK-3 (REVIEW_V0147): stale suggestion — a feed raced the
+                    // debounce; NEVER replace the newer buffer with the older
+                    // correction: ignore the press and re-plan the compute.
+                    scheduleCompute(immediate = false)
+                    return
+                }
+                val anchor = tracker.anchorAbs
+                if (replacer.replace(region, corrected, ed, dictationIdle())) {
+                    CorrCounters.applied++
+                    tracker.reset(TypedRegionTracker.ResetReason.WAND_PRESS, anchor + corrected.length)
+                    clearRow()
+                }
+            }
+            RegionReplacer.WandPress.UNDO -> {
+                val ed = editor() ?: return
+                if (replacer.undo(ed)) CorrCounters.undone++
+                onUndoMode(replacer.hasUndoLevel)
+            }
+        }
+    }
+
+    // ------------------------------------------------------------- internals
+
+    private fun resetRegion(reason: TypedRegionTracker.ResetReason, cursorAbs: Int) {
+        cancelScheduled()
+        generation++
+        tracker.reset(reason, cursorAbs)
+        clearRow()
+    }
+
+    private fun clearRow() {
+        suggestion = null
+        suggestionForRegion = null
+        onRowUpdate(null, null, false, false)
+        onUndoMode(replacer.hasUndoLevel)
+    }
+
+    private fun scheduleCompute(immediate: Boolean) {
+        cancelScheduled()
+        val region = tracker.buffer
+        if (region.isEmpty() || tracker.anchorAbs < 0) {
+            clearRow()
+            return
+        }
+        val gen = ++generation
+        if (immediate) {
+            schedule(0, gen) { runCompute(gen, region) }
+        } else {
+            schedule(VoiceKeyboardService.CORR_DEBOUNCE_MS, gen) { runCompute(gen, region) }
+        }
+    }
+
+    private fun runCompute(gen: Long, region: String) {
+        if (gen != generation) return // stale hand-over (§7)
+        CorrCounters.computes++
+        // VK-1 (REVIEW_V0147): crash net — a compute failure must NEVER kill
+        // the worker/process; the row clears (structured rejection) and the
+        // log stays code-only (rule 9: no typed text ever).
+        val corrected = runCatching { compute(region) }.getOrElse {
+            android.util.Log.w("VK-CORR", "compute_abort")
+            postToMain { if (gen == generation) clearRow() }
+            return
+        }
+        postToMain { publish(gen, region, corrected) }
+    }
+
+    private fun publish(gen: Long, region: String, corrected: String?) {
+        if (gen != generation) return
+        if (tracker.buffer != region) return // belt: a feed raced the publish
+        // §4 suffix proof BEFORE display — verify() resets on mismatch.
+        if (!tracker.verify(editor()?.getTextBeforeCursor(region.length + 8))) {
+            CorrCounters.verifyFail++
+            clearRow()
+            return
+        }
+        val has = corrected != null && corrected != region
+        suggestion = if (has) corrected else null
+        suggestionForRegion = if (has) region else null
+        if (has) CorrCounters.rowsShown++
+        onRowUpdate(region, if (has) corrected else null, has, has && dictationIdle())
+        onUndoMode(replacer.hasUndoLevel)
     }
 }

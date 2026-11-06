@@ -1,0 +1,389 @@
+{
+ "meta": {
+  "model": "Qwen/Qwen3-ASR-0.6B",
+  "source_tokenizer": "/home/dev/models/qwen-export/Qwen3-ASR-0.6B-hf/tokenizer.json",
+  "source_tokenizer_sha256": "fe1fad59be22a41ee293363fcf95fdedbc7c93f3b49270b1d2e18bd1399a7a05",
+  "hf_cache_snapshot_files": [
+   "config.json",
+   "generation_config.json",
+   "preprocessor_config.json",
+   "tokenizer_config.json"
+  ],
+  "hf_cache_snapshot": "/home/dev/.cache/huggingface/hub/models--Qwen--Qwen3-ASR-0.6B/snapshots/5eb144179a02acc5e5ba31e748d22b0cf3e303b0",
+  "tokenizers_version": "0.23.3",
+  "python": "3.11.2",
+  "generated_at": "2026-11-04T18:01:41+00:00",
+  "decode_reference": "tokenizers.Tokenizer.decode(ids, skip_special_tokens=True)",
+  "scope": "decode-only goldens — no BPE encoding required on device (T22e)"
+ },
+ "pairs": [
+  {
+   "label": "empty",
+   "ids": [],
+   "text": ""
+  },
+  {
+   "label": "ascii_words",
+   "ids": [
+    14990,
+    1879
+   ],
+   "text": "hello world"
+  },
+  {
+   "label": "ascii_sentence",
+   "ids": [
+    785,
+    3974,
+    13876,
+    38835,
+    34208,
+    916,
+    279,
+    15678,
+    5562,
+    13
+   ],
+   "text": "The quick brown fox jumps over the lazy dog."
+  },
+  {
+   "label": "single_char",
+   "ids": [
+    64
+   ],
+   "text": "a"
+  },
+  {
+   "label": "uppercase",
+   "ids": [
+    31714,
+    1593,
+    467,
+    2749,
+    51,
+    74838,
+    787,
+    3256,
+    953
+   ],
+   "text": "HALLO WELT SCHREIBEN"
+  },
+  {
+   "label": "umlauts",
+   "ids": [
+    2305,
+    16942,
+    10489,
+    1683,
+    253,
+    48686,
+    34037,
+    30512
+   ],
+   "text": "ä ö ü ß Ä Ö Ü"
+  },
+  {
+   "label": "german_sentence",
+   "ids": [
+    6464,
+    78940,
+    7180,
+    26647,
+    23455,
+    2030,
+    11331,
+    7997,
+    58285,
+    82,
+    5342,
+    1320,
+    30203,
+    343,
+    19349,
+    13
+   ],
+   "text": "Größe für Straße und Maß müsste flüssig sein."
+  },
+  {
+   "label": "euro",
+   "ids": [
+    32617,
+    62411,
+    295,
+    220,
+    16,
+    17,
+    11,
+    20,
+    15,
+    12984,
+    13
+   ],
+   "text": "Das kostet 12,50 €."
+  },
+  {
+   "label": "euro_repeated",
+   "ids": [
+    15056,
+    19461,
+    2986,
+    28324,
+    12984,
+    296,
+    22449,
+    732,
+    2918,
+    12984
+   ],
+   "text": "€ Eurozeichen € mitten im Text €"
+  },
+  {
+   "label": "leading_spaces",
+   "ids": [
+    256,
+    50232,
+    85527,
+    92798,
+    2986,
+    28324
+   ],
+   "text": "   führende Leerzeichen"
+  },
+  {
+   "label": "multiple_spaces",
+   "ids": [
+    64,
+    220,
+    293,
+    256,
+    272,
+    262,
+    294
+   ],
+   "text": "a  b   c    d"
+  },
+  {
+   "label": "trailing_spaces",
+   "ids": [
+    77,
+    610,
+    97761,
+    256
+   ],
+   "text": "nachlauf  "
+  },
+  {
+   "label": "newline",
+   "ids": [
+    59462,
+    457,
+    88748,
+    198,
+    59462,
+    457,
+    40462
+   ],
+   "text": "Zeile eins\nZeile zwei"
+  },
+  {
+   "label": "paragraphs",
+   "ids": [
+    271,
+    19462,
+    3667,
+    22080,
+    20175,
+    382,
+    57,
+    896,
+    2015,
+    22080,
+    20175,
+    13
+   ],
+   "text": "\n\nErster Absatz.\n\nZweiter Absatz."
+  },
+  {
+   "label": "digits_punct",
+   "ids": [
+    16,
+    22,
+    13,
+    18,
+    9465,
+    11,
+    220,
+    19,
+    17,
+    16175,
+    856,
+    29368,
+    92952,
+    320,
+    7138,
+    8,
+    508,
+    38365,
+    60
+   ],
+   "text": "17.3 mm, 42%; x=y+z (plus) [minus]"
+  },
+  {
+   "label": "tab",
+   "ids": [
+    71620,
+    197,
+    8582,
+    10511
+   ],
+   "text": "ein\tTabulator"
+  },
+  {
+   "label": "emoji",
+   "ids": [
+    6123,
+    1268,
+    11162,
+    236,
+    231,
+    2030,
+    68792,
+    7714,
+    11162,
+    248,
+    222,
+    293,
+    3850,
+    11162,
+    236,
+    101
+   ],
+   "text": "Feier 🎉 und Rakete 🚀 bunt 🎨"
+  },
+  {
+   "label": "special_mix",
+   "ids": [
+    2082,
+    42477,
+    220,
+    151645,
+    51292
+   ],
+   "text": "Anfang  Ende"
+  },
+  {
+   "label": "special_only",
+   "ids": [
+    151644,
+    8948,
+    151645
+   ],
+   "text": "system"
+  },
+  {
+   "label": "long_sequence",
+   "ids": [
+    18175,
+    422,
+    31580,
+    367,
+    2714,
+    2712,
+    406,
+    10928,
+    52287,
+    9970,
+    8535,
+    28883,
+    74890,
+    2660,
+    25,
+    12741,
+    18372,
+    7070,
+    8151,
+    4865,
+    35323,
+    2478,
+    11,
+    2030,
+    2746,
+    350,
+    559,
+    2628,
+    738,
+    11687,
+    2746,
+    467,
+    9416,
+    465,
+    13177,
+    89,
+    7180,
+    13177,
+    89,
+    304,
+    2918,
+    4443,
+    11,
+    81625,
+    22010,
+    9919,
+    713,
+    724,
+    295,
+    38132,
+    13368,
+    26692,
+    1728,
+    11,
+    393,
+    43226,
+    2030,
+    14248,
+    1579,
+    72269,
+    26,
+    547,
+    1014,
+    64,
+    1070,
+    13368,
+    12709,
+    11,
+    16942,
+    11,
+    10489,
+    2030,
+    6616,
+    9236,
+    89,
+    7066,
+    1683,
+    253,
+    68312,
+    16030,
+    95524,
+    11,
+    50697,
+    704,
+    1863,
+    14320,
+    77,
+    13368,
+    220,
+    16,
+    17,
+    18,
+    39307,
+    13017,
+    81,
+    70668,
+    304,
+    12984,
+    13
+   ],
+   "text": "Die Diktation erkennt auch lange Passagen ohne Probleme: Der Nutzer spricht einfach los, und die Tastatur setzt die Wörter Satz für Satz in Text um, inklusive Zeichensetzung wie Komma, Punkt und Semikolon; Umlaute wie ä, ö, ü und das Eszett ß funktionieren ebenfalls, ebenso Ziffern wie 123 sowie Beträge in €."
+  }
+ ]
+}

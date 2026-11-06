@@ -1,0 +1,474 @@
+{
+  "lang": "de",
+  "threads": 16,
+  "ort": "1.31.1",
+  "transformers": "5.22.1",
+  "torch": "2.15.0+cpu",
+  "goldens": 20,
+  "max_new_tokens": 64,
+  "word_identity_hf_vs_int8": 0.972,
+  "word_total": 107,
+  "logit_parity_rel_err": {
+    "encoder": 4.496162974517547e-07,
+    "decoder_init": 1.219595349350316e-06,
+    "decoder_step": 1.376581983071311e-06
+  },
+  "int8_identical_to_fp32_texts": 18,
+  "clean_word_match_int8": 17,
+  "clean_word_match_hf": 19,
+  "identical_in_out_count": 0,
+  "rtf_20word_region_s": {
+    "median": 0.4224,
+    "p95": 0.4853,
+    "runs": 20,
+    "assumed_typing_window_s": 7.0
+  },
+  "rtf": 0.0603,
+  "peak_rss_mb": 3809.0,
+  "rss_delta_mb": 2.0,
+  "int8_sizes_bytes": {
+    "encoder.int8.onnx": 109881536,
+    "decoder_init.int8.onnx": 162951993,
+    "decoder_step.int8.onnx": 148832293
+  },
+  "int8_total_mb": 421.7,
+  "sentences": [
+    {
+      "input": "och gehe morgen zum Arzt",
+      "class": "neighbour",
+      "clean": "ich gehe morgen zum Arzt",
+      "hf_greedy": "Ich gehe morgen zum Arzt.",
+      "hf_pipeline": "Ich gehe morgen zum Arzt.",
+      "onnx_int8": "Ich gehe morgen zum Arzt.",
+      "onnx_fp32": "Ich gehe morgen zum Arzt.",
+      "int8_identical_to_fp32": true,
+      "diffs_vs_hf": {
+        "substitutions": [],
+        "deletions": []
+      },
+      "clean_ok_int8": true,
+      "clean_ok_hf": true,
+      "n_input_tokens": 11,
+      "n_output_tokens": 8,
+      "n_words_in": 5,
+      "n_words_out": 5,
+      "identical_in_out": false
+    },
+    {
+      "input": "das Wetter word heute besser",
+      "class": "neighbour",
+      "clean": "das Wetter wird heute besser",
+      "hf_greedy": "Das Wetter wird heute besser.",
+      "hf_pipeline": "Das Wetter wird heute besser.",
+      "onnx_int8": "Das Wetter wird heute besser.",
+      "onnx_fp32": "Das Wetter wird heute besser.",
+      "int8_identical_to_fp32": true,
+      "diffs_vs_hf": {
+        "substitutions": [],
+        "deletions": []
+      },
+      "clean_ok_int8": true,
+      "clean_ok_hf": true,
+      "n_input_tokens": 8,
+      "n_output_tokens": 6,
+      "n_words_in": 5,
+      "n_words_out": 5,
+      "identical_in_out": false
+    },
+    {
+      "input": "wir tteffen uns am Bahnhof",
+      "class": "neighbour",
+      "clean": "wir treffen uns am Bahnhof",
+      "hf_greedy": "Wir treffen uns am Bahnhof.",
+      "hf_pipeline": "Wir treffen uns am Bahnhof.",
+      "onnx_int8": "Wir treffen uns am Bahnhof.",
+      "onnx_fp32": "Wir treffen uns am Bahnhof.",
+      "int8_identical_to_fp32": true,
+      "diffs_vs_hf": {
+        "substitutions": [],
+        "deletions": []
+      },
+      "clean_ok_int8": true,
+      "clean_ok_hf": true,
+      "n_input_tokens": 12,
+      "n_output_tokens": 7,
+      "n_words_in": 5,
+      "n_words_out": 5,
+      "identical_in_out": false
+    },
+    {
+      "input": "der Zug kommt um acht ihr",
+      "class": "neighbour",
+      "clean": "der Zug kommt um acht Uhr",
+      "hf_greedy": "Der Zug kommt um acht Uhr.",
+      "hf_pipeline": "Der Zug kommt um acht Uhr.",
+      "onnx_int8": "Der Zug kommt um ihr Acht.",
+      "onnx_fp32": "Der Zug kommt um acht Uhr.",
+      "int8_identical_to_fp32": false,
+      "diffs_vs_hf": {
+        "substitutions": [
+          [
+            4,
+            "acht",
+            "ihr"
+          ],
+          [
+            5,
+            "Uhr.",
+            "Acht."
+          ]
+        ],
+        "deletions": []
+      },
+      "clean_ok_int8": false,
+      "clean_ok_hf": true,
+      "n_input_tokens": 9,
+      "n_output_tokens": 8,
+      "n_words_in": 6,
+      "n_words_out": 6,
+      "identical_in_out": false
+    },
+    {
+      "input": "ich brauche Hilfe beim imzug",
+      "class": "neighbour",
+      "clean": "ich brauche Hilfe beim Umzug",
+      "hf_greedy": "Ich brauche Hilfe beim Umzug.",
+      "hf_pipeline": "Ich brauche Hilfe beim Umzug.",
+      "onnx_int8": "Ich brauche Hilfe beim Umzug.",
+      "onnx_fp32": "Ich brauche Hilfe beim Umzug.",
+      "int8_identical_to_fp32": true,
+      "diffs_vs_hf": {
+        "substitutions": [],
+        "deletions": []
+      },
+      "clean_ok_int8": true,
+      "clean_ok_hf": true,
+      "n_input_tokens": 13,
+      "n_output_tokens": 10,
+      "n_words_in": 5,
+      "n_words_out": 5,
+      "identical_in_out": false
+    },
+    {
+      "input": "am Freitag fahren wir nach Beriln",
+      "class": "transposition",
+      "clean": "am Freitag fahren wir nach Berlin",
+      "hf_greedy": "Am Freitag fahren wir nach Berlin.",
+      "hf_pipeline": "Am Freitag fahren wir nach Berlin.",
+      "onnx_int8": "Am Freitag fahren wir nach Berlin.",
+      "onnx_fp32": "Am Freitag fahren wir nach Berlin.",
+      "int8_identical_to_fp32": true,
+      "diffs_vs_hf": {
+        "substitutions": [],
+        "deletions": []
+      },
+      "clean_ok_int8": true,
+      "clean_ok_hf": true,
+      "n_input_tokens": 12,
+      "n_output_tokens": 8,
+      "n_words_in": 6,
+      "n_words_out": 6,
+      "identical_in_out": false
+    },
+    {
+      "input": "ads Buch liegt auf dem Tisch",
+      "class": "transposition",
+      "clean": "das Buch liegt auf dem Tisch",
+      "hf_greedy": "Das Buch liegt auf dem Tisch.",
+      "hf_pipeline": "Das Buch liegt auf dem Tisch.",
+      "onnx_int8": "Das Buch liegt auf dem Tisch.",
+      "onnx_fp32": "Das Buch liegt auf dem Tisch.",
+      "int8_identical_to_fp32": true,
+      "diffs_vs_hf": {
+        "substitutions": [],
+        "deletions": []
+      },
+      "clean_ok_int8": true,
+      "clean_ok_hf": true,
+      "n_input_tokens": 9,
+      "n_output_tokens": 7,
+      "n_words_in": 6,
+      "n_words_out": 6,
+      "identical_in_out": false
+    },
+    {
+      "input": "iwr haben Pizza gegessen",
+      "class": "transposition",
+      "clean": "wir haben Pizza gegessen",
+      "hf_greedy": "Wir haben Pizza gegessen.",
+      "hf_pipeline": "Wir haben Pizza gegessen.",
+      "onnx_int8": "Wir haben Pizza gegessen.",
+      "onnx_fp32": "Wir haben Pizza gegessen.",
+      "int8_identical_to_fp32": true,
+      "diffs_vs_hf": {
+        "substitutions": [],
+        "deletions": []
+      },
+      "clean_ok_int8": true,
+      "clean_ok_hf": true,
+      "n_input_tokens": 12,
+      "n_output_tokens": 7,
+      "n_words_in": 4,
+      "n_words_out": 4,
+      "identical_in_out": false
+    },
+    {
+      "input": "die Kazte schläft auf dem Sofa",
+      "class": "transposition",
+      "clean": "die Katze schläft auf dem Sofa",
+      "hf_greedy": "Die Katze schläft auf dem Sofa.",
+      "hf_pipeline": "Die Katze schläft auf dem Sofa.",
+      "onnx_int8": "Die Katze schläft auf dem Sofa.",
+      "onnx_fp32": "Die Katze schläft auf dem Sofa.",
+      "int8_identical_to_fp32": true,
+      "diffs_vs_hf": {
+        "substitutions": [],
+        "deletions": []
+      },
+      "clean_ok_int8": true,
+      "clean_ok_hf": true,
+      "n_input_tokens": 15,
+      "n_output_tokens": 12,
+      "n_words_in": 6,
+      "n_words_out": 6,
+      "identical_in_out": false
+    },
+    {
+      "input": "er hat die Rechnung bzahlt",
+      "class": "missing",
+      "clean": "er hat die Rechnung bezahlt",
+      "hf_greedy": "Er hat die Rechnung bezahlt.",
+      "hf_pipeline": "Er hat die Rechnung bezahlt.",
+      "onnx_int8": "Er hat die Rechnung bezahlt.",
+      "onnx_fp32": "Er hat die Rechnung bezahlt.",
+      "int8_identical_to_fp32": true,
+      "diffs_vs_hf": {
+        "substitutions": [],
+        "deletions": []
+      },
+      "clean_ok_int8": true,
+      "clean_ok_hf": true,
+      "n_input_tokens": 13,
+      "n_output_tokens": 7,
+      "n_words_in": 5,
+      "n_words_out": 5,
+      "identical_in_out": false
+    },
+    {
+      "input": "das Meeting beginnt um zhn Uhr",
+      "class": "missing",
+      "clean": "das Meeting beginnt um zehn Uhr",
+      "hf_greedy": "Das Meeting beginnt um zehn Uhr.",
+      "hf_pipeline": "Das Meeting beginnt um zehn Uhr.",
+      "onnx_int8": "Das Meeting beginnt um zehn Uhr.",
+      "onnx_fp32": "Das Meeting beginnt um zehn Uhr.",
+      "int8_identical_to_fp32": true,
+      "diffs_vs_hf": {
+        "substitutions": [],
+        "deletions": []
+      },
+      "clean_ok_int8": true,
+      "clean_ok_hf": true,
+      "n_input_tokens": 12,
+      "n_output_tokens": 8,
+      "n_words_in": 6,
+      "n_words_out": 6,
+      "identical_in_out": false
+    },
+    {
+      "input": "wir müssen noch einkaufen gehe",
+      "class": "missing",
+      "clean": "wir müssen noch einkaufen gehen",
+      "hf_greedy": "Wir müssen noch einkaufen gehen.",
+      "hf_pipeline": "Wir müssen noch einkaufen gehen.",
+      "onnx_int8": "Wir müssen noch einkaufen gehen.",
+      "onnx_fp32": "Wir müssen noch einkaufen gehen.",
+      "int8_identical_to_fp32": true,
+      "diffs_vs_hf": {
+        "substitutions": [],
+        "deletions": []
+      },
+      "clean_ok_int8": true,
+      "clean_ok_hf": true,
+      "n_input_tokens": 11,
+      "n_output_tokens": 8,
+      "n_words_in": 5,
+      "n_words_out": 5,
+      "identical_in_out": false
+    },
+    {
+      "input": "sie arbeitett in der Bibliothek",
+      "class": "doubled",
+      "clean": "sie arbeitet in der Bibliothek",
+      "hf_greedy": "Sie arbeitet in der Bibliothek.",
+      "hf_pipeline": "Sie arbeitet in der Bibliothek.",
+      "onnx_int8": "Sie arbeitet in der Bibliothek.",
+      "onnx_fp32": "Sie arbeitet in der Bibliothek.",
+      "int8_identical_to_fp32": true,
+      "diffs_vs_hf": {
+        "substitutions": [],
+        "deletions": []
+      },
+      "clean_ok_int8": true,
+      "clean_ok_hf": true,
+      "n_input_tokens": 9,
+      "n_output_tokens": 6,
+      "n_words_in": 5,
+      "n_words_out": 5,
+      "identical_in_out": false
+    },
+    {
+      "input": "der Kaffee ist schon kallt",
+      "class": "doubled",
+      "clean": "der Kaffee ist schon kalt",
+      "hf_greedy": "Der Kaffee ist schon kalt.",
+      "hf_pipeline": "Der Kaffee ist schon kalt.",
+      "onnx_int8": "Der Kaffee ist schon kalt.",
+      "onnx_fp32": "Der Kaffee ist schon kalt.",
+      "int8_identical_to_fp32": true,
+      "diffs_vs_hf": {
+        "substitutions": [],
+        "deletions": []
+      },
+      "clean_ok_int8": true,
+      "clean_ok_hf": true,
+      "n_input_tokens": 11,
+      "n_output_tokens": 8,
+      "n_words_in": 5,
+      "n_words_out": 5,
+      "identical_in_out": false
+    },
+    {
+      "input": "iich habe die E-Mail verschickt",
+      "class": "doubled",
+      "clean": "ich habe die E-Mail verschickt",
+      "hf_greedy": "Ich habe die E-Mail verschickt.",
+      "hf_pipeline": "Ich habe die E-Mail verschickt.",
+      "onnx_int8": "Ich habe die E-Mail verschickt.",
+      "onnx_fp32": "Ich habe die E-Mail verschickt.",
+      "int8_identical_to_fp32": true,
+      "diffs_vs_hf": {
+        "substitutions": [],
+        "deletions": []
+      },
+      "clean_ok_int8": true,
+      "clean_ok_hf": true,
+      "n_input_tokens": 13,
+      "n_output_tokens": 9,
+      "n_words_in": 5,
+      "n_words_out": 5,
+      "identical_in_out": false
+    },
+    {
+      "input": "das Kind spielt im Gärten",
+      "class": "umlaut",
+      "clean": "das Kind spielt im Garten",
+      "hf_greedy": "Das Kind spielt im Gärten.",
+      "hf_pipeline": "Das Kind spielt im Gärten.",
+      "onnx_int8": "Das Kind spielt im Gärten.",
+      "onnx_fp32": "Das Kind spielt im Gärten.",
+      "int8_identical_to_fp32": true,
+      "diffs_vs_hf": {
+        "substitutions": [],
+        "deletions": []
+      },
+      "clean_ok_int8": false,
+      "clean_ok_hf": false,
+      "n_input_tokens": 10,
+      "n_output_tokens": 8,
+      "n_words_in": 5,
+      "n_words_out": 5,
+      "identical_in_out": false
+    },
+    {
+      "input": "wir schauen heüte Abend einen Film",
+      "class": "umlaut",
+      "clean": "wir schauen heute Abend einen Film",
+      "hf_greedy": "Wir schauen heute Abend einen Film.",
+      "hf_pipeline": "Wir schauen heute Abend einen Film.",
+      "onnx_int8": "Wir schauen hüten Abend einen Film.",
+      "onnx_fp32": "Wir schauen heute Abend einen Film.",
+      "int8_identical_to_fp32": false,
+      "diffs_vs_hf": {
+        "substitutions": [
+          [
+            2,
+            "heute",
+            "hüten"
+          ]
+        ],
+        "deletions": []
+      },
+      "clean_ok_int8": false,
+      "clean_ok_hf": true,
+      "n_input_tokens": 14,
+      "n_output_tokens": 11,
+      "n_words_in": 6,
+      "n_words_out": 6,
+      "identical_in_out": false
+    },
+    {
+      "input": "die Tür ist nöch offen",
+      "class": "umlaut",
+      "clean": "die Tür ist noch offen",
+      "hf_greedy": "Die Tür ist noch offen.",
+      "hf_pipeline": "Die Tür ist noch offen.",
+      "onnx_int8": "Die Tür ist noch offen.",
+      "onnx_fp32": "Die Tür ist noch offen.",
+      "int8_identical_to_fp32": true,
+      "diffs_vs_hf": {
+        "substitutions": [],
+        "deletions": []
+      },
+      "clean_ok_int8": true,
+      "clean_ok_hf": true,
+      "n_input_tokens": 11,
+      "n_output_tokens": 6,
+      "n_words_in": 5,
+      "n_words_out": 5,
+      "identical_in_out": false
+    },
+    {
+      "input": "erliest die Zeitung in der Küche",
+      "class": "spacing",
+      "clean": "er liest die Zeitung in der Küche",
+      "hf_greedy": "Er liest die Zeitung in der Küche.",
+      "hf_pipeline": "Er liest die Zeitung in der Küche.",
+      "onnx_int8": "Er liest die Zeitung in der Küche.",
+      "onnx_fp32": "Er liest die Zeitung in der Küche.",
+      "int8_identical_to_fp32": true,
+      "diffs_vs_hf": {
+        "substitutions": [],
+        "deletions": []
+      },
+      "clean_ok_int8": true,
+      "clean_ok_hf": true,
+      "n_input_tokens": 11,
+      "n_output_tokens": 9,
+      "n_words_in": 6,
+      "n_words_out": 7,
+      "identical_in_out": false
+    },
+    {
+      "input": "ichrufe dich später an",
+      "class": "spacing",
+      "clean": "ich rufe dich später an",
+      "hf_greedy": "Ich rufe dich später an.",
+      "hf_pipeline": "Ich rufe dich später an.",
+      "onnx_int8": "Ich rufe dich später an.",
+      "onnx_fp32": "Ich rufe dich später an.",
+      "int8_identical_to_fp32": true,
+      "diffs_vs_hf": {
+        "substitutions": [],
+        "deletions": []
+      },
+      "clean_ok_int8": true,
+      "clean_ok_hf": true,
+      "n_input_tokens": 10,
+      "n_output_tokens": 8,
+      "n_words_in": 4,
+      "n_words_out": 5,
+      "identical_in_out": false
+    }
+  ]
+}

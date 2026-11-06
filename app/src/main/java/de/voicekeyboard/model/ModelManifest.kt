@@ -28,6 +28,17 @@ object ModelManifest {
     /** Variant B (LiteRT, cached streaming) — base from the Arm repo. */
     const val BASE_URL_LITERT = "https://huggingface.co/Arm/parakeet-tdt-0-6b-v3-int8-litert/resolve/main/"
 
+    /**
+     * T22b'/VK-2 (REVIEW_V0146): base URL of the QWEN set — EMPTY until the
+     * download server host is pinned at upload time (post-GATE decision;
+     * the placeholder host of the draft was NOT resolvable — see review).
+     * Empty = the set is NOT offered: DownloadPolicy reports Unsupported
+     * ("not enabled yet"), the Setup card stays in the not-downloaded state
+     * and a hand-started download fails fast WITHOUT any network attempt.
+     * Pinning the host here is the one-line unlock (plus contract §3 server).
+     */
+    const val BASE_URL_QWEN = ""
+
     /** Compatibility alias: today's single set = variant A (uncontrolled callers). */
     const val BASE_URL = BASE_URL_ONNX
 
@@ -85,11 +96,62 @@ object ModelManifest {
         ),
     )
 
-    /** Manifest per variant (V1): A = today's list, B = LiteRT set. */
+    /**
+     * T22b' (PLAN_V0146 §7 + docs/QWEN_ASR_CONTRACT.md §3): QWEN3-ASR-0.6B set
+     * (gate decision v0.1.46) — the PINNED production file list. 6 FLAT names
+     * (the server delivers flat names, the engine finds them in the model
+     * dir); sizes/sha256 verified against the export artifacts. An EMPTY list
+     * would keep the set structurally inert (isAllowedName rejects everything,
+     * DownloadPolicy reports Unsupported) — this list is the unlock.
+     */
+    val QWEN: List<ModelFile> = listOf(
+        ModelFile(
+            storeName = "encoder.int8.onnx",
+            sizeBytes = 187_361_021L,
+            sha256 = "327974e11e2914037272224fc439af093bb251d0d232c0513bc9054d1ae6adba",
+        ),
+        ModelFile(
+            storeName = "qwen_prefill.int8.onnx",
+            sizeBytes = 752_810_624L,
+            sha256 = "1a505e73e42074a2fdded9cdef4d9484586d52dbd654760982df738e1c03e48d",
+        ),
+        ModelFile(
+            storeName = "qwen_step.int8.onnx",
+            sizeBytes = 752_598_179L,
+            sha256 = "9a7f8946996be4f36c0687265cc18f0d929c459001d15d1dfc5b6f783cb198d5",
+        ),
+        ModelFile(
+            storeName = "tokenizer.json",
+            sizeBytes = 11_429_653L,
+            sha256 = "fe1fad59be22a41ee293363fcf95fdedbc7c93f3b49270b1d2e18bd1399a7a05",
+        ),
+        ModelFile(
+            storeName = "mel_filters.npy",
+            sizeBytes = 103_040L,
+            sha256 = "8abf12444e0d9c0fd6c5e49f8b977d41e47b51a5eb48d399c232578d3d5e914f",
+        ),
+        ModelFile(
+            storeName = "mel_config.json",
+            sizeBytes = 260L,
+            sha256 = "1888b2defc1b7db6ca081bd706f31e8fc1107cd44f1eba644834251f6dccd24c",
+        ),
+    )
+
+    /** Manifest per variant (V1): A = today's list, B = LiteRT set, Q = pinned 0.6B contract (T22b'). */
     fun forVariant(variant: de.voicekeyboard.model.ModelVariant): List<ModelFile> =
         when (variant) {
             de.voicekeyboard.model.ModelVariant.ONNX_CPU -> ONNX
             de.voicekeyboard.model.ModelVariant.LITERT_CPU -> LITERT
+            de.voicekeyboard.model.ModelVariant.QWEN3_ASR -> QWEN
+        }
+
+    /** T22b (PLAN_V0146 §2): base URL per set — the downloader gets its source
+     *  per variant (A/B unchanged, QWEN = download server path). */
+    fun baseUrlFor(variant: de.voicekeyboard.model.ModelVariant): String =
+        when (variant) {
+            de.voicekeyboard.model.ModelVariant.ONNX_CPU -> BASE_URL_ONNX
+            de.voicekeyboard.model.ModelVariant.LITERT_CPU -> BASE_URL_LITERT
+            de.voicekeyboard.model.ModelVariant.QWEN3_ASR -> BASE_URL_QWEN
         }
 
     /** Compatibility: DEFAULT stays an alias to A. */

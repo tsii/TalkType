@@ -22,6 +22,9 @@ class DownloadController(
     private val downloaderFactory: () -> DownloadOp,
     private val manifest: List<ModelFile> = ModelManifest.DEFAULT,
     private val executor: Executor,
+    /** T22d: the model set — markers, part paths, staging move and activation
+     *  all run per variant (default A = old callers). */
+    val variant: ModelVariant = ModelVariant.ONNX_CPU,
 ) {
 
     /** Narrow download port: production = ModelDownloader::download; tests = fakes. */
@@ -90,10 +93,24 @@ class DownloadController(
 
     private fun run() {
         try {
+            // T22d: a set without a pinned manifest is structurally not
+            // downloadable — abort BEFORE any staging/marker/download op
+            // ("modell nicht freigeschaltet").
+            if (order.isEmpty()) {
+                setState(State.Failed(ModelError.Storage("model set not unlocked (${variant.id})")))
+                return
+            }
+            // VK-2 (REVIEW_V0146): no pinned base URL yet (server host is
+            // decided at upload time) — abort BEFORE any staging/marker/
+            // download op, WITHOUT a single network attempt.
+            if (de.voicekeyboard.model.ModelManifest.baseUrlFor(variant).isEmpty()) {
+                setState(State.Failed(ModelError.Storage("model set not enabled yet (${variant.id})")))
+                return
+            }
             val staging = store.newStagingDir()
             var completedBytes = 0L
             for ((index, file) in order.withIndex()) {
-                store.markDownloading()
+                store.markDownloading(variant)
                 setState(State.Downloading(index, order.size, file.storeName, fraction(completedBytes)))
                 val op = downloaderFactory()
                 currentOp = op
@@ -121,15 +138,15 @@ class DownloadController(
                     setState(State.Failed(ModelError.Storage("download ended without success: ${file.storeName}")))
                     return
                 }
-                if (!store.movePartToStaging(file.storeName, staging)) {
+                if (!store.movePartToStaging(file.storeName, staging, variant)) {
                     setState(State.Failed(ModelError.Storage("Staging move failed: ${file.storeName}")))
                     return
                 }
                 completedBytes += sizeByName.getValue(file.storeName)
             }
-            store.markVerifying()
+            store.markVerifying(variant)
             setState(State.Verifying)
-            if (!store.activate(staging)) {
+            if (!store.activate(staging, variant)) {
                 setState(State.Failed(ModelError.Storage("activation failed (staging incomplete/hash)")))
                 return
             }

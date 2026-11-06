@@ -71,7 +71,8 @@ class MicCaptureTest {
         var geleseneSamples = 0
         var quadrate = 0.0
         var peak = 0
-        val puffer = ShortArray(1600) // 100 ms        try {
+        val puffer = ShortArray(1600) // 100 ms
+        try {
             rec.startRecording()
             val start = System.currentTimeMillis()
             while (geleseneSamples < sampleRate * 2 && System.currentTimeMillis() - start < 6000) {

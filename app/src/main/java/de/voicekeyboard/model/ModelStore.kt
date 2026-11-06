@@ -107,10 +107,12 @@ class ModelStore(
      *  entries (store names + expected file hashes). No disk access; changes
      *  exactly when the model set changes. Persistence key of the one-time
      *  network-revoke invite (NetworkInvitePolicy, Settings key
-     *  "net_invite_shown_for"). */
-    fun manifestSetId(): String =
+     *  "net_invite_shown_for").
+     *  T22c (B4): per variant — each set gets its own invite id; callers without
+     *  an argument keep variant A, so existing persisted ids stay valid. */
+    fun manifestSetId(variant: ModelVariant = ModelVariant.ONNX_CPU): String =
         Sha256.ofBytes(
-            manifest.joinToString("\n") { "${it.storeName}:${it.sha256}" }.toByteArray(),
+            manifestFor(variant).joinToString("\n") { "${it.storeName}:${it.sha256}" }.toByteArray(),
         )
 
     /** V1: active version ID per variant (old pointer ⇒ variant A). */
@@ -169,9 +171,9 @@ class ModelStore(
 
     /** Like [status], but without a full hash — for main-thread callers. */
     fun statusQuick(variant: ModelVariant = ModelVariant.ONNX_CPU): ModelStatus = when {
-        marker(VERIFY_MARKER) -> ModelStatus.VERIFYING
-        marker(DOWNLOAD_MARKER) -> ModelStatus.DOWNLOADING
-        activeVersion(variant) == null -> absentOrPartial()
+        marker(VERIFY_MARKER, variant) -> ModelStatus.VERIFYING
+        marker(DOWNLOAD_MARKER, variant) -> ModelStatus.DOWNLOADING
+        activeVersion(variant) == null -> absentOrPartial(variant)
         else -> if (isReadyQuick(variant)) ModelStatus.READY else ModelStatus.BROKEN
     }
 
@@ -192,15 +194,22 @@ class ModelStore(
 
     /** V1: status per variant. */
     fun status(variant: ModelVariant): ModelStatus = when {
-        marker(VERIFY_MARKER) -> ModelStatus.VERIFYING
-        marker(DOWNLOAD_MARKER) -> ModelStatus.DOWNLOADING
-        activeVersion(variant) == null -> absentOrPartial()
+        marker(VERIFY_MARKER, variant) -> ModelStatus.VERIFYING
+        marker(DOWNLOAD_MARKER, variant) -> ModelStatus.DOWNLOADING
+        activeVersion(variant) == null -> absentOrPartial(variant)
         else -> if (verifyInstalled(variant)) ModelStatus.READY else ModelStatus.BROKEN
     }
 
-    private fun absentOrPartial(): ModelStatus =
+    /** T22c (B3): only remnants of the OWN set count — a .part of another
+     *  variant must not fake a DOWNLOADING trail here (name checked against
+     *  the variant whitelist). */
+    private fun absentOrPartial(variant: ModelVariant): ModelStatus =
         // Pointer missing: ABSENT, except download remnants exist → keep the DOWNLOADING trail
-        if (downloadsDir.listFiles()?.any { it.name.endsWith(PART_SUFFIX) } == true) {
+        if (downloadsDir.listFiles()?.any {
+                it.name.endsWith(PART_SUFFIX) &&
+                    isAllowedName(it.name.removeSuffix(PART_SUFFIX), variant)
+            } == true
+        ) {
             ModelStatus.DOWNLOADING
         } else {
             ModelStatus.ABSENT
@@ -208,17 +217,20 @@ class ModelStore(
 
     // ---- downloads / resume ----
 
-    /** Part file (downloads/<name>.part) for resuming — whitelisted names only. */
-    fun partFile(name: String): File = safePart(name)
+    /** Part file (downloads/<name>.part) for resuming — whitelisted names only.
+     *  T22c: per variant (name whitelist of the own set); default A = old callers. */
+    fun partFile(name: String, variant: ModelVariant = ModelVariant.ONNX_CPU): File = safePart(name, variant)
 
-    /** ETag sidecar for the resume guard; null if none was stored. */
-    fun etagFor(name: String): String? {
-        val f = File(downloadsDir, safeName(name) + ETAG_SUFFIX)
+    /** ETag sidecar for the resume guard; null if none was stored.
+     *  VK-1 (REVIEW_V0146): per variant — the name whitelist of the OWN set;
+     *  default A keeps every existing caller. */
+    fun etagFor(name: String, variant: ModelVariant = ModelVariant.ONNX_CPU): String? {
+        val f = File(downloadsDir, safeName(name, variant) + ETAG_SUFFIX)
         return if (f.isFile) f.readText().trim().takeIf { it.isNotEmpty() } else null
     }
 
-    fun storeEtag(name: String, etag: String?) {
-        val f = File(downloadsDir, safeName(name) + ETAG_SUFFIX)
+    fun storeEtag(name: String, etag: String?, variant: ModelVariant = ModelVariant.ONNX_CPU) {
+        val f = File(downloadsDir, safeName(name, variant) + ETAG_SUFFIX)
         if (etag == null) f.delete() else f.writeText(etag)
     }
 
@@ -262,6 +274,10 @@ class ModelStore(
     /** V1: activation per variant (checked against the variant manifest). */
     fun activate(stagingDir: File, variant: ModelVariant): Boolean {
         if (!stagingDir.isDirectory) return false
+        // T22d: a set WITHOUT a pinned manifest must never activate — an empty
+        // list would otherwise pass vacuously and activate ANY staging dir
+        // (e.g. a future set before its contract is pinned).
+        if (manifestFor(variant).isEmpty()) return false
         val stagingName = stagingDir.name
         for (entry in manifestFor(variant)) {
             val f = safeChild(stagingDir, entry.storeName, variant)
@@ -280,47 +296,84 @@ class ModelStore(
             return false
         }
         sweepStaleVersions()
-        clearMarkers()
+        clearMarkers(variant)
         // F11 P2: the version just hashed counts as checked in this process —
         // interactive paths (Mic tap, 🐞 export) never have to run over ~670 MB again.
         verifiedThisProcess[variant.name] = true
         return true
     }
 
-    /** Deletes all versions except the active one (reclaim space). */
+    /** Deletes all versions that are NOT active in ANY variant (space reclaim).
+     *  T22c (B1): previously only activeVersion() of variant A survived —
+     *  activating set B deleted the version dir of set A. */
     fun sweepStaleVersions() {
-        val active = activeVersion() ?: return
+        val active = ModelVariant.entries.mapNotNull { activeVersion(it) }.toSet()
+        if (active.isEmpty()) return
         versionsDir.listFiles()?.forEach { dir ->
-            if (dir.isDirectory && dir.name != active) dir.deleteRecursively()
+            if (dir.isDirectory && dir.name !in active) dir.deleteRecursively()
         }
     }
 
-    /** Discards all download remnants (.part/.etag) and markers. */
+    /** T22c (PLAN_V0146 §2 "Delete other model"): deletes the COMPLETE model set
+     *  of a variant — version dir, pointer, download remnants (.part/.etag) and
+     *  markers. The ACTIVE variant (the one chosen in the prefs — the store has
+     *  no prefs access, so the caller passes it) is refused WITHOUT deleting:
+     *  deleting under the running engine would rip away its model dir.
+     *  Returns true if the set was (or already is) gone, false on refusal. */
+    fun deleteSet(variant: ModelVariant, activeVariant: ModelVariant): Boolean {
+        if (variant == activeVariant) return false
+        activeVersion(variant)?.let { File(versionsDir, it).deleteRecursively() }
+        pointerFile(variant).delete()
+        // variant A: a stale legacy pointer (active.txt) must go too
+        if (variant == ModelVariant.ONNX_CPU) File(root, "active.txt").delete()
+        downloadsDir.listFiles()?.forEach { f ->
+            val base = f.name.removeSuffix(PART_SUFFIX).removeSuffix(ETAG_SUFFIX)
+            if (isAllowedName(base, variant)) f.delete()
+        }
+        clearMarkers(variant)
+        verifiedThisProcess.remove(variant.name)
+        return true
+    }
+
+    /** Discards all download remnants (.part/.etag) and markers (T22c: of every
+     *  variant — a maintenance reset must not leave foreign set markers behind). */
     fun clearDownloads() {
         downloadsDir.listFiles()?.forEach { it.delete() }
-        clearMarkers()
+        ModelVariant.entries.forEach { clearMarkers(it) }
     }
 
     // ---- markers (DOWNLOADING/VERIFYING for the status display) ----
 
-    fun markDownloading() = writeMarker(DOWNLOAD_MARKER)
-    fun markVerifying() = writeMarker(VERIFY_MARKER)
-    fun clearMarkers() {
-        File(root, DOWNLOAD_MARKER).delete()
-        File(root, VERIFY_MARKER).delete()
+    /** T22c (B2): markers per variant. Variant A keeps the LEGACY global names
+     *  (.downloading/.verifying) — existing installations and callers without an
+     *  argument behave exactly as before; other variants get own files
+     *  (.downloading-<id>). */
+    fun markDownloading(variant: ModelVariant = ModelVariant.ONNX_CPU) =
+        writeMarker(DOWNLOAD_MARKER, variant)
+
+    fun markVerifying(variant: ModelVariant = ModelVariant.ONNX_CPU) =
+        writeMarker(VERIFY_MARKER, variant)
+
+    fun clearMarkers(variant: ModelVariant = ModelVariant.ONNX_CPU) {
+        markerFile(DOWNLOAD_MARKER, variant).delete()
+        markerFile(VERIFY_MARKER, variant).delete()
     }
 
-    private fun writeMarker(name: String) {
-        File(root, name).writeText("1")
+    private fun writeMarker(name: String, variant: ModelVariant) {
+        markerFile(name, variant).writeText("1")
     }
 
-    private fun marker(name: String): Boolean = File(root, name).isFile
+    private fun marker(name: String, variant: ModelVariant): Boolean =
+        markerFile(name, variant).isFile
+
+    private fun markerFile(name: String, variant: ModelVariant): File =
+        if (variant == ModelVariant.ONNX_CPU) File(root, name)
+        else File(root, "$name-${variant.id}")
 
     // ---- path traversal protection ----
 
     /** Allowed base name from the manifest — no '/', '..' etc. */
     private fun safeName(name: String): String = safeName(name, ModelVariant.ONNX_CPU)
-
     /** V5: whitelist check against the VARIANT (store knows its own via manifestFor). */
     private fun safeName(name: String, variant: ModelVariant): String {
         require(isAllowedName(name, variant)) { "file name not whitelisted: $name" }
@@ -353,8 +406,6 @@ class ModelStore(
         }
         return canonicalChild
     }
-
-    private fun safePart(name: String): File = safePart(name, ModelVariant.ONNX_CPU)
 
     private fun safePart(name: String, variant: ModelVariant): File =
         safeChild(downloadsDir, safeName(name, variant) + PART_SUFFIX, variant)

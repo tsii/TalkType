@@ -31,7 +31,13 @@
         android:label="@string/app_name"
         android:icon="@mipmap/ic_launcher"
         android:theme="@style/Theme.VoiceKeyboard"
-        android:allowBackup="false">
+        android:allowBackup="false"
+        android:largeHeap="true">
+        <!-- T22-oom-fix (emulator 5566): largeHeap as a SAFETY NET only. The
+             16-head KV cache lives OFF the Java heap since T22-oom-fix
+             (direct ByteBuffers, ping-pong A/B in OffHeapKvPool) — but the ORT
+             arena and transient Java views still need headroom above the
+             192-MB default Dalvik limit on some devices. -->
 
         <!-- SB1-07: remove the ORT AAR telemetry provider via manifest merger
              (TECH_FACTS.md §3 concept 3) — must be a child of <application>. -->

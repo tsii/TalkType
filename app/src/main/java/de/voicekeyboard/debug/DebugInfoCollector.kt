@@ -53,6 +53,24 @@ class DebugInfoCollector(private val context: Context) {
         gateOpenAtStop: Int? = null,
         /** AP7-W1: rejected foreign resets of the hold gate (W1b evidence). */
         gateForeignResets: Int? = null,
+        /** T22i (PLAN_V0146 §6, 🐞: active_model_set): provider for the id of
+         *  the ACTIVE model set — INJECTED (the collector never reads prefs).
+         *  Deferred so the value reflects the moment of the export. */
+        activeModelSet: (() -> String?)? = null,
+        /** T22i (🐞: engine_set_used): provider for the id of the set whose
+         *  engine is ACTUALLY loaded — different from the active set ⇒ the
+         *  fallback is visible. Until T22f the service reports the active set. */
+        engineSetUsed: (() -> String?)? = null,
+        /** T23h (PLAN_V0147 §8, 🐞: corr_row_enabled): provider for the typing
+         *  suggestions switch — INJECTED (the collector never reads prefs). */
+        corrRowEnabled: (() -> Boolean?)? = null,
+        /** T23h (🐞: corr_lang_mode): provider for the correction language mode
+         *  (current/all) — injected like corrRowEnabled. */
+        corrLangMode: (() -> String?)? = null,
+        /** T23h (🐞: corr counters): provider for the [de.voicekeyboard.ime.CorrCounters]
+         *  watcher object — counters/codes only, invoked HERE at collect time
+         *  (T22i pattern: no service field access in the collector). */
+        corrCounters: (() -> de.voicekeyboard.ime.CorrCounters?)? = null,
     ): DebugSnapshot {
         // T19 (v0.1.45): ONE shared version read path — the Setup header and
         // this export use the same [AppVersion.read] (PackageManager; no
@@ -175,6 +193,21 @@ class DebugInfoCollector(private val context: Context) {
             warmHit = coordinator?.warmHit,
             loadTrigger = coordinator?.loadTrigger,
             engineLoads = coordinator?.engineLoads,
+            // T22i (PLAN_V0146 §6): set ids via the injected providers — invoked
+            // HERE (at collect time), no prefs access in the collector.
+            activeModelSet = activeModelSet?.invoke(),
+            engineSetUsed = engineSetUsed?.invoke(),
+            // T23h: values from the injected providers/watcher object — invoked
+            // at collect time; NEVER typed/corrected text (rule 9).
+            corrRowEnabled = corrRowEnabled?.invoke(),
+            corrLangMode = corrLangMode?.invoke(),
+            corrRowsShown = corrCounters?.invoke()?.rowsShown,
+            corrApplied = corrCounters?.invoke()?.applied,
+            corrUndone = corrCounters?.invoke()?.undone,
+            corrComputes = corrCounters?.invoke()?.computes,
+            corrVerifyFail = corrCounters?.invoke()?.verifyFail,
+            corrLang = corrCounters?.invoke()?.lang?.ifEmpty { null },
+            corrRegionBucket = corrCounters?.invoke()?.regionLenBucket,
         )
     }
 

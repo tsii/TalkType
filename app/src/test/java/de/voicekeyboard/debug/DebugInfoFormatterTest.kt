@@ -52,13 +52,13 @@ class DebugInfoFormatterTest {
 
     private val empty = DebugSnapshot()
 
-    // 1. FIELD COUNT (F31→AP7-E1→A4a→W-vc34): header + 68 lines = 69 — the drift check
+    // 1. FIELD COUNT (F31→AP7-E1→A4a→W-vc34→T22i→T23h): header + 79 lines = 80 — the drift check
     // in the formatter (`check(lines.size == KEYS.size + 1)`) must catch every field change.
     @Test
-    fun `format has exactly 69 lines - header plus 68 fields`() {
+    fun `format has exactly 80 lines - header plus 79 fields`() {
         for (s in listOf(full, empty)) {
             val lines = DebugInfoFormatter.format(s).lines()
-            assertEquals("header + KEYS.size(68) fields", 69, lines.size)
+            assertEquals("header + KEYS.size(79) fields", 80, lines.size)
             assertTrue("too few lines: ${lines.size}", lines.size >= 5)
         }
     }
@@ -92,7 +92,13 @@ class DebugInfoFormatterTest {
                 "last_decode_ms", "hyp_len", "current_len", "committed_len", "write_reason",
                 "write_same", "write_w1", "write_w3d", "write_delta", "last_write_audio_s",
                 // W package (vc34, debugger recommendation): +5 engine warming fields at the end.
-                "engine_load_ms", "engine_resident", "warm_hit", "load_trigger", "engine_loads"),
+                "engine_load_ms", "engine_resident", "warm_hit", "load_trigger", "engine_loads",
+                // T22i (PLAN_V0146 §6): +2 model-set fields at the end.
+                "active_model_set", "engine_set_used",
+                // T23h (PLAN_V0147 §8): +9 correction fields at the end.
+                "corr_row_enabled", "corr_lang_mode", "corr_rows_shown", "corr_applied",
+                "corr_undone", "corr_computes", "corr_verify_fail", "corr_lang",
+                "corr_region_bucket"),
             keys,
         )
     }
@@ -134,7 +140,7 @@ class DebugInfoFormatterTest {
             lastError = "audioInit:Security\nException:secret",
         )
         val out = DebugInfoFormatter.format(dirty)
-        assertEquals("no multi-line output", 69, out.lines().size)
+        assertEquals("no multi-line output", 80, out.lines().size)
         for (line in out.lines().drop(1)) {
             val value = line.substringAfter(": ")
             assertFalse("colon in the value: '$value'", value.contains(":"))
@@ -266,7 +272,7 @@ class DebugInfoFormatterTest {
                 // A4a: +10 — the existing keys stay BEFORE the new ones.
                 "last_decode_ms", "hyp_len", "current_len", "committed_len", "write_reason",
                 "write_same", "write_w1", "write_w3d", "write_delta", "last_write_audio_s"),
-            keys.dropLast(5).takeLast(47),
+            keys.dropLast(16).takeLast(47),
         )
         // F17b+F21: exact values in the full snapshot, dash when missing (numbers only, rule 9):
         assertTrue(fullText.contains("decode_ms_max: 900"))
@@ -329,9 +335,9 @@ class DebugInfoFormatterTest {
         assertEquals(
             listOf("last_decode_ms", "hyp_len", "current_len", "committed_len", "write_reason",
                 "write_same", "write_w1", "write_w3d", "write_delta", "last_write_audio_s"),
-            keys.dropLast(5).takeLast(10),
+            keys.dropLast(16).takeLast(10),
         )
-        assertEquals("68 fields", 68, keys.size)
+        assertEquals("79 fields", 79, keys.size)
         assertEquals("no duplicate keys", keys.size, keys.toSet().size)
     }
 
@@ -373,10 +379,10 @@ class DebugInfoFormatterTest {
     }
 
     // A4a red test 3: the existing 53 KEYS stay unchanged IN ORDER;
-    // header + 68 = 69 lines (W-vc34: +5 engine warming fields), deterministic
+    // header + 79 = 80 lines (W-vc34: +5, T22i: +2, T23h: +9), deterministic
     // for an empty and a full snapshot.
     @Test
-    fun `A4a existing keys unchanged - 69 lines deterministic empty and full`() {
+    fun `A4a existing keys unchanged - 80 lines deterministic empty and full`() {
         val old53 = listOf("app_version", "build", "api_level", "model_status", "model_variant",
             "model_version", "model_bytes", "last_error", "rtf", "first_hyp_ms",
             "threads", "permissions", "peak_pct", "route", "src", "peak_dbfs",
@@ -392,8 +398,8 @@ class DebugInfoFormatterTest {
             "gate_foreign_resets", "rebases")
         for (s in listOf(full, empty)) {
             val lines = DebugInfoFormatter.format(s).lines()
-            assertEquals("header + 68 fields", 69, lines.size)
-            assertEquals("existing 53 KEYS unchanged", old53, lines.drop(1).map { it.substringBefore(":") }.dropLast(15))
+            assertEquals("header + 79 fields", 80, lines.size)
+            assertEquals("existing 53 KEYS unchanged", old53, lines.drop(1).map { it.substringBefore(":") }.dropLast(26))
         }
         assertEquals(
             DebugInfoFormatter.format(DebugSnapshot()),
@@ -404,10 +410,10 @@ class DebugInfoFormatterTest {
 
     // ---- W package (vc34, debugger recommendation): +5 engine warming fields ----
 
-    // W4c: exact keys/values at the end, header+68=69 lines, '-/default' for
+    // W4c: exact keys/values at the end, header+79=80 lines, '-/default' for
     // the empty state (rule 9: numbers/codes mic|ime_show|'-' only, never content).
     @Test
-    fun `W fields engine_load_ms through engine_loads exact - 69 lines - dash when empty`() {
+    fun `W fields engine_load_ms through engine_loads exact - 80 lines - dash when empty`() {
         val out = DebugInfoFormatter.format(
             DebugSnapshot(
                 engineLoadMs = 4531L,
@@ -422,24 +428,68 @@ class DebugInfoFormatterTest {
         assertTrue("warm start 0/1", out.contains("warm_hit: 1"))
         assertTrue("trigger code", out.contains("load_trigger: ime_show"))
         assertTrue("load counter", out.contains("engine_loads: 1"))
-        // header + 68 fields = 69 lines (the drift check in the formatter secures the count)
-        assertEquals(69, out.size)
-        // the last five keys exactly, in fixed order (after last_write_audio_s):
+        // header + 79 fields = 80 lines (the drift check in the formatter secures the count)
+        assertEquals(80, out.size)
+        // the last seven keys exactly, in fixed order (after last_write_audio_s:
+        // the W-vc34 engine fields, then the T22i model-set fields):
         assertEquals(
-            listOf("engine_load_ms", "engine_resident", "warm_hit", "load_trigger", "engine_loads"),
-            out.drop(1).map { it.substringBefore(":") }.takeLast(5),
+            listOf("engine_load_ms", "engine_resident", "warm_hit", "load_trigger", "engine_loads",
+                "active_model_set", "engine_set_used"),
+            out.drop(1).map { it.substringBefore(":") }.takeLast(16).take(7),
         )
         // empty state: '-' instead of guessing (no coordinator => everything a dash)
         val none = DebugInfoFormatter.format(DebugSnapshot()).lines()
         for (k in listOf("engine_load_ms", "engine_resident", "warm_hit", "load_trigger", "engine_loads")) {
             assertTrue("$k must be missing as a dash", none.contains("$k: -"))
         }
-        assertEquals(69, none.size)
+        assertEquals(80, none.size)
         // 0/1 encoding, never true/false (like ctl_failed/starting)
         val zero = DebugInfoFormatter.format(
             DebugSnapshot(engineResident = false, warmHit = false),
         ).lines()
         assertTrue(zero.contains("engine_resident: 0"))
         assertTrue(zero.contains("warm_hit: 0"))
+    }
+
+    // ---- T22i (PLAN_V0146 §6): +2 model-set fields (🐞 active_model_set /
+    // engine_set_used) — set IDS (closed codes, rule 9), injected by the
+    // caller (the collector never touches prefs). A FALLBACK is visible:
+    // active=qwen3-asr-0.6b-int8 with engine_set_used=onnx-cpu means the target
+    // set was not READY and the coordinator fell back to A. ----
+
+    @Test
+    fun `T22i fields active_model_set and engine_set_used - ids exact - fallback visible - dash when empty`() {
+        val out = DebugInfoFormatter.format(
+            DebugSnapshot(activeModelSet = "qwen3-asr-0.6b-int8", engineSetUsed = "onnx-cpu"),
+        ).lines()
+        assertTrue("active set id verbatim", out.contains("active_model_set: qwen3-asr-0.6b-int8"))
+        assertTrue("engine set id verbatim", out.contains("engine_set_used: onnx-cpu"))
+        // fallback case: BOTH values differ and are visible as such
+        assertTrue(
+            "fallback must be visible (different values)",
+            out.contains("active_model_set: qwen3-asr-0.6b-int8") &&
+                out.contains("engine_set_used: onnx-cpu"),
+        )
+        // no fallback: both identical (today's single-set world)
+        val same = DebugInfoFormatter.format(
+            DebugSnapshot(activeModelSet = "onnx-cpu", engineSetUsed = "onnx-cpu"),
+        ).lines()
+        assertTrue(same.contains("active_model_set: onnx-cpu"))
+        assertTrue(same.contains("engine_set_used: onnx-cpu"))
+        // missing values → '-', never a guess; appended AFTER engine_loads
+        val none = DebugInfoFormatter.format(DebugSnapshot()).lines()
+        assertTrue(none.contains("active_model_set: -"))
+        assertTrue(none.contains("engine_set_used: -"))
+        assertEquals(80, none.size)
+        assertEquals(
+            listOf("active_model_set", "engine_set_used"),
+            none.drop(1).map { it.substringBefore(":") }.takeLast(11).take(2),
+        )
+        // a colon in the id would be sanitized (ids have none today — pinned anyway)
+        val dirty = DebugInfoFormatter.format(
+            DebugSnapshot(activeModelSet = "a:b", engineSetUsed = "c:d"),
+        ).lines()
+        assertTrue(dirty.contains("active_model_set: a=b"))
+        assertTrue(dirty.contains("engine_set_used: c=d"))
     }
 }

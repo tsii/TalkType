@@ -535,3 +535,24 @@ keep flowing, just quiet); a **dead source** (no blocks) remains under the
 `ERR_STALL` contract (F28b1/F30) and is **not** preempted by the auto-stop
 (evidenced: `FakeAudioScenarioTest` case c). Shorter pauses (< 2500 ms) never
 interrupt.
+
+## Documented refinement T23 (2026-11-05) — content above unchanged, only
+supplemented here
+
+**Typing suggestions, suggestion-only** (V0.1.47 chain per
+`docs/PLAN_V0147.md`, user command 2026-11-05) is a **refinement of the
+"no autocorrect in v1" rule**: the keyboard gains a suggestion ROW above the
+keys, but **nothing is ever replaced automatically**. A correction applies
+ONLY on an explicit wand press (`RegionReplacer`: batch edit with suffix
+proof before and after, single-level undo until the next keystroke). No
+learning, no persistence of typed text (rule 9: no typed content in
+logs/exports — the 🐞 export carries counters/codes only). The lists are
+STATIC word lists (hermitdave/FrequencyWords content 2018, CC BY-SA 4.0 —
+`assets/wordlists/NOTICE.txt`), NOT adaptive dictionaries. Typed-region
+tracking stays local and bounded (≤ 500 UTF-16 units, oldest dropped) and
+resets on field start, dictation commit, selection/cursor moves, editor
+change and suffix mismatch. Word keyboards ship for **de + en only**
+(`LanguageAvailability`, §16); all 15 layouts keep dictation capability.
+Full semantics: PLAN_V0147 §0/§3–§8; quality goldens:
+`testdata/typing_goldens` (fix-rate 30/32 ≥ 90 % gate, clean-corpus FP 0/117,
+corrector p95 0.53 ms per region).

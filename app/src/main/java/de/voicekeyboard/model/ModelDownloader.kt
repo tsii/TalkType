@@ -25,10 +25,13 @@ import java.security.MessageDigest
  *
  * @param opener lets tests fake the transport (JDK HttpServer or
  *   in-memory connection) — production code uses the default.
+ * @param variant T22d: the model set — part files live per variant
+ *   (name whitelist of the own set; default A = old callers).
  */
 class ModelDownloader(
     private val baseUrl: String = ModelManifest.BASE_URL,
     private val store: ModelStore,
+    private val variant: ModelVariant = ModelVariant.ONNX_CPU,
     private val connectTimeoutMs: Int = 15_000,
     private val readTimeoutMs: Int = 30_000,
     private val maxRetries: Int = 4,
@@ -87,7 +90,7 @@ class ModelDownloader(
         restartedAfter416: Boolean = false,
         currentAttempt: Int = 1,
     ): Boolean {
-        val part = store.partFile(file.storeName)
+        val part = store.partFile(file.storeName, variant)
         val parent = part.parentFile ?: throw ModelError.Storage("no parent directory for ${part.name}")
         parent.mkdirs()
 
@@ -115,13 +118,13 @@ class ModelDownloader(
             // On 416 NO ETag restart: the .part is (presumably) complete —
             // an ETag change is caught safely by the hash check (mismatch).
             val etag = connection.getHeaderField("ETag")
-            val storedEtag = store.etagFor(file.storeName)
+            val storedEtag = store.etagFor(file.storeName, variant)
             if (status != 416 && resumeFrom > 0 && storedEtag != null && etag != null && storedEtag != etag) {
                 part.delete()
-                store.storeEtag(file.storeName, null)
+                store.storeEtag(file.storeName, null, variant)
                 return downloadAttempt(file, listener) // without resume, fresh ETag is stored
             }
-            if (etag != null) store.storeEtag(file.storeName, etag)
+            if (etag != null) store.storeEtag(file.storeName, etag, variant)
 
             if (status == 416) {
                 // Range not satisfiable (B-1): do NOT delete the .part.
@@ -132,14 +135,14 @@ class ModelDownloader(
                     val actual = Sha256.hex(digest.digest())
                     if (!Sha256.constantTimeEquals(actual, file.sha256)) {
                         part.delete()
-                        store.storeEtag(file.storeName, null)
+                        store.storeEtag(file.storeName, null, variant)
                         throw ModelError.HashMismatch(file.storeName, file.sha256, actual)
                     }
                     return true
                 }
                 // smaller than the expected size → discarded and EXACTLY ONE restart without range
                 part.delete()
-                store.storeEtag(file.storeName, null)
+                store.storeEtag(file.storeName, null, variant)
                 if (restartedAfter416) {
                     throw ModelError.Http(416, "range not satisfiable even without resume (${file.storeName})")
                 }
@@ -216,7 +219,7 @@ class ModelDownloader(
             if (!Sha256.constantTimeEquals(actual, file.sha256)) {
                 // A mismatch is final: discard the .part so no broken resume follows
                 part.delete()
-                store.storeEtag(file.storeName, null)
+                store.storeEtag(file.storeName, null, variant)
                 throw ModelError.HashMismatch(file.storeName, file.sha256, actual)
             }
             return true

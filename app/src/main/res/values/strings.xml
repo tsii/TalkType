@@ -7,6 +7,21 @@
     <string name="setup_download_cancel">Cancel</string>
     <string name="setup_open_settings">Open system settings</string>
 
+    <!-- T22h (PLAN_V0146 §3): dictation model selection — one card per set.
+         LITERT_CPU stays debug-only and hidden. -->
+    <string name="model_section_title">Dictation model</string>
+    <string name="model_parakeet_title">Parakeet TDT 0.6B (recommended)</string>
+    <string name="model_parakeet_body">Fast on-device engine · 0.67 GB</string>
+    <string name="model_qwen_title">Qwen3-ASR 0.6B (experimental)</string>
+    <string name="model_qwen_body">Multilingual alternative model · 1.7 GB download. Less accurate on our German tests and may invent words during silence. Slower than real time on our test device (RTF 1.2 measured); NOT yet measured on your phone — it may be much slower. Experimental. Parakeet stays recommended.</string>
+    <string name="model_ram_locked">Needs at least 8 GB device memory</string>
+    <string name="model_active">Active</string>
+    <string name="model_ready">Ready</string>
+    <string name="model_not_downloaded">Not downloaded</string>
+    <string name="model_delete">Delete</string>
+    <string name="model_select">Use this model</string>
+    <string name="model_download">Download</string>
+
     <string name="setup_state_ready">Model active – voice feature unlocked.</string>
     <string name="setup_state_absent">No model installed. Download it once; afterwards the keyboard works fully offline.</string>
     <string name="setup_state_downloading">Loading model …</string>
@@ -104,4 +119,20 @@
     <!-- AP7-E1-P2 (Fable §0.2.5): the editor was changed by the app during
          restartInput — dictation ended in a controlled way (no ghost writing). -->
     <string name="editor_rebaseline_lost_hint">Editor switched — dictation ended</string>
+  <!-- T23f (PLAN_V0147 §6): correction row — wand button content descriptions.
+       T23h adds the setup switch text; the dictation model texts above stay
+       untouched. -->
+  <string name="wand_apply_correction">Apply correction</string>
+  <string name="wand_undo_correction">Undo correction</string>
+  <!-- T23m (PLAN_V0147 §16, user command 2026-11-05): word keyboard limited
+       to de+en — setup language section reason + doc lines. -->
+  <string name="setup_lang_coming_soon">coming soon</string>
+  <string name="setup_lang_only_available">Only available languages appear on the keyboard</string>
+  <string name="setup_lang_word_correction">Word correction available for: %1$s</string>
+  <!-- T23h (PLAN_V0147 §6/§8): setup section "Typing suggestions" —
+       corr_row_enabled + corr_lang_mode switches + §14.2 discoverability hint. -->
+  <string name="setup_typing_title">Typing suggestions</string>
+  <string name="setup_typing_show">Show suggestions while typing</string>
+  <string name="setup_typing_all_langs">Correct in all active languages</string>
+  <string name="setup_typing_lang_hint">Long-press the language key to switch</string>
 </resources>

@@ -1,0 +1,630 @@
+{
+  "lang": "de",
+  "ort": "1.31.1",
+  "threads": 16,
+  "goldens": 20,
+  "gate_word_identity_fused_vs_unfused": 1.0,
+  "gate_identical_token_ids": 20,
+  "gate_identical_texts": 20,
+  "logit_parity_fused_vs_unfused_rel": {
+    "encoder": 0.0,
+    "decoder_init": 0.0,
+    "decoder_step": 0.0
+  },
+  "logit_gate_pass": true,
+  "word_gate_pass": true,
+  "fused_rtf_20word_region_s_median": 0.2613,
+  "rtf": 0.0373,
+  "sizes_bytes": {
+    "encoder": 85228809,
+    "decoder_init": 14453095,
+    "decoder_step": 333394,
+    "shared_weights.bin": 148509696
+  },
+  "fused_total_mb": 248.5,
+  "unfused_total_mb": 421.7,
+  "sentences": [
+    {
+      "input": "och gehe morgen zum Arzt",
+      "class": "neighbour",
+      "unfused_ids": [
+        1674,
+        873,
+        88,
+        8030,
+        729,
+        674,
+        21271,
+        5
+      ],
+      "fused_ids": [
+        1674,
+        873,
+        88,
+        8030,
+        729,
+        674,
+        21271,
+        5
+      ],
+      "same_token_ids": true,
+      "same_text": true,
+      "unfused_text": "Ich gehe morgen zum Arzt.",
+      "fused_text": "Ich gehe morgen zum Arzt.",
+      "word_hits": 5,
+      "word_total": 5
+    },
+    {
+      "input": "das Wetter word heute besser",
+      "class": "neighbour",
+      "unfused_ids": [
+        644,
+        14845,
+        551,
+        4270,
+        5305,
+        5
+      ],
+      "fused_ids": [
+        644,
+        14845,
+        551,
+        4270,
+        5305,
+        5
+      ],
+      "same_token_ids": true,
+      "same_text": true,
+      "unfused_text": "Das Wetter wird heute besser.",
+      "fused_text": "Das Wetter wird heute besser.",
+      "word_hits": 5,
+      "word_total": 5
+    },
+    {
+      "input": "wir tteffen uns am Bahnhof",
+      "class": "neighbour",
+      "unfused_ids": [
+        1185,
+        3,
+        10629,
+        1149,
+        183,
+        26989,
+        5
+      ],
+      "fused_ids": [
+        1185,
+        3,
+        10629,
+        1149,
+        183,
+        26989,
+        5
+      ],
+      "same_token_ids": true,
+      "same_text": true,
+      "unfused_text": "Wir treffen uns am Bahnhof.",
+      "fused_text": "Wir treffen uns am Bahnhof.",
+      "word_hits": 5,
+      "word_total": 5
+    },
+    {
+      "input": "der Zug kommt um acht ihr",
+      "class": "neighbour",
+      "unfused_ids": [
+        660,
+        15962,
+        4287,
+        561,
+        1650,
+        14217,
+        17,
+        5
+      ],
+      "fused_ids": [
+        660,
+        15962,
+        4287,
+        561,
+        1650,
+        14217,
+        17,
+        5
+      ],
+      "same_token_ids": true,
+      "same_text": true,
+      "unfused_text": "Der Zug kommt um ihr Acht.",
+      "fused_text": "Der Zug kommt um ihr Acht.",
+      "word_hits": 6,
+      "word_total": 6
+    },
+    {
+      "input": "ich brauche Hilfe beim imzug",
+      "class": "neighbour",
+      "unfused_ids": [
+        1674,
+        3858,
+        2295,
+        15,
+        9636,
+        3,
+        2683,
+        2432,
+        5131,
+        5
+      ],
+      "fused_ids": [
+        1674,
+        3858,
+        2295,
+        15,
+        9636,
+        3,
+        2683,
+        2432,
+        5131,
+        5
+      ],
+      "same_token_ids": true,
+      "same_text": true,
+      "unfused_text": "Ich brauche Hilfe beim Umzug.",
+      "fused_text": "Ich brauche Hilfe beim Umzug.",
+      "word_hits": 5,
+      "word_total": 5
+    },
+    {
+      "input": "am Freitag fahren wir nach Beriln",
+      "class": "transposition",
+      "unfused_ids": [
+        736,
+        17874,
+        3,
+        7844,
+        558,
+        559,
+        4308,
+        5
+      ],
+      "fused_ids": [
+        736,
+        17874,
+        3,
+        7844,
+        558,
+        559,
+        4308,
+        5
+      ],
+      "same_token_ids": true,
+      "same_text": true,
+      "unfused_text": "Am Freitag fahren wir nach Berlin.",
+      "fused_text": "Am Freitag fahren wir nach Berlin.",
+      "word_hits": 6,
+      "word_total": 6
+    },
+    {
+      "input": "ads Buch liegt auf dem Tisch",
+      "class": "transposition",
+      "unfused_ids": [
+        644,
+        4675,
+        5282,
+        219,
+        340,
+        14696,
+        5
+      ],
+      "fused_ids": [
+        644,
+        4675,
+        5282,
+        219,
+        340,
+        14696,
+        5
+      ],
+      "same_token_ids": true,
+      "same_text": true,
+      "unfused_text": "Das Buch liegt auf dem Tisch.",
+      "fused_text": "Das Buch liegt auf dem Tisch.",
+      "word_hits": 6,
+      "word_total": 6
+    },
+    {
+      "input": "iwr haben Pizza gegessen",
+      "class": "transposition",
+      "unfused_ids": [
+        1185,
+        745,
+        15365,
+        873,
+        122,
+        8185,
+        5
+      ],
+      "fused_ids": [
+        1185,
+        745,
+        15365,
+        873,
+        122,
+        8185,
+        5
+      ],
+      "same_token_ids": true,
+      "same_text": true,
+      "unfused_text": "Wir haben Pizza gegessen.",
+      "fused_text": "Wir haben Pizza gegessen.",
+      "word_hits": 4,
+      "word_total": 4
+    },
+    {
+      "input": "die Kazte schläft auf dem Sofa",
+      "class": "transposition",
+      "unfused_ids": [
+        316,
+        16699,
+        15,
+        3,
+        860,
+        5852,
+        89,
+        17,
+        219,
+        340,
+        17547,
+        5
+      ],
+      "fused_ids": [
+        316,
+        16699,
+        15,
+        3,
+        860,
+        5852,
+        89,
+        17,
+        219,
+        340,
+        17547,
+        5
+      ],
+      "same_token_ids": true,
+      "same_text": true,
+      "unfused_text": "Die Katze schläft auf dem Sofa.",
+      "fused_text": "Die Katze schläft auf dem Sofa.",
+      "word_hits": 6,
+      "word_total": 6
+    },
+    {
+      "input": "er hat die Rechnung bzahlt",
+      "class": "missing",
+      "unfused_ids": [
+        848,
+        3,
+        547,
+        67,
+        20242,
+        28239,
+        5
+      ],
+      "fused_ids": [
+        848,
+        3,
+        547,
+        67,
+        20242,
+        28239,
+        5
+      ],
+      "same_token_ids": true,
+      "same_text": true,
+      "unfused_text": "Er hat die Rechnung bezahlt.",
+      "fused_text": "Er hat die Rechnung bezahlt.",
+      "word_hits": 5,
+      "word_total": 5
+    },
+    {
+      "input": "das Meeting beginnt um zhn Uhr",
+      "class": "missing",
+      "unfused_ids": [
+        644,
+        9198,
+        18272,
+        561,
+        3,
+        13140,
+        3789,
+        5
+      ],
+      "fused_ids": [
+        644,
+        9198,
+        18272,
+        561,
+        3,
+        13140,
+        3789,
+        5
+      ],
+      "same_token_ids": true,
+      "same_text": true,
+      "unfused_text": "Das Meeting beginnt um zehn Uhr.",
+      "fused_text": "Das Meeting beginnt um zehn Uhr.",
+      "word_hits": 6,
+      "word_total": 6
+    },
+    {
+      "input": "wir müssen noch einkaufen gehe",
+      "class": "missing",
+      "unfused_ids": [
+        1185,
+        3766,
+        763,
+        236,
+        11520,
+        35,
+        7455,
+        5
+      ],
+      "fused_ids": [
+        1185,
+        3766,
+        763,
+        236,
+        11520,
+        35,
+        7455,
+        5
+      ],
+      "same_token_ids": true,
+      "same_text": true,
+      "unfused_text": "Wir müssen noch einkaufen gehen.",
+      "fused_text": "Wir müssen noch einkaufen gehen.",
+      "word_hits": 5,
+      "word_total": 5
+    },
+    {
+      "input": "sie arbeitett in der Bibliothek",
+      "class": "doubled",
+      "unfused_ids": [
+        292,
+        19512,
+        16,
+        74,
+        30381,
+        5
+      ],
+      "fused_ids": [
+        292,
+        19512,
+        16,
+        74,
+        30381,
+        5
+      ],
+      "same_token_ids": true,
+      "same_text": true,
+      "unfused_text": "Sie arbeitet in der Bibliothek.",
+      "fused_text": "Sie arbeitet in der Bibliothek.",
+      "word_hits": 5,
+      "word_total": 5
+    },
+    {
+      "input": "der Kaffee ist schon kallt",
+      "class": "doubled",
+      "unfused_ids": [
+        660,
+        14854,
+        229,
+        1594,
+        3,
+        4766,
+        17,
+        5
+      ],
+      "fused_ids": [
+        660,
+        14854,
+        229,
+        1594,
+        3,
+        4766,
+        17,
+        5
+      ],
+      "same_token_ids": true,
+      "same_text": true,
+      "unfused_text": "Der Kaffee ist schon kalt.",
+      "fused_text": "Der Kaffee ist schon kalt.",
+      "word_hits": 5,
+      "word_total": 5
+    },
+    {
+      "input": "iich habe die E-Mail verschickt",
+      "class": "doubled",
+      "unfused_ids": [
+        1674,
+        2010,
+        67,
+        262,
+        18,
+        7098,
+        548,
+        30344,
+        5
+      ],
+      "fused_ids": [
+        1674,
+        2010,
+        67,
+        262,
+        18,
+        7098,
+        548,
+        30344,
+        5
+      ],
+      "same_token_ids": true,
+      "same_text": true,
+      "unfused_text": "Ich habe die E-Mail verschickt.",
+      "fused_text": "Ich habe die E-Mail verschickt.",
+      "word_hits": 5,
+      "word_total": 5
+    },
+    {
+      "input": "das Kind spielt im Gärten",
+      "class": "umlaut",
+      "unfused_ids": [
+        644,
+        6557,
+        12842,
+        256,
+        350,
+        3185,
+        324,
+        5
+      ],
+      "fused_ids": [
+        644,
+        6557,
+        12842,
+        256,
+        350,
+        3185,
+        324,
+        5
+      ],
+      "same_token_ids": true,
+      "same_text": true,
+      "unfused_text": "Das Kind spielt im Gärten.",
+      "fused_text": "Das Kind spielt im Gärten.",
+      "word_hits": 5,
+      "word_total": 5
+    },
+    {
+      "input": "wir schauen heüte Abend einen Film",
+      "class": "umlaut",
+      "unfused_ids": [
+        1185,
+        3,
+        13900,
+        3,
+        107,
+        1272,
+        324,
+        9436,
+        595,
+        3417,
+        5
+      ],
+      "fused_ids": [
+        1185,
+        3,
+        13900,
+        3,
+        107,
+        1272,
+        324,
+        9436,
+        595,
+        3417,
+        5
+      ],
+      "same_token_ids": true,
+      "same_text": true,
+      "unfused_text": "Wir schauen hüten Abend einen Film.",
+      "fused_text": "Wir schauen hüten Abend einen Film.",
+      "word_hits": 6,
+      "word_total": 6
+    },
+    {
+      "input": "die Tür ist nöch offen",
+      "class": "umlaut",
+      "unfused_ids": [
+        316,
+        12087,
+        229,
+        763,
+        10883,
+        5
+      ],
+      "fused_ids": [
+        316,
+        12087,
+        229,
+        763,
+        10883,
+        5
+      ],
+      "same_token_ids": true,
+      "same_text": true,
+      "unfused_text": "Die Tür ist noch offen.",
+      "fused_text": "Die Tür ist noch offen.",
+      "word_hits": 5,
+      "word_total": 5
+    },
+    {
+      "input": "erliest die Zeitung in der Küche",
+      "class": "spacing",
+      "unfused_ids": [
+        848,
+        3,
+        23217,
+        67,
+        23542,
+        16,
+        74,
+        16011,
+        5
+      ],
+      "fused_ids": [
+        848,
+        3,
+        23217,
+        67,
+        23542,
+        16,
+        74,
+        16011,
+        5
+      ],
+      "same_token_ids": true,
+      "same_text": true,
+      "unfused_text": "Er liest die Zeitung in der Küche.",
+      "fused_text": "Er liest die Zeitung in der Küche.",
+      "word_hits": 7,
+      "word_total": 7
+    },
+    {
+      "input": "ichrufe dich später an",
+      "class": "spacing",
+      "unfused_ids": [
+        1674,
+        3,
+        10977,
+        15,
+        5930,
+        8908,
+        46,
+        5
+      ],
+      "fused_ids": [
+        1674,
+        3,
+        10977,
+        15,
+        5930,
+        8908,
+        46,
+        5
+      ],
+      "same_token_ids": true,
+      "same_text": true,
+      "unfused_text": "Ich rufe dich später an.",
+      "fused_text": "Ich rufe dich später an.",
+      "word_hits": 5,
+      "word_total": 5
+    }
+  ]
+}

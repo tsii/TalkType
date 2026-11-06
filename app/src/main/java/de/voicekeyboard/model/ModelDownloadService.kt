@@ -51,11 +51,36 @@ object ForegroundStartPolicy {
     fun isAbort(mode: Mode): Boolean = mode == Mode.ABORT
 }
 
+/**
+ * T22d (PLAN_V0146 §3/§6): per-set download wiring — ONE variant (from the
+ * intent extra, [ModelVariant.fromId], default A) decides downloader base
+ * URL, manifest source and store variant. Pure, JVM-testable; the service
+ * applies it 1:1, so the three can never drift apart.
+ */
+data class DownloadWiring(
+    val variant: ModelVariant,
+    val manifest: List<ModelFile>,
+    val baseUrl: String,
+)
+
+/** Maps the EXTRA_VARIANT intent extra to the complete per-set wiring. */
+fun downloadWiring(extraVariant: String?): DownloadWiring {
+    val variant = ModelVariant.fromId(extraVariant)
+    return DownloadWiring(
+        variant = variant,
+        manifest = ModelManifest.forVariant(variant),
+        baseUrl = ModelManifest.baseUrlFor(variant),
+    )
+}
+
 class ModelDownloadService : Service() {
 
     companion object {
         const val ACTION_START = "de.voicekeyboard.model.download.START"
         const val ACTION_CANCEL = "de.voicekeyboard.model.download.CANCEL"
+
+        /** T22d: model set of the download (id string, fromId, default A). */
+        const val EXTRA_VARIANT = "de.voicekeyboard.model.download.EXTRA_VARIANT"
         const val CHANNEL_ID = "model_download"
         const val NOTIFICATION_ID = 42
         private const val TAG = "VK-DL"
@@ -101,7 +126,10 @@ class ModelDownloadService : Service() {
 
         when (action) {
             ACTION_START -> {
-                val c = controller ?: createController().also { controller = it }
+                // T22d: per-set wiring from the intent extra (default A);
+                // a controller that is already running WINS (single-run).
+                val wiring = downloadWiring(intent.getStringExtra(EXTRA_VARIANT))
+                val c = controller ?: createController(wiring).also { controller = it }
                 val startedAt = System.currentTimeMillis()
                 c.listener = { state ->
                     notifyAll(state)
@@ -165,14 +193,15 @@ class ModelDownloadService : Service() {
         false
     }
 
-    private fun createController(): DownloadController {
+    private fun createController(wiring: DownloadWiring): DownloadController {
         val store = ModelStore(modelRoot(this))
-        val downloader = ModelDownloader(store = store)
+        val downloader = ModelDownloader(baseUrl = wiring.baseUrl, store = store, variant = wiring.variant)
         return DownloadController(
             store = store,
             downloaderFactory = { DownloadController.opOf(downloader) },
-            manifest = ModelManifest.DEFAULT,
+            manifest = wiring.manifest,
             executor = executor,
+            variant = wiring.variant,
         )
     }
 

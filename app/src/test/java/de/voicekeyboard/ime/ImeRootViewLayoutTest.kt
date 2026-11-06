@@ -105,10 +105,12 @@ class ImeRootViewLayoutTest {
         assertTrue("micButton height > 0", view.micButton.height > 0)
         assertEquals("micButton fills the row", status48, view.micButton.height)
 
-        val debugButton = statusRow.getChildAt(statusRow.childCount - 1) as Button
-        assertEquals("🐞 key is the last status row component", "🐞", debugButton.text.toString())
-        assertEquals("🐞 VISIBLE", View.VISIBLE, debugButton.visibility)
-        assertTrue("🐞 height > 0", debugButton.height > 0)
+        // T23f (PLAN_V0147 §6): the WAND is the rightmost row child now —
+        // 🐞 sits left of it (kept 48 dp, visible, in the row).
+        assertEquals("🐞 in the status row", statusRow, view.debugButton.parent)
+        assertEquals("🐞 text", "🐞", view.debugButton.text.toString())
+        assertEquals("🐞 VISIBLE", View.VISIBLE, view.debugButton.visibility)
+        assertTrue("🐞 height > 0", view.debugButton.height > 0)
 
         assertEquals("Keyboard VISIBLE", View.VISIBLE, view.keyboardView.visibility)
         assertTrue("keyboard height > 0", view.keyboardView.height > 0)
@@ -210,8 +212,9 @@ class ImeRootViewLayoutTest {
         // finding 1b: 🐞 is a view child (view.debugButton), right (last child),
         // 48 dp wide, visible with height > 0.
         val row = statusRowOf(view)
-        val last = row.getChildAt(row.childCount - 1)
-        assertSame("debugButton is the last child of the status row (right)", view.debugButton, last)
+        // T23f (PLAN_V0147 §6): the wand is the last child (right); 🐞 stays a
+        // FIXED row child left of it (the original P0 finding, adapted).
+        assertSame("debugButton is a fixed child of the status row", row, view.debugButton.parent)
         assertEquals("🐞 VISIBLE", View.VISIBLE, view.debugButton.visibility)
         assertEquals("🐞 width 48 dp", (48 * density).toInt(), view.debugButton.width)
         assertTrue("🐞 height > 0", view.debugButton.height > 0)

@@ -1,0 +1,43 @@
+# TalkType stoplist German (T23b, PLAN_V0147 §15.1)
+# Purpose: colloquial misspellings and corpus junk from the subtitle frequency
+# list (e.g. "nich", "gehts") that must NOT be offered as correction targets.
+# Static, curated, <=200 entries, no learning (rule 9 safe).
+# Format: one word per line, '#' lines are comments (no inline comments).
+# Applied case-insensitively against the folded forms BEFORE the top-N cut-off.
+#
+# T23c collision curation (2026-11-05, §15.1/§14.6): non-words / corpus junk
+# that collided with typing_goldens lexicon typo forms — removed so the
+# corrector can suggest the real German form:
+bud
+fur
+schient
+strasse
+# T23c calibration curation (precheck_t23c.py over the golden corpus):
+# subtitle junk / colloquial forms that produced false candidates:
+zosch
+kale
+nich
+jerzy
+fûr
+gruße
+get
+hbo
+kbo
+warren
+stanton
+schneer
+jetz
+staten
+seaton
+gtr
+mila
+sch
+# ASCII umlaut variants (subtitle spellings; the corrector suggests the
+# standard umlaut form — typing_goldens morph rows, umlaut rule):
+fuer
+haette
+koennen
+waere
+# NOT stoplisted (real German words, corrector must NOT touch them):
+# wirf (Imperativ "Wirf!"), schon (echtes Wort) — documented as corpus
+# collisions in testdata/typing_goldens/de.tsv (T23c header comment).

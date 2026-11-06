@@ -9,7 +9,7 @@ package de.voicekeyboard.debug
  * no URLs, no target app package name. The export text is never logged
  * (that concerns the calling layer, DebugInfoCollector).
  *
- * Format: header line with a visible assurance, then EXACTLY 68 lines
+ * Format: header line with a visible assurance, then EXACTLY 70 lines
  * `schluessel: wert` in fixed order (determinism), missing values
  * as `-`, values sanitized to a single line (no line breaks, no colons).
  */
@@ -220,6 +220,39 @@ data class DebugSnapshot(
     /** W1 (🐞: engine_loads): number of executed engine.load() runs (monotone
      *  until shutdown; number only, rule 9). */
     val engineLoads: Int? = null,
+
+    // ---- T22i (PLAN_V0146 §6): model set fields — ids/codes only (rule 9) ----
+
+    /** T22i (🐞: active_model_set): id of the ACTIVE model set (prefs choice,
+     *  injected by the caller — the collector never reads prefs), e.g.
+     *  `onnx-cpu`/`qwen3-asr-0.6b-int8`. */
+    val activeModelSet: String? = null,
+
+    /** T22i (🐞: engine_set_used): id of the set whose engine is ACTUALLY
+     *  loaded — different from [activeModelSet] ⇒ fallback visible (target
+     *  set not READY, coordinator fell back to A). */
+    val engineSetUsed: String? = null,
+
+    // ================================================= T23h (PLAN_V0147 §8)
+    /** T23h (🐞: corr_row_enabled): typing suggestions switch state (on/off). */
+    val corrRowEnabled: Boolean? = null,
+    /** T23h (🐞: corr_lang_mode): correction language mode (current/all). */
+    val corrLangMode: String? = null,
+    /** T23h (🐞: corr_rows_shown): publishes with a suggestion (counter). */
+    val corrRowsShown: Int? = null,
+    /** T23h (🐞: corr_applied): wand applies (counter). */
+    val corrApplied: Int? = null,
+    /** T23h (🐞: corr_undone): wand undos (counter). */
+    val corrUndone: Int? = null,
+    /** T23h (🐞: corr_computes): region computes (debounce + separator). */
+    val corrComputes: Int? = null,
+    /** T23h (🐞: corr_verify_fail): failed suffix proofs (counter). */
+    val corrVerifyFail: Int? = null,
+    /** T23h (🐞: corr_lang): layout id of the last compute (code, no text). */
+    val corrLang: String? = null,
+    /** T23h (🐞: corr_region_bucket): typed-region length bucket
+     *  (0 / 1-50 / 51-150 / 151-500). */
+    val corrRegionBucket: Int? = null,
 )
 
 object DebugInfoFormatter {
@@ -227,7 +260,7 @@ object DebugInfoFormatter {
     /** Visible rule-9 assurance in the header line. */
     private const val HEADER = "# VK-DEBUG v1 keine inhalte"
 
-    /** Fixed field order (F13b2: +8, F17b: +3, F21: +2, F26a/b: +2, F28b1: +2, F28b2: +2, F31: +1, F42: +6, F52: +1, AP3: +8, A4a: +10, W-vc34: +5). */
+    /** Fixed field order (F13b2: +8, F17b: +3, F21: +2, F26a/b: +2, F28b1: +2, F28b2: +2, F31: +1, F42: +6, F52: +1, AP3: +8, A4a: +10, W-vc34: +5, T22i: +2). */
     private val KEYS = listOf(
         "app_version", "build", "api_level", "model_status", "model_variant",
         "model_version", "model_bytes", "last_error", "rtf", "first_hyp_ms",
@@ -253,6 +286,14 @@ object DebugInfoFormatter {
         // W package (vc34, debugger recommendation): +5 engine warming — APPENDED,
         // the stock fields stay in front of it in order unchanged.
         "engine_load_ms", "engine_resident", "warm_hit", "load_trigger", "engine_loads",
+        // T22i (PLAN_V0146 §6): +2 model-set fields — APPENDED, the existing
+        // 68 stay in front of it in order unchanged.
+        "active_model_set", "engine_set_used",
+        // T23h (PLAN_V0147 §8): +9 correction fields — APPENDED, the existing
+        // 70 stay in front of it in order unchanged.
+        "corr_row_enabled", "corr_lang_mode", "corr_rows_shown", "corr_applied",
+        "corr_undone", "corr_computes", "corr_verify_fail", "corr_lang",
+        "corr_region_bucket",
     )
 
     fun format(s: DebugSnapshot): String {
@@ -360,6 +401,21 @@ object DebugInfoFormatter {
         lines += "warm_hit: " + value(s.warmHit?.let { if (it) "1" else "0" })
         lines += "load_trigger: " + value(s.loadTrigger)
         lines += "engine_loads: " + value(s.engineLoads?.toString())
+        // T22i (PLAN_V0146 §6): model set ids — closed codes only (rule 9);
+        // active_model_set != engine_set_used makes an engine fallback visible.
+        lines += "active_model_set: " + value(s.activeModelSet)
+        lines += "engine_set_used: " + value(s.engineSetUsed)
+        // T23h (PLAN_V0147 §8): correction fields — counters/codes ONLY
+        // (rule 9: never typed or corrected text).
+        lines += "corr_row_enabled: " + value(s.corrRowEnabled?.let { if (it) "on" else "off" })
+        lines += "corr_lang_mode: " + value(s.corrLangMode)
+        lines += "corr_rows_shown: " + value(s.corrRowsShown?.toString())
+        lines += "corr_applied: " + value(s.corrApplied?.toString())
+        lines += "corr_undone: " + value(s.corrUndone?.toString())
+        lines += "corr_computes: " + value(s.corrComputes?.toString())
+        lines += "corr_verify_fail: " + value(s.corrVerifyFail?.toString())
+        lines += "corr_lang: " + value(s.corrLang)
+        lines += "corr_region_bucket: " + value(s.corrRegionBucket?.toString())
         check(lines.size == KEYS.size + 1) { "Feldzahl driftet: ${lines.size}" }
         return lines.joinToString("\n")
     }

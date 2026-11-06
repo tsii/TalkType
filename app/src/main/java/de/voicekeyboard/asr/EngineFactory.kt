@@ -26,8 +26,13 @@ object EngineFactory {
     /**
      * V3: use the variant only if the model is READY; otherwise fallback A.
      * [store] decides via [ModelStore.isReady] (variant-separated, V1).
+     * T22g: QWEN3_ASR arm — the engine construction is ORT-FREE (sessions
+     * come up only in load(), T22f2); a not-ready set falls back to A.
      */
     fun create(variant: ModelVariant, store: ModelStore): Result {
+        if (variant == ModelVariant.QWEN3_ASR && store.isReady(ModelVariant.QWEN3_ASR)) {
+            return Result(de.voicekeyboard.asr.qwen.QwenAsrEngine(), ModelVariant.QWEN3_ASR)
+        }
         if (variant == ModelVariant.LITERT_CPU && store.isReady(ModelVariant.LITERT_CPU)) {
             val engine = LiteRtBridge.acquire()?.invoke()
             if (engine != null) return Result(engine, ModelVariant.LITERT_CPU)

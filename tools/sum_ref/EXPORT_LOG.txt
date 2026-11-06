@@ -1,0 +1,763 @@
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+2026-11-05T20:25:22 download file=config.json model=Qwen/Qwen3-0.6B bytes=726 sha256=660db3b73d788119c04535e48cf9be5f55bc3100841a718637ae695b442f27dd
+2026-11-05T20:25:22 download file=generation_config.json model=Qwen/Qwen3-0.6B bytes=239 sha256=2325da0f15bb848e018c5ae071b7943332e9f871d6b60e2ed22ca97d4cb993d2
+2026-11-05T20:25:24 download file=tokenizer.json model=Qwen/Qwen3-0.6B bytes=11422654 sha256=aeb13307a71acd8fe81861d94ad54ab689df773318809eed3cbe794b4492dae4
+2026-11-05T20:25:25 download file=tokenizer_config.json model=Qwen/Qwen3-0.6B bytes=9732 sha256=d5d09f07b48c3086c508b30d1c9114bd1189145b74e982a265350c923acd8101
+2026-11-05T20:25:25 download file=vocab.json model=Qwen/Qwen3-0.6B bytes=2776833 sha256=ca10d7e9fb3ed18575dd1e277a2579c16d108e32f27439684afa0e10b1440910
+2026-11-05T20:25:26 download file=merges.txt model=Qwen/Qwen3-0.6B bytes=1671853 sha256=8831e4f1a044471340f7c0a83d7bd71306a5b867e95fd870f74d0c5308a904d5
+2026-11-05T20:25:28 download file=model.safetensors model=Qwen/Qwen3-0.6B bytes=1503300328 sha256=f47f71177f32bcd101b7573ec9171e6a57f4f4d31148d38e382306f42996874b
+2026-11-05T20:25:28 stage=download model=Qwen/Qwen3-0.6B seconds=84 artifact=PIN.json bytes=250 sha256=b5469b4805fc761977343376b27bfce2870d267c0cc2b43244b49abe17482b4c rss_max_kb=1370632 total_bytes=1519182365
+LOG download file=config.json model=Qwen/Qwen3-0.6B bytes=726 sha256=660db3b73d788119c04535e48cf9be5f55bc3100841a718637ae695b442f27dd
+LOG download file=generation_config.json model=Qwen/Qwen3-0.6B bytes=239 sha256=2325da0f15bb848e018c5ae071b7943332e9f871d6b60e2ed22ca97d4cb993d2
+LOG download file=tokenizer.json model=Qwen/Qwen3-0.6B bytes=11422654 sha256=aeb13307a71acd8fe81861d94ad54ab689df773318809eed3cbe794b4492dae4
+LOG download file=tokenizer_config.json model=Qwen/Qwen3-0.6B bytes=9732 sha256=d5d09f07b48c3086c508b30d1c9114bd1189145b74e982a265350c923acd8101
+LOG download file=vocab.json model=Qwen/Qwen3-0.6B bytes=2776833 sha256=ca10d7e9fb3ed18575dd1e277a2579c16d108e32f27439684afa0e10b1440910
+LOG download file=merges.txt model=Qwen/Qwen3-0.6B bytes=1671853 sha256=8831e4f1a044471340f7c0a83d7bd71306a5b867e95fd870f74d0c5308a904d5
+LOG download file=model.safetensors model=Qwen/Qwen3-0.6B bytes=1503300328 sha256=f47f71177f32bcd101b7573ec9171e6a57f4f4d31148d38e382306f42996874b
+LOG 2026-11-05T20:25:28 stage=download model=Qwen/Qwen3-0.6B seconds=84 artifact=PIN.json bytes=250 sha256=b5469b4805fc761977343376b27bfce2870d267c0cc2b43244b49abe17482b4c rss_max_kb=1370632 total_bytes=1519182365
+	Command being timed: ".venv-asr/bin/python tools/sum_ref/export_qwen_text_onnx.py --candidate b --stage download"
+	User time (seconds): 4.64
+	System time (seconds): 3.49
+	Percent of CPU this job got: 8%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 1:38.56
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 1370632
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 3372
+	Minor (reclaiming a frame) page faults: 412331
+	Voluntary context switches: 246924
+	Involuntary context switches: 698
+	Swaps: 0
+	File system inputs: 63310
+	File system outputs: 5934733
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0
+NO-GO stage=prefill: need >=8 GB MemAvailable, have 5 GB — refusing to start (RAM guard, plan §9). Free memory (finish background Gradle) and re-run; this is NOT a retry loop.
+Command exited with non-zero status 3
+	Command being timed: ".venv-asr/bin/python tools/sum_ref/export_qwen_text_onnx.py --candidate b --stage prefill"
+	User time (seconds): 3.78
+	System time (seconds): 1.07
+	Percent of CPU this job got: 24%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 0:19.98
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 193644
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 11153
+	Minor (reclaiming a frame) page faults: 38889
+	Voluntary context switches: 5295
+	Involuntary context switches: 1302
+	Swaps: 0
+	File system inputs: 256802
+	File system outputs: 0
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 3
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+2026-11-05T20:27:47 download file=config.json model=Qwen/Qwen3-1.7B bytes=726 sha256=1ddb5b89ebc90dcb417a45c213d818577e65976454d29385c8f6140771d95197
+2026-11-05T20:27:48 download file=generation_config.json model=Qwen/Qwen3-1.7B bytes=239 sha256=2325da0f15bb848e018c5ae071b7943332e9f871d6b60e2ed22ca97d4cb993d2
+2026-11-05T20:27:48 download file=tokenizer.json model=Qwen/Qwen3-1.7B bytes=11422654 sha256=aeb13307a71acd8fe81861d94ad54ab689df773318809eed3cbe794b4492dae4
+2026-11-05T20:27:48 download file=tokenizer_config.json model=Qwen/Qwen3-1.7B bytes=9732 sha256=d5d09f07b48c3086c508b30d1c9114bd1189145b74e982a265350c923acd8101
+2026-11-05T20:27:49 download file=vocab.json model=Qwen/Qwen3-1.7B bytes=2776833 sha256=ca10d7e9fb3ed18575dd1e277a2579c16d108e32f27439684afa0e10b1440910
+2026-11-05T20:27:49 download file=merges.txt model=Qwen/Qwen3-1.7B bytes=1671853 sha256=8831e4f1a044471340f7c0a83d7bd71306a5b867e95fd870f74d0c5308a904d5
+2026-11-05T20:27:49 download file=model.safetensors.index.json model=Qwen/Qwen3-1.7B bytes=25605 sha256=0d660e94b165eb912669a5249dff44b83188c4777a07ddb9611fb78d91b0578d
+2026-11-05T20:30:30 download file=model-00001-of-00002.safetensors model=Qwen/Qwen3-1.7B bytes=3441185608 sha256=169ad53ec313c3a34b06c0809216e4fc072cce444a5d4ff2b59690d064130ed5
+2026-11-05T20:31:25 download file=model-00002-of-00002.safetensors model=Qwen/Qwen3-1.7B bytes=622329984 sha256=912becff8d60672aa8628ef08c05898d9adf17c2ad4ae3caf99b065622fdeff9
+2026-11-05T20:31:26 stage=download model=Qwen/Qwen3-1.7B seconds=222 artifact=PIN.json bytes=337 sha256=beafd8272b47c872b0a37d96ac6407ad5af94fe46ddfbdd6d4ae593835acec7d rss_max_kb=3580160 total_bytes=4079423234
+LOG download file=config.json model=Qwen/Qwen3-1.7B bytes=726 sha256=1ddb5b89ebc90dcb417a45c213d818577e65976454d29385c8f6140771d95197
+LOG download file=generation_config.json model=Qwen/Qwen3-1.7B bytes=239 sha256=2325da0f15bb848e018c5ae071b7943332e9f871d6b60e2ed22ca97d4cb993d2
+LOG download file=tokenizer.json model=Qwen/Qwen3-1.7B bytes=11422654 sha256=aeb13307a71acd8fe81861d94ad54ab689df773318809eed3cbe794b4492dae4
+LOG download file=tokenizer_config.json model=Qwen/Qwen3-1.7B bytes=9732 sha256=d5d09f07b48c3086c508b30d1c9114bd1189145b74e982a265350c923acd8101
+LOG download file=vocab.json model=Qwen/Qwen3-1.7B bytes=2776833 sha256=ca10d7e9fb3ed18575dd1e277a2579c16d108e32f27439684afa0e10b1440910
+LOG download file=merges.txt model=Qwen/Qwen3-1.7B bytes=1671853 sha256=8831e4f1a044471340f7c0a83d7bd71306a5b867e95fd870f74d0c5308a904d5
+LOG download file=model.safetensors.index.json model=Qwen/Qwen3-1.7B bytes=25605 sha256=0d660e94b165eb912669a5249dff44b83188c4777a07ddb9611fb78d91b0578d
+LOG download file=model-00001-of-00002.safetensors model=Qwen/Qwen3-1.7B bytes=3441185608 sha256=169ad53ec313c3a34b06c0809216e4fc072cce444a5d4ff2b59690d064130ed5
+LOG download file=model-00002-of-00002.safetensors model=Qwen/Qwen3-1.7B bytes=622329984 sha256=912becff8d60672aa8628ef08c05898d9adf17c2ad4ae3caf99b065622fdeff9
+LOG 2026-11-05T20:31:26 stage=download model=Qwen/Qwen3-1.7B seconds=222 artifact=PIN.json bytes=337 sha256=beafd8272b47c872b0a37d96ac6407ad5af94fe46ddfbdd6d4ae593835acec7d rss_max_kb=3580160 total_bytes=4079423234
+	Command being timed: ".venv-asr/bin/python tools/sum_ref/export_qwen_text_onnx.py --candidate a --stage download"
+	User time (seconds): 9.75
+	System time (seconds): 10.83
+	Percent of CPU this job got: 8%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 3:53.19
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 3580160
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 3807
+	Minor (reclaiming a frame) page faults: 1055310
+	Voluntary context switches: 756215
+	Involuntary context switches: 3768
+	Swaps: 0
+	File system inputs: 130496
+	File system outputs: 15913537
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0
+RAM guard OK stage=prefill: MemAvailable 10 GB >= 8 GB
+Loading weights:   0%|          | 0/311 [00:00<?, ?it/s]Loading weights:   0%|          | 1/311 [00:01<09:20,  1.81s/it]Loading weights:   1%|          | 2/311 [00:03<08:37,  1.68s/it]Loading weights:   8%|▊         | 26/311 [00:03<00:28, 10.18it/s]Loading weights:   9%|▉         | 29/311 [00:03<00:25, 11.20it/s]Loading weights:  15%|█▍        | 46/311 [00:04<00:12, 21.07it/s]Loading weights:  17%|█▋        | 53/311 [00:04<00:10, 25.22it/s]Loading weights:  19%|█▉        | 59/311 [00:04<00:09, 27.51it/s]Loading weights:  21%|██        | 64/311 [00:04<00:09, 26.75it/s]Loading weights:  22%|██▏       | 69/311 [00:04<00:10, 23.44it/s]Loading weights:  23%|██▎       | 73/311 [00:05<00:16, 14.25it/s]Loading weights:  33%|███▎      | 102/311 [00:05<00:05, 39.70it/s]Loading weights:  36%|███▌      | 111/311 [00:06<00:05, 38.72it/s]Loading weights:  40%|████      | 125/311 [00:06<00:06, 28.09it/s]Loading weights:  76%|███████▌  | 236/311 [00:07<00:00, 101.42it/s]Loading weights:  80%|████████  | 250/311 [00:07<00:00, 89.91it/s] Loading weights:  84%|████████▍ | 261/311 [00:07<00:00, 74.27it/s]Loading weights: 100%|██████████| 311/311 [00:07<00:00, 40.11it/s]
+prefill logits parity rel = 1.607e+00
+Traceback (most recent call last):
+  File "/home/dev/Voice-Keyboard/tools/sum_ref/export_qwen_text_onnx.py", line 484, in <module>
+    main()
+  File "/home/dev/Voice-Keyboard/tools/sum_ref/export_qwen_text_onnx.py", line 476, in main
+    parts["prefill"] = stage_prefill(cand, raw, out, args.force, args.skip_parity)
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/dev/Voice-Keyboard/tools/sum_ref/export_qwen_text_onnx.py", line 321, in stage_prefill
+    assert rel <= 1e-4, f"prefill parity FAILED rel={rel:.3e} > 1e-4"
+           ^^^^^^^^^^^
+AssertionError: prefill parity FAILED rel=1.607e+00 > 1e-4
+Command exited with non-zero status 1
+	Command being timed: ".venv-asr/bin/python tools/sum_ref/export_qwen_text_onnx.py --candidate b --stage prefill"
+	User time (seconds): 9.49
+	System time (seconds): 4.13
+	Percent of CPU this job got: 26%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 0:51.71
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 4755288
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 382388
+	Minor (reclaiming a frame) page faults: 847197
+	Voluntary context switches: 31822
+	Involuntary context switches: 1552
+	Swaps: 0
+	File system inputs: 3577938
+	File system outputs: 0
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 1
+NO-GO stage=prefill: need >=8 GB MemAvailable, have 7 GB — refusing to start (RAM guard, plan §9). Free memory (finish background Gradle) and re-run; this is NOT a retry loop.
+Command exited with non-zero status 3
+	Command being timed: ".venv-asr/bin/python tools/sum_ref/export_qwen_text_onnx.py --candidate b --stage prefill"
+	User time (seconds): 1.47
+	System time (seconds): 0.03
+	Percent of CPU this job got: 189%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 0:00.79
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 198712
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 1
+	Minor (reclaiming a frame) page faults: 41188
+	Voluntary context switches: 36
+	Involuntary context switches: 149
+	Swaps: 0
+	File system inputs: 0
+	File system outputs: 0
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 3
+RAM guard OK stage=prefill: MemAvailable 9 GB >= 8 GB
+Loading weights:   0%|          | 0/311 [00:00<?, ?it/s]Loading weights:   0%|          | 1/311 [00:00<01:05,  4.72it/s]Loading weights:  51%|█████     | 159/311 [00:00<00:00, 638.40it/s]Loading weights:  89%|████████▉ | 277/311 [00:00<00:00, 834.86it/s]Loading weights: 100%|██████████| 311/311 [00:00<00:00, 708.45it/s]
+/home/dev/Voice-Keyboard/tools/sum_ref/export_qwen_text_onnx.py:277: DeprecationWarning: You are using the legacy TorchScript-based ONNX export. Starting in PyTorch 2.9, the new torch.export-based ONNX exporter has become the default. Learn more about the new export logic: https://docs.pytorch.org/docs/stable/onnx_export.html. For exporting control flow: https://pytorch.org/tutorials/beginner/onnx/export_control_flow_model_to_onnx_tutorial.html
+  torch.onnx.export(
+2026-11-05T20:54:23 stage=prefill_fp32 model=Qwen/Qwen3-0.6B seconds=14 artifact=qwen_text_prefill.onnx bytes=816155 sha256=80a8be80d55288ef111a7d5e0e621655fd2a91919bb321ada2630cf621167149 rss_max_kb=5308656 parity_rel=1.3679883750228328e-06
+prefill logits parity rel = 1.368e-06
+LOG 2026-11-05T20:54:23 stage=prefill_fp32 model=Qwen/Qwen3-0.6B seconds=14 artifact=qwen_text_prefill.onnx bytes=816155 sha256=80a8be80d55288ef111a7d5e0e621655fd2a91919bb321ada2630cf621167149 rss_max_kb=5308656 parity_rel=1.3679883750228328e-06
+	Command being timed: ".venv-asr/bin/python tools/sum_ref/export_qwen_text_onnx.py --candidate b --stage prefill"
+	User time (seconds): 15.50
+	System time (seconds): 8.66
+	Percent of CPU this job got: 104%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 0:23.07
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 5308656
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 363424
+	Minor (reclaiming a frame) page faults: 3856506
+	Voluntary context switches: 11567
+	Involuntary context switches: 3220
+	Swaps: 0
+	File system inputs: 51164
+	File system outputs: 5873210
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0
+RAM guard OK stage=step: MemAvailable 8 GB >= 8 GB
+Loading weights:   0%|          | 0/311 [00:00<?, ?it/s]Loading weights:   0%|          | 1/311 [00:04<24:50,  4.81s/it]Loading weights:  50%|████▉     | 155/311 [00:04<00:03, 43.67it/s]Loading weights:  67%|██████▋   | 207/311 [00:06<00:02, 40.42it/s]Loading weights:  76%|███████▌  | 237/311 [00:06<00:01, 46.74it/s]Loading weights:  84%|████████▎ | 260/311 [00:06<00:00, 52.13it/s]Loading weights:  90%|████████▉ | 279/311 [00:07<00:00, 50.03it/s]Loading weights:  94%|█████████▍| 293/311 [00:08<00:00, 41.65it/s]Loading weights: 100%|██████████| 311/311 [00:08<00:00, 38.68it/s]
+/home/dev/Voice-Keyboard/tools/sum_ref/export_qwen_text_onnx.py:277: DeprecationWarning: You are using the legacy TorchScript-based ONNX export. Starting in PyTorch 2.9, the new torch.export-based ONNX exporter has become the default. Learn more about the new export logic: https://docs.pytorch.org/docs/stable/onnx_export.html. For exporting control flow: https://pytorch.org/tutorials/beginner/onnx/export_control_flow_model_to_onnx_tutorial.html
+  torch.onnx.export(
+step logits parity rel = 1.682e-06
+Loading weights:   0%|          | 0/311 [00:00<?, ?it/s]Loading weights:   0%|          | 1/311 [00:07<37:26,  7.25s/it]Loading weights:   1%|          | 2/311 [00:07<17:05,  3.32s/it]Loading weights:   9%|▉         | 28/311 [00:10<01:12,  3.89it/s]Loading weights:   9%|▉         | 29/311 [00:10<01:10,  4.00it/s]Loading weights:  41%|████      | 127/311 [00:11<00:06, 30.36it/s]Loading weights:  47%|████▋     | 147/311 [00:14<00:10, 15.62it/s]Loading weights:  56%|█████▌    | 173/311 [00:15<00:06, 20.57it/s]Loading weights:  60%|██████    | 188/311 [00:15<00:05, 24.28it/s]Loading weights:  72%|███████▏  | 225/311 [00:15<00:02, 37.85it/s]Loading weights:  78%|███████▊  | 243/311 [00:17<00:02, 23.59it/s]Loading weights:  82%|████████▏ | 256/311 [00:17<00:02, 25.23it/s]Loading weights: 100%|██████████| 311/311 [00:17<00:00, 17.61it/s]
+2026-11-05T21:03:17 stage=step_fp32 model=Qwen/Qwen3-0.6B seconds=157 artifact=qwen_text_step.onnx bytes=701281 sha256=ffcd58dac4ee84ca34602d53063780ed39708d0022b6554a871bb84bbb07a48a rss_max_kb=11932840 step_logits_rel=1.682e-06;greedy_logits_rel_max=2.530e-06 greedy_match=True
+greedy loop parity: identical=True logits_rel_max=2.530e-06 (per-step ['1.39e-06', '2.53e-06', '1.51e-06', '1.53e-06', '1.97e-06', '1.61e-06', '1.19e-06', '1.49e-06'])
+LOG 2026-11-05T21:03:17 stage=step_fp32 model=Qwen/Qwen3-0.6B seconds=157 artifact=qwen_text_step.onnx bytes=701281 sha256=ffcd58dac4ee84ca34602d53063780ed39708d0022b6554a871bb84bbb07a48a rss_max_kb=11932840 step_logits_rel=1.682e-06;greedy_logits_rel_max=2.530e-06 greedy_match=True
+	Command being timed: ".venv-asr/bin/python tools/sum_ref/export_qwen_text_onnx.py --candidate b --stage step"
+	User time (seconds): 37.88
+	System time (seconds): 17.29
+	Percent of CPU this job got: 31%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 2:55.42
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 11932840
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 1922347
+	Minor (reclaiming a frame) page faults: 5396781
+	Voluntary context switches: 98480
+	Involuntary context switches: 5335
+	Swaps: 0
+	File system inputs: 12274544
+	File system outputs: 5873114
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0
+2026-11-05T21:15:00 stage=fp32_go_no_go model=Qwen/Qwen3-1.7B decision=NO-GO reason="fp32 export RAM guard: host MemAvailable peaked 16 GB < 24 GB floor (>=24 GB required, plan §8 T25a / §9 risk row); guard refused start 2x (exit 3), no crash, no retry loop; raw weights fully downloaded+sha-pinned (4.08 GB) so export can resume on any host with >=24 GB free without re-download"
+2026-11-05T21:15:00 stage=pipeline_proof model=Qwen/Qwen3-0.6B decision=COMPLETE "download->fp32 prefill+step opset17; parity prefill=1.368e-06 step=1.682e-06 greedy-loop identical=True rel_max=2.530e-06 (gate <=1e-4); int8+fusion deferred to T25b"
+2026-11-05T21:41:08 stage=flatten_fp32 model=Qwen/Qwen3-0.6B seconds=21 peak_rss_mb=5527 artifact=qwen_text_prefill.onnx bytes=535611 sha256=440478a147cf4414706dfc2ee84498faf6bfa28fdad59f0fb52be3325069cd1b dedup_dropped=309 data=1244659712
+2026-11-05T21:42:01 stage=flatten_fp32 model=Qwen/Qwen3-0.6B seconds=52 peak_rss_mb=8384 artifact=qwen_text_step.onnx bytes=420731 sha256=ab069a7da6ed16f6afae0195daf5cfe94fbbcdedc0dee47f6e21bc1919eacd82 dedup_dropped=309 data=1244659712
+LOG 2026-11-05T21:41:08 stage=flatten_fp32 model=Qwen/Qwen3-0.6B seconds=21 peak_rss_mb=5527 artifact=qwen_text_prefill.onnx bytes=535611 sha256=440478a147cf4414706dfc2ee84498faf6bfa28fdad59f0fb52be3325069cd1b dedup_dropped=309 data=1244659712
+LOG 2026-11-05T21:42:01 stage=flatten_fp32 model=Qwen/Qwen3-0.6B seconds=52 peak_rss_mb=8384 artifact=qwen_text_step.onnx bytes=420731 sha256=ab069a7da6ed16f6afae0195daf5cfe94fbbcdedc0dee47f6e21bc1919eacd82 dedup_dropped=309 data=1244659712
+	Command being timed: ".venv-asr/bin/python tools/sum_ref/quantize_qwen_text.py --stage flatten"
+	User time (seconds): 3.36
+	System time (seconds): 8.82
+	Percent of CPU this job got: 14%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 1:24.42
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 8585284
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 2071
+	Minor (reclaiming a frame) page faults: 5451899
+	Voluntary context switches: 5450
+	Involuntary context switches: 789
+	Swaps: 0
+	File system inputs: 9338249
+	File system outputs: 4863820
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0
+2026-11-05T21:46:34 stage=flatten_fp32 model=Qwen/Qwen3-0.6B seconds=162 peak_rss_mb=12822 artifact=qwen_text_prefill.onnx bytes=597319 sha256=fd7aa710413acc7c1163df6c919dcbbea17ed962b2193d9912ec3e9aa46ba2cb dedup_dropped=0 inits_kept=311 bytes_kept=3006529536 data=4251160576
+2026-11-05T21:50:38 stage=flatten_fp32 model=Qwen/Qwen3-0.6B seconds=239 peak_rss_mb=13156 artifact=qwen_text_step.onnx bytes=481652 sha256=375742478b26d203a3c87ff9b147822fc5445ad7f5cfc5907dabebe4199647ea dedup_dropped=0 inits_kept=311 bytes_kept=3006529536 data=4251160576
+LOG 2026-11-05T21:46:34 stage=flatten_fp32 model=Qwen/Qwen3-0.6B seconds=162 peak_rss_mb=12822 artifact=qwen_text_prefill.onnx bytes=597319 sha256=fd7aa710413acc7c1163df6c919dcbbea17ed962b2193d9912ec3e9aa46ba2cb dedup_dropped=0 inits_kept=311 bytes_kept=3006529536 data=4251160576
+LOG 2026-11-05T21:50:38 stage=flatten_fp32 model=Qwen/Qwen3-0.6B seconds=239 peak_rss_mb=13156 artifact=qwen_text_step.onnx bytes=481652 sha256=375742478b26d203a3c87ff9b147822fc5445ad7f5cfc5907dabebe4199647ea dedup_dropped=0 inits_kept=311 bytes_kept=3006529536 data=4251160576
+	Command being timed: ".venv-asr/bin/python tools/sum_ref/quantize_qwen_text.py --stage flatten --force"
+	User time (seconds): 7.84
+	System time (seconds): 27.11
+	Percent of CPU this job got: 8%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 6:52.37
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 13471672
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 2397
+	Minor (reclaiming a frame) page faults: 10660267
+	Voluntary context switches: 14378
+	Involuntary context switches: 9031
+	Swaps: 0
+	File system inputs: 20454078
+	File system outputs: 11746252
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0
+WARNING:root:Please consider to run pre-processing before quantization. Refer to example: https://github.com/microsoft/onnxruntime-inference-examples/blob/main/quantization/image_classification/cpu/ReadMe.md 
+2026-11-05T21:53:59 stage=quantize_int8 model=Qwen/Qwen3-0.6B seconds=32 peak_rss_mb=9397 artifact=qwen_text_prefill.int8.onnx bytes=752807032 sha256=d727302baa4291ae88a84ea36f2e4f70244d7ca941b998728f6e6502a8508ba1 weight_type=QInt8 opset17
+WARNING:root:Please consider to run pre-processing before quantization. Refer to example: https://github.com/microsoft/onnxruntime-inference-examples/blob/main/quantization/image_classification/cpu/ReadMe.md 
+2026-11-05T21:54:25 stage=quantize_int8 model=Qwen/Qwen3-0.6B seconds=24 peak_rss_mb=9397 artifact=qwen_text_step.int8.onnx bytes=752598179 sha256=1f9b5aa89988a9d31e8d50d3369aae582079fe62561eb5a7e4c35e51ce5f399f weight_type=QInt8 opset17
+RAM guard: waiting, avail=2 GB (need 8)
+RAM guard: waiting, avail=4 GB (need 8)
+RAM guard: waiting, avail=7 GB (need 8)
+RAM guard: waiting, avail=5 GB (need 8)
+LOG 2026-11-05T21:53:59 stage=quantize_int8 model=Qwen/Qwen3-0.6B seconds=32 peak_rss_mb=9397 artifact=qwen_text_prefill.int8.onnx bytes=752807032 sha256=d727302baa4291ae88a84ea36f2e4f70244d7ca941b998728f6e6502a8508ba1 weight_type=QInt8 opset17
+LOG 2026-11-05T21:54:25 stage=quantize_int8 model=Qwen/Qwen3-0.6B seconds=24 peak_rss_mb=9397 artifact=qwen_text_step.int8.onnx bytes=752598179 sha256=1f9b5aa89988a9d31e8d50d3369aae582079fe62561eb5a7e4c35e51ce5f399f weight_type=QInt8 opset17
+	Command being timed: ".venv-asr/bin/python tools/sum_ref/quantize_qwen_text.py --stage quantize"
+	User time (seconds): 8.43
+	System time (seconds): 16.49
+	Percent of CPU this job got: 13%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 3:07.57
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 9622480
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 5611
+	Minor (reclaiming a frame) page faults: 9152772
+	Voluntary context switches: 7409
+	Involuntary context switches: 1888
+	Swaps: 0
+	File system inputs: 7404526
+	File system outputs: 14693581
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0
+2026-11-05T21:55:10 stage=merge model=Qwen/Qwen3-0.6B seconds=19 peak_rss_mb=5947 artifact=qwen_text_prefill.int8.onnx bytes=1025404 sha256=adda6186b9ff580af4bf8357558a09b6ac047f18d7ed50c4ba00ea51190e12c7 dedup_tensors=255 removed_copies_mb=751.8
+2026-11-05T21:55:10 stage=merge model=Qwen/Qwen3-0.6B seconds=19 peak_rss_mb=5947 artifact=qwen_text_step.int8.onnx bytes=816551 sha256=25d16714e7604c819e482b2fd75717b4801826be63b715f7495bac186eecb181 dedup_tensors=255 removed_copies_mb=751.8
+2026-11-05T21:55:10 stage=merge model=Qwen/Qwen3-0.6B seconds=19 peak_rss_mb=5947 artifact=shared_weights.bin bytes=751800320 sha256=3225df9a89feab608c6ae63a593a1a09c5fbb9111e945f984d8c8f7a3ad94ff4 total_set_bytes=753642275
+LOG 2026-11-05T21:55:10 stage=merge model=Qwen/Qwen3-0.6B seconds=19 peak_rss_mb=5947 artifact=qwen_text_prefill.int8.onnx bytes=1025404 sha256=adda6186b9ff580af4bf8357558a09b6ac047f18d7ed50c4ba00ea51190e12c7 dedup_tensors=255 removed_copies_mb=751.8
+LOG 2026-11-05T21:55:10 stage=merge model=Qwen/Qwen3-0.6B seconds=19 peak_rss_mb=5947 artifact=qwen_text_step.int8.onnx bytes=816551 sha256=25d16714e7604c819e482b2fd75717b4801826be63b715f7495bac186eecb181 dedup_tensors=255 removed_copies_mb=751.8
+LOG 2026-11-05T21:55:10 stage=merge model=Qwen/Qwen3-0.6B seconds=19 peak_rss_mb=5947 artifact=shared_weights.bin bytes=751800320 sha256=3225df9a89feab608c6ae63a593a1a09c5fbb9111e945f984d8c8f7a3ad94ff4 total_set_bytes=753642275
+SIZE GATE (fused int8 set <= 800 MB): 753.6 MB -> PASS
+	Command being timed: ".venv-asr/bin/python tools/sum_ref/quantize_qwen_text.py --stage fuse"
+	User time (seconds): 6.20
+	System time (seconds): 12.11
+	Percent of CPU this job got: 74%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 0:24.60
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 6090040
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 2258
+	Minor (reclaiming a frame) page faults: 4288949
+	Voluntary context switches: 1211
+	Involuntary context switches: 1223
+	Swaps: 0
+	File system inputs: 1313995
+	File system outputs: 1471958
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0
+RAM guard: waiting, avail=7 GB (need 8)
+RAM guard: waiting, avail=4 GB (need 8)
+RAM guard: waiting, avail=7 GB (need 8)
+int8-vs-fp32 greedy agreement = 0.0234 per-text [0.0625, 0.0, 0.0312, 0.0, 0.0, 0.0, 0.0625, 0.0312]
+Traceback (most recent call last):
+  File "/home/dev/Voice-Keyboard/tools/sum_ref/quantize_qwen_text.py", line 415, in <module>
+    main()
+  File "/home/dev/Voice-Keyboard/tools/sum_ref/quantize_qwen_text.py", line 405, in main
+    report["parity"] = stage_parity()
+                       ^^^^^^^^^^^^^^
+  File "/home/dev/Voice-Keyboard/tools/sum_ref/quantize_qwen_text.py", line 343, in stage_parity
+    assert agree >= 0.95, f"int8 parity FAILED: {agree:.4f} < 0.95"
+           ^^^^^^^^^^^^^
+AssertionError: int8 parity FAILED: 0.0234 < 0.95
+Command exited with non-zero status 1
+	Command being timed: ".venv-asr/bin/python tools/sum_ref/quantize_qwen_text.py --stage parity"
+	User time (seconds): 1093.16
+	System time (seconds): 21.43
+	Percent of CPU this job got: 245%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 7:33.53
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 6835348
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 1330057
+	Minor (reclaiming a frame) page faults: 1752100
+	Voluntary context switches: 102767
+	Involuntary context switches: 199304
+	Swaps: 0
+	File system inputs: 11128314
+	File system outputs: 88
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 1
+NO-GO: MemAvailable 2 GB < 8 GB after 900s wait — refusing to start (no retry loop).
+RAM guard: waiting, avail=0 GB (need 8)
+RAM guard: waiting, avail=1 GB (need 8)
+RAM guard: waiting, avail=4 GB (need 8)
+RAM guard: waiting, avail=5 GB (need 8)
+RAM guard: waiting, avail=5 GB (need 8)
+RAM guard: waiting, avail=5 GB (need 8)
+RAM guard: waiting, avail=6 GB (need 8)
+RAM guard: waiting, avail=5 GB (need 8)
+RAM guard: waiting, avail=5 GB (need 8)
+RAM guard: waiting, avail=4 GB (need 8)
+RAM guard: waiting, avail=4 GB (need 8)
+RAM guard: waiting, avail=5 GB (need 8)
+RAM guard: waiting, avail=5 GB (need 8)
+RAM guard: waiting, avail=4 GB (need 8)
+RAM guard: waiting, avail=4 GB (need 8)
+RAM guard: waiting, avail=3 GB (need 8)
+RAM guard: waiting, avail=3 GB (need 8)
+RAM guard: waiting, avail=3 GB (need 8)
+RAM guard: waiting, avail=6 GB (need 8)
+RAM guard: waiting, avail=0 GB (need 8)
+RAM guard: waiting, avail=6 GB (need 8)
+RAM guard: waiting, avail=3 GB (need 8)
+RAM guard: waiting, avail=3 GB (need 8)
+RAM guard: waiting, avail=4 GB (need 8)
+RAM guard: waiting, avail=4 GB (need 8)
+RAM guard: waiting, avail=3 GB (need 8)
+RAM guard: waiting, avail=3 GB (need 8)
+RAM guard: waiting, avail=3 GB (need 8)
+RAM guard: waiting, avail=2 GB (need 8)
+RAM guard: waiting, avail=3 GB (need 8)
+Command exited with non-zero status 3
+	Command being timed: ".venv-asr/bin/python tools/sum_ref/quantize_qwen_text.py --stage measure"
+	User time (seconds): 0.89
+	System time (seconds): 0.19
+	Percent of CPU this job got: 0%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 15:02.95
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 22940
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 774
+	Minor (reclaiming a frame) page faults: 4438
+	Voluntary context switches: 424
+	Involuntary context switches: 387
+	Swaps: 0
+	File system inputs: 24806
+	File system outputs: 0
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 3
+NO-GO: MemAvailable 6 GB < 8 GB after 900s wait — refusing to start (no retry loop).
+RAM guard: waiting, avail=1 GB (need 8)
+RAM guard: waiting, avail=3 GB (need 8)
+RAM guard: waiting, avail=2 GB (need 8)
+RAM guard: waiting, avail=5 GB (need 8)
+RAM guard: waiting, avail=2 GB (need 8)
+RAM guard: waiting, avail=0 GB (need 8)
+RAM guard: waiting, avail=3 GB (need 8)
+RAM guard: waiting, avail=3 GB (need 8)
+RAM guard: waiting, avail=2 GB (need 8)
+RAM guard: waiting, avail=1 GB (need 8)
+RAM guard: waiting, avail=3 GB (need 8)
+RAM guard: waiting, avail=3 GB (need 8)
+RAM guard: waiting, avail=2 GB (need 8)
+RAM guard: waiting, avail=6 GB (need 8)
+RAM guard: waiting, avail=6 GB (need 8)
+RAM guard: waiting, avail=5 GB (need 8)
+RAM guard: waiting, avail=5 GB (need 8)
+RAM guard: waiting, avail=5 GB (need 8)
+RAM guard: waiting, avail=4 GB (need 8)
+RAM guard: waiting, avail=4 GB (need 8)
+RAM guard: waiting, avail=3 GB (need 8)
+RAM guard: waiting, avail=3 GB (need 8)
+RAM guard: waiting, avail=1 GB (need 8)
+RAM guard: waiting, avail=3 GB (need 8)
+RAM guard: waiting, avail=1 GB (need 8)
+RAM guard: waiting, avail=2 GB (need 8)
+RAM guard: waiting, avail=3 GB (need 8)
+RAM guard: waiting, avail=4 GB (need 8)
+RAM guard: waiting, avail=3 GB (need 8)
+RAM guard: waiting, avail=3 GB (need 8)
+Command exited with non-zero status 3
+	Command being timed: ".venv-asr/bin/python tools/sum_ref/quantize_qwen_text.py --stage measure --wait-ram 900"
+	User time (seconds): 0.73
+	System time (seconds): 0.04
+	Percent of CPU this job got: 0%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 15:05.58
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 24596
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 868
+	Minor (reclaiming a frame) page faults: 4582
+	Voluntary context switches: 568
+	Involuntary context switches: 89
+	Swaps: 0
+	File system inputs: 34305
+	File system outputs: 0
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 3
+2026-11-05T23:55:14 stage=measure_int8_host model=Qwen/Qwen3-0.6B seconds=38 peak_rss_mb=3322 artifact=EXPORT_LOG.txt bytes=33587 sha256=a77988cfbaade0797e5cfd44a2e5f662f3c3cf0f4f69a6216395b6983a5c6d3a threads=4 texts=4 tokens=32 per_s=[2.84, 2.13, 2.86, 4.38] median_s=2.85 peak_rss_mb=3322 d2_identical=True d2_sha=d61ab06cbfc23d6aec75aa12ad11fbd9e98f7f2093d86edce8bac10c81f04c5e
+LOG 2026-11-05T23:55:14 stage=measure_int8_host model=Qwen/Qwen3-0.6B seconds=38 peak_rss_mb=3322 artifact=EXPORT_LOG.txt bytes=33587 sha256=a77988cfbaade0797e5cfd44a2e5f662f3c3cf0f4f69a6216395b6983a5c6d3a threads=4 texts=4 tokens=32 per_s=[2.84, 2.13, 2.86, 4.38] median_s=2.85 peak_rss_mb=3322 d2_identical=True d2_sha=d61ab06cbfc23d6aec75aa12ad11fbd9e98f7f2093d86edce8bac10c81f04c5e
+report -> /home/dev/models/sum-export/b-0.6b/quant_report.json
+	Command being timed: ".venv-asr/bin/python tools/sum_ref/quantize_qwen_text.py --stage measure --wait-ram 900"
+	User time (seconds): 64.92
+	System time (seconds): 1.78
+	Percent of CPU this job got: 127%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 0:52.24
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 3402092
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 161275
+	Minor (reclaiming a frame) page faults: 875290
+	Voluntary context switches: 40513
+	Involuntary context switches: 4159
+	Swaps: 0
+	File system inputs: 2593937
+	File system outputs: 89
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0
+2026-11-05T23:58:00 stage=parity_int8_vs_fp32 model=Qwen/Qwen3-0.6B decision=FAIL "free-running greedy agreement=0.0234 (8 texts x 32 tokens; per-text [0.0625,0.0,0.0312,0.0,0.0,0.0,0.0625,0.0312]); gate >=0.95 NOT met; int8-vs-fp32 fused-vs-unfused bit-identical (fusion exonerated); flatten-vs-original fp32 bit-identical (flatten exonerated)"
+2026-11-05T23:58:00 stage=parity_probe model=Qwen/Qwen3-0.6B "full-int8-per-tensor: teacher-forced per-step argmax agreement=0.6484 (83/128, 4 texts), logit rel 0.24-0.39 corr 0.93; per_channel: rel 0.378 corr 0.946; lm_head-fp32 variant: rel 0.383 (no gain, head quant NOT the cause); variant attn-fp32+MLP/head-int8: teacher-forced 0.8828, free-run 0.2266, 2.01 GB/graph (breaks size gate too). Root cause: dynamic per-tensor ACTIVATION quantization (QLinearMatMul) of the attention stack. STOP per task rule: documented interim + report, no fudging."
+2026-11-06T01:31:12 stage=flatten_bitident_verify model=Qwen/Qwen3-0.6B seconds=37 peak_rss_mb=2936 artifact=qwen_text_prefill.onnx bytes=597319 sha256=fd7aa710413acc7c1163df6c919dcbbea17ed962b2193d9912ec3e9aa46ba2cb logits_bit_identical=True probe_tokens=8
+LOG 2026-11-06T01:31:12 stage=flatten_bitident_verify model=Qwen/Qwen3-0.6B seconds=37 peak_rss_mb=2936 artifact=qwen_text_prefill.onnx bytes=597319 sha256=fd7aa710413acc7c1163df6c919dcbbea17ed962b2193d9912ec3e9aa46ba2cb logits_bit_identical=True probe_tokens=8
+	Command being timed: ".venv-asr/bin/python tools/sum_ref/quantize_qwen_text.py --stage verify --wo"
+	User time (seconds): 3.88
+	System time (seconds): 6.39
+	Percent of CPU this job got: 27%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 0:37.87
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 3006140
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 1167743
+	Minor (reclaiming a frame) page faults: 1180567
+	Voluntary context switches: 65025
+	Involuntary context switches: 502
+	Swaps: 0
+	File system inputs: 8158150
+	File system outputs: 128
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0
+WARNING:root:Please consider to run pre-processing before quantization. Refer to example: https://github.com/microsoft/onnxruntime-inference-examples/blob/main/quantization/image_classification/cpu/ReadMe.md 
+2026-11-06T01:35:24 stage=quantize_int8wo_perchannel model=Qwen/Qwen3-0.6B seconds=29 peak_rss_mb=9410 artifact=qwen_text_prefill.int8.onnx bytes=3508011 sha256=0a594eb45ff4f594c6bb468bc87dbd76e097459950359b13761bcae8fc632165 weight_type=QInt8 per_channel=True mode=IntegerOps(default)
+WARNING:root:Please consider to run pre-processing before quantization. Refer to example: https://github.com/microsoft/onnxruntime-inference-examples/blob/main/quantization/image_classification/cpu/ReadMe.md 
+2026-11-06T01:37:39 stage=quantize_int8wo_perchannel model=Qwen/Qwen3-0.6B seconds=134 peak_rss_mb=9410 artifact=qwen_text_step.int8.onnx bytes=3298366 sha256=313344fbacab1cfd45ee2e43e527f00e1413504f93fb68ecd36cdec71b952a32 weight_type=QInt8 per_channel=True mode=IntegerOps(default)
+RAM guard: waiting, avail=7 GB (need 8)
+RAM guard: waiting, avail=7 GB (need 8)
+LOG 2026-11-06T01:35:24 stage=quantize_int8wo_perchannel model=Qwen/Qwen3-0.6B seconds=29 peak_rss_mb=9410 artifact=qwen_text_prefill.int8.onnx bytes=3508011 sha256=0a594eb45ff4f594c6bb468bc87dbd76e097459950359b13761bcae8fc632165 weight_type=QInt8 per_channel=True mode=IntegerOps(default)
+LOG 2026-11-06T01:37:39 stage=quantize_int8wo_perchannel model=Qwen/Qwen3-0.6B seconds=134 peak_rss_mb=9410 artifact=qwen_text_step.int8.onnx bytes=3298366 sha256=313344fbacab1cfd45ee2e43e527f00e1413504f93fb68ecd36cdec71b952a32 weight_type=QInt8 per_channel=True mode=IntegerOps(default)
+	Command being timed: ".venv-asr/bin/python tools/sum_ref/quantize_qwen_text.py --stage quantize --wo --wait-ram 900"
+	User time (seconds): 48.73
+	System time (seconds): 36.93
+	Percent of CPU this job got: 37%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 3:51.31
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 9635688
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 2028
+	Minor (reclaiming a frame) page faults: 7598572
+	Voluntary context switches: 5561
+	Involuntary context switches: 12709
+	Swaps: 0
+	File system inputs: 6470811
+	File system outputs: 14703295
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0
+Traceback (most recent call last):
+  File "/home/dev/Voice-Keyboard/tools/sum_ref/quantize_qwen_text.py", line 479, in <module>
+    main()
+  File "/home/dev/Voice-Keyboard/tools/sum_ref/quantize_qwen_text.py", line 466, in main
+    stage_fuse(args.force, args.wo)
+  File "/home/dev/Voice-Keyboard/tools/sum_ref/quantize_qwen_text.py", line 305, in stage_fuse
+    onnx.checker.check_model(merged)
+  File "/home/dev/Voice-Keyboard/.venv-asr/lib/python3.11/site-packages/onnx/checker.py", line 163, in check_model
+    C.check_model(
+onnx.onnx_cpp2py_export.checker.ValidationError: TensorProto (tensor name: onnx::MatMul_6349_scale) should contain one and only one value field.
+Command exited with non-zero status 1
+	Command being timed: ".venv-asr/bin/python tools/sum_ref/quantize_qwen_text.py --stage fuse --wo --wait-ram 900"
+	User time (seconds): 2.69
+	System time (seconds): 3.52
+	Percent of CPU this job got: 69%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 0:08.98
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 5556888
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 936
+	Minor (reclaiming a frame) page faults: 2820067
+	Voluntary context switches: 1106
+	Involuntary context switches: 231
+	Swaps: 0
+	File system inputs: 1386228
+	File system outputs: 1485952
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 1
+2026-11-06T01:57:42 stage=merge_wo model=Qwen/Qwen3-0.6B seconds=31 peak_rss_mb=6055 artifact=qwen_text_prefill.int8.onnx bytes=1055607 sha256=7587d7804df2e4ad5ec8532a03cf0803dc2de8124c0a705095f28383eefd7abb dedup_tensors=456 removed_copies_mb=754.6
+2026-11-06T01:57:43 stage=merge_wo model=Qwen/Qwen3-0.6B seconds=31 peak_rss_mb=6055 artifact=qwen_text_step.int8.onnx bytes=846754 sha256=c39a451213826e4733c191ba2715aab60e8aa69d36241515cea8a73ca623768e dedup_tensors=456 removed_copies_mb=754.6
+2026-11-06T01:57:43 stage=merge_wo model=Qwen/Qwen3-0.6B seconds=31 peak_rss_mb=6055 artifact=shared_weights.bin bytes=753942400 sha256=c381c6fb8f8909bbae312ed42e476c36219945f7a924c366a287f81030e7f2e7 total_set_bytes=755844761
+RAM guard: waiting, avail=4 GB (need 6)
+RAM guard: waiting, avail=4 GB (need 6)
+RAM guard: waiting, avail=3 GB (need 6)
+RAM guard: waiting, avail=1 GB (need 6)
+RAM guard: waiting, avail=1 GB (need 6)
+RAM guard: waiting, avail=0 GB (need 6)
+LOG 2026-11-06T01:57:42 stage=merge_wo model=Qwen/Qwen3-0.6B seconds=31 peak_rss_mb=6055 artifact=qwen_text_prefill.int8.onnx bytes=1055607 sha256=7587d7804df2e4ad5ec8532a03cf0803dc2de8124c0a705095f28383eefd7abb dedup_tensors=456 removed_copies_mb=754.6
+LOG 2026-11-06T01:57:43 stage=merge_wo model=Qwen/Qwen3-0.6B seconds=31 peak_rss_mb=6055 artifact=qwen_text_step.int8.onnx bytes=846754 sha256=c39a451213826e4733c191ba2715aab60e8aa69d36241515cea8a73ca623768e dedup_tensors=456 removed_copies_mb=754.6
+LOG 2026-11-06T01:57:43 stage=merge_wo model=Qwen/Qwen3-0.6B seconds=31 peak_rss_mb=6055 artifact=shared_weights.bin bytes=753942400 sha256=c381c6fb8f8909bbae312ed42e476c36219945f7a924c366a287f81030e7f2e7 total_set_bytes=755844761
+SIZE GATE (fused int8 set <= 800 MB): 755.8 MB -> PASS
+size regression vs T25b set (753.6 MB): YES -> HARD FAIL
+Traceback (most recent call last):
+  File "/home/dev/Voice-Keyboard/tools/sum_ref/quantize_qwen_text.py", line 487, in <module>
+    main()
+  File "/home/dev/Voice-Keyboard/tools/sum_ref/quantize_qwen_text.py", line 474, in main
+    stage_fuse(args.force, args.wo)
+  File "/home/dev/Voice-Keyboard/tools/sum_ref/quantize_qwen_text.py", line 330, in stage_fuse
+    assert not regress, f"size regression vs T25b: {total} > {T25B_SET_BYTES}"
+AssertionError: size regression vs T25b: 755844761 > 753642275
+Command exited with non-zero status 1
+	Command being timed: ".venv-asr/bin/python tools/sum_ref/quantize_qwen_text.py --stage fuse --wo --wait-ram 900"
+	User time (seconds): 3.37
+	System time (seconds): 4.64
+	Percent of CPU this job got: 3%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 3:51.10
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 6199824
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 2004
+	Minor (reclaiming a frame) page faults: 3938894
+	Voluntary context switches: 1791
+	Involuntary context switches: 246
+	Swaps: 0
+	File system inputs: 2848594
+	File system outputs: 1476260
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 1
+2026-11-06T02:05:15 stage=merge_wo model=Qwen/Qwen3-0.6B seconds=11 peak_rss_mb=6058 artifact=qwen_text_prefill.int8.onnx bytes=1055607 sha256=7587d7804df2e4ad5ec8532a03cf0803dc2de8124c0a705095f28383eefd7abb dedup_tensors=456 removed_copies_mb=754.6
+2026-11-06T02:05:15 stage=merge_wo model=Qwen/Qwen3-0.6B seconds=11 peak_rss_mb=6058 artifact=qwen_text_step.int8.onnx bytes=846754 sha256=c39a451213826e4733c191ba2715aab60e8aa69d36241515cea8a73ca623768e dedup_tensors=456 removed_copies_mb=754.6
+2026-11-06T02:05:15 stage=merge_wo model=Qwen/Qwen3-0.6B seconds=11 peak_rss_mb=6058 artifact=shared_weights.bin bytes=753942400 sha256=c381c6fb8f8909bbae312ed42e476c36219945f7a924c366a287f81030e7f2e7 total_set_bytes=755844761
+RAM guard: waiting, avail=4 GB (need 6)
+LOG 2026-11-06T02:05:15 stage=merge_wo model=Qwen/Qwen3-0.6B seconds=11 peak_rss_mb=6058 artifact=qwen_text_prefill.int8.onnx bytes=1055607 sha256=7587d7804df2e4ad5ec8532a03cf0803dc2de8124c0a705095f28383eefd7abb dedup_tensors=456 removed_copies_mb=754.6
+LOG 2026-11-06T02:05:15 stage=merge_wo model=Qwen/Qwen3-0.6B seconds=11 peak_rss_mb=6058 artifact=qwen_text_step.int8.onnx bytes=846754 sha256=c39a451213826e4733c191ba2715aab60e8aa69d36241515cea8a73ca623768e dedup_tensors=456 removed_copies_mb=754.6
+LOG 2026-11-06T02:05:15 stage=merge_wo model=Qwen/Qwen3-0.6B seconds=11 peak_rss_mb=6058 artifact=shared_weights.bin bytes=753942400 sha256=c381c6fb8f8909bbae312ed42e476c36219945f7a924c366a287f81030e7f2e7 total_set_bytes=755844761
+SIZE GATE (fused int8 set <= 800 MB): 755.8 MB -> PASS
+size vs T25b set (753.6 MB): +2.2 MB (per-channel scale vectors; plan gate is the 800 MB limit, still met)
+	Command being timed: ".venv-asr/bin/python tools/sum_ref/quantize_qwen_text.py --stage fuse --wo --force --wait-ram 900"
+	User time (seconds): 3.45
+	System time (seconds): 4.83
+	Percent of CPU this job got: 18%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 0:45.24
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 6203760
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 1607
+	Minor (reclaiming a frame) page faults: 3930889
+	Voluntary context switches: 1533
+	Involuntary context switches: 405
+	Swaps: 0
+	File system inputs: 2649260
+	File system outputs: 1476260
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0
+RAM guard: waiting, avail=5 GB (need 8)
+RAM guard: waiting, avail=5 GB (need 8)
+RAM guard: waiting, avail=5 GB (need 8)
+RAM guard: waiting, avail=5 GB (need 8)
+RAM guard: waiting, avail=5 GB (need 8)
+int8-vs-fp32 greedy agreement = 0.0664 per-text [0.0625, 0.0, 0.25, 0.0, 0.0312, 0.0312, 0.125, 0.0312]
+Traceback (most recent call last):
+  File "/home/dev/Voice-Keyboard/tools/sum_ref/quantize_qwen_text.py", line 486, in <module>
+    main()
+  File "/home/dev/Voice-Keyboard/tools/sum_ref/quantize_qwen_text.py", line 475, in main
+    report["parity"] = stage_parity(args.wo)
+                       ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/dev/Voice-Keyboard/tools/sum_ref/quantize_qwen_text.py", line 398, in stage_parity
+    assert agree >= 0.95, f"int8 parity FAILED: {agree:.4f} < 0.95"
+           ^^^^^^^^^^^^^
+AssertionError: int8 parity FAILED: 0.0664 < 0.95
+Command exited with non-zero status 1
+	Command being timed: ".venv-asr/bin/python tools/sum_ref/quantize_qwen_text.py --stage parity --wo --wait-ram 900"
+	User time (seconds): 1619.11
+	System time (seconds): 29.29
+	Percent of CPU this job got: 219%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 12:30.91
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 6831520
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 1331028
+	Minor (reclaiming a frame) page faults: 1756342
+	Voluntary context switches: 93407
+	Involuntary context switches: 474978
+	Swaps: 0
+	File system inputs: 10519165
+	File system outputs: 88
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 1
+2026-11-06T02:23:45 stage=measure_int8_host_wo model=Qwen/Qwen3-0.6B seconds=26 peak_rss_mb=3334 artifact=EXPORT_LOG.txt bytes=48920 sha256=1c69a007774d57b26785cf7e9c4909b9c557ede162c7a7f1cb1d0913dec9245c threads=4 texts=4 tokens=32 per_s=[2.13, 2.2, 2.09, 2.08] median_s=2.11 peak_rss_mb=3334 d2_identical=True d2_sha=53a714d9faad1ddd780b42a43269c22b1a6fae5d1067ab52fbc78caacd03ba79
+LOG 2026-11-06T02:23:45 stage=measure_int8_host_wo model=Qwen/Qwen3-0.6B seconds=26 peak_rss_mb=3334 artifact=EXPORT_LOG.txt bytes=48920 sha256=1c69a007774d57b26785cf7e9c4909b9c557ede162c7a7f1cb1d0913dec9245c threads=4 texts=4 tokens=32 per_s=[2.13, 2.2, 2.09, 2.08] median_s=2.11 peak_rss_mb=3334 d2_identical=True d2_sha=53a714d9faad1ddd780b42a43269c22b1a6fae5d1067ab52fbc78caacd03ba79
+report -> /home/dev/models/sum-export/b-0.6b/quant_report_wo.json
+	Command being timed: ".venv-asr/bin/python tools/sum_ref/quantize_qwen_text.py --stage measure --wo --wait-ram 900"
+	User time (seconds): 53.98
+	System time (seconds): 1.11
+	Percent of CPU this job got: 193%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 0:28.43
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 3414012
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 12416
+	Minor (reclaiming a frame) page faults: 887924
+	Voluntary context switches: 8972
+	Involuntary context switches: 767
+	Swaps: 0
+	File system inputs: 401797
+	File system outputs: 81
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0
+2026-11-06T02:25:00 stage=t25c_b_wo_decision model=Qwen/Qwen3-0.6B decision=FINAL-FAIL "per-channel IntegerOps free-run agreement=0.0664 (<0.95 gate; T25b per-tensor was 0.0234); size gate PASS 755.8MB<=800MB (+2.2MB delta = per-channel scale vectors); D2 determinism PASS sha 53a714d9...; measure median 2.11s/32tok threads=4; flatten bit-identity re-asserted. Mechanism note: ORT quantize_dynamic already defaults mode=IntegerOps (MatMulInteger) and STILL quantizes activations uint8-dynamic — true weight-only/fp32-activation is not expressible with the prescribed no-calibration tool. Harthalt: no third round, no candidate C, no app work; slip accepted."

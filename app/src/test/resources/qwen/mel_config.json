@@ -1,0 +1,1 @@
+{"num_mel_bins": 128, "n_fft": 400, "hop_length": 160, "sampling_rate": 16000, "min_length": 8000, "n_window": 50, "norm": "slaney", "mel_scale": "slaney", "max_frequency": 8000.0, "log10_clamp": 1e-10, "norm_max_minus": 8.0, "log_offset": 4.0, "log_div": 4.0}

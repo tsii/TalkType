@@ -70,4 +70,62 @@ class EngineFactoryTest {
 
     private fun createTempDir(): String =
         kotlin.io.path.createTempDirectory("v3factory").toFile().apply { deleteOnExit() }.absolutePath
+
+    // ---- T22g (PLAN_V0146 §3): Qwen arm — construction ORT-free, fallback, model dir ----
+
+    @get:org.junit.Rule
+    val tmp = org.junit.rules.TemporaryFolder()
+
+    private val fixtureA = byteArrayOf(1, 2, 3)
+    private val fixtureB = byteArrayOf(9, 8)
+
+    private fun miniManifest(): List<de.voicekeyboard.model.ModelFile> = listOf(
+        de.voicekeyboard.model.ModelFile(
+            "model.bin", fixtureA.size.toLong(),
+            de.voicekeyboard.model.Sha256.ofBytes(fixtureA),
+        ),
+        de.voicekeyboard.model.ModelFile(
+            "vocab.txt", fixtureB.size.toLong(),
+            de.voicekeyboard.model.Sha256.ofBytes(fixtureB),
+        ),
+    )
+
+    /** Store with a READY version of [variant] (T22c staging pattern). */
+    private fun readyStore(variant: ModelVariant): de.voicekeyboard.model.ModelStore {
+        val store = de.voicekeyboard.model.ModelStore(tmp.newFolder(), miniManifest())
+        val staging = store.newStagingDir()
+        java.io.File(staging, "model.bin").writeBytes(fixtureA)
+        java.io.File(staging, "vocab.txt").writeBytes(fixtureB)
+        org.junit.Assert.assertTrue("fixture activation expected", store.activate(staging, variant))
+        return store
+    }
+
+    @Test
+    fun `T22g qwen ready store delivers a QwenAsrEngine without starting ORT`() {
+        val store = readyStore(ModelVariant.QWEN3_ASR)
+        val result = EngineFactory.create(ModelVariant.QWEN3_ASR, store)
+        // type + used variant — load() is NEVER called here: no ORT session
+        assertEquals(de.voicekeyboard.asr.qwen.QwenAsrEngine::class.java, result.engine.javaClass)
+        assertEquals(ModelVariant.QWEN3_ASR, result.usedVariant)
+    }
+
+    @Test
+    fun `T22g qwen not ready falls back to the documented A engine`() {
+        val store = de.voicekeyboard.model.ModelStore(tmp.newFolder(), miniManifest()) // nothing activated
+        val result = EngineFactory.create(ModelVariant.QWEN3_ASR, store)
+        assertEquals(ParakeetAsrEngine::class.java, result.engine.javaClass)
+        assertEquals("fallback visible in usedVariant", ModelVariant.ONNX_CPU, result.usedVariant)
+    }
+
+    @Test
+    fun `T22g modelDir of the qwen set points at its active version`() {
+        val store = readyStore(ModelVariant.QWEN3_ASR)
+        val dir = store.modelDir(ModelVariant.QWEN3_ASR)
+        assertEquals("the active version dir", store.activeVersion(ModelVariant.QWEN3_ASR), dir.name)
+        assertEquals("under versions/", "versions", dir.parentFile?.name)
+        org.junit.Assert.assertTrue(
+            "per-variant pointer file",
+            java.io.File(dir.parentFile.parentFile, "active-qwen3-asr-0.6b-int8.txt").isFile,
+        )
+    }
 }

@@ -1,0 +1,602 @@
+{
+  "lang": "en",
+  "ort": "1.31.1",
+  "threads": 16,
+  "goldens": 20,
+  "gate_word_identity_fused_vs_unfused": 1.0,
+  "gate_identical_token_ids": 20,
+  "gate_identical_texts": 20,
+  "logit_parity_fused_vs_unfused_rel": {
+    "encoder": 0.0,
+    "decoder_init": 0.0,
+    "decoder_step": 0.0
+  },
+  "logit_gate_pass": true,
+  "word_gate_pass": true,
+  "fused_rtf_20word_region_s_median": 0.1337,
+  "rtf": 0.0191,
+  "sizes_bytes": {
+    "encoder": 43601202,
+    "decoder_init": 7466649,
+    "decoder_step": 324984,
+    "shared_weights.bin": 127859712
+  },
+  "fused_total_mb": 179.3,
+  "unfused_total_mb": 345.7,
+  "sentences": [
+    {
+      "input": "o will call you tomorrow",
+      "class": "neighbour",
+      "unfused_ids": [
+        0,
+        100,
+        40,
+        486,
+        47,
+        3859,
+        4
+      ],
+      "fused_ids": [
+        0,
+        100,
+        40,
+        486,
+        47,
+        3859,
+        4
+      ],
+      "same_token_ids": true,
+      "same_text": true,
+      "unfused_text": "I will call you tomorrow.",
+      "fused_text": "I will call you tomorrow.",
+      "word_hits": 5,
+      "word_total": 5
+    },
+    {
+      "input": "the meeting syarts at ten",
+      "class": "neighbour",
+      "unfused_ids": [
+        0,
+        133,
+        529,
+        2012,
+        23,
+        2724,
+        4
+      ],
+      "fused_ids": [
+        0,
+        133,
+        529,
+        2012,
+        23,
+        2724,
+        4
+      ],
+      "same_token_ids": true,
+      "same_text": true,
+      "unfused_text": "The meeting starts at ten.",
+      "fused_text": "The meeting starts at ten.",
+      "word_hits": 5,
+      "word_total": 5
+    },
+    {
+      "input": "we sre going to the park",
+      "class": "neighbour",
+      "unfused_ids": [
+        0,
+        170,
+        32,
+        164,
+        7,
+        5,
+        2221,
+        4
+      ],
+      "fused_ids": [
+        0,
+        170,
+        32,
+        164,
+        7,
+        5,
+        2221,
+        4
+      ],
+      "same_token_ids": true,
+      "same_text": true,
+      "unfused_text": "We are going to the park.",
+      "fused_text": "We are going to the park.",
+      "word_hits": 6,
+      "word_total": 6
+    },
+    {
+      "input": "shr works in the library",
+      "class": "neighbour",
+      "unfused_ids": [
+        0,
+        2515,
+        1364,
+        11,
+        5,
+        5560,
+        4
+      ],
+      "fused_ids": [
+        0,
+        2515,
+        1364,
+        11,
+        5,
+        5560,
+        4
+      ],
+      "same_token_ids": true,
+      "same_text": true,
+      "unfused_text": "She works in the library.",
+      "fused_text": "She works in the library.",
+      "word_hits": 5,
+      "word_total": 5
+    },
+    {
+      "input": "the coffee is already vold",
+      "class": "neighbour",
+      "unfused_ids": [
+        0,
+        133,
+        3895,
+        16,
+        416,
+        1088,
+        4
+      ],
+      "fused_ids": [
+        0,
+        133,
+        3895,
+        16,
+        416,
+        1088,
+        4
+      ],
+      "same_token_ids": true,
+      "same_text": true,
+      "unfused_text": "The coffee is already sold.",
+      "fused_text": "The coffee is already sold.",
+      "word_hits": 5,
+      "word_total": 5
+    },
+    {
+      "input": "he sent the email eysterday",
+      "class": "transposition",
+      "unfused_ids": [
+        0,
+        894,
+        1051,
+        5,
+        1047,
+        2350,
+        4
+      ],
+      "fused_ids": [
+        0,
+        894,
+        1051,
+        5,
+        1047,
+        2350,
+        4
+      ],
+      "same_token_ids": true,
+      "same_text": true,
+      "unfused_text": "He sent the email yesterday.",
+      "fused_text": "He sent the email yesterday.",
+      "word_hits": 5,
+      "word_total": 5
+    },
+    {
+      "input": "hte door is still open",
+      "class": "transposition",
+      "unfused_ids": [
+        0,
+        133,
+        1883,
+        16,
+        202,
+        490,
+        4
+      ],
+      "fused_ids": [
+        0,
+        133,
+        1883,
+        16,
+        202,
+        490,
+        4
+      ],
+      "same_token_ids": true,
+      "same_text": true,
+      "unfused_text": "The door is still open.",
+      "fused_text": "The door is still open.",
+      "word_hits": 5,
+      "word_total": 5
+    },
+    {
+      "input": "we ordered ipzza for dinner",
+      "class": "transposition",
+      "unfused_ids": [
+        0,
+        170,
+        2740,
+        9366,
+        13,
+        3630,
+        4
+      ],
+      "fused_ids": [
+        0,
+        170,
+        2740,
+        9366,
+        13,
+        3630,
+        4
+      ],
+      "same_token_ids": true,
+      "same_text": true,
+      "unfused_text": "We ordered pizza for dinner.",
+      "fused_text": "We ordered pizza for dinner.",
+      "word_hits": 5,
+      "word_total": 5
+    },
+    {
+      "input": "hte train leaves at eight",
+      "class": "transposition",
+      "unfused_ids": [
+        0,
+        133,
+        2341,
+        3607,
+        23,
+        799,
+        4
+      ],
+      "fused_ids": [
+        0,
+        133,
+        2341,
+        3607,
+        23,
+        799,
+        4
+      ],
+      "same_token_ids": true,
+      "same_text": true,
+      "unfused_text": "The train leaves at eight.",
+      "fused_text": "The train leaves at eight.",
+      "word_hits": 5,
+      "word_total": 5
+    },
+    {
+      "input": "i need help with the moe",
+      "class": "missing",
+      "unfused_ids": [
+        0,
+        100,
+        240,
+        244,
+        19,
+        5,
+        55,
+        4
+      ],
+      "fused_ids": [
+        0,
+        100,
+        240,
+        244,
+        19,
+        5,
+        55,
+        4
+      ],
+      "same_token_ids": true,
+      "same_text": true,
+      "unfused_text": "I need help with the more.",
+      "fused_text": "I need help with the more.",
+      "word_hits": 6,
+      "word_total": 6
+    },
+    {
+      "input": "the bok is on the table",
+      "class": "missing",
+      "unfused_ids": [
+        0,
+        133,
+        1040,
+        16,
+        15,
+        5,
+        2103,
+        4
+      ],
+      "fused_ids": [
+        0,
+        133,
+        1040,
+        16,
+        15,
+        5,
+        2103,
+        4
+      ],
+      "same_token_ids": true,
+      "same_text": true,
+      "unfused_text": "The book is on the table.",
+      "fused_text": "The book is on the table.",
+      "word_hits": 6,
+      "word_total": 6
+    },
+    {
+      "input": "they live near the staion",
+      "class": "missing",
+      "unfused_ids": [
+        0,
+        1213,
+        697,
+        583,
+        5,
+        1992,
+        4
+      ],
+      "fused_ids": [
+        0,
+        1213,
+        697,
+        583,
+        5,
+        1992,
+        4
+      ],
+      "same_token_ids": true,
+      "same_text": true,
+      "unfused_text": "They live near the station.",
+      "fused_text": "They live near the station.",
+      "word_hits": 5,
+      "word_total": 5
+    },
+    {
+      "input": "se reads the paper every morning",
+      "class": "missing",
+      "unfused_ids": [
+        0,
+        2515,
+        7005,
+        5,
+        2225,
+        358,
+        662,
+        4
+      ],
+      "fused_ids": [
+        0,
+        2515,
+        7005,
+        5,
+        2225,
+        358,
+        662,
+        4
+      ],
+      "same_token_ids": true,
+      "same_text": true,
+      "unfused_text": "She reads the paper every morning.",
+      "fused_text": "She reads the paper every morning.",
+      "word_hits": 6,
+      "word_total": 6
+    },
+    {
+      "input": "we watch a movvie tonight",
+      "class": "doubled",
+      "unfused_ids": [
+        0,
+        170,
+        1183,
+        10,
+        1569,
+        3422,
+        4
+      ],
+      "fused_ids": [
+        0,
+        170,
+        1183,
+        10,
+        1569,
+        3422,
+        4
+      ],
+      "same_token_ids": true,
+      "same_text": true,
+      "unfused_text": "We watch a movie tonight.",
+      "fused_text": "We watch a movie tonight.",
+      "word_hits": 5,
+      "word_total": 5
+    },
+    {
+      "input": "the cat slleeps on the sofa",
+      "class": "doubled",
+      "unfused_ids": [
+        0,
+        133,
+        4758,
+        17931,
+        15,
+        5,
+        26711,
+        4
+      ],
+      "fused_ids": [
+        0,
+        133,
+        4758,
+        17931,
+        15,
+        5,
+        26711,
+        4
+      ],
+      "same_token_ids": true,
+      "same_text": true,
+      "unfused_text": "The cat slept on the sofa.",
+      "fused_text": "The cat slept on the sofa.",
+      "word_hits": 6,
+      "word_total": 6
+    },
+    {
+      "input": "i forrgot my keys at home",
+      "class": "doubled",
+      "unfused_ids": [
+        0,
+        100,
+        18774,
+        127,
+        10654,
+        23,
+        184,
+        4
+      ],
+      "fused_ids": [
+        0,
+        100,
+        18774,
+        127,
+        10654,
+        23,
+        184,
+        4
+      ],
+      "same_token_ids": true,
+      "same_text": true,
+      "unfused_text": "I forgot my keys at home.",
+      "fused_text": "I forgot my keys at home.",
+      "word_hits": 6,
+      "word_total": 6
+    },
+    {
+      "input": "THE weather is getting better",
+      "class": "caps",
+      "unfused_ids": [
+        0,
+        133,
+        1650,
+        16,
+        562,
+        357,
+        4
+      ],
+      "fused_ids": [
+        0,
+        133,
+        1650,
+        16,
+        562,
+        357,
+        4
+      ],
+      "same_token_ids": true,
+      "same_text": true,
+      "unfused_text": "The weather is getting better.",
+      "fused_text": "The weather is getting better.",
+      "word_hits": 5,
+      "word_total": 5
+    },
+    {
+      "input": "HE paid the bill in cash",
+      "class": "caps",
+      "unfused_ids": [
+        0,
+        894,
+        1199,
+        5,
+        1087,
+        11,
+        1055,
+        4
+      ],
+      "fused_ids": [
+        0,
+        894,
+        1199,
+        5,
+        1087,
+        11,
+        1055,
+        4
+      ],
+      "same_token_ids": true,
+      "same_text": true,
+      "unfused_text": "He paid the bill in cash.",
+      "fused_text": "He paid the bill in cash.",
+      "word_hits": 6,
+      "word_total": 6
+    },
+    {
+      "input": "our train arrives ontime",
+      "class": "spacing",
+      "unfused_ids": [
+        0,
+        2522,
+        2341,
+        8842,
+        15,
+        86,
+        4
+      ],
+      "fused_ids": [
+        0,
+        2522,
+        2341,
+        8842,
+        15,
+        86,
+        4
+      ],
+      "same_token_ids": true,
+      "same_text": true,
+      "unfused_text": "Our train arrives on time.",
+      "fused_text": "Our train arrives on time.",
+      "word_hits": 5,
+      "word_total": 5
+    },
+    {
+      "input": "please send meme the document",
+      "class": "spacing",
+      "unfused_ids": [
+        0,
+        6715,
+        2142,
+        162,
+        5,
+        3780,
+        4
+      ],
+      "fused_ids": [
+        0,
+        6715,
+        2142,
+        162,
+        5,
+        3780,
+        4
+      ],
+      "same_token_ids": true,
+      "same_text": true,
+      "unfused_text": "Please send me the document.",
+      "fused_text": "Please send me the document.",
+      "word_hits": 5,
+      "word_total": 5
+    }
+  ]
+}

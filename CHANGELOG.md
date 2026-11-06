@@ -5,6 +5,84 @@ HANDOFF.md, state/progress.md and the review documents; kept current from now on
 `versionCode` in parentheses. APKs older than the current dist rotation are removed
 from `dist/` (checksums of the last rotations: `dist/SHA256SUMS-*.txt`).
 
+## [0.1.47] — in preparation (48) — typing suggestions, suggestion-only (wand row)
+
+User command 2026-11-05 (`docs/PLAN_V0147.md`): a suggestion row above the keys
+refines the "no autocorrect in v1" rule — NOTHING is ever replaced
+automatically. Not built yet (tests/docs in progress; dist + vc48 bump + review
+follow in T23j).
+
+- **Suggestion row with magic wand** (T23f): 40-dp row in the statusRow slot —
+  eligible text fields only (never passwords/URI/e-mail/NO_SUGGESTIONS, never
+  numeric/phone/NULL); suggestion text left (changed words bold+underlined,
+  dimmed when empty), wand button right (vector icon, no emoji — minSdk 29).
+  Applies ONLY on an explicit wand press, single-level undo until the next
+  keystroke, glyph switch on the wand. Setup switch "Typing suggestions"
+  (default ON, `corr_row_enabled`).
+- **Correction pipeline, pure Kotlin/JVM** (T23a–T23e): typing rules (sentence
+  caps, spacing, repeated-word drop), neighbour-key model from the real layouts,
+  lexicon corrector (weighted edit distance, calibrated threshold 1.6, ambiguity
+  brakes), German compound acceptance, typed-region tracker (≤ 500 chars,
+  suffix proof), replacement over the InputConnection (batch edit, re-verify).
+  Quality over the gold corpus: lexicon fix-rate 30/32 = 93.8 % (≥ 90 % gate),
+  clean-corpus false positives 0/117, corrector p95 0.53 ms per region; two
+  documented wrong-fixes remain as U1 context-scorer candidates.
+- **Word lists, static, CC BY-SA 4.0** (T23b): hermitdave/FrequencyWords content
+  2018 — German top 100k, English top 150k; `assets/wordlists/NOTICE.txt` +
+  `tools/wordlists/SOURCES.md`; cut-off and typo-filter evaluation documented
+  in `tools/wordlists/SWEEP_*.md` (deeper lists degrade the corrector). No
+  learning, no persistence of typed text (rule 9: counters/codes only in the
+  🐞 export — 9 new `corr_*` fields).
+- **Correction language mode** (T23k/T23l): CURRENT vs ALL_ACTIVE, toggled by
+  LONG-PRESS on the language key (2-cell popup, slide selection); in ALL_ACTIVE
+  the space bar shows "All languages" in the device display language and the
+  current language moves to the row as a prefix tag.
+- **Word keyboards limited to de + en** (T23m, §16): the other 13 languages stay
+  greyed in Setup ("coming soon", clickable hint, saved choices survive) and
+  drop out of the globe cycle until the §16 runbook makes them available.
+
+## [0.1.46] — 2026-11-05 (47) — second ASR model: Qwen3-ASR 0.6B (experimental), switchable
+Dist: release `d28c66691a728c206334789e0e4e7c71f7fb6584e185acd8bd3b084a6854ed24`,
+diag-debug `58215f6aac3c3ef4f745c49b51819156182d63c37aed13b66bcaf3b56e0bffd6`.
+Tests debug **732/0** + release **691/0** (one load-flaky rerun green: SegmentFinalizeTest
+under full-suite wall-clock pressure, single run 7/7 — same lineage as DictationHoldGateTest);
+review `docs/REVIEW_V0146.md` P0=0/P1=0 after fix round (VK-1 etag per variant, VK-2 empty
+baseUrl = not offered, VK-3 contract doc).
+- **Honest scope note (user asked for “Qwen 1.6B”)**: delivered model is **0.6B** — the
+  1.7B decoder export exceeded this host's RAM (needs ≥ 24 GB free in one process;
+  SIGKILL/OOM twice). The export tooling is staged and the extra set id
+  `qwen3-asr-1.7b-int8` can ship later on a bigger host without any code change.
+  Numbers and decision: `docs/QWEN_ASR_CONTRACT.md`, planner decision `docs/PLAN_V0146.md` §7.
+- **Model management per set** (T22c): activating one model never deletes another
+  (pointer/marker/partial per variant), `deleteSet()` for the non-active set, legacy
+  installs unaffected (defaults keep variant A byte-identical incl. `.etag`/pointer names).
+- **Download per set** (T22b′/d): Qwen set pinned IN THE APP (6 files, sizes + sha256,
+  1.704.302.777 B total); server host intentionally EMPTY until upload — card shows
+  “not available yet” instead of offering a 404 (VK-2). RAM gate ≥ 8 GiB, space floor
+  3.2 GB; `EXTRA_VARIANT` routes service/downloader/whitelist per set.
+- **Qwen engine on the existing ONNX runtime** (T22e/f): own Kotlin Mel frontend
+  (Bluestein 400-pt DFT, golden-checked), block attention mask, chat prompt with
+  forced `language German`, encoder + prefill + KV-cache step graphs, greedy with
+  EOS {151643,151645}, cap 128 (`incomplete=true`), repeat guard, silence guard
+  (1 s silence ⇒ empty text — model alone hallucinates “systemschluss”; see contract §5).
+  No new native runtime, no APK growth; tokenizer decode golden against HF tokenizer (20 pairs).
+- **Switching** (T22g): setup writes the pref only for READY sets; a RUNNING DICTATION IS
+  NEVER ABORTED — switch defers to dictation end; exactly ONE engine resident (shutdown
+  before rebuild); broken target falls back to Parakeet (`switch_fallback` code + 🐞 field
+  `engine_set_used`). Parakeet stays the default for everyone (pref absent ⇒ unchanged path).
+- **Setup UI** (T22h): “Dictation model” section — “Parakeet TDT 0.6B (recommended) · 0.67 GB”
+  and “Qwen3-ASR 0.6B (experimental)” with honest body copy (slower, less accurate on our
+  German tests, may invent words during silence); Select/Download/Delete per card; network
+  invite now keyed per active set id (A users keep their existing id).
+- **Emu duty 5566 (partial, environment-degraded)**: version line `TalkType 0.1.46 (47) · debug`,
+  model cards live, Parakeet download path PROVEN end-to-end on-device (671 MB, 29 s,
+  etag + part in own set, READY), VK-HIT/VK-INSETS green. ENGINE LOAD crashes in
+  libonnxruntime via ARM-translator **with 0.1.45 too (control test)** — host RAM
+  pressure day (exports + swap); retried 4 configurations, deterministic. Parakeet
+  dictation regression + all Qwen timing therefore move to the phone, which is the
+  real gate anyway (planner: 35 s window must finalize ≤ 10 s on device before the
+  Qwen UI unlocks). Emulator left stopped to heal the host.
+
 ## [0.1.45] — 2026-11-04 (46) — version label, network-revoke invite, notifications optional
 Dist: release `082fa82f2c8e787a8f2e45861c70bbbc71814853d8b388430a443cfafb8ff258`,
 diag-debug `42e3e9db263869afa4ab2cca6bf572c8387c94a85dae874b6319c93580bdcc52`.

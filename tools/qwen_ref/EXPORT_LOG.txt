@@ -1,0 +1,12 @@
+2026-11-04T19:33:42 stage=mel model=Qwen3-ASR-0.6B-hf seconds=1 artifact=mel_filters.npy bytes=103040 sha256=8abf12444e0d9c0fd6c5e49f8b977d41e47b51a5eb48d399c232578d3d5e914f
+2026-11-04T19:34:46 stage=prefill model=Qwen3-ASR-0.6B-hf seconds=61 artifact=qwen_prefill.int8.onnx bytes=597228025 sha256=5329409e54ab55d73c66e351a7b1b9e2f3ca1b238ea0ac5b5105dd44f0c2b2a6
+2026-11-04T19:37:56 stage=prefill model=Qwen3-ASR-0.6B-hf seconds=82 artifact=qwen_prefill.int8.onnx bytes=752810624 sha256=1a505e73e42074a2fdded9cdef4d9484586d52dbd654760982df738e1c03e48d
+2026-11-04T19:40:13 stage=step model=Qwen3-ASR-0.6B-hf seconds=98 artifact=qwen_step.int8.onnx bytes=752598179 sha256=9a7f8946996be4f36c0687265cc18f0d929c459001d15d1dfc5b6f783cb198d5
+2026-11-04T19:47:41 stage=mel model=Qwen3-ASR-1.7B-hf seconds=1 artifact=mel_filters.npy bytes=103040 sha256=8abf12444e0d9c0fd6c5e49f8b977d41e47b51a5eb48d399c232578d3d5e914f
+2026-11-04T19:49:00 stage=encoder model=Qwen3-ASR-1.7B-hf seconds=77 artifact=encoder.int8.onnx bytes=318894668 sha256=9034587eb6d24aef6e550394c51093643a98f54d71c25d091e3fec6ccc3eaddb
+2026-11-04T20:06:59 stage=prefill model=Qwen3-ASR-1.7B-hf seconds=208 artifact=qwen_prefill.int8.onnx bytes=1001284822 sha256=290e78d8140a0389d8cd134750b17d8473e849068ee537356bc3b5ffdd658919
+2026-11-04T20:30:00 stage=encoder model=Qwen3-ASR-0.6B-hf seconds=0 artifact=encoder.onnx bytes=745680228 sha256=49e2d72f16522ffb2e79182841266f350050883f28fe23c07fc6394e2803864e (adopted from first full run, parity 2.999e-07)
+2026-11-04T20:30:00 stage=encoder model=Qwen3-ASR-0.6B-hf seconds=0 artifact=encoder.int8.onnx bytes=187361021 sha256=327974e11e2914037272224fc439af093bb251d0d232c0513bc9054d1ae6adba (adopted from first full run)
+2026-11-04T20:30:00 stage=step model=Qwen3-ASR-0.6B-hf seconds=0 artifact=qwen_step.onnx bytes=480377 sha256=194d0c151fd1e9422342e2b86f267aafb129eb29ff1a7caea588bef2eb533629 (fp32 stub; .data 5390700544 e79723be6a69db4684c3b18caec4df3f18762c77473e3ee64fc47a8de2e548ed)
+2026-11-04T20:31:00 stage=step model=Qwen3-ASR-0.6B-hf seconds=0 artifact=qwen_step.int8.onnx bytes=752598179 sha256=9a7f8946996be4f36c0687265cc18f0d929c459001d15d1dfc5b6f783cb198d5 (re-quantized after transposed-lm_head dedupe fix)
+2026-11-04T20:31:00 stage=prefill model=Qwen3-ASR-0.6B-hf seconds=0 artifact=qwen_prefill.onnx bytes=598557 sha256=6c9b4c9abfc6e0826695012f455c00edb4db247438db306b6d0ca25f36b11f4b (fp32 stub; .data 5390671872 sha256=11133a48b9ebd0242dffa41b761da318b86b0e089a58c82272988c17dedd7da9)

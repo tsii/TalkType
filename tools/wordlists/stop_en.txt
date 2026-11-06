@@ -1,0 +1,14 @@
+# TalkType stoplist English (T23b, PLAN_V0147 §15.1)
+# Purpose: colloquial misspellings and corpus junk from the subtitle frequency
+# list that must NOT be offered as correction targets.
+# Static, curated, <=200 entries, no learning (rule 9 safe).
+# Format: one word per line, '#' lines are comments. Applied case-insensitively
+# against the folded forms BEFORE the top-N cut-off (see build_wordlist.py).
+# Status: initially EMPTY — curation follows the T23b sweep
+# (tools/wordlists/SWEEP_en.md) and T23c corrector goldens.
+
+# T23c calibration curation (precheck_t23c.py): brand/junk forms that produced
+# false candidates in ALL_ACTIVE mode:
+hbo
+kbo
+mila

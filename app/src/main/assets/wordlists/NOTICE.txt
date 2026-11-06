@@ -1,0 +1,40 @@
+TalkType — NOTICE for the bundled frequency word lists (de-de.bin, en-us.bin)
+
+The word list assets in this directory are a DERIVED WORK of:
+
+  "FrequencyWords" by Hermit Dave — full word frequency lists generated
+  from the OpenSubtitles 2018 corpus (OPUS / OpenSubtitles2018,
+  http://opus.nlpl.eu/OpenSubtitles2018.php).
+  Source repository: https://github.com/hermitdave/FrequencyWords
+    content/2018/de/de_full.txt  (retrieved 2026-11-05,
+      sha256 a5fc13f4efaaf70fd9226d11295fd3cd4c2264852ee1fad22c0abaf64acec8dc)
+    content/2018/en/en_full.txt  (retrieved 2026-11-05,
+      sha256 7fea67ab954e2c01df6c608c9826e594cf36f8823b3243554f88245fb75dc506)
+
+LICENCE (content): Creative Commons Attribution-ShareAlike 4.0 International
+  (CC-BY-SA 4.0, https://creativecommons.org/licenses/by-sa/4.0/)
+  as stated by the source repository README ("CC-by-sa-4.0 for content");
+  the generator code itself is MIT licensed and not distributed in the APK.
+  User approval for CC-BY-SA with attribution NOTICE: 2026-11-05
+  (docs/PLAN_V0147.md §12.1).
+
+Modifications (Bearbeitungsvermerk):
+  - filtered to letter-only word forms (incl. umlauts / eszett), length >= 2
+  - case-insensitive deduplication (most frequent spelling kept as main form)
+  - cut-off to the most frequent forms: de-de top 100,000 / en-us top 150,000
+    (T23b sweep decision, see tools/wordlists/SWEEP_de.md / SWEEP_en.md)
+  - stoplist subtraction (curated stop lists — see
+    tools/wordlists/stop_de.txt / stop_en.txt, 1267 / 660 bytes incl.
+    'strasse', 'bud'; VK-7 wording correction REVIEW_V0147)
+  - repacked into the deterministic VKWL1 binary format
+    (format documented in tools/build_wordlist.py)
+
+Rebuild (bit-identical, same input + stoplist):
+  python3 tools/build_wordlist.py build de-de tools/wordlists/de_full.txt \
+      --stop tools/wordlists/stop_de.txt --top 100000 \
+      --out app/src/main/assets/wordlists/de-de.bin
+  python3 tools/build_wordlist.py build en-us tools/wordlists/en_full.txt \
+      --stop tools/wordlists/stop_en.txt --top 150000 \
+      --out app/src/main/assets/wordlists/en-us.bin
+
+This notice must ship with every APK distribution that contains the assets.

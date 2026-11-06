@@ -5,6 +5,26 @@ HANDOFF.md, state/progress.md and the review documents; kept current from now on
 `versionCode` in parentheses. APKs older than the current dist rotation are removed
 from `dist/` (checksums of the last rotations: `dist/SHA256SUMS-*.txt`).
 
+## [0.1.47] - 2026-11-06 (versionCode 48) — pushed 232a9e5
+### Added
+- Experimental second dictation model Qwen3-ASR 0.6B (gated: BASE_URL_QWEN empty, card
+  hidden until server upload; mutually exclusive with U2; honest label).
+- Typing suggestion row (suggestion-only: wand press required, undoable via second press,
+  no learning, no persistence). Rules for all 15 layouts + word-list neighbour corrector
+  for de-de/en-us only; other 13 languages greyed ("coming soon", toast).
+- Setup: "Show suggestions" switch + "Correct in all active languages" switch (default off).
+- Correction assets CC-BY-SA 4.0 (NOTICE.txt; de 100k / en 150k forms, sweep-proven cut).
+### Fixed
+- VK-8 (P0): word lists never loaded on device (double-prefixed asset path) — corrector
+  was silently dead outside JVM tests.
+- VK-9 (P1): silent character drop when IME relayout (300 ms correction publish) landed
+  between key DOWN/UP — model rebuild now early-returns on identical stamp
+  (asset.id|layer|width|fit), tap identity preserved.
+### Notes
+- Tests 888/0 debug + 850/0 release (fresh, --rerun-tasks). Review R3: P0=0 P1=0 P2=3.
+- P2 backlog 0.1.48: UNDO dictation-idle gate, compute_abort counter field, NOTICE SA line,
+  "Adresse" exclusion decision (user open point).
+
 ## [0.1.47] — in preparation (48) — typing suggestions, suggestion-only (wand row)
 
 User command 2026-11-05 (`docs/PLAN_V0147.md`): a suggestion row above the keys

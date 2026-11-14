@@ -5,6 +5,33 @@ HANDOFF.md, state/progress.md and the review documents; kept current from now on
 `versionCode` in parentheses. APKs older than the current dist rotation are removed
 from `dist/` (checksums of the last rotations: `dist/SHA256SUMS-*.txt`).
 
+## [0.1.49] - 2026-11-14 (versionCode 49) — keyboard geometry from the reference layout
+### Changed
+- **Rows 0–2 follow the reference keyboard geometry** (plan `docs/PLAN_GEOMETRY_V0149.md`,
+  applied to all 15 layout assets by `tools/apply_geometry_v0149.py`): row 1 = 10 equal keys,
+  row 2 = 9 letters indented by half a key + backspace (1.5 units) right of `l`,
+  row 3 = shift (1.5) + 7 letters + enter (2.0 = 20 % of the row, 216 px @ 1080).
+- **`.` is back in the footer between the space bar and the microphone**; the space bar
+  shrinks from 7.5 to 6.5 units (624 → 540 px). Microphone and enter keep their positions.
+- **Numbers ↔ special characters:** the leftmost key of the row above the space bar is the
+  toggle (`#+=` on the numbers page, `?123` back) via the new action `layer-symbols-shift`;
+  `?123` / `ABC` at the bottom left stay as they are. Shift no longer exists on the symbol
+  pages (the reference has none there).
+### Unchanged on purpose
+- Look & feel: theme colours, offset key rectangles with their shading gap, square corners,
+  font sizes, height fit — `KeyboardTheme` / `KeyboardHeight` diff = 0 lines.
+### Also contained (from the 0.1.48 preparation)
+- The experimental U2 text-correction engine (BART/FLAN-T5 int8, `BASE_URL_U2` still empty ⇒
+  Setup card inert, nothing auto-downloads) — see the `[0.1.48]` section below for its T24a–T24e list.
+
+### Tests
+- New `GeometryV0149Test` (7 checks, incl. a 1080-px pixel probe and a character-inventory
+  snapshot) and `SymbolToggleStateMachineTest` (layer chain as a state machine);
+  `LetterRowAlignmentAcrossAssetsTest`, `FooterAcrossAssetsTest`, `SymbolGridAcrossAssetsTest`,
+  `LayoutCompletenessTest` and `LayoutArtifactTest` reformulated.
+- Debug suite **944 / 0** (`--rerun-tasks`); emulator check of all four layers with measured
+  key rectangles (backspace 162 px, shift 162 px, enter 217 px, space 540 px, `.` 830–913 px).
+
 ## [0.1.47] - 2026-11-06 (versionCode 48) — pushed 232a9e5
 ### Added
 - Experimental second dictation model Qwen3-ASR 0.6B (gated: BASE_URL_QWEN empty, card
@@ -24,6 +51,33 @@ from `dist/` (checksums of the last rotations: `dist/SHA256SUMS-*.txt`).
 - Tests 888/0 debug + 850/0 release (fresh, --rerun-tasks). Review R3: P0=0 P1=0 P2=3.
 - P2 backlog 0.1.48: UNDO dictation-idle gate, compute_abort counter field, NOTICE SA line,
   "Adresse" exclusion decision (user open point).
+
+## [0.1.48] — merged into 0.1.49 (49) — U2 text correction (experimental, inert until hosted)
+
+Gleis 3 per PLAN_V0147 §17 (user command 2026-11-05): the optional on-device
+spelling-correction model (U2) alongside the resident ASR engine. SUGGESTION-ONLY
+as T23 (wand press, undo, no learning, no persistence). NOT built as APK yet;
+BASE_URL_U2 stays EMPTY — the Setup card is visible but INERT (download never
+offered, Qwen-VK-2 pattern) until the host is pinned; nothing auto-downloads.
+
+- **T24a (done):** BART (en, MIT) / FLAN-T5 (de, Apache-2.0) spelling sets
+  exported, int8-quantized, MERGED (shared external-data blob: en 179.3 MB /
+  de 248.5 MB, -48 %/-41 %), parity 100 %, RTF host 0.019/0.037
+  (`docs/BART_CORRECT_CONTRACT.md` §12).
+- **T24b (done):** ModelVariant TEXT sets (bart-spelling-{en,de}-int8), sha-pinned
+  7-file manifests (multi-segment store names — `shared/`, `tokenizer/`), Setup
+  card "Text correction (U2)" with licence/size line, RAM gate 8 GB like Qwen;
+  ModelStore multi-segment traversal-safe, DownloadPolicy U2 wiring.
+- **T24c/B3b (done):** BartCorrectEngine (greedy KV loop, cap 64, vocab_meta
+  contract, §6 substitution guard — pure substitutions only) + real tokenizer
+  (ByteLevel-BPE en, SP-Unigram de) with GATE parity per sentence
+  (en 165->147, de 226->161 tokens) and 40/40 round-trips.
+- **T24d (done):** preheat state machine (IDLE/LOADING/READY/UNLOADING; first
+  text key, RAM guard >= 400 MB, 3 retries/session, unload 60 s idle or
+  ineligible field); the LIST result shows immediately, the U2 result
+  upgrades the row asynchronously — the wand applies whatever is current.
+- **T24e (done):** 🐞 fields u2_state/u2_upgrades/u2_guard_rejects (codes/
+  numbers only, rule 9); vocab_meta key contract pinned in the contract doc.
 
 ## [0.1.47] — in preparation (48) — typing suggestions, suggestion-only (wand row)
 

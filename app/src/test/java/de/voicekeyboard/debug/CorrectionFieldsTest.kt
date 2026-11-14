@@ -83,4 +83,42 @@ class CorrectionFieldsTest {
             assertTrue("value is not a code/number: '$l'", pattern.matches(l.substringAfter(": ")))
         }
     }
+
+    // ---------------------------------------------- T24e (Gleis 3) U2 fields
+
+    /** T24e (PLAN_V0147 §17): the 3 U2 fields — state code + counters only
+     *  (rule 9: never typed/corrected text). */
+    @Test fun `u2 fields render state and counters`() {
+        val s = DebugSnapshot(
+            corrRowEnabled = true,
+            corrLangMode = "current",
+            u2State = "READY",
+            u2Upgrades = 2,
+            u2GuardRejects = 1,
+        )
+        val out = DebugInfoFormatter.format(s)
+        assertEquals("u2_state: READY", line(out, "u2_state"))
+        assertEquals("u2_upgrades: 2", line(out, "u2_upgrades"))
+        assertEquals("u2_guard_rejects: 1", line(out, "u2_guard_rejects"))
+    }
+
+    @Test fun `u2 fields empty - dash for null, explicit zeros render as zeros`() {
+        val out = DebugInfoFormatter.format(DebugSnapshot())
+        assertEquals("u2_state: -", line(out, "u2_state"))
+        assertEquals("u2_upgrades: -", line(out, "u2_upgrades")) // null = no U2 session yet
+        assertEquals("u2_guard_rejects: -", line(out, "u2_guard_rejects"))
+        val zeroed = DebugInfoFormatter.format(DebugSnapshot(u2Upgrades = 0, u2GuardRejects = 0))
+        assertEquals("u2_upgrades: 0", line(zeroed, "u2_upgrades"))
+        assertEquals("u2_guard_rejects: 0", line(zeroed, "u2_guard_rejects"))
+    }
+
+    @Test fun `u2 lines carry only codes and numbers`() {
+        val s = DebugSnapshot(u2State = "LOADING", u2Upgrades = 7, u2GuardRejects = 3)
+        val u2Lines = DebugInfoFormatter.format(s).lines().filter { it.startsWith("u2_") }
+        assertEquals("exactly 3 u2 fields", 3, u2Lines.size)
+        val pattern = Regex("^(IDLE|LOADING|READY|UNLOADING|-|[0-9]+)$")
+        for (l in u2Lines) {
+            assertTrue("u2 value not a code/number: '$l'", pattern.matches(l.substringAfter(": ")))
+        }
+    }
 }

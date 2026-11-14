@@ -109,6 +109,11 @@ object DownloadPolicy {
         if (freeBytes < floor) return false
         return when (variant) {
             ModelVariant.QWEN3_ASR -> totalRamBytes >= QWEN_MIN_TOTAL_RAM_BYTES
+            // T24b (Gleis 3): the U2 TEXT sets run NEXT TO the resident ASR
+            // engine (session ~0.4-0.5 GB, BART_CORRECT_CONTRACT §9) — same
+            // RAM gate class as Qwen (PLAN_V0147 §17.1 freeBytes/RAM guard).
+            ModelVariant.BART_SPELLING_EN, ModelVariant.BART_SPELLING_DE ->
+                totalRamBytes >= QWEN_MIN_TOTAL_RAM_BYTES
             else -> true // plan §2: "RAM gate (Qwen only)"
         }
     }

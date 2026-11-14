@@ -207,7 +207,7 @@ class ModelStore(
         // Pointer missing: ABSENT, except download remnants exist → keep the DOWNLOADING trail
         if (downloadsDir.listFiles()?.any {
                 it.name.endsWith(PART_SUFFIX) &&
-                    isAllowedName(it.name.removeSuffix(PART_SUFFIX), variant)
+                    isAllowedName(unescapeStoreName(it.name.removeSuffix(PART_SUFFIX)), variant)
             } == true
         ) {
             ModelStatus.DOWNLOADING
@@ -225,12 +225,12 @@ class ModelStore(
      *  VK-1 (REVIEW_V0146): per variant — the name whitelist of the OWN set;
      *  default A keeps every existing caller. */
     fun etagFor(name: String, variant: ModelVariant = ModelVariant.ONNX_CPU): String? {
-        val f = File(downloadsDir, safeName(name, variant) + ETAG_SUFFIX)
+        val f = File(downloadsDir, escapeStoreName(safeName(name, variant)) + ETAG_SUFFIX)
         return if (f.isFile) f.readText().trim().takeIf { it.isNotEmpty() } else null
     }
 
     fun storeEtag(name: String, etag: String?, variant: ModelVariant = ModelVariant.ONNX_CPU) {
-        val f = File(downloadsDir, safeName(name, variant) + ETAG_SUFFIX)
+        val f = File(downloadsDir, escapeStoreName(safeName(name, variant)) + ETAG_SUFFIX)
         if (etag == null) f.delete() else f.writeText(etag)
     }
 
@@ -254,8 +254,11 @@ class ModelStore(
         val dst = safeChild(stagingDir, name, variant)
         if (!src.isFile) return false
         if (dst.exists()) dst.delete()
+        // T24b (B2): multi-segment targets live in subdirectories — the rename
+        // needs the parent chain of the set tree inside the staging dir.
+        dst.parentFile?.mkdirs()
         return if (src.renameTo(dst)) {
-            File(downloadsDir, safeName(name, variant) + ETAG_SUFFIX).delete()
+            File(downloadsDir, escapeStoreName(name) + ETAG_SUFFIX).delete()
             true
         } else {
             false
@@ -327,7 +330,7 @@ class ModelStore(
         // variant A: a stale legacy pointer (active.txt) must go too
         if (variant == ModelVariant.ONNX_CPU) File(root, "active.txt").delete()
         downloadsDir.listFiles()?.forEach { f ->
-            val base = f.name.removeSuffix(PART_SUFFIX).removeSuffix(ETAG_SUFFIX)
+            val base = unescapeStoreName(f.name.removeSuffix(PART_SUFFIX).removeSuffix(ETAG_SUFFIX))
             if (isAllowedName(base, variant)) f.delete()
         }
         clearMarkers(variant)
@@ -374,16 +377,36 @@ class ModelStore(
 
     /** Allowed base name from the manifest — no '/', '..' etc. */
     private fun safeName(name: String): String = safeName(name, ModelVariant.ONNX_CPU)
-    /** V5: whitelist check against the VARIANT (store knows its own via manifestFor). */
+    /** V5: whitelist check against the VARIANT (store knows its own via manifestFor).
+     *  T24b (Gleis 3 B2): MULTI-SEGMENT names — the store name is the CHECKED
+     *  manifest name (e.g. "shared/shared_weights.bin"); the FLAT downloads
+     *  artifacts use [escapeStoreName] instead. */
     private fun safeName(name: String, variant: ModelVariant): String {
         require(isAllowedName(name, variant)) { "file name not whitelisted: $name" }
         return name
     }
 
-    private fun isAllowedName(name: String, variant: ModelVariant): Boolean =
-        name.isNotEmpty() &&
-            '/' !in name && '\\' !in name && name != "." && name != ".." &&
-            manifestFor(variant).any { it.storeName == name }
+    /**
+     * T24b (Gleis 3 B2): per-segment whitelist — a store name may contain '/'
+     * (U2 merged sets reference "shared/shared_weights.bin" RELATIVELY inside
+     * the set dir), but EVERY segment is validated individually: no empty
+     * segment, no "."/"..", no backslash, no absolute path. Flat names behave
+     * BYTE-IDENTICALLY to the old single-segment rule (single segment).
+     */
+    private fun isAllowedName(name: String, variant: ModelVariant): Boolean {
+        if (name.isEmpty()) return false
+        if ('\\' in name) return false
+        val segments = name.split('/')
+        if (segments.any { it.isEmpty() || it == "." || it == ".." }) return false
+        return manifestFor(variant).any { it.storeName == name }
+    }
+
+    /** T24b (B2): flat artifact name for the downloads dir — '/' is escaped to
+     *  %2F so parts/etags stay FLAT (no subdirectories in downloads; the
+     *  resume scan stays a plain listFiles). Identity for flat names. */
+    private fun escapeStoreName(name: String): String = name.replace("/", "%2F")
+
+    private fun unescapeStoreName(name: String): String = name.replace("%2F", "/")
 
     /**
      * Child path with double protection: (1) the name (possibly with ".part" suffix)
@@ -395,20 +418,26 @@ class ModelStore(
     private fun safeChild(dir: File, name: String, variant: ModelVariant): File {
         val base = name.removeSuffix(PART_SUFFIX)
         require(isAllowedName(base, variant)) { "file name not whitelisted: $name" }
-        require('/' !in name && '\\' !in name && name != "." && name != "..") {
-            "path traversal denied: $name"
-        }
+        // T24b (B2): the canonical anchor now covers the WHOLE subtree below
+        // dir (multi-segment names resolve INTO subdirectories of dir);
+        // equality with dir itself is rejected. Traversal (../, absolute) dies
+        // either at the per-segment whitelist or here at the canonical check.
         val child = File(dir, name)
         val canonicalParent = dir.canonicalFile
         val canonicalChild = child.canonicalFile
-        require(canonicalChild.parentFile == canonicalParent) {
+        require(canonicalChild != canonicalParent &&
+            canonicalChild.path.startsWith(canonicalParent.path + File.separator)) {
             "path traversal denied: ${child.path}"
         }
         return canonicalChild
     }
 
-    private fun safePart(name: String, variant: ModelVariant): File =
-        safeChild(downloadsDir, safeName(name, variant) + PART_SUFFIX, variant)
+    private fun safePart(name: String, variant: ModelVariant): File {
+        // T24b (B2): parts stay FLAT in downloadsDir — '/' escaped to %2F
+        // (no subdirectories in downloads; the resume scan stays listFiles).
+        safeName(name, variant) // whitelist check with the UNESCAPED name
+        return File(downloadsDir, escapeStoreName(name) + PART_SUFFIX)
+    }
 
     companion object {
         private const val PART_SUFFIX = ".part"

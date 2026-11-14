@@ -127,6 +127,13 @@ en: start **2**, EOS **2**, PAD **1**, BOS 0 · de: start **0**, EOS **1**, PAD 
   tokenizer.json konvertiert; de: SentencePiece-**Unigram** als tokenizer.json)
   + `tokenizer_config.json` + `vocab_meta.json` (alle IDs + Präfix).
   sha256 in EXPORT_LOG (stage=tokenizer).
+- **App-Vertrag vocab_meta.json (T24b/B3b, 2026-11-06):** die Schlüssel heißen
+  `decoder_start_token_id` / `eos_token_id` / `pad_token_id` / `input_prefix`
+  (NICHT start/eos/pad/prefix) — die App liest genau diese Namen
+  (`BartCorrectEngine.VocabMeta`); decoder_start speist decodeInit, eos den
+  Loop-Stopp + Tokenizer-Append, input_prefix das de-Präfix. Fund aus der
+  B3b-Paritätsrunde (selbst-erfundene Kurznamen maskiert durch eigene
+  Test-Fixtures — behoben + gegen echte Assets gepinnt).
 - **Vor/Nach-Zählung** (20 Goldens je Sprache, `reports/bart_u2_*.json`,
   Felder `n_input_tokens/n_output_tokens/n_words_in/n_words_out`):
   - en: 165 → 147 Tokens, 106 → 107 Wörter (Modell ergänzt Satzpunkt)

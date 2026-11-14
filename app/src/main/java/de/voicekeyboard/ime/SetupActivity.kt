@@ -143,6 +143,10 @@ class SetupActivity : ComponentActivity() {
         // T23h (PLAN_V0147 §6): typing suggestions section BELOW the dictation
         // model section (appended at the end of the layout root).
         buildTypingSection()
+        // T24b (PLAN_V0147 §17.2, Gleis 3): the U2 text-correction card — third
+        // model card, programmatic (no XML change), honest inert state while
+        // BASE_URL_U2 is empty; the set follows the CURRENT typing language.
+        buildU2Card()
 
         // observer AFTER layout registration: the service informs us state-based
         // (no polling, no own thread); UI-thread delivery via runOnUiThread.
@@ -252,6 +256,103 @@ class SetupActivity : ComponentActivity() {
             ?.joinToString(", ")
             ?: ""
         return getString(R.string.setup_lang_word_correction, wordCorrLangs)
+    }
+
+    // ---- T24b (Gleis 3): U2 text-correction card ----
+
+    /** U2 views (programmatic card — no XML layout change). */
+    private var u2Status: TextView? = null
+    private var u2Delete: Button? = null
+    private var u2SetLine: TextView? = null
+
+    /**
+     * T24b: the U2 set follows the CURRENT typing language (de layout ->
+     * BART_SPELLING_DE, en layout -> BART_SPELLING_EN; the preheat of T24d
+     * decides per session — the card only mirrors the store truth).
+     */
+    private fun u2VariantForTypingLanguage(): de.voicekeyboard.model.ModelVariant =
+        if (activeTypingLanguage().startsWith("en")) {
+            de.voicekeyboard.model.ModelVariant.BART_SPELLING_EN
+        } else {
+            de.voicekeyboard.model.ModelVariant.BART_SPELLING_DE
+        }
+
+    /** Current typing language (vk_layout, filtered like the service cycle). */
+    private fun activeTypingLanguage(): String {
+        val prefs = getSharedPreferences(de.voicekeyboard.ime.VoiceKeyboardService.LAYOUT_PREFS, MODE_PRIVATE)
+        val active = de.voicekeyboard.keyboard.LanguageAvailability.filterActive(
+            de.voicekeyboard.ime.LanguageCycle.parseActive(
+                prefs.getString(de.voicekeyboard.ime.VoiceKeyboardService.KEY_ACTIVE_LANGUAGES, null),
+            ),
+        )
+        return de.voicekeyboard.ime.LanguageCycle.initialLanguage(
+            active,
+            prefs.getString(de.voicekeyboard.ime.VoiceKeyboardService.KEY_CURRENT_LANGUAGE, null),
+        )
+    }
+
+    private fun buildU2Card() {
+        val layoutRoot = findViewById<TextView>(R.id.setup_title).parent as android.widget.LinearLayout
+        val density = resources.displayMetrics.density
+        val container = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            setPadding(0, (16 * density).toInt(), 0, 0)
+        }
+        container.addView(TextView(this).apply {
+            text = getString(R.string.u2_title)
+            textSize = 16f
+            setTypeface(typeface, android.graphics.Typeface.BOLD)
+        })
+        container.addView(TextView(this).apply {
+            text = getString(R.string.u2_body)
+            textSize = 13f
+            setPadding(0, (4 * density).toInt(), 0, 0)
+        })
+        u2SetLine = TextView(this).apply { textSize = 13f }
+        container.addView(u2SetLine!!)
+        u2Status = TextView(this).apply { textSize = 13f }
+        container.addView(u2Status!!)
+        u2Delete = Button(this).apply {
+            text = getString(R.string.model_delete)
+            visibility = android.view.View.GONE
+            setOnClickListener { onDeleteModel(u2VariantForTypingLanguage()) }
+        }
+        container.addView(u2Delete)
+        layoutRoot.addView(container)
+        renderU2Card()
+    }
+
+    /**
+     * T24b: the honest card state — RAM gate (8 GB floor, Qwen class:
+     * U2 session ~0.4-0.5 GB NEXT TO the resident ASR engine), empty
+     * BASE_URL_U2 = not offered (Qwen VK-2 pattern: inert, fail-fast,
+     * never a dead download promise); Delete only for a READY set (frees
+     * the ~0.25 GB; C2 orphan rule applies like the ASR sets).
+     */
+    private fun renderU2Card() {
+        val variant = u2VariantForTypingLanguage()
+        val store = modelStore()
+        val status = store.statusQuick(variant)
+        val totalRam = totalRamOverride ?: deviceTotalRamBytes()
+        u2SetLine?.text = getString(
+            R.string.u2_set,
+            de.voicekeyboard.ime.LanguageCycle.endonym(
+                if (variant == de.voicekeyboard.model.ModelVariant.BART_SPELLING_EN) "en-us" else "de-de",
+            ),
+        )
+        u2Delete?.visibility = if (status == de.voicekeyboard.model.ModelStatus.READY) {
+            android.view.View.VISIBLE
+        } else {
+            android.view.View.GONE
+        }
+        when {
+            status == de.voicekeyboard.model.ModelStatus.READY ->
+                u2Status?.text = getString(R.string.u2_ready)
+            totalRam < de.voicekeyboard.model.DownloadPolicy.QWEN_MIN_TOTAL_RAM_BYTES ->
+                u2Status?.text = getString(R.string.model_ram_locked)
+            else ->
+                u2Status?.text = getString(R.string.model_not_downloaded)
+        }
     }
 
     /**
@@ -447,6 +548,8 @@ class SetupActivity : ComponentActivity() {
                 controller.state is DownloadController.State.Downloading,
             fraction = (controller?.state as? DownloadController.State.Downloading)?.fraction ?: 0f,
         )
+        // T24b (Gleis 3): the U2 card follows every model-card refresh.
+        renderU2Card()
     }
 
     private fun renderModelCard(

@@ -55,10 +55,10 @@ class DebugInfoFormatterTest {
     // 1. FIELD COUNT (F31→AP7-E1→A4a→W-vc34→T22i→T23h): header + 79 lines = 80 — the drift check
     // in the formatter (`check(lines.size == KEYS.size + 1)`) must catch every field change.
     @Test
-    fun `format has exactly 80 lines - header plus 79 fields`() {
+    fun `format has exactly 83 lines - header plus 82 fields`() {
         for (s in listOf(full, empty)) {
             val lines = DebugInfoFormatter.format(s).lines()
-            assertEquals("header + KEYS.size(79) fields", 80, lines.size)
+            assertEquals("header + KEYS.size(82) fields", 83, lines.size)
             assertTrue("too few lines: ${lines.size}", lines.size >= 5)
         }
     }
@@ -98,7 +98,9 @@ class DebugInfoFormatterTest {
                 // T23h (PLAN_V0147 §8): +9 correction fields at the end.
                 "corr_row_enabled", "corr_lang_mode", "corr_rows_shown", "corr_applied",
                 "corr_undone", "corr_computes", "corr_verify_fail", "corr_lang",
-                "corr_region_bucket"),
+                "corr_region_bucket",
+                // T24e (PLAN_V0147 §17, Gleis 3): +3 U2 fields at the end.
+                "u2_state", "u2_upgrades", "u2_guard_rejects"),
             keys,
         )
     }
@@ -140,7 +142,7 @@ class DebugInfoFormatterTest {
             lastError = "audioInit:Security\nException:secret",
         )
         val out = DebugInfoFormatter.format(dirty)
-        assertEquals("no multi-line output", 80, out.lines().size)
+        assertEquals("no multi-line output", 83, out.lines().size)
         for (line in out.lines().drop(1)) {
             val value = line.substringAfter(": ")
             assertFalse("colon in the value: '$value'", value.contains(":"))
@@ -272,7 +274,7 @@ class DebugInfoFormatterTest {
                 // A4a: +10 — the existing keys stay BEFORE the new ones.
                 "last_decode_ms", "hyp_len", "current_len", "committed_len", "write_reason",
                 "write_same", "write_w1", "write_w3d", "write_delta", "last_write_audio_s"),
-            keys.dropLast(16).takeLast(47),
+            keys.dropLast(19).takeLast(47),
         )
         // F17b+F21: exact values in the full snapshot, dash when missing (numbers only, rule 9):
         assertTrue(fullText.contains("decode_ms_max: 900"))
@@ -335,9 +337,9 @@ class DebugInfoFormatterTest {
         assertEquals(
             listOf("last_decode_ms", "hyp_len", "current_len", "committed_len", "write_reason",
                 "write_same", "write_w1", "write_w3d", "write_delta", "last_write_audio_s"),
-            keys.dropLast(16).takeLast(10),
+            keys.dropLast(19).takeLast(10),
         )
-        assertEquals("79 fields", 79, keys.size)
+        assertEquals("82 fields", 82, keys.size)
         assertEquals("no duplicate keys", keys.size, keys.toSet().size)
     }
 
@@ -382,7 +384,7 @@ class DebugInfoFormatterTest {
     // header + 79 = 80 lines (W-vc34: +5, T22i: +2, T23h: +9), deterministic
     // for an empty and a full snapshot.
     @Test
-    fun `A4a existing keys unchanged - 80 lines deterministic empty and full`() {
+    fun `A4a existing keys unchanged - 83 lines deterministic empty and full`() {
         val old53 = listOf("app_version", "build", "api_level", "model_status", "model_variant",
             "model_version", "model_bytes", "last_error", "rtf", "first_hyp_ms",
             "threads", "permissions", "peak_pct", "route", "src", "peak_dbfs",
@@ -398,8 +400,8 @@ class DebugInfoFormatterTest {
             "gate_foreign_resets", "rebases")
         for (s in listOf(full, empty)) {
             val lines = DebugInfoFormatter.format(s).lines()
-            assertEquals("header + 79 fields", 80, lines.size)
-            assertEquals("existing 53 KEYS unchanged", old53, lines.drop(1).map { it.substringBefore(":") }.dropLast(26))
+            assertEquals("header + 82 fields", 83, lines.size)
+            assertEquals("existing 53 KEYS unchanged", old53, lines.drop(1).map { it.substringBefore(":") }.dropLast(29))
         }
         assertEquals(
             DebugInfoFormatter.format(DebugSnapshot()),
@@ -429,20 +431,20 @@ class DebugInfoFormatterTest {
         assertTrue("trigger code", out.contains("load_trigger: ime_show"))
         assertTrue("load counter", out.contains("engine_loads: 1"))
         // header + 79 fields = 80 lines (the drift check in the formatter secures the count)
-        assertEquals(80, out.size)
+        assertEquals(83, out.size)
         // the last seven keys exactly, in fixed order (after last_write_audio_s:
         // the W-vc34 engine fields, then the T22i model-set fields):
         assertEquals(
             listOf("engine_load_ms", "engine_resident", "warm_hit", "load_trigger", "engine_loads",
                 "active_model_set", "engine_set_used"),
-            out.drop(1).map { it.substringBefore(":") }.takeLast(16).take(7),
+            out.drop(1).map { it.substringBefore(":") }.takeLast(19).take(7),
         )
         // empty state: '-' instead of guessing (no coordinator => everything a dash)
         val none = DebugInfoFormatter.format(DebugSnapshot()).lines()
         for (k in listOf("engine_load_ms", "engine_resident", "warm_hit", "load_trigger", "engine_loads")) {
             assertTrue("$k must be missing as a dash", none.contains("$k: -"))
         }
-        assertEquals(80, none.size)
+        assertEquals(83, none.size)
         // 0/1 encoding, never true/false (like ctl_failed/starting)
         val zero = DebugInfoFormatter.format(
             DebugSnapshot(engineResident = false, warmHit = false),
@@ -480,10 +482,10 @@ class DebugInfoFormatterTest {
         val none = DebugInfoFormatter.format(DebugSnapshot()).lines()
         assertTrue(none.contains("active_model_set: -"))
         assertTrue(none.contains("engine_set_used: -"))
-        assertEquals(80, none.size)
+        assertEquals(83, none.size)
         assertEquals(
             listOf("active_model_set", "engine_set_used"),
-            none.drop(1).map { it.substringBefore(":") }.takeLast(11).take(2),
+            none.drop(1).map { it.substringBefore(":") }.takeLast(14).take(2),
         )
         // a colon in the id would be sanitized (ids have none today — pinned anyway)
         val dirty = DebugInfoFormatter.format(

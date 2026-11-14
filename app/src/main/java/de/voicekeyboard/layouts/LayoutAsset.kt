@@ -57,6 +57,7 @@ object KeyActions {
     const val SHIFT = "shift"
     const val CAPS = "caps"
     const val LAYER_SYMBOLS = "layer-symbols"
+    const val LAYER_SYMBOLS_ALT = "layer-symbols-shift"
     const val LAYER_BASE = "layer-base"
     const val BACKSPACE = "backspace"
     const val SPACE = "space"
@@ -68,7 +69,7 @@ object KeyActions {
     const val CURSOR_RIGHT = "cursor-right"
 
     val ALL = setOf(
-        SHIFT, CAPS, LAYER_SYMBOLS, LAYER_BASE, BACKSPACE, SPACE, ENTER,
+        SHIFT, CAPS, LAYER_SYMBOLS, LAYER_SYMBOLS_ALT, LAYER_BASE, BACKSPACE, SPACE, ENTER,
         LANGUAGE, EMOJI, MIC, CURSOR_LEFT, CURSOR_RIGHT,
     )
 }

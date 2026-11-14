@@ -135,4 +135,9 @@
   <string name="setup_typing_show">Show suggestions while typing</string>
   <string name="setup_typing_all_langs">Correct in all active languages</string>
   <string name="setup_typing_lang_hint">Long-press the language key to switch</string>
+  <!-- T24b (PLAN_V0147 §17.2, Gleis 3): U2 text-correction model card. -->
+  <string name="u2_title">Text correction (U2) — experimental</string>
+  <string name="u2_body">Optional spelling model on-device · 179 MB (en) / 249 MB (de) · MIT / Apache-2.0 · downloads only with your consent</string>
+  <string name="u2_ready">Ready — upgrades the typing suggestions automatically</string>
+  <string name="u2_set">Set: %1$s</string>
 </resources>

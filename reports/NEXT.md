@@ -1,6 +1,8 @@
 - **Flaky lineage update (2026-11-04):** DictationHoldGateTest hardened: root cause was an abort race in runCorpus (stop() sets active=false before async reason 'final' lands), not the wall window; loop now breaks on source-end only for gate=true and on !isActive only with a recorded reason; windows 20s->60s/15s->45s. Green debug+release under load 14-37.
 # Next tasks (order)
 
+**FEATURE SLIPPED to 0.1.5x per Plan §3/D3 (2026-11-06):** B/Qwen3-0.6B int8 quality gate FAIL final (T25b 0.0234 per-tensor, T25c 0.0664 per-channel; root cause ORT quantize_dynamic ACTIVATION quantization — weight-only not expressible with the prescribed tool), A fp32 host-RAM NO-GO; gold corpus+checker remain, no BASE_URL_SUM will exist. Evidence: `reports/sum_t25b.json`, `reports/sum_t25c_b_wo.json`, `docs/SUM_MODEL_CONTRACT.md` §10a.
+
 **Status 2026-11-04 · v0.1.44 / versionCode 45 DELIVERED + PUSHED + ON PHONE.**
 Commit `52d2493` pushed to **https://github.com/tsii/TalkType** main (verified
 `git ls-remote` == local, 13:5x UTC after a temporary deploy-key rejection was

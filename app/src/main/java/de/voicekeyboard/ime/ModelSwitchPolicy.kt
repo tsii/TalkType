@@ -13,7 +13,7 @@ import de.voicekeyboard.model.ModelVariant
 object ModelSwitchPolicy {
 
     /** Rejection reasons (closed codes, rule 9). */
-    enum class Reason { NOT_READY }
+    enum class Reason { NOT_READY, TEXT_SET }
 
     sealed class Decision {
         /** Target not READY — never applied (the UI writes the pref only on READY;
@@ -36,6 +36,9 @@ object ModelSwitchPolicy {
         targetReady: Boolean,
         dictationActive: Boolean,
     ): Decision = when {
+        // T24b (Gleis 3): a TEXT set (U2) is NEVER a dictation engine — the
+        // switch policy governs the ASR set ONLY (PLAN_V0147 §17).
+        target.kind == ModelVariant.Kind.TEXT -> Decision.Rejected(Reason.TEXT_SET)
         target == current -> Decision.NoOp
         !targetReady -> Decision.Rejected(Reason.NOT_READY)
         dictationActive -> Decision.Deferred

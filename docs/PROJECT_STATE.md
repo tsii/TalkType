@@ -56,9 +56,11 @@ garbage removed. **Pushing further changes only after user approval (rule
 10).**
 
 ## Test inventory (measured)
-`app/build/test-results/testDebugUnitTest`: **513 tests / 0 failures** +
-`app/build/test-results/testReleaseUnitTest`: **482 tests / 0 failures**
-= **995 / 0** total (evidence: sum of the result XMLs, status 0.1.31).
+`app/build/test-results/testDebugUnitTest`: **944 tests / 0 failures**
+(status 0.1.49, `--rerun-tasks`, XML copy `/tmp/v149_debug/`) +
+`app/build/test-results/testReleaseUnitTest`: **850 tests / 0 failures**
+(status 0.1.47, `/tmp/v_final_release/`). The release suite was not re-run for
+0.1.49 (debug-only change set); counts of older releases are in CHANGELOG.md.
 Layout status: **15/15 layouts** (base+shift) with a **unified footer**
 (Σ 13, no `cursor-*` keys, dot menu with `cellActions` — F24e, target design
 `docs/LAYOUT_REQUIREMENTS.md` §2.3); globe language switch F25 wired

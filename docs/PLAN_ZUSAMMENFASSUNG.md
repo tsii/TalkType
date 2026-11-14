@@ -1,6 +1,7 @@
 # PLAN ZUSAMMENFASSUNG — 0.1.48 / vc49: "Zusammenfassungs-Button" (on-device dictation summarizer)
 
 Planner: oracle session, 2026-11-05. Status: PLAN ONLY — no code, no Gradle, no export, no git.
+**FEATURE SLIPPED to 0.1.5x per Plan §3/D3 (2026-11-06):** B/Qwen3-0.6B int8 quality gate FAIL final (T25b 0.0234 per-tensor, T25c 0.0664 per-channel; root cause ORT quantize_dynamic ACTIVATION quantization — weight-only not expressible with the prescribed tool), A fp32 host-RAM NO-GO; gold corpus+checker remain, no BASE_URL_SUM will exist. Evidence: `reports/sum_t25b.json`, `reports/sum_t25c_b_wo.json`, `docs/SUM_MODEL_CONTRACT.md` §10a.
 Repo language English; German titles allowed. Every figure is either **BELEGT** (cited) or **ZIEL** (target with measurement plan) or **~unverified** (planner has no web access — same discipline as `docs/PLAN_V0147.md` §13).
 
 ## 0. Ground truth this plan stands on (read before deciding anything)

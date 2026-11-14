@@ -11,12 +11,16 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
 /**
- * T6 (v0.1.37, docs/PLAN_SYMBOL_RASTER.md §Tests 2): symbol grid with stable
- * ⌫/⏎ letter slots — across ALL 15 assets:
+ * T6 (v0.1.37, docs/PLAN_SYMBOL_RASTER.md §Tests 2) + V0.1.49
+ * (docs/PLAN_GEOMETRY_V0149.md §2): symbol grid with stable ⌫/⏎ slots —
+ * across ALL 15 assets:
  *
  *  - Σ per row [10, 10, 10, 13] ± 0.001 (unit grid; 1u = 108 px);
- *  - ⌫ EXACTLY 1× at the r1 END, width 1.0 (letter slot like base r1 — KEY_GAP_DP=0
- *    ⇒ pixel-identical); ⏎ EXACTLY 1× at the r2 END, width 1.0; ⇧ stays r2[0] at 1.5;
+ *  - r1 = NEW margin 0.5 (V0.1.49 half-indent like the letter home row) +
+ *    10 characters à 0.85; ⌫ EXACTLY 1× at the r1 END, width 1.0;
+ *  - r2 = NEW toggle 1.0 (V0.1.49 §4.7: symbols '#+=' → layer-symbols-shift,
+ *    symbolsShift '?123' → layer-symbols; NO ⇧ anymore) + 10 × 0.75 +
+ *    ⏎ EXACTLY 1× at the r2 END, width 1.5;
  *  - symbols r0 = 10 digits at 1.0 (digit IDs asset-local), r1/r2 in the
  *    PLAN order (language-neutral identical in all 15);
  *  - footer r3 = ABC1.5/🌐1/😊1/space7.5/🎤2 — NO ⏎, no text character next to
@@ -79,29 +83,51 @@ class SymbolGridAcrossAssetsTest {
                 for ((i, expect) in listOf(10.0, 10.0, 10.0, 13.0).withIndex()) {
                     assertEquals("$id/$layerName Σ r$i", expect, rows[i].sumOf { it.width }, 0.001)
                 }
-                // (b) ⌫ EXACTLY 1× at the r1 END, width 1.0 (letter slot).
+                // (b) V0.1.49: r1 = margin 0.5 + 10 characters à 0.85; ⌫ EXACTLY
+                //     1× at the r1 END, width 1.0 (letter slot).
                 val r1 = rows[1]
+                assertEquals("$id/$layerName r1[0] is the margin (V0.1.49)", KeyKind.MARGIN, r1[0].kind)
+                assertEquals("$id/$layerName r1 margin 0.5", 0.5, r1[0].width, 0.0001)
+                val r1text = r1.filter { it.kind == KeyKind.TEXT }
+                assertEquals("$id/$layerName r1 = 10 direct cells", 10, r1text.size)
+                for (k in r1text) {
+                    assertEquals("$id/$layerName r1 '${k.label}' at 0.85 (V0.1.49)", 0.85, k.width, 0.0001)
+                }
                 val bs = r1.filter { it.kind == KeyKind.ACTION && it.value == KeyActions.BACKSPACE }
                 assertEquals("$id/$layerName ⌫ exactly 1x", 1, bs.size)
                 assertTrue("$id/$layerName ⌫ at the r1 END", r1.last() === bs.single())
                 assertEquals("$id/$layerName ⌫ width 1.0", 1.0, bs.single().width, 0.0001)
-                // (c) ⇧ stays r2[0] at 1.5; ⏎ EXACTLY 1× at the r2 END, width 1.0.
+                // (c) V0.1.49: Z2[0] is the TOGGLE (1.0) — symbols '#+=' →
+                //     layer-symbols-shift, symbolsShift '?123' → layer-symbols;
+                //     ⇧ is GONE from both symbol layers. ⏎ EXACTLY 1× at the r2
+                //     END, width 1.5.
                 val r2 = rows[2]
-                val shift = r2.firstOrNull()
+                val toggle = r2.firstOrNull()
+                val wantToggle = if (layerName == "symbols")
+                    listOf("symbols-toggle", "#+=", KeyActions.LAYER_SYMBOLS_ALT)
+                else
+                    listOf("symbols-back", "?123", KeyActions.LAYER_SYMBOLS)
                 assertTrue(
-                    "$id/$layerName ⇧ r2[0]",
-                    shift != null && shift.kind == KeyKind.ACTION && shift.value == KeyActions.SHIFT,
+                    "$id/$layerName toggle r2[0] (${wantToggle[0]})",
+                    toggle != null && toggle.kind == KeyKind.ACTION && toggle.value == wantToggle[2],
                 )
-                assertEquals("$id/$layerName ⇧ 1.5 stays", 1.5, shift!!.width, 0.0001)
+                assertEquals("$id/$layerName ${wantToggle[0]} id", wantToggle[0], toggle!!.id)
+                assertEquals("$id/$layerName ${wantToggle[0]} label", wantToggle[1], toggle.label)
+                assertEquals("$id/$layerName ${wantToggle[0]} width 1.0 (V0.1.49)", 1.0, toggle.width, 0.0001)
+                assertEquals(
+                    "$id/$layerName NO ⇧ on the symbol layers (V0.1.49 §4.7)",
+                    0, rows.flatten().count { it.value == KeyActions.SHIFT },
+                )
                 val enter = r2.filter { it.kind == KeyKind.ACTION && it.value == KeyActions.ENTER }
                 assertEquals("$id/$layerName ⏎ exactly 1x in r2", 1, enter.size)
                 assertTrue("$id/$layerName ⏎ at the r2 END", r2.last() === enter.single())
-                assertEquals("$id/$layerName ⏎ width 1.0", 1.0, enter.single().width, 0.0001)
-                // (c2) T7-M rule (v0.1.37, PLAN_SYMBOL_RASTER.md): r2 at most 10
-                //     direct cells at 0.75 — 11/12 at 0.75 break the budget 7.5
-                //     (Σ10.000 − ⇧1.5 − ⏎1.0; 11·0.75 = 8.25 > 7.5, arithmetically
-                //     impossible). Overflow stays reachable via inventory menus
-                //     (menu handover: da/fi „…“ → dot menu, el „–“ → hyphen menu).
+                assertEquals("$id/$layerName ⏎ width 1.5 (V0.1.49)", 1.5, enter.single().width, 0.0001)
+                // (c2) T7-M rule (v0.1.37, PLAN_SYMBOL_RASTER.md; budget adapted
+                //     to V0.1.49): r2 at most 10 direct cells at 0.75 — 11/12 at
+                //     0.75 break the budget 7.5 (Σ10.000 − toggle 1.0 − ⏎ 1.5;
+                //     11·0.75 = 8.25 > 7.5, arithmetically impossible). Overflow
+                //     stays reachable via inventory menus (menu handover: da/fi
+                //     „…“ → dot menu, el „–“ → hyphen menu).
                 val r2text = r2.filter { it.kind == KeyKind.TEXT }
                 assertTrue("$id/$layerName r2 ≤ 10 direct cells (M rule)", r2text.size <= 10)
                 for (k in r2text) {

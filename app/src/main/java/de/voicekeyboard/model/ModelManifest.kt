@@ -42,6 +42,45 @@ object ModelManifest {
     /** Compatibility alias: today's single set = variant A (uncontrolled callers). */
     const val BASE_URL = BASE_URL_ONNX
 
+    /**
+     * T24b (PLAN_V0147 §17.2, Gleis 3): base URL of the U2 TEXT sets — EMPTY
+     * until the download host is pinned at upload time (EXACTLY the Qwen
+     * pattern of BASE_URL_QWEN: empty = the set is not offered, the Setup
+     * card stays inert, a hand-started download fails fast without any
+     * network attempt). Pinning the host here is the one-line unlock.
+     */
+    const val BASE_URL_U2 = ""
+
+    /**
+     * T24b U2 TEXT sets — MERGED int8 artifacts (BART_CORRECT_CONTRACT §12:
+     * 3 graphs + shared/ external-data blob + tokenizer trio; the graphs
+     * reference "shared/shared_weights.bin" RELATIVELY, so the store names
+     * keep the subdirectory tree). sha256/bytes pinned against
+     * tools/bart_ref/EXPORT_LOG.txt (stage=merge/tokenizer). NOTE (T24b,
+     * next Teil): ModelStore's flat-name whitelist must learn MULTI-SEGMENT
+     * store names (traversal-safe per segment) before these sets can
+     * download — this list is the pin, not yet the unlock.
+     */
+    val U2_EN: List<ModelFile> = listOf(
+        ModelFile("encoder.int8.onnx", 43_601_202L, "bba119c4dc16830e6a0a0d670167134862ce124e1ac6b39c5abc936e2436cf54"),
+        ModelFile("decoder_init.int8.onnx", 7_466_649L, "d986026349e944bbf1f2da44cf5a7e7da4b4bf211b1e3a6c2b86fd7704f96629"),
+        ModelFile("decoder_step.int8.onnx", 324_984L, "2d1a70e4e4217f06fe42517003ec099035447b4a83cf1e508f2cb455901dc8b2"),
+        ModelFile("shared/shared_weights.bin", 127_859_712L, "0a8a2920ae3412512ee60bfc48f31984a092c77cb3efd83a7fa80d7a39c3479c"),
+        ModelFile("tokenizer/tokenizer.json", 3_558_746L, "dcf1e4d967564d18f9b7721e268b8a517027319a5cac544b9c1d9a0ce0163f44"),
+        ModelFile("tokenizer/tokenizer_config.json", 497L, "123732aac64b1214daae8ad115a9efcd59d935f09db70872c01efb713781ae51"),
+        ModelFile("tokenizer/vocab_meta.json", 225L, "5787c24699747b0db708eccc72475af62d38a1d6661b406a562986d41257f662"),
+    )
+
+    val U2_DE: List<ModelFile> = listOf(
+        ModelFile("encoder.int8.onnx", 85_228_809L, "05507b81ecdad185131bdfdaccf942cf066584eb11ea20d85e5343eb25dbb89e"),
+        ModelFile("decoder_init.int8.onnx", 14_453_095L, "97872f564c62c091db9b8f47b8b743ebcafa685d1bd2b01f37a088778d6ccda2"),
+        ModelFile("decoder_step.int8.onnx", 333_394L, "275a785385b759351f84a74fc4ba7a18cd64b8823838c9e73f716291fd1a2b63"),
+        ModelFile("shared/shared_weights.bin", 148_509_696L, "68296cd919fa2691744c80d62c981b55047b8f1ab3ed3e6a2f31b1111da430cd"),
+        ModelFile("tokenizer/tokenizer.json", 2_422_267L, "483ff18e85be28f7c6a27b6a4ed17583abf139bb016bd4bd91277e35924a536d"),
+        ModelFile("tokenizer/tokenizer_config.json", 2_488L, "682dc5904ee05fef4acddad8478ccf35aea659fecb927686bf77247d978648a1"),
+        ModelFile("tokenizer/vocab_meta.json", 230L, "12d90200acae09451e327cb4402af03ba310f5002507a706dd4c9f351cca2da4"),
+    )
+
     /** Variant A (ONNX_CPU): today's list, untouched. */
     val ONNX: List<ModelFile> = listOf(
         ModelFile(
@@ -137,12 +176,15 @@ object ModelManifest {
         ),
     )
 
-    /** Manifest per variant (V1): A = today's list, B = LiteRT set, Q = pinned 0.6B contract (T22b'). */
+    /** Manifest per variant (V1): A = today's list, B = LiteRT set, Q = pinned 0.6B contract (T22b'),
+     *  U2 = TEXT sets (T24b Gleis 3). */
     fun forVariant(variant: de.voicekeyboard.model.ModelVariant): List<ModelFile> =
         when (variant) {
             de.voicekeyboard.model.ModelVariant.ONNX_CPU -> ONNX
             de.voicekeyboard.model.ModelVariant.LITERT_CPU -> LITERT
             de.voicekeyboard.model.ModelVariant.QWEN3_ASR -> QWEN
+            de.voicekeyboard.model.ModelVariant.BART_SPELLING_EN -> U2_EN
+            de.voicekeyboard.model.ModelVariant.BART_SPELLING_DE -> U2_DE
         }
 
     /** T22b (PLAN_V0146 §2): base URL per set — the downloader gets its source
@@ -152,6 +194,8 @@ object ModelManifest {
             de.voicekeyboard.model.ModelVariant.ONNX_CPU -> BASE_URL_ONNX
             de.voicekeyboard.model.ModelVariant.LITERT_CPU -> BASE_URL_LITERT
             de.voicekeyboard.model.ModelVariant.QWEN3_ASR -> BASE_URL_QWEN
+            de.voicekeyboard.model.ModelVariant.BART_SPELLING_EN -> BASE_URL_U2
+            de.voicekeyboard.model.ModelVariant.BART_SPELLING_DE -> BASE_URL_U2
         }
 
     /** Compatibility: DEFAULT stays an alias to A. */

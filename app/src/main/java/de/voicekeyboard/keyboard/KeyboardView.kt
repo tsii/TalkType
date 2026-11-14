@@ -1342,7 +1342,11 @@ class KeyboardView @JvmOverloads constructor(
                 shiftTemporary = false
                 applyLayerState()
             }
-            KeyActions.LAYER_SYMBOLS -> switchLayer(if (symbolShift) "symbolsShift" else "symbols", fromSymbols = true)
+            // V0.1.49: '?123' always leads to the NUMBER page (symbols) — even
+            // from symbolsShift; switchLayer resets symbolShift (target 'symbols').
+            KeyActions.LAYER_SYMBOLS -> switchLayer("symbols", fromSymbols = true)
+            // V0.1.49: '#+=' on the symbols page leads to the special characters.
+            KeyActions.LAYER_SYMBOLS_ALT -> switchLayer("symbolsShift", fromSymbols = true)
             KeyActions.LAYER_BASE -> switchLayer("base", fromSymbols = false)
             else -> listener?.onAction(action)
         }
@@ -1444,6 +1448,7 @@ class KeyboardView @JvmOverloads constructor(
                 KeyActions.SPACE -> "Space bar"
                 KeyActions.SHIFT -> if (capsLock) "Caps lock" else "Shift"
                 KeyActions.LAYER_SYMBOLS -> "Digits and symbols"
+                KeyActions.LAYER_SYMBOLS_ALT -> "Special characters"
                 KeyActions.LAYER_BASE -> "Letters"
                 KeyActions.CURSOR_LEFT -> "Cursor left"
                 KeyActions.CURSOR_RIGHT -> "Cursor right"

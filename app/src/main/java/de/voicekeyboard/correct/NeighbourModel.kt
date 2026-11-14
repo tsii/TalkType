@@ -134,7 +134,7 @@ class NeighbourModel private constructor(
 }
 
 /** Minimal JSON reader (objects, arrays, strings, numbers, bools, null). */
-private object MiniJson {
+internal object MiniJson { // T24b/B3: internal for BartCorrectEngine/B3b tokenizer (was file-private)
 
     fun parseObject(text: String): Map<String, Any?> {
         val p = Parser(text)

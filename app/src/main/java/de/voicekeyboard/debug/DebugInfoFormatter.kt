@@ -253,6 +253,14 @@ data class DebugSnapshot(
     /** T23h (🐞: corr_region_bucket): typed-region length bucket
      *  (0 / 1-50 / 51-150 / 151-500). */
     val corrRegionBucket: Int? = null,
+
+    // ================================================= T24e (PLAN_V0147 §17)
+    /** T24e (🐞: u2_state): TEXT engine preheat state (code only). */
+    val u2State: String? = null,
+    /** T24e (🐞: u2_upgrades): row upgrades through the U2 engine (counter). */
+    val u2Upgrades: Int? = null,
+    /** T24e (🐞: u2_guard_rejects): U2 outputs discarded by the §6 guard. */
+    val u2GuardRejects: Int? = null,
 )
 
 object DebugInfoFormatter {
@@ -294,6 +302,9 @@ object DebugInfoFormatter {
         "corr_row_enabled", "corr_lang_mode", "corr_rows_shown", "corr_applied",
         "corr_undone", "corr_computes", "corr_verify_fail", "corr_lang",
         "corr_region_bucket",
+        // T24e (PLAN_V0147 §17, Gleis 3): +3 U2 fields — APPENDED, the existing
+        // 79 stay in front of it in order unchanged.
+        "u2_state", "u2_upgrades", "u2_guard_rejects",
     )
 
     fun format(s: DebugSnapshot): String {
@@ -416,6 +427,10 @@ object DebugInfoFormatter {
         lines += "corr_verify_fail: " + value(s.corrVerifyFail?.toString())
         lines += "corr_lang: " + value(s.corrLang)
         lines += "corr_region_bucket: " + value(s.corrRegionBucket?.toString())
+        // T24e: U2 fields — state code + counters only (rule 9).
+        lines += "u2_state: " + value(s.u2State)
+        lines += "u2_upgrades: " + value(s.u2Upgrades?.toString())
+        lines += "u2_guard_rejects: " + value(s.u2GuardRejects?.toString())
         check(lines.size == KEYS.size + 1) { "Feldzahl driftet: ${lines.size}" }
         return lines.joinToString("\n")
     }

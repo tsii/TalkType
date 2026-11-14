@@ -71,6 +71,9 @@ class DebugInfoCollector(private val context: Context) {
          *  watcher object — counters/codes only, invoked HERE at collect time
          *  (T22i pattern: no service field access in the collector). */
         corrCounters: (() -> de.voicekeyboard.ime.CorrCounters?)? = null,
+        /** T24e (🐞: u2_state): provider for the TEXT engine preheat state
+         *  (code only — IDLE/LOADING/READY/UNLOADING; null = "-"). */
+        u2State: (() -> String?)? = null,
     ): DebugSnapshot {
         // T19 (v0.1.45): ONE shared version read path — the Setup header and
         // this export use the same [AppVersion.read] (PackageManager; no
@@ -208,6 +211,10 @@ class DebugInfoCollector(private val context: Context) {
             corrVerifyFail = corrCounters?.invoke()?.verifyFail,
             corrLang = corrCounters?.invoke()?.lang?.ifEmpty { null },
             corrRegionBucket = corrCounters?.invoke()?.regionLenBucket,
+            // T24e: U2 state + counters (rule 9: codes/numbers only).
+            u2State = u2State?.invoke(),
+            u2Upgrades = corrCounters?.invoke()?.u2Upgrades,
+            u2GuardRejects = corrCounters?.invoke()?.u2GuardRejects,
         )
     }
 

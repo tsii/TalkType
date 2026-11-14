@@ -51,8 +51,8 @@ convention and should not be extended (otherwise docs and code drift apart).
 ### Allowed actions (`kind:"action"`)
 
 ```
-shift, caps, layer-symbols, layer-base, backspace, space, enter,
-language, emoji, mic, cursor-left, cursor-right
+shift, caps, layer-symbols, layer-symbols-shift, layer-base, backspace,
+space, enter, language, emoji, mic, cursor-left, cursor-right
 ```
 
 - `caps` is in the allowlist but used by no asset (double tap on `shift` =
@@ -199,10 +199,19 @@ Everything else is an artifact (`⌇` U+2307, `=\<`, `⇧` on a character key).
   the long-press menus are **language-neutral** and identical in all 15
   assets (T4/PLAN_LONGPRESS_SYMBOLS.md; digits without a menu, no `hint` on
   symbol keys).
-- **Symbol layer grid** (T6/PLAN_SYMBOL_RASTER.md): Σ=[10,10,10,13] per row
-  with stable letter slots — ⌫ exactly at the r1 end (width 1.0), ⏎ exactly
-  at the r2 end (width 1.0) as in the letter layers; no text character next
-  to the space bar (footer: ABC 1.5 · 🌐 1 · 😊 1 · space 7.5 · 🎤 2).
+- **Symbol layer grid** (T6/PLAN_SYMBOL_RASTER.md, re-rastered in V0.1.49 /
+  PLAN_GEOMETRY_V0149.md §2): Σ=[10,10,10,13] per row — r1 = margin 0.5 +
+  10 characters at 0.85 + ⌫ 1.0; r2 = **layer toggle at the far left**
+  (`layer-symbols-shift` with label `#+=` on `symbols`, `layer-symbols` with
+  `?123` on `symbolsShift`, width 1.0) + 10 characters at 0.75 + ⏎ 1.5;
+  r3 footer unchanged: ABC 1.5 · 🌐 1 · 😊 1 · space 7.5 · 🎤 2. There is **no
+  `shift` key on the symbol pages** since V0.1.49 — the reference layout has
+  none, and `LayoutCompletenessTest` forbids it.
+- **Letter layer grid** (V0.1.49): r0 = 10 × 1.0; r1 = margin 0.5 + 9 ×
+  0.888889 + **⌫ 1.5** (right of `l`; cs-cz 10 × 0.800, ru-ru 11 × 0.772727
+  + ⌫ 1.25); r2 = ⇧ 1.5 + 7 × 0.928571 + **⏎ 2.0** (cs-cz ⇧ 2.0 + 6 × 1.0 +
+  ⏎ 2.0; ru-ru ⇧ 1.0 + 10 × 0.9 + ⏎ 2.0 in a Σ 12 row); r3 = `?123` 1.5 ·
+  🌐 1 · 😊 1 · **space 6.5** · **`.` 1.0** · 🎤 2 = Σ 13.
 
 ## Other rules an asset must fulfill
 

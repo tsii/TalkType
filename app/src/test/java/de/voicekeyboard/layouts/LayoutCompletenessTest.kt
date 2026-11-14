@@ -449,7 +449,6 @@ class LayoutCompletenessTest {
 
     /** Basic rule 4: mandatory action keys per layer, unique. */
     private fun checkRequiredActionKeys(parsed: LayoutAsset) {
-        val isRu = parsed.id == "ru-ru"
         val mustHaveOnce = listOf(
             KeyActions.SPACE to "space",
             KeyActions.BACKSPACE to "backspace",
@@ -460,15 +459,13 @@ class LayoutCompletenessTest {
         for ((layerName, layer) in parsed.layers) {
             val actions = keysOf(layer).filter { it.kind == KeyKind.ACTION }.map { it.value }
             for ((action, _) in mustHaveOnce) {
-                // ru-ru D27: the letter layers (base/shift) have NO backspace
-                // (r2 = shift1+10+enter1 is full; r0 = 11+margin has no space).
-                val expected =
-                    if (isRu && (layerName == "base" || layerName == "shift") && action == KeyActions.BACKSPACE) 0
-                    else 1
+                // V0.1.49: ⌫ exactly 1× in ALL layers of ALL 15 assets — the
+                // ru-ru D27 exception (no backspace in base/shift) is GONE
+                // (the old m-right margin is now the ⌫ key, §3).
                 val count = actions.count { it == action }
-                if (count != expected) {
+                if (count != 1) {
                     fail("Asset '${parsed.id}' layer '$layerName': action '$action' " +
-                        "present $count times (expected: exactly $expected)")
+                        "present $count times (expected: exactly 1)")
                 }
             }
             // letter layers need shift, symbol layers a layer switch.
@@ -487,40 +484,44 @@ class LayoutCompletenessTest {
     }
 
     /**
-     * P1-03/M8c (LAYOUT_REQUIREMENTS rule 4a + §6 item 9): shift key in the symbol layers.
-     * symbols AND symbolsShift: exactly one key with kind==action, value=="shift",
-     * label=="⇧", id=="shift", at position row 2 / column 0, width==1.5.
-     * Forbidden in both layers: value=="layer-symbols"; value=="layer-base" on a
-     * key with label != "ABC" (ABC/layer-base in row 3 stays as a direct way).
+     * V0.1.49 (docs/PLAN_GEOMETRY_V0149.md §4.7): the symbol layers switch via
+     * the NEW Z2 toggle — the shift key is GONE from both symbol layers.
+     *  - symbols r2[0]:      id 'symbols-toggle', label '#+=', action,
+     *    value 'layer-symbols-shift' (→ symbolsShift), width 1.0;
+     *  - symbolsShift r2[0]: id 'symbols-back', label '?123', action,
+     *    value 'layer-symbols' (→ back to the numbers page), width 1.0;
+     *  - NO key with value 'shift' in either symbol layer;
+     *  - the old rule 4a ban on 'layer-symbols' is superseded by the exact
+     *    toggle pinning above (symbolsShift r2[0] legitimately carries it);
+     *  - layer-base stays allowed only with label 'ABC' (footer direct way).
      */
     private fun checkSymbolShiftKeys(parsed: LayoutAsset) {
         for (layerName in listOf("symbols", "symbolsShift")) {
             val rows = parsed.layers.getValue(layerName).rows
-            // (1) position row 2 / column 0: id shift, ⇧, action, value shift, width 1.5
             if (rows.size <= 2 || rows[2].isEmpty()) {
-                fail("Asset '${parsed.id}' layer '$layerName': row 2 missing — ⇧ key expected")
+                fail("Asset '${parsed.id}' layer '$layerName': row 2 missing — toggle key expected")
             }
             val pos = rows[2][0]
-            if (pos.id != "shift" || pos.label != "⇧" || pos.kind != KeyKind.ACTION ||
-                pos.value != KeyActions.SHIFT || pos.width != 1.5
+            val expected = if (layerName == "symbols") {
+                listOf("symbols-toggle", "#+=", KeyActions.LAYER_SYMBOLS_ALT)
+            } else {
+                listOf("symbols-back", "?123", KeyActions.LAYER_SYMBOLS)
+            }
+            if (pos.id != expected[0] || pos.label != expected[1] || pos.kind != KeyKind.ACTION ||
+                pos.value != expected[2] || pos.width != 1.0
             ) {
                 fail("Asset '${parsed.id}' layer '$layerName' row 2/column 0: " +
                     "id='${pos.id}', label='${pos.label}', kind=${pos.kind}, value='${pos.value}', " +
-                    "width=${pos.width} (expected: id=shift, label=⇧, action, shift, 1.5)")
+                    "width=${pos.width} (expected: id=${expected[0]}, label=${expected[1]}, " +
+                    "action, ${expected[2]}, 1.0)")
             }
-            // (2) exactly ONE key with value==shift AND label==⇧ in this layer
             val shiftKeys = keysOf(parsed.layers.getValue(layerName))
                 .filter { it.value == KeyActions.SHIFT }
-            if (shiftKeys.size != 1 || shiftKeys[0].label != "⇧") {
+            if (shiftKeys.isNotEmpty()) {
                 fail("Asset '${parsed.id}' layer '$layerName': ${shiftKeys.size} key(s) with " +
-                    "value==shift — expected exactly 1 with label ⇧")
+                    "value==shift — the symbol layers carry NO shift key (V0.1.49 §4.7)")
             }
-            // (3) forbidden values
             for (key in keysOf(parsed.layers.getValue(layerName))) {
-                if (key.value == KeyActions.LAYER_SYMBOLS) {
-                    fail("Asset '${parsed.id}' layer '$layerName' key '${key.id}': " +
-                        "value=='layer-symbols' is forbidden (rule 4a)")
-                }
                 if (key.value == KeyActions.LAYER_BASE && key.label != "ABC") {
                     fail("Asset '${parsed.id}' layer '$layerName' key '${key.id}': " +
                         "layer-base with label '${key.label}' != 'ABC' (rule 4a)")
@@ -530,23 +531,16 @@ class LayoutCompletenessTest {
     }
 
     /**
-     * F27d/F29→F36/V2 + F40 (docs/DESIGN_TASTATUR_V2.md, 1u = 108 px; user
-     * feedback v0.1.27): base/shift carry the V2 grid — r0 = 10 letters at
-     * 1.0 each WITHOUT ⌫; r1 = margin 0.5 + letter block 8.5u + ⌫ 1.0 (F40: at the
-     * r1 END); r2 = T11 (docs/PLAN_T11_T12.md §2, D1 = variant B) boundary grid:
-     * NO more @ (reachable via the M long-press menu), the 13 7-key assets
-     * ⇧ 1.22224 + 8 at 0.94444 (7 letters + period, 102-px cells) + ⏎ 1.22224,
-     * center chain symmetric about 5.0 (every center pair sums to 10);
-     * cs-cz (B') ⇧ 2.025 + 7 at 0.85 (6 letters + period) + ⏎ 2.025; footer r3
-     * Σ13 STAYS but the period moves up to r2 (space 6.5→7.5, 5 keys; its own
-     * unit u_footer). Rounding: 5 decimals, sum tolerance
-     * 0.001u (≤ 0.11 px). Special cases: cs-cz r1 = 10 letters at 0.85 + ⌫ 1.0
-     * (the same 8.5u block); ru-ru r0/r1 = margin 0.11111 (12 px) per side +
-     * 11 at 0.88889 (96 px, spec §6), r2 stays the D27 full row ⇧1 + 10 at
-     * 1.0 + ⏎1 = Σ12 (spec §6 "unchanged"; NO swap — no @ in r1, ⌫ only on
-     * the symbol layers, @ on period). fr-fr is structurally standard (r1 has
-     * As-is 9 letters + ⌫, m lies in r2 — spec §6 "10 letters" does not match
-     * the asset, no key moves).
+     * V0.1.49 (docs/PLAN_GEOMETRY_V0149.md §1/§3): base/shift carry the new row
+     * realignment — r0 = 10 letters at 1.0 (ru: 12-key full row, D27, untouched);
+     * r1 = margin 0.5 (ru 0.25) + letter block + ONE ⌫ 1.5 (ru 1.25) at the r1 END
+     * (§0 variant A — NOT two backspaces); r2 = ⇧ 1.5 (cs 2.0, ru 1.0) +
+     * letters 7 × 0.928571 (cs 6 × 1.0, ru 10 × 0.9) + ⏎ 2.0 (ru: Σ12 → 180 px,
+     * NOT 20 %); NO period in r2 anymore — it moves to the footer between
+     * space and mic (space 7.5→6.5, Σ stays 13). The T11 symmetry invariant
+     * (c[i]+c[n-1-i]=10) is GONE by design (⏎ 2.0 ≠ ⇧ 1.5) — the replacement
+     * alignment invariant (Z1 letter width == Z2 letter width ±0.05) lives in
+     * LetterRowAlignmentAcrossAssetsTest.
      */
     private fun checkGeometry(parsed: LayoutAsset) {
         val isRu = parsed.id == "ru-ru"
@@ -554,163 +548,122 @@ class LayoutCompletenessTest {
         for (layerName in listOf("base", "shift")) {
             val rows = parsed.layers.getValue(layerName).rows
             if (rows.size < 4) {
-                fail("Asset '${parsed.id}' $layerName: fewer than 4 rows (V2 geometry)")
+                fail("Asset '${parsed.id}' $layerName: fewer than 4 rows (V0.1.49 geometry)")
             }
             val expectSums = if (isRu) listOf(10.0, 10.0, 12.0, 13.0) else listOf(10.0, 10.0, 10.0, 13.0)
             val sums = rows.take(4).map { row -> row.sumOf { it.width } }
             for (i in expectSums.indices) {
                 if (kotlin.math.abs(sums[i] - expectSums[i]) > 0.001) {
                     fail("Asset '${parsed.id}' $layerName: row sum r$i=" +
-                        "${"%.5f".format(sums[i])}u != ${expectSums[i]}u (F36/V2)")
+                        "${"%.5f".format(sums[i])}u != ${expectSums[i]}u (V0.1.49)")
                 }
             }
-            // ⌫ leaves r0 (all assets); F40: ⌫ sits exactly 1x at the r1 END (ru-ru:
-            // none in the letter layers, D27) and NOT anymore in r2.
+            // ⌫ stays out of r0 and r2 (the F40 rule keeps holding: ⌫ sits at
+            // the r1 END — now at width 1.5/1.25 instead of 1.0).
             val bsR0 = rows[0].count { it.kind == KeyKind.ACTION && it.value == KeyActions.BACKSPACE }
-            if (bsR0 != 0) fail("Asset '${parsed.id}' $layerName: r0 must carry NO backspace (F36/V2)")
+            if (bsR0 != 0) fail("Asset '${parsed.id}' $layerName: r0 must carry NO backspace")
             val bsR2 = rows[2].count { it.kind == KeyKind.ACTION && it.value == KeyActions.BACKSPACE }
-            if (bsR2 != 0) fail("Asset '${parsed.id}' $layerName: r2 must carry NO backspace (F40 — ⌫ sits at the r1 end)")
+            if (bsR2 != 0) fail("Asset '${parsed.id}' $layerName: r2 must carry NO backspace (⌫ sits at the r1 end)")
             val enterR2 = rows[2].count { it.kind == KeyKind.ACTION && it.value == KeyActions.ENTER }
             val enterR3 = rows[3].count { it.kind == KeyKind.ACTION && it.value == KeyActions.ENTER }
             if (enterR2 != 1) fail("Asset '${parsed.id}' $layerName: enter $enterR2 times in r2 (expected 1)")
-            if (enterR3 != 0) fail("Asset '${parsed.id}' $layerName: enter forbidden in r3 (V2 geometry)")
-            // r1: margin 0.5 + letter block + @ 1.0; ru-ru: full row with 12-px side margins, no @.
+            if (enterR3 != 0) fail("Asset '${parsed.id}' $layerName: enter forbidden in r3")
+            // r1: margin 0.5 (ru 0.25) + letters + ONE ⌫ 1.5 (ru 1.25) at the END.
             val r1 = rows[1]
-            if (isRu) {
-                if (r1[0].kind != KeyKind.MARGIN || r1.last().kind != KeyKind.MARGIN ||
-                    kotlin.math.abs(r1[0].width - 0.11111) > 0.001 ||
-                    kotlin.math.abs(r1.last().width - 0.11111) > 0.001
-                ) fail("Asset 'ru-ru' $layerName: r1 needs 0.11111u side margins (12 px, spec §6)")
-                if (r1.any { it.kind == KeyKind.TEXT && it.value == "@" }) {
-                    fail("Asset 'ru-ru' $layerName: r1 must carry no @ key (D27, @ on period)")
-                }
-                val ruLetters1 = r1.filter { it.kind == KeyKind.TEXT }
-                if (ruLetters1.size != 11) {
-                    fail("Asset 'ru-ru' $layerName: r1 needs 11 letters (has ${ruLetters1.size})")
-                }
-                for (k in ruLetters1) {
-                    if (kotlin.math.abs(k.width - 0.88889) > 0.001) {
-                        fail("Asset 'ru-ru' $layerName r1 '${k.id}': width ${k.width} != 0.88889 (96 px, spec §6)")
-                    }
-                }
-            } else {
-                if (r1.isEmpty() || r1[0].kind != KeyKind.MARGIN ||
-                    kotlin.math.abs(r1[0].width - 0.5) > 0.0001
-                ) {
-                    fail("Asset '${parsed.id}' $layerName: r1[0] must be margin 0.5 (F36/V2)")
-                }
-                val atInR1 = r1.count { it.kind == KeyKind.TEXT && it.value == "@" }
-                if (atInR1 != 0) {
-                    fail("Asset '${parsed.id}' $layerName: r1 must carry NO @ (T8: @ is not a direct key anymore, reachable via the M menu)")
-                }
-                val bsR1 = r1.filter { it.kind == KeyKind.ACTION && it.value == KeyActions.BACKSPACE }
-                if (bsR1.size != 1 || r1.last() !== bsR1[0] ||
-                    kotlin.math.abs(bsR1[0].width - 1.0) > 0.0001
-                ) {
-                    fail("Asset '${parsed.id}' $layerName: ⌫ exactly 1x at the r1 END (width 1.0) expected (F40)")
-                }
-                val letters = r1.filter { it.kind == KeyKind.TEXT && it.value != "@" }
-                val wantN = if (isCs) 10 else 9
-                val wantW = if (isCs) 0.85 else 0.94444 // 10 respectively 9 letters of the 8.5u block
-                if (letters.size != wantN) {
-                    fail("Asset '${parsed.id}' $layerName: r1 needs $wantN letters (has ${letters.size})")
-                }
-                for (k in letters) {
-                    if (kotlin.math.abs(k.width - wantW) > 0.001) {
-                        fail("Asset '${parsed.id}' $layerName r1 '${k.id}': width ${k.width} != $wantW (F36/V2)")
-                    }
-                }
-                if (r1.last().kind == KeyKind.MARGIN) {
-                    fail("Asset '${parsed.id}' $layerName: r1 without right margin (Σ10, F36/V2)")
+            val wantMargin = if (isRu) 0.25 else 0.5
+            if (r1[0].kind != KeyKind.MARGIN || kotlin.math.abs(r1[0].width - wantMargin) > 0.001) {
+                fail("Asset '${parsed.id}' $layerName: r1[0] must be margin $wantMargin (V0.1.49 §1/§3)")
+            }
+            if (r1.any { it.kind == KeyKind.TEXT && it.value == "@" }) {
+                fail("Asset '${parsed.id}' $layerName: r1 must carry NO @ key (@ → M menu / ru: period menu)")
+            }
+            val bsR1 = r1.filter { it.kind == KeyKind.ACTION && it.value == KeyActions.BACKSPACE }
+            val wantBs = if (isRu) 1.25 else 1.5
+            if (bsR1.size != 1 || r1.last() !== bsR1[0] ||
+                kotlin.math.abs(bsR1[0].width - wantBs) > 0.001
+            ) {
+                fail("Asset '${parsed.id}' $layerName: ⌫ exactly 1x at the r1 END, width $wantBs expected (V0.1.49 §0 variant A)")
+            }
+            val letters1 = r1.filter { it.kind == KeyKind.TEXT }
+            val wantN1 = when { isRu -> 11; isCs -> 10; else -> 9 }
+            val wantW1 = when { isRu -> 0.772727; isCs -> 0.8; else -> 0.888889 }
+            if (letters1.size != wantN1) {
+                fail("Asset '${parsed.id}' $layerName: r1 needs $wantN1 letters (has ${letters1.size})")
+            }
+            for (k in letters1) {
+                if (kotlin.math.abs(k.width - wantW1) > 0.001) {
+                    fail("Asset '${parsed.id}' $layerName r1 '${k.id}': width ${k.width} != $wantW1 (V0.1.49)")
                 }
             }
-            // r2 T11 (docs/PLAN_T11_T12.md §2, D1 = VARIANT B): boundary grid —
-            // 8 equal cells (7 letters + the NEW period key id 'period' before ⏎)
-            // on the r1 boundary raster, ⇧ and ⏎ take the symmetric remainder.
-            //  - the 13 7-key assets: ⇧ 1.22224 + 8 at 0.94444 (102 px) + ⏎ 1.22224
-            //    (px: 132 + 8×102 + 132 = 1080; centers 1.69446..8.30554).
-            //  - cs-cz (B'): ⇧ 2.025 + 7 at 0.85 (6 letters + period) + ⏎ 2.025.
-            //  - period carries the F54 menu , ! ? : ; ( ) (moved up from the
-            //    footer, base AND shift); M keeps its @ alternate (T8).
-            //  - ru-ru: the D27 full row stays (no period key in r2, 6-key footer).
+            // r2: ⇧ + letters + ⏎ 2.0; period is GONE from r2 (footer since V0.1.49).
             val r2 = rows[2]
             val r2Texts = r2.filter { it.kind == KeyKind.TEXT }
-            val wantShift = when { isRu -> 1.0; isCs -> 2.025; else -> 1.22224 }
+            val wantShift = when { isRu -> 1.0; isCs -> 2.0; else -> 1.5 }
             if (r2.isEmpty() || r2[0].kind != KeyKind.ACTION || r2[0].value != KeyActions.SHIFT ||
                 kotlin.math.abs(r2[0].width - wantShift) > 0.001
             ) {
-                fail("Asset '${parsed.id}' $layerName: r2[0] must be shift width $wantShift (T11, is " +
-                    "${r2.firstOrNull()?.let { it.value + "/" + it.width }})")
+                fail("Asset '${parsed.id}' $layerName: r2[0] must be shift width $wantShift (V0.1.49), is " +
+                    "${r2.firstOrNull()?.let { it.value + "/" + it.width }}")
             }
-            val wantL = when {
-                isRu -> 1.0    // D27: 10 at 1.0 in the Σ12 row
-                isCs -> 0.85   // 91.8 px
-                else -> 0.94444 // 102 px — boundary raster of the home row
-            }
-            val wantNT = if (isRu) 10 else if (isCs) 7 else 8 // letters + period
-            if (r2Texts.size != wantNT) {
-                fail("Asset '${parsed.id}' $layerName: r2 needs $wantNT text keys incl. period (has ${r2Texts.size})")
+            val wantL2 = when { isRu -> 0.9; isCs -> 1.0; else -> 0.928571 }
+            val wantN2 = when { isRu -> 10; isCs -> 6; else -> 7 }
+            if (r2Texts.size != wantN2) {
+                fail("Asset '${parsed.id}' $layerName: r2 needs $wantN2 letters (has ${r2Texts.size}; period moved to the footer)")
             }
             for (k in r2Texts) {
-                if (kotlin.math.abs(k.width - wantL) > 0.001) {
-                    fail("Asset '${parsed.id}' $layerName r2 '${k.id}': width ${k.width} != $wantL (T11)")
+                if (kotlin.math.abs(k.width - wantL2) > 0.001) {
+                    fail("Asset '${parsed.id}' $layerName r2 '${k.id}': width ${k.width} != $wantL2 (V0.1.49)")
                 }
             }
             val enter = r2.firstOrNull { it.kind == KeyKind.ACTION && it.value == KeyActions.ENTER }
-            val wantEnter = when { isRu -> 1.0; isCs -> 2.025; else -> 1.22224 }
-            if (enter == null || kotlin.math.abs(enter.width - wantEnter) > 0.001) {
-                fail("Asset '${parsed.id}' $layerName: ⏎ width $wantEnter expected in r2 (T11)")
+            if (enter == null || kotlin.math.abs(enter.width - 2.0) > 0.001) {
+                fail("Asset '${parsed.id}' $layerName: ⏎ width 2.0 expected in r2 (V0.1.49 §4.3)")
             }
+            if (r2.any { it.id == "period" }) {
+                fail("Asset '${parsed.id}' $layerName: NO period key in r2 (it sits in the footer, V0.1.49)")
+            }
+            // @ stays reachable via the M long-press menu (T8); the M key is the
+            // LAST LETTER of r2 (no period key there anymore). ru-ru carries
+            // deliberately NO @ on M (D27: @ runs via the period menu).
             if (!isRu) {
-                // T11: NO more direct @ key in r2 — @ runs via the M menu.
-                if (r2.any { it.kind == KeyKind.TEXT && it.value == "@" }) {
-                    fail("Asset '${parsed.id}' $layerName: direct @ key forbidden in r2 (@ → M menu)")
-                }
-                // T11: the period key sits exactly 1× in r2 (slot before ⏎).
-                val period = r2.filter { it.id == "period" }
-                if (period.size != 1 || period[0].kind != KeyKind.TEXT || period[0].value != ".") {
-                    fail("Asset '${parsed.id}' $layerName: exactly 1 period key (text, '.') expected in r2 (T11)")
-                }
-                // M lookup excludes the period key (id 'period'): the M key is
-                // the LAST LETTER, not the last text key of r2.
-                val m = r2Texts.lastOrNull { it.id != "period" }
+                val m = r2Texts.lastOrNull()
                 if (m == null || m.alternates.none { it == "@" }) {
                     fail("Asset '${parsed.id}' $layerName: the M key must carry @ in its long-press menu (T8)")
                 }
             }
             if (r2.last().kind == KeyKind.MARGIN) {
-                fail("Asset '${parsed.id}' $layerName: r2 without right margin (F36/V2)")
+                fail("Asset '${parsed.id}' $layerName: r2 without right margin")
             }
-            // T11 invariant (variant B): the FULL r2 center chain is symmetric
-            // about 5.0 — every center pair c[i] + c[n-1-i] = 10 (⇧ = ⏎). Replaces
-            // the T8 Y/M centering (13/9, 145/18) — documented deviation in
-            // DESIGN_TASTATUR_V2 §10.
-            if (!isRu) {
-                var x2 = 0.0
-                val c2 = r2.map { x2 += it.width; x2 - it.width / 2 }
-                for (i in c2.indices) {
-                    if (kotlin.math.abs(c2[i] + c2[c2.size - 1 - i] - 10.0) > 0.001) {
-                        fail("Asset '${parsed.id}' $layerName: T11 symmetry violated — " +
-                            "c[$i]=${"%.5f".format(c2[i])} + c[${c2.size - 1 - i}]=${"%.5f".format(c2[c2.size - 1 - i])} != 10")
-                    }
-                }
+            // V0.1.49: the T11 symmetry invariant is deliberately GONE —
+            // ⏎ 2.0 ≠ ⇧ 1.5 breaks every center pair; the replacement invariant
+            // (Z1 letter width == Z2 letter width ±0.05) is asserted in
+            // LetterRowAlignmentAcrossAssetsTest.
+            // Footer r3: symbols|language|emoji|space|period|mic for ALL 15
+            // (ru too — it already had this form since F54).
+            val r3Ids = rows[3].map { it.id }
+            if (r3Ids != listOf("symbols", "language", "emoji", "space", "period", "mic")) {
+                fail("Asset '${parsed.id}' $layerName: footer ids (V0.1.49 §4.5): $r3Ids")
             }
         }
     }
 
     /**
      * Counter-checks (must turn red, §6 item 9): mutated assets must be
-     * rejected by checkSymbolShiftKeys.
+     * rejected by checkSymbolShiftKeys. V0.1.49: the mutated object is the
+     * Z2 toggle (formerly the ⇧ key) — (b) was reformulated because '?123' is
+     * now the CORRECT label of the symbolsShift toggle.
      */
     @Test
     fun `counter-checks symbolsShift back key must be rejected`() {
         val base = LayoutParser.parse(asset("de-de.json")!!) // correct reference asset
-        // (a) key effectively missing in symbolsShift row 2/column 0 (id changed)
-        assertRejected(mutateShiftKey(base, "symbolsShift") { it.copy(id = "shift-x") }, "(a) key missing")
-        // (b) da-dk as-is state: label ?123 + value shift
-        assertRejected(mutateShiftKey(base, "symbolsShift") { it.copy(label = "?123") }, "(b) ?123 label")
-        // (c) ⇧ with value layer-base (as-is state ru-ru/cs-cz)
-        assertRejected(mutateShiftKey(base, "symbolsShift") { it.copy(value = "layer-base") }, "(c) layer-base on ⇧")
+        // (a) toggle effectively missing in symbolsShift row 2/column 0 (id changed)
+        assertRejected(mutateShiftKey(base, "symbolsShift") { it.copy(id = "toggle-x") }, "(a) key missing")
+        // (b) wrong label ('#+=' belongs to the symbols toggle, not the return key)
+        assertRejected(mutateShiftKey(base, "symbolsShift") { it.copy(label = "#+=") }, "(b) #+= label")
+        // (c) toggle with value layer-base (as-is state ru-ru/cs-cz)
+        assertRejected(mutateShiftKey(base, "symbolsShift") { it.copy(value = "layer-base") }, "(c) layer-base on the toggle")
+        // (d) resurrected ⇧ — forbidden on the symbol layers since V0.1.49
+        assertRejected(mutateShiftKey(base, "symbolsShift") { it.copy(value = "shift", label = "⇧") }, "(d) shift on the symbol layer")
     }
 
     private fun mutateShiftKey(

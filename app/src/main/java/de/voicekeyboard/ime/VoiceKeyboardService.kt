@@ -402,6 +402,17 @@ class VoiceKeyboardService : InputMethodService(), KeyboardView.Listener {
      * correct() always null ON DEVICE (JVM tests masked it). internal for
      * the VK-8 registry regression test.
      */
+    /** T23g: main handler for correction UI hops (field for U2 idle scheduling). */
+    private var corrMain: android.os.Handler? = null
+
+    // ---- T24d (Gleis 3): U2 preheat + engine holder ----
+    private var u2Preheat: de.voicekeyboard.correct.U2Preheat? = null
+    private var u2Engine: de.voicekeyboard.correct.BartCorrectEngine? = null
+    private var u2EngineVariant: de.voicekeyboard.model.ModelVariant? = null
+    private var u2IdleRunnable: Runnable? = null
+    /** Service-side eligibility snapshot of the CURRENT field (T23f view seam). */
+    private var corrFieldEligibleNow = false
+
     internal val corrRegistry = WordListRegistry { path ->
         runCatching { assets.open(path).use { it.readBytes() } }.getOrNull()
     }
@@ -498,8 +509,8 @@ class VoiceKeyboardService : InputMethodService(), KeyboardView.Listener {
         // handler; the compute provider runs on the worker (list/parse work),
         // every UI hop goes over postToMain. Seams injected (CorrectionWiringTest).
         corrWorker = java.util.concurrent.Executors.newSingleThreadExecutor()
-        val corrMain = android.os.Handler(android.os.Looper.getMainLooper())
-        corrScheduler = CorrScheduler(corrWorker!!, corrMain)
+        corrMain = android.os.Handler(android.os.Looper.getMainLooper())
+        corrScheduler = CorrScheduler(corrWorker!!, corrMain!!)
         corrWiring = CorrectionWiring(
             compute = { region -> corrComputeRegion(region) },
             editor = {
@@ -508,7 +519,7 @@ class VoiceKeyboardService : InputMethodService(), KeyboardView.Listener {
             dictationIdle = { coordinator?.state == de.voicekeyboard.dictation.DictationState.IDLE },
             schedule = corrScheduler!!::schedule,
             cancelScheduled = corrScheduler!!::cancel,
-            postToMain = { corrMain.post(it) },
+            postToMain = { corrMain!!.post(it) },
             onRowUpdate = { original, corrected, hasSuggestion, enabled ->
                 // T23l (§14.6): in ALL_ACTIVE the endonym moves from the space bar
                 // into the correction row as a prefix tag ("DE").
@@ -520,6 +531,41 @@ class VoiceKeyboardService : InputMethodService(), KeyboardView.Listener {
                 rootView?.setCorrection(original, corrected, hasSuggestion, enabled)
             },
             onUndoMode = { hasUndoLevel -> rootView?.setWandUndoMode(hasUndoLevel) },
+        )
+        // T24d (PLAN_V0147 §17.1): U2 preheat state machine — the ONE owner of
+        // the on-demand TEXT engine lifecycle; every condition injected (no
+        // direct store/pref/system access in the pure class).
+        corrWiring!!.u2Upgrade = { region, deliver -> u2ComputeUpgrade(region, deliver) }
+        u2Preheat = de.voicekeyboard.correct.U2Preheat(
+            loadAndWarmUp = { loadU2EngineAndWarmUp() },
+            unload = {
+                u2Engine?.close()
+                u2Engine = null
+                u2EngineVariant = null
+            },
+            freeBytes = { availableMemoryBytes() },
+            setDownloaded = {
+                modelStore().statusQuick(u2TypingVariant()) ==
+                    de.voicekeyboard.model.ModelStatus.READY
+            },
+            eligibleField = { corrFieldEligibleNow },
+            correctionSwitchOn = { layoutPrefs().getBoolean(PREF_CORR_ROW_ENABLED, true) },
+            dictationIdle = {
+                coordinator?.state == de.voicekeyboard.dictation.DictationState.IDLE
+            },
+            asrLoading = { startingUp },
+            postToMain = { corrMain!!.post(it) },
+            runAsync = { corrWorker?.execute(it) },
+            scheduleIdleUnload = { ms, run ->
+                u2IdleRunnable?.let { corrMain?.removeCallbacks(it) }
+                val r = Runnable { run() }
+                u2IdleRunnable = r
+                corrMain?.postDelayed(r, ms)
+            },
+            cancelIdleUnload = {
+                u2IdleRunnable?.let { corrMain?.removeCallbacks(it) }
+                u2IdleRunnable = null
+            },
         )
     }
 
@@ -796,6 +842,10 @@ class VoiceKeyboardService : InputMethodService(), KeyboardView.Listener {
         // region anchor (initialSelStart; <0 falls back to 0 in the tracker).
         rootView?.setFieldInputType(info.inputType)
         corrWiring?.onFieldStart(info.initialSelStart)
+        // T24d (§17.1): session budget reset + ineligible-field unload
+        corrFieldEligibleNow = isCorrectionFieldEligible(info.inputType)
+        u2Preheat?.onSessionStart()
+        if (!corrFieldEligibleNow) u2Preheat?.onIneligibleField()
         // T23l: re-resolve the ALL_ACTIVE space label (pref/config may have changed).
         rootView?.keyboardView?.invalidate()
         updateStatus()
@@ -827,6 +877,10 @@ class VoiceKeyboardService : InputMethodService(), KeyboardView.Listener {
 
     override fun onDestroy() {
         // T23g: correction worker down with the service (no leaked thread).
+        // T24d: the U2 engine unloads FIRST (its unload runs on the worker).
+        u2Preheat?.shutdown()
+        u2Engine?.close()
+        u2Engine = null
         corrWiring = null
         corrScheduler = null
         corrWorker?.shutdownNow()
@@ -1244,6 +1298,8 @@ class VoiceKeyboardService : InputMethodService(), KeyboardView.Listener {
                     ?: LanguageModePolicy.VALUE_CURRENT
             },
             corrCounters = { CorrCounters },
+            // T24e (🐞: u2_state): preheat state as a CODE (rule 9).
+            u2State = { u2Preheat?.state?.name },
         )
         // Rule 9: the export text is NEVER logged — only format/status.
         val text = de.voicekeyboard.debug.DebugInfoFormatter.format(snapshot)
@@ -1919,6 +1975,7 @@ class VoiceKeyboardService : InputMethodService(), KeyboardView.Listener {
         val ic = currentInputConnection ?: return
         ic.commitText(text, 1)
         corrWiring?.feedText(text) // T23g (§4): typed-region feed (emoji path too)
+        u2Preheat?.onTextKey() // T24d (§17.1): text-committing key (NOT Enter/mic)
     }
 
     override fun onAction(action: String) {
@@ -1936,6 +1993,7 @@ class VoiceKeyboardService : InputMethodService(), KeyboardView.Listener {
             KeyActions.SPACE -> {
                 ic.commitText(" ", 1)
                 corrWiring?.feedText(" ") // T23g: separator -> immediate compute
+                u2Preheat?.onTextKey() // T24d: space commits text too
             }
             KeyActions.ENTER -> {
                 performEditorAction(currentInputEditorInfo)
@@ -2078,6 +2136,76 @@ class VoiceKeyboardService : InputMethodService(), KeyboardView.Listener {
             return
         }
         applyLanguage(next)
+    }
+
+    /** T24d (Gleis 3): the U2 set of the CURRENT typing language. */
+    private fun u2TypingVariant(): de.voicekeyboard.model.ModelVariant =
+        if (currentLanguage().startsWith("en")) {
+            de.voicekeyboard.model.ModelVariant.BART_SPELLING_EN
+        } else {
+            de.voicekeyboard.model.ModelVariant.BART_SPELLING_DE
+        }
+
+    /** T24d (§17.1): device free memory (RAM guard source). */
+    private fun availableMemoryBytes(): Long {
+        val info = android.app.ActivityManager.MemoryInfo()
+        (getSystemService(android.content.Context.ACTIVITY_SERVICE) as android.app.ActivityManager)
+            .getMemoryInfo(info)
+        return info.availMem
+    }
+
+    /**
+     * T24d (§17.1): load + ONE dummy 8-word warm-up inference on the worker.
+     * The warm-up text is a FIXED constant (no user data, rule 9).
+     */
+    private fun loadU2EngineAndWarmUp() {
+        val variant = u2TypingVariant()
+        val dir = modelStore().modelDir(variant)
+        val engine = de.voicekeyboard.correct.BartCorrectEngine(
+            graphsLoader = { de.voicekeyboard.correct.BartOrtGraphs.load(it) },
+            tokenizer = de.voicekeyboard.correct.BartTokenizers.fromModelDir(dir),
+        )
+        engine.load(dir)
+        engine.correct("ein kleiner warmup satz mit genau acht woertern")
+        u2Engine = engine
+        u2EngineVariant = variant
+    }
+
+    /**
+     * T24d: asynchronous U2 upgrade of the correction row — the LIST result
+     * shows IMMEDIATELY (never blocking); when the TEXT engine is READY and
+     * its output passes the §6 substitution guard, the row upgrades in place
+     * (only while the region is still current). The wand press applies
+     * whatever suggestion is current — list OR upgraded (§17.1).
+     */
+    private fun u2ComputeUpgrade(region: String, deliver: (String?) -> Unit) {
+        val engine = u2Engine
+        val variant = u2EngineVariant
+        if (engine == null || variant == null || u2Preheat?.isReady != true) {
+            corrMain?.post { deliver(null) }
+            return
+        }
+        // language switch mid-session: the engine no longer matches the typing
+        // language — no upgrade until the next session (documented T24d scope)
+        if (variant != u2TypingVariant()) {
+            corrMain?.post { deliver(null) }
+            return
+        }
+        corrWorker?.execute {
+            val out = runCatching { engine.correct(region) }.getOrNull()
+            val plan = out?.let { result ->
+                runCatching {
+                    de.voicekeyboard.correct.substitutionPlan(region, result.output)
+                }.getOrNull()
+            }
+            val text = if (plan is de.voicekeyboard.correct.GuardDecision.Substitutions) {
+                out?.output
+            } else {
+                if (plan is de.voicekeyboard.correct.GuardDecision.Reject) CorrCounters.u2GuardRejects++
+                null
+            }
+            corrMain?.post { deliver(text) }
+        }
     }
 
     /**
@@ -2638,6 +2766,10 @@ object CorrCounters {
     var lang = ""
     var regionLenBucket = 0
 
+    /** T24e (🐞: u2_upgrades/u2_guard_rejects): TEXT-engine counters. */
+    var u2Upgrades = 0
+    var u2GuardRejects = 0
+
     fun reset() {
         rowsShown = 0
         applied = 0
@@ -2646,6 +2778,8 @@ object CorrCounters {
         verifyFail = 0
         lang = ""
         regionLenBucket = 0
+        u2Upgrades = 0
+        u2GuardRejects = 0
     }
 
     /** T23h (§8): typed-region length bucket for the export —
@@ -2819,6 +2953,15 @@ internal class CorrectionWiring(
     /** Corrected region of the LAST verified compute — what the wand applies. */
     private var suggestion: String? = null
 
+    /**
+     * T24d (PLAN_V0147 §17): optional ASYNCHRONOUS U2 upgrade of the row —
+     * the service injects it (engine + substitution guard on the worker);
+     * the deliver callback runs ON MAIN and upgrades the row ONLY while the
+     * region is still current (list result shows immediately, the U2
+     * result never blocks, §17.1).
+     */
+    internal var u2Upgrade: ((region: String, deliver: (String?) -> Unit) -> Unit)? = null
+
     /** VK-3 (REVIEW_V0147): the region the suggestion was PUBLISHED for —
      *  APPLY is bound to it; a buffer change voids the suggestion
      *  (a feed raced the debounce) instead of replacing newer text. */
@@ -2957,5 +3100,19 @@ internal class CorrectionWiring(
         if (has) CorrCounters.rowsShown++
         onRowUpdate(region, if (has) corrected else null, has, has && dictationIdle())
         onUndoMode(replacer.hasUndoLevel)
+        // T24d (§17): the LIST result shows immediately; when the TEXT engine
+        // is READY, its guarded output upgrades the same row asynchronously —
+        // the wand press then applies the upgraded suggestion.
+        if (has) {
+            u2Upgrade?.invoke(region) { upgraded ->
+                if (upgraded != null && upgraded != suggestion &&
+                    suggestionForRegion == region && gen == generation
+                ) {
+                    suggestion = upgraded
+                    CorrCounters.u2Upgrades++
+                    onRowUpdate(region, upgraded, true, dictationIdle())
+                }
+            }
+        }
     }
 }

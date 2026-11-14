@@ -15,9 +15,10 @@ import org.robolectric.annotation.Config
  * (docs/PLAN_GEOMETRY_V0149.md §2): symbol grid with stable ⌫/⏎ slots —
  * across ALL 15 assets:
  *
- *  - Σ per row [10, 10, 10, 13] ± 0.001 (unit grid; 1u = 108 px);
- *  - r1 = NEW margin 0.5 (V0.1.49 half-indent like the letter home row) +
- *    10 characters à 0.85; ⌫ EXACTLY 1× at the r1 END, width 1.0;
+ *  - Σ per row [10, 11.25, 10, 13] ± 0.001 (unit grid; 1u = 96 px at Σ 11.25);
+ *  - r1 = margin 0.5 (half-indent like the letter home row) +
+ *    10 characters à 1.0; ⌫ EXACTLY 1× at the r1 END, width 0.75
+ *    (V0.1.50: three quarters of a character — == 0.75 × character width);
  *  - r2 = NEW toggle 1.0 (V0.1.49 §4.7: symbols '#+=' → layer-symbols-shift,
  *    symbolsShift '?123' → layer-symbols; NO ⇧ anymore) + 10 × 0.75 +
  *    ⏎ EXACTLY 1× at the r2 END, width 1.5;
@@ -79,24 +80,28 @@ class SymbolGridAcrossAssetsTest {
             for (layerName in listOf("symbols", "symbolsShift")) {
                 val rows = asset.layers.getValue(layerName).rows
                 assertEquals("$id/$layerName: 4 rows", 4, rows.size)
-                // (a) unit grid Σ=[10,10,10,13].
-                for ((i, expect) in listOf(10.0, 10.0, 10.0, 13.0).withIndex()) {
+                // (a) unit grid Σ=[10,11.25,10,13] (V0.1.50).
+                for ((i, expect) in listOf(10.0, 11.25, 10.0, 13.0).withIndex()) {
                     assertEquals("$id/$layerName Σ r$i", expect, rows[i].sumOf { it.width }, 0.001)
                 }
-                // (b) V0.1.49: r1 = margin 0.5 + 10 characters à 0.85; ⌫ EXACTLY
-                //     1× at the r1 END, width 1.0 (letter slot).
+                // (b) V0.1.50: r1 = margin 0.5 + 10 characters à 1.0; ⌫ EXACTLY
+                //     1× at the r1 END, width 0.75 (== 0.75 × character width).
                 val r1 = rows[1]
-                assertEquals("$id/$layerName r1[0] is the margin (V0.1.49)", KeyKind.MARGIN, r1[0].kind)
+                assertEquals("$id/$layerName r1[0] is the margin", KeyKind.MARGIN, r1[0].kind)
                 assertEquals("$id/$layerName r1 margin 0.5", 0.5, r1[0].width, 0.0001)
                 val r1text = r1.filter { it.kind == KeyKind.TEXT }
                 assertEquals("$id/$layerName r1 = 10 direct cells", 10, r1text.size)
                 for (k in r1text) {
-                    assertEquals("$id/$layerName r1 '${k.label}' at 0.85 (V0.1.49)", 0.85, k.width, 0.0001)
+                    assertEquals("$id/$layerName r1 '${k.label}' at 1.0 (V0.1.50)", 1.0, k.width, 0.0001)
                 }
                 val bs = r1.filter { it.kind == KeyKind.ACTION && it.value == KeyActions.BACKSPACE }
                 assertEquals("$id/$layerName ⌫ exactly 1x", 1, bs.size)
                 assertTrue("$id/$layerName ⌫ at the r1 END", r1.last() === bs.single())
-                assertEquals("$id/$layerName ⌫ width 1.0", 1.0, bs.single().width, 0.0001)
+                assertEquals("$id/$layerName ⌫ width 0.75 (V0.1.50)", 0.75, bs.single().width, 0.0001)
+                assertEquals(
+                    "$id/$layerName ⌫ == 0.75 × character width (V0.1.50)",
+                    0.75 * r1text.first().width, bs.single().width, 1e-6,
+                )
                 // (c) V0.1.49: Z2[0] is the TOGGLE (1.0) — symbols '#+=' →
                 //     layer-symbols-shift, symbolsShift '?123' → layer-symbols;
                 //     ⇧ is GONE from both symbol layers. ⏎ EXACTLY 1× at the r2

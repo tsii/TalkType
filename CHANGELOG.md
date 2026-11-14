@@ -5,6 +5,22 @@ HANDOFF.md, state/progress.md and the review documents; kept current from now on
 `versionCode` in parentheses. APKs older than the current dist rotation are removed
 from `dist/` (checksums of the last rotations: `dist/SHA256SUMS-*.txt`).
 
+## [0.1.50] - 2026-11-14 (versionCode 50) — geometry correction: M under the i|o gap
+### Fixed (user finding on 0.1.49)
+- **`M` sits centred under the gap between `i` and `o`** again: row 3 letters are back to the
+  full key width (1.0) and the flanks are symmetric (`shift` 1.5 + 7 × 1.0 + `enter` 1.5,
+  Σ 10) ⇒ M centre = 864 px @1080 = exactly the `i`/`o` boundary (measured on the emulator).
+- **Enter is narrower**: 1.5 units = 162 px instead of 2.0 = 216 px, identical to `shift`.
+- **Backspace in the home row is much narrower now**: 0.75 × letter width (79 px instead of
+  162 px) — narrower than a normal key, as requested; the half-key indent of row 2 is kept and
+  the letters grow back to 1.0 (105.37 px because the row sum is 10.25).
+- Symbol pages follow the same rules (row 1 = 0.5 + 10 × 1.0 + ⌫ 0.75; enter stays 1.5).
+### Tests
+- `GeometryV0149Test` extended to 8 checks — new `mCenteredUnderTheIAndOGap` (M centre == 864 px
+  ±0.5 from the real `KeyboardModel`), `⌫ == 0.75 × letter width` (±1e-6), `enter == shift`;
+  `LetterRowAlignmentAcrossAssetsTest`, `LayoutCompletenessTest`, `SymbolGridAcrossAssetsTest`
+  reformulated. Debug suite **945 / 0** (`--rerun-tasks`, `/tmp/v150_debug/`).
+
 ## [0.1.49] - 2026-11-14 (versionCode 49) — keyboard geometry from the reference layout
 ### Changed
 - **Rows 0–2 follow the reference keyboard geometry** (plan `docs/PLAN_GEOMETRY_V0149.md`,

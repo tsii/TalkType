@@ -1,42 +1,50 @@
 #!/usr/bin/env python3
-"""V0.1.49 geometry migration (docs/PLAN_GEOMETRY_V0149.md §1/§2/§3/§4.9).
+"""V0.1.50 geometry correction (supersedes docs/PLAN_GEOMETRY_V0149.md §1/§2).
 
-Applies the AOSP-style row realignment to ALL 15 layout assets. The tables
-below are the ONLY source of truth; cs-cz and ru-ru are their own table rows
-(§3). ONE backspace in Z1 (§0, variant A — NOT two).
+User correction to V0.1.49: the M of the third letter row must sit at the
+i|o GAP of the first row (M center on the i|o boundary = 8.0 units = 864 px
+at Σ 10 and unit 108 px), NOT centered under the i. Therefore the enter
+key becomes as slim as the shift key, and the Z1 backspace shrinks to
+THREE QUARTERS of a letter width (0.75). The tables below are the ONLY
+source of truth; cs-cz and ru-ru are their own table rows.
 
 Letter layers (base+shift):
   - 13 standard assets (da-dk de-de el-gr en-us es-es fi-fi fr-fr it-it
     nl-nl pl-pl pt-pt sv-se tr-tr):
-      Z1 = m-left 0.500 + 9 × 0.888889 + ⌫ 1.500   (px: 54 + 9×96 + 162)
-      Z2 = ⇧ 1.500 + 7 × 0.928571 + ⏎ 2.000       (px: 162 + 7×100.29 + 216)
-  - cs-cz: Z1 = 0.500 + 10 × 0.800 + ⌫ 1.500;  Z2 = ⇧ 2.000 + 6 × 1.000 + ⏎ 2.000
-  - ru-ru: Z0 UNTOUCHED; Z1 = 0.250 + 11 × 0.772727 + ⌫ 1.250 (Σ 10; the
-    old m-right margin is REPLACED by the backspace key); Z2 = ⇧ 1.000 +
-    10 × 0.900 + ⏎ 2.000 (Σ 12 → ⏎ = 180 px); Z3 untouched (already
-    symbols|language|emoji|space|period|mic with space 6.5).
-  - period (id 'period', F54 menu , ! ? : ; ( )) moves from Z2 to Z3,
-    inserted between space and mic; space 7.5 -> 6.5 (Σ stays 13).
+      Z0 = 10 × 1.0 (unchanged)
+      Z1 = m-left 0.500 + 9 × 1.000 + ⌫ 0.750   (Σ 10.25; px unit 105.37)
+      Z2 = ⇧ 1.500 + 7 × 1.000 + ⏎ 1.500       (Σ 10 → M center 8.0u
+                                                   = 864 px = i|o gap;
+                                                   ⏎ == ⇧, 162 px each)
+  - cs-cz: Z0 = 10 × 1.0; Z1 = m-left 0.500 + 10 × 1.000 + ⌫ 0.750
+      (Σ 11.25); Z2 = ⇧ 2.000 + 6 × 1.000 + ⏎ 2.000 (Σ 10, unchanged).
+  - ru-ru: Z0 UNTOUCHED (13 keys, Σ 10); Z1 = m-left 0.500 + 11 × 1.000 +
+      ⌫ 0.750 (Σ 12.25); Z2 = ⇧ 1.500 + 10 × 0.900 + ⏎ 1.500 (Σ 12);
+      Z3 untouched (already symbols|language|emoji|space|period|mic 6.5).
+  - period (id 'period', F54 menu , ! ? : ; ( )) sits in Z3 between space
+    and mic (space 7.5 -> 6.5, Σ stays 13) — carried over from V0.1.49.
 
 Symbol layers (symbols+symbolsShift, all 15 identical):
-      Z1 = NEW margin 0.500 + 10 × 0.850 + ⌫ 1.000
-      Z2 = NEW toggle 1.000 + 10 × 0.750 + ⏎ 1.500   (no shift key anymore)
+      Z0 = 10 × 1.0 (unchanged)
+      Z1 = m-left 0.500 + 10 × 1.000 + ⌫ 0.750  (Σ 11.25)
+      Z2 = toggle 1.000 + 10 × 0.750 + ⏎ 1.500 (Σ 10, unchanged)
       Z3 untouched (base|language|emoji|space 7.5|mic)
   - toggle keys: symbols Z2[0]  = {id symbols-toggle, label #+=, width 1.0,
-    action layer-symbols-shift}  <- NEW action; the LayoutParser accepts it
-    only from Teil B on (LAYER_SYMBOLS_ALT in KeyActions.ALL) — expected,
-    documented intermediate state;
-    symbolsShift Z2[0] = {id symbols-back, label ?123, width 1.0,
-    action layer-symbols}.
+    action layer-symbols-shift}; symbolsShift Z2[0] = {id symbols-back,
+    label ?123, width 1.0, action layer-symbols}.
+
+Mnemonic: ⌫ = 0.75 × letter width (never 1.5, never 1.0); ⏎ = ⇧ on ALL
+letter layers (symmetric wings).
 
 Invariants (HARD-asserted per asset+layer):
   - character inventory (TEXT values ∪ labels ∪ alternates) before == after
     — nothing lost, nothing invented (the period only MOVES Z2 -> Z3 within
     the same layer; margins/actions carry no characters);
-  - Σ per row == target ± 0.001 (letters 10/10/10[ru 12]/13, symbols
-    10/10/10/13);
+  - Σ per row == target ± 0.001 (letters 10/10.25/10/13, cs 10/11.25/10/13,
+    ru 10/12.25/12/13; symbols 10/11.25/10/13);
   - layer-wide unique key ids; letter Z3 ids == [symbols,language,emoji,
     space,period,mic], symbol Z3 ids == [base,language,emoji,space,mic];
+  - ⏎ == ⇧ on every letter layer (symmetric wings, table property);
   - output format == input format (2-space JSON, one key per line):
     the UNMODIFIED layers section must re-render byte-identically BEFORE
     the migration is applied (format guard) — hence idempotency is proven
@@ -57,15 +65,17 @@ ALL = SEVEN + [CS, RU]
 LAYER_NAMES = ["base", "shift", "symbols", "symbolsShift"]
 F54 = [",", "!", "?", ":", ";", "(", ")"]
 
-# §1/§3 letter tables, per asset class:
+# V0.1.50 letter tables, per asset class:
 # (z1_margin, z1_letter, z1_backspace, n_z1, z2_shift, z2_letter, n_z2, z2_enter)
+# Mnemonic: ⌫ = 0.75 × letter; ⏎ == ⇧ (symmetric wings).
 LETTER = {
-    "std": (0.5, 0.888889, 1.5, 9, 1.5, 0.928571, 7, 2.0),
-    "cs":  (0.5, 0.8, 1.5, 10, 2.0, 1.0, 6, 2.0),
-    "ru":  (0.25, 0.772727, 1.25, 11, 1.0, 0.9, 10, 2.0),
+    "std": (0.5, 1.0, 0.75, 9, 1.5, 1.0, 7, 1.5),
+    "cs":  (0.5, 1.0, 0.75, 10, 2.0, 1.0, 6, 2.0),
+    "ru":  (0.5, 1.0, 0.75, 11, 1.5, 0.9, 10, 1.5),
 }
-# §2 symbol table (all 15 identical)
-SYM = {"margin": 0.5, "z1_letter": 0.85, "backspace": 1.0, "toggle": 1.0,
+assert all(row[7] == row[4] for row in LETTER.values()), "⏎ == ⇧ on letter layers"
+# V0.1.50 symbol table (all 15 identical): ⌫ = 0.75 × letter width
+SYM = {"margin": 0.5, "z1_letter": 1.0, "backspace": 0.75, "toggle": 1.0,
        "z2_letter": 0.75, "enter": 1.5}
 
 TOGGLE_FWD = {"id": "symbols-toggle", "label": "#+=", "width": 1.0,
@@ -113,12 +123,18 @@ def letter_class(asset_id):
 
 
 def rebuild_letter_layer(rows, cls):
-    """§1/§3: Z1 backspace row, Z2 enter row, Z3 period footer."""
+    """V0.1.50 letter rows: Z0 10×1.0, Z1 margin+letters+⌫ 0.75, Z2 ⇧+letters+⏎==⇧."""
     m, l1, bs, n1, sh, l2, n2, en = LETTER[cls]
     r1, r2, r3 = rows[1], rows[2], rows[3]
 
-    # --- Z0 untouched (Σ hard-asserted in check_invariants) ---
-    # --- Z1: margin + n1 letters + ONE backspace (§0 variant A) ---
+    # --- Z0: 10 × 1.0 for std/cs; ru untouched (13 keys, Σ 10) ---
+    if cls != "ru":
+        z0_letters = text_keys(rows[0])
+        assert len(z0_letters) == 10, f"Z0 needs 10 letters (has {len(z0_letters)})"
+        for k in z0_letters:
+            set_width(k, 1.0)
+
+    # --- Z1: margin 0.5 + n1 letters à 1.0 + ONE ⌫ 0.75 ---
     assert r1[0].get("kind") == "margin", "Z1[0] must be a margin key"
     set_width(r1[0], m)
     letters = text_keys(r1)
@@ -138,7 +154,7 @@ def rebuild_letter_layer(rows, cls):
     set_width(r1[-1], bs)
     assert sum(1 for k in r1 if is_action(k, "backspace")) == 1, "exactly ONE ⌫ in Z1"
 
-    # --- Z2: shift + n2 letters + enter; period moves to the footer ---
+    # --- Z2: ⇧ + n2 letters + ⏎; period moves to the footer ---
     assert is_action(r2[0], "shift"), "Z2[0] must be the shift key"
     set_width(r2[0], sh)
     assert is_action(r2[-1], "enter"), "Z2 must end with the enter key"
@@ -178,10 +194,10 @@ def rebuild_letter_layer(rows, cls):
 
 
 def rebuild_symbol_layer(rows, layer_name):
-    """§2: Z1 margin + 10 × 0.85 + ⌫ 1.0; Z2 toggle + 10 × 0.75 + ⏎ 1.5."""
+    """V0.1.50 symbol rows: Z1 margin + 10 × 1.0 + ⌫ 0.75; Z2 toggle + 10 × 0.75 + ⏎ 1.5."""
     r1, r2, r3 = rows[1], rows[2], rows[3]
 
-    # --- Z0 untouched; Z1: NEW left margin (idempotent) ---
+    # --- Z0 untouched (10 × 1.0, Σ hard-asserted); Z1: left margin ---
     if r1[0].get("kind") != "margin":
         r1.insert(0, {"id": "m-left", "kind": "margin", "width": num(SYM["margin"])})
     else:
@@ -222,20 +238,22 @@ def rebuild_symbol_layer(rows, layer_name):
 def check_invariants(asset_id, doc):
     """Σ per row + unique ids + footer ids — HARD, after the migration."""
     cls = letter_class(asset_id)
+    letter_targets = {
+        "std": [10.0, 10.25, 10.0, 13.0],
+        "cs":  [10.0, 11.25, 10.0, 13.0],
+        "ru":  [10.0, 12.25, 12.0, 13.0],
+    }[cls]
+    symbol_targets = [10.0, 11.25, 10.0, 13.0]
     for name in LAYER_NAMES:
         rows = doc["layers"][name]["rows"]
         ids = [k["id"] for row in rows for k in row]
         assert len(ids) == len(set(ids)), f"{asset_id}/{name}: duplicate key ids"
         is_letter = name in ("base", "shift")
+        targets = letter_targets if is_letter else symbol_targets
         for r in range(4):
-            if r == 3:
-                target = 13.0
-            elif is_letter and cls == "ru" and r == 2:
-                target = 12.0
-            else:
-                target = 10.0
             s = sum(k["width"] for k in rows[r])
-            assert abs(s - target) < 0.001, f"{asset_id}/{name}: Σ row {r} = {s} != {target}"
+            assert abs(s - targets[r]) < 0.001, \
+                f"{asset_id}/{name}: Σ row {r} = {s} != {targets[r]}"
         expected_footer = (["symbols", "language", "emoji", "space", "period", "mic"]
                            if is_letter else
                            ["base", "language", "emoji", "space", "mic"])
@@ -311,8 +329,9 @@ def main():
         label = {"std": "standard table (§1)", "cs": "cs-cz exception (§3)",
                  "ru": "ru-ru exception (§3)"}[cls]
         report.append(f"{asset_id}: OK — {label}")
-    print(f"migrated {len(ALL)} assets — letter Σ 10/10/10[ru 12]/13, "
-          f"symbol Σ 10/10/10/13; inventory/sums/ids hard-asserted")
+    print(f"migrated {len(ALL)} assets — letter Σ 10/10.25/10/13 "
+          f"(cs 10/11.25/10/13, ru 10/12.25/12/13), symbol Σ 10/11.25/10/13; "
+          f"inventory/sums/ids hard-asserted")
     print("\n".join(report))
 
 

@@ -117,89 +117,89 @@
           {
             "id": "m-left",
             "kind": "margin",
-            "width": 0.25
+            "width": 0.5
           },
           {
             "id": "hard-sign",
             "label": "ъ",
-            "width": 0.772727,
+            "width": 1,
             "kind": "text",
             "value": "ъ"
           },
           {
             "id": "ef",
             "label": "ф",
-            "width": 0.772727,
+            "width": 1,
             "kind": "text",
             "value": "ф"
           },
           {
             "id": "yeru",
             "label": "ы",
-            "width": 0.772727,
+            "width": 1,
             "kind": "text",
             "value": "ы"
           },
           {
             "id": "ve",
             "label": "в",
-            "width": 0.772727,
+            "width": 1,
             "kind": "text",
             "value": "в"
           },
           {
             "id": "a-cyr",
             "label": "а",
-            "width": 0.772727,
+            "width": 1,
             "kind": "text",
             "value": "а"
           },
           {
             "id": "pe",
             "label": "п",
-            "width": 0.772727,
+            "width": 1,
             "kind": "text",
             "value": "п"
           },
           {
             "id": "er",
             "label": "р",
-            "width": 0.772727,
+            "width": 1,
             "kind": "text",
             "value": "р"
           },
           {
             "id": "o-cyr",
             "label": "о",
-            "width": 0.772727,
+            "width": 1,
             "kind": "text",
             "value": "о"
           },
           {
             "id": "el",
             "label": "л",
-            "width": 0.772727,
+            "width": 1,
             "kind": "text",
             "value": "л"
           },
           {
             "id": "de",
             "label": "д",
-            "width": 0.772727,
+            "width": 1,
             "kind": "text",
             "value": "д"
           },
           {
             "id": "zhe",
             "label": "ж",
-            "width": 0.772727,
+            "width": 1,
             "kind": "text",
             "value": "ж"
           },
           {
             "id": "backspace",
             "label": "⌫",
-            "width": 1.25,
+            "width": 0.75,
             "kind": "action",
             "value": "backspace"
           }
@@ -208,7 +208,7 @@
           {
             "id": "shift",
             "label": "⇧",
-            "width": 1,
+            "width": 1.5,
             "kind": "action",
             "value": "shift"
           },
@@ -285,7 +285,7 @@
           {
             "id": "enter",
             "label": "⏎",
-            "width": 2,
+            "width": 1.5,
             "kind": "action",
             "value": "enter"
           }
@@ -454,89 +454,89 @@
           {
             "id": "m-left",
             "kind": "margin",
-            "width": 0.25
+            "width": 0.5
           },
           {
             "id": "hard-sign",
             "label": "Ъ",
-            "width": 0.772727,
+            "width": 1,
             "kind": "text",
             "value": "Ъ"
           },
           {
             "id": "ef",
             "label": "Ф",
-            "width": 0.772727,
+            "width": 1,
             "kind": "text",
             "value": "Ф"
           },
           {
             "id": "yeru",
             "label": "Ы",
-            "width": 0.772727,
+            "width": 1,
             "kind": "text",
             "value": "Ы"
           },
           {
             "id": "ve",
             "label": "В",
-            "width": 0.772727,
+            "width": 1,
             "kind": "text",
             "value": "В"
           },
           {
             "id": "a-cyr",
             "label": "А",
-            "width": 0.772727,
+            "width": 1,
             "kind": "text",
             "value": "А"
           },
           {
             "id": "pe",
             "label": "П",
-            "width": 0.772727,
+            "width": 1,
             "kind": "text",
             "value": "П"
           },
           {
             "id": "er",
             "label": "Р",
-            "width": 0.772727,
+            "width": 1,
             "kind": "text",
             "value": "Р"
           },
           {
             "id": "o-cyr",
             "label": "О",
-            "width": 0.772727,
+            "width": 1,
             "kind": "text",
             "value": "О"
           },
           {
             "id": "el",
             "label": "Л",
-            "width": 0.772727,
+            "width": 1,
             "kind": "text",
             "value": "Л"
           },
           {
             "id": "de",
             "label": "Д",
-            "width": 0.772727,
+            "width": 1,
             "kind": "text",
             "value": "Д"
           },
           {
             "id": "zhe",
             "label": "Ж",
-            "width": 0.772727,
+            "width": 1,
             "kind": "text",
             "value": "Ж"
           },
           {
             "id": "backspace",
             "label": "⌫",
-            "width": 1.25,
+            "width": 0.75,
             "kind": "action",
             "value": "backspace"
           }
@@ -545,7 +545,7 @@
           {
             "id": "shift",
             "label": "⇧",
-            "width": 1,
+            "width": 1.5,
             "kind": "action",
             "value": "shift"
           },
@@ -622,7 +622,7 @@
           {
             "id": "enter",
             "label": "⏎",
-            "width": 2,
+            "width": 1.5,
             "kind": "action",
             "value": "enter"
           }
@@ -766,7 +766,7 @@
           {
             "id": "hyphen",
             "label": "-",
-            "width": 0.85,
+            "width": 1,
             "kind": "text",
             "value": "-",
             "alternates": [
@@ -777,7 +777,7 @@
           {
             "id": "plus",
             "label": "+",
-            "width": 0.85,
+            "width": 1,
             "kind": "text",
             "value": "+",
             "alternates": [
@@ -787,7 +787,7 @@
           {
             "id": "slash",
             "label": "/",
-            "width": 0.85,
+            "width": 1,
             "kind": "text",
             "value": "/",
             "alternates": [
@@ -798,7 +798,7 @@
           {
             "id": "paren-left",
             "label": "(",
-            "width": 0.85,
+            "width": 1,
             "kind": "text",
             "value": "(",
             "alternates": [
@@ -810,7 +810,7 @@
           {
             "id": "paren-right",
             "label": ")",
-            "width": 0.85,
+            "width": 1,
             "kind": "text",
             "value": ")",
             "alternates": [
@@ -822,35 +822,35 @@
           {
             "id": "amp",
             "label": "&",
-            "width": 0.85,
+            "width": 1,
             "kind": "text",
             "value": "&"
           },
           {
             "id": "at",
             "label": "@",
-            "width": 0.85,
+            "width": 1,
             "kind": "text",
             "value": "@"
           },
           {
             "id": "equals",
             "label": "=",
-            "width": 0.85,
+            "width": 1,
             "kind": "text",
             "value": "="
           },
           {
             "id": "hash",
             "label": "#",
-            "width": 0.85,
+            "width": 1,
             "kind": "text",
             "value": "#"
           },
           {
             "id": "percent",
             "label": "%",
-            "width": 0.85,
+            "width": 1,
             "kind": "text",
             "value": "%",
             "alternates": [
@@ -860,7 +860,7 @@
           {
             "id": "backspace",
             "label": "⌫",
-            "width": 1,
+            "width": 0.75,
             "kind": "action",
             "value": "backspace"
           }
@@ -1095,77 +1095,77 @@
           {
             "id": "hyphen",
             "label": "_",
-            "width": 0.85,
+            "width": 1,
             "kind": "text",
             "value": "_"
           },
           {
             "id": "slash",
             "label": "|",
-            "width": 0.85,
+            "width": 1,
             "kind": "text",
             "value": "|"
           },
           {
             "id": "paren-left",
             "label": "<",
-            "width": 0.85,
+            "width": 1,
             "kind": "text",
             "value": "<"
           },
           {
             "id": "paren-right",
             "label": ">",
-            "width": 0.85,
+            "width": 1,
             "kind": "text",
             "value": ">"
           },
           {
             "id": "at",
             "label": "€",
-            "width": 0.85,
+            "width": 1,
             "kind": "text",
             "value": "€"
           },
           {
             "id": "amp",
             "label": "$",
-            "width": 0.85,
+            "width": 1,
             "kind": "text",
             "value": "$"
           },
           {
             "id": "percent",
             "label": "‰",
-            "width": 0.85,
+            "width": 1,
             "kind": "text",
             "value": "‰"
           },
           {
             "id": "plus",
             "label": "±",
-            "width": 0.85,
+            "width": 1,
             "kind": "text",
             "value": "±"
           },
           {
             "id": "equals",
             "label": "×",
-            "width": 0.85,
+            "width": 1,
             "kind": "text",
             "value": "×"
           },
           {
             "id": "hash",
             "label": "£",
-            "width": 0.85,
+            "width": 1,
             "kind": "text",
             "value": "£"
           },
           {
             "id": "backspace",
             "label": "⌫",
-            "width": 1,
+            "width": 0.75,
             "kind": "action",
             "value": "backspace"
           }

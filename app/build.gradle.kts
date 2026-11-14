@@ -11,8 +11,8 @@ android {
         applicationId = "de.voicekeyboard"
         minSdk = 29
         targetSdk = 36
-        versionCode = 49
-        versionName = "0.1.49"
+        versionCode = 50
+        versionName = "0.1.50"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         // clearPackageData bewusst false: Ein Instrumented-Lauf darf einen echten

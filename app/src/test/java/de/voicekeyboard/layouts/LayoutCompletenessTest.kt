@@ -272,9 +272,10 @@ class LayoutCompletenessTest {
 
     /**
      * F27d→F36/V2 stock geometry as a standalone gate: all 15 assets carry
-     * base+shift the V2 target image — sums 10/10/10/13 (ru-ru r2: 12, D27), no
-     * ⌫ in r0, F40: ⌫ exactly 1x at the r1 END, @ exactly 1x in r2 before ⏎ (ru-ru:
-     * exception, no swap), letter block center 5u (ru-ru 6u).
+     * base+shift the V2 target image — sums 10/10.25/10/13 (cs 10/11.25/10/13,
+     * ru 10/12.25/12/13, V0.1.50), no ⌫ in r0, F40: ⌫ exactly 1x at the r1 END
+     * (width 0.75), @ exactly 1x in r2 before ⏎ as alternate (ru-ru:
+     * exception, no swap).
      */
     @Test
     fun `stock geometry holds for all 15 assets`() {
@@ -531,16 +532,14 @@ class LayoutCompletenessTest {
     }
 
     /**
-     * V0.1.49 (docs/PLAN_GEOMETRY_V0149.md §1/§3): base/shift carry the new row
-     * realignment — r0 = 10 letters at 1.0 (ru: 12-key full row, D27, untouched);
-     * r1 = margin 0.5 (ru 0.25) + letter block + ONE ⌫ 1.5 (ru 1.25) at the r1 END
-     * (§0 variant A — NOT two backspaces); r2 = ⇧ 1.5 (cs 2.0, ru 1.0) +
-     * letters 7 × 0.928571 (cs 6 × 1.0, ru 10 × 0.9) + ⏎ 2.0 (ru: Σ12 → 180 px,
-     * NOT 20 %); NO period in r2 anymore — it moves to the footer between
-     * space and mic (space 7.5→6.5, Σ stays 13). The T11 symmetry invariant
-     * (c[i]+c[n-1-i]=10) is GONE by design (⏎ 2.0 ≠ ⇧ 1.5) — the replacement
-     * alignment invariant (Z1 letter width == Z2 letter width ±0.05) lives in
-     * LetterRowAlignmentAcrossAssetsTest.
+     * V0.1.50 (correction of docs/PLAN_GEOMETRY_V0149.md §1/§3): base/shift
+     * carry the user-corrected row geometry — r0 = 10 letters at 1.0 (ru:
+     * 13-key full row, untouched); r1 = margin 0.5 + letter block à 1.0 + ONE
+     * ⌫ 0.75 (== 0.75 × letter width) at the r1 END; r2 = ⇧ 1.5 (cs 2.0,
+     * ru 1.5) + letters 7 × 1.0 (cs 6 × 1.0, ru 10 × 0.9) + ⏎ == ⇧ (symmetric
+     * wings); NO period in r2 anymore — it moves to the footer between
+     * space and mic (space 7.5→6.5, Σ stays 13). The M center of the standard
+     * r2 sits on the i|o gap of r0 (asserted in GeometryV0149Test).
      */
     private fun checkGeometry(parsed: LayoutAsset) {
         val isRu = parsed.id == "ru-ru"
@@ -548,18 +547,22 @@ class LayoutCompletenessTest {
         for (layerName in listOf("base", "shift")) {
             val rows = parsed.layers.getValue(layerName).rows
             if (rows.size < 4) {
-                fail("Asset '${parsed.id}' $layerName: fewer than 4 rows (V0.1.49 geometry)")
+                fail("Asset '${parsed.id}' $layerName: fewer than 4 rows (V0.1.50 geometry)")
             }
-            val expectSums = if (isRu) listOf(10.0, 10.0, 12.0, 13.0) else listOf(10.0, 10.0, 10.0, 13.0)
+            val expectSums = when {
+                isRu -> listOf(10.0, 12.25, 12.0, 13.0)
+                isCs -> listOf(10.0, 11.25, 10.0, 13.0)
+                else -> listOf(10.0, 10.25, 10.0, 13.0)
+            }
             val sums = rows.take(4).map { row -> row.sumOf { it.width } }
             for (i in expectSums.indices) {
                 if (kotlin.math.abs(sums[i] - expectSums[i]) > 0.001) {
                     fail("Asset '${parsed.id}' $layerName: row sum r$i=" +
-                        "${"%.5f".format(sums[i])}u != ${expectSums[i]}u (V0.1.49)")
+                        "${"%.5f".format(sums[i])}u != ${expectSums[i]}u (V0.1.50)")
                 }
             }
             // ⌫ stays out of r0 and r2 (the F40 rule keeps holding: ⌫ sits at
-            // the r1 END — now at width 1.5/1.25 instead of 1.0).
+            // the r1 END — now at width 0.75, three quarters of a letter).
             val bsR0 = rows[0].count { it.kind == KeyKind.ACTION && it.value == KeyActions.BACKSPACE }
             if (bsR0 != 0) fail("Asset '${parsed.id}' $layerName: r0 must carry NO backspace")
             val bsR2 = rows[2].count { it.kind == KeyKind.ACTION && it.value == KeyActions.BACKSPACE }
@@ -568,56 +571,54 @@ class LayoutCompletenessTest {
             val enterR3 = rows[3].count { it.kind == KeyKind.ACTION && it.value == KeyActions.ENTER }
             if (enterR2 != 1) fail("Asset '${parsed.id}' $layerName: enter $enterR2 times in r2 (expected 1)")
             if (enterR3 != 0) fail("Asset '${parsed.id}' $layerName: enter forbidden in r3")
-            // r1: margin 0.5 (ru 0.25) + letters + ONE ⌫ 1.5 (ru 1.25) at the END.
+            // r1: margin 0.5 + letters à 1.0 + ONE ⌫ 0.75 at the END.
             val r1 = rows[1]
-            val wantMargin = if (isRu) 0.25 else 0.5
-            if (r1[0].kind != KeyKind.MARGIN || kotlin.math.abs(r1[0].width - wantMargin) > 0.001) {
-                fail("Asset '${parsed.id}' $layerName: r1[0] must be margin $wantMargin (V0.1.49 §1/§3)")
+            if (r1[0].kind != KeyKind.MARGIN || kotlin.math.abs(r1[0].width - 0.5) > 0.001) {
+                fail("Asset '${parsed.id}' $layerName: r1[0] must be margin 0.5 (V0.1.50)")
             }
             if (r1.any { it.kind == KeyKind.TEXT && it.value == "@" }) {
                 fail("Asset '${parsed.id}' $layerName: r1 must carry NO @ key (@ → M menu / ru: period menu)")
             }
-            val bsR1 = r1.filter { it.kind == KeyKind.ACTION && it.value == KeyActions.BACKSPACE }
-            val wantBs = if (isRu) 1.25 else 1.5
-            if (bsR1.size != 1 || r1.last() !== bsR1[0] ||
-                kotlin.math.abs(bsR1[0].width - wantBs) > 0.001
-            ) {
-                fail("Asset '${parsed.id}' $layerName: ⌫ exactly 1x at the r1 END, width $wantBs expected (V0.1.49 §0 variant A)")
-            }
             val letters1 = r1.filter { it.kind == KeyKind.TEXT }
+            val bsR1 = r1.filter { it.kind == KeyKind.ACTION && it.value == KeyActions.BACKSPACE }
+            if (bsR1.size != 1 || r1.last() !== bsR1[0] ||
+                kotlin.math.abs(bsR1[0].width - 0.75) > 0.001 ||
+                kotlin.math.abs(bsR1[0].width - 0.75 * letters1.first().width) > 1e-6
+            ) {
+                fail("Asset '${parsed.id}' $layerName: ⌫ exactly 1x at the r1 END, width 0.75 == 0.75 × letter width expected (V0.1.50)")
+            }
             val wantN1 = when { isRu -> 11; isCs -> 10; else -> 9 }
-            val wantW1 = when { isRu -> 0.772727; isCs -> 0.8; else -> 0.888889 }
             if (letters1.size != wantN1) {
                 fail("Asset '${parsed.id}' $layerName: r1 needs $wantN1 letters (has ${letters1.size})")
             }
             for (k in letters1) {
-                if (kotlin.math.abs(k.width - wantW1) > 0.001) {
-                    fail("Asset '${parsed.id}' $layerName r1 '${k.id}': width ${k.width} != $wantW1 (V0.1.49)")
+                if (kotlin.math.abs(k.width - 1.0) > 0.001) {
+                    fail("Asset '${parsed.id}' $layerName r1 '${k.id}': width ${k.width} != 1.0 (V0.1.50)")
                 }
             }
-            // r2: ⇧ + letters + ⏎ 2.0; period is GONE from r2 (footer since V0.1.49).
+            // r2: ⇧ + letters + ⏎ == ⇧; period is GONE from r2 (footer since V0.1.49).
             val r2 = rows[2]
             val r2Texts = r2.filter { it.kind == KeyKind.TEXT }
-            val wantShift = when { isRu -> 1.0; isCs -> 2.0; else -> 1.5 }
+            val wantShift = when { isRu -> 1.5; isCs -> 2.0; else -> 1.5 }
             if (r2.isEmpty() || r2[0].kind != KeyKind.ACTION || r2[0].value != KeyActions.SHIFT ||
                 kotlin.math.abs(r2[0].width - wantShift) > 0.001
             ) {
-                fail("Asset '${parsed.id}' $layerName: r2[0] must be shift width $wantShift (V0.1.49), is " +
+                fail("Asset '${parsed.id}' $layerName: r2[0] must be shift width $wantShift (V0.1.50), is " +
                     "${r2.firstOrNull()?.let { it.value + "/" + it.width }}")
             }
-            val wantL2 = when { isRu -> 0.9; isCs -> 1.0; else -> 0.928571 }
+            val wantL2 = when { isRu -> 0.9; else -> 1.0 }
             val wantN2 = when { isRu -> 10; isCs -> 6; else -> 7 }
             if (r2Texts.size != wantN2) {
                 fail("Asset '${parsed.id}' $layerName: r2 needs $wantN2 letters (has ${r2Texts.size}; period moved to the footer)")
             }
             for (k in r2Texts) {
                 if (kotlin.math.abs(k.width - wantL2) > 0.001) {
-                    fail("Asset '${parsed.id}' $layerName r2 '${k.id}': width ${k.width} != $wantL2 (V0.1.49)")
+                    fail("Asset '${parsed.id}' $layerName r2 '${k.id}': width ${k.width} != $wantL2 (V0.1.50)")
                 }
             }
             val enter = r2.firstOrNull { it.kind == KeyKind.ACTION && it.value == KeyActions.ENTER }
-            if (enter == null || kotlin.math.abs(enter.width - 2.0) > 0.001) {
-                fail("Asset '${parsed.id}' $layerName: ⏎ width 2.0 expected in r2 (V0.1.49 §4.3)")
+            if (enter == null || kotlin.math.abs(enter.width - r2[0].width) > 0.001) {
+                fail("Asset '${parsed.id}' $layerName: ⏎ == ⇧ (symmetric wings) expected in r2 (V0.1.50)")
             }
             if (r2.any { it.id == "period" }) {
                 fail("Asset '${parsed.id}' $layerName: NO period key in r2 (it sits in the footer, V0.1.49)")

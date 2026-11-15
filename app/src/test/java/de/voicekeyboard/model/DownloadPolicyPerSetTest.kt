@@ -159,6 +159,24 @@ class DownloadPolicyPerSetTest {
         assertTrue(DownloadPolicy.canOfferSet(ModelVariant.LITERT_CPU, ram79, plentyFree))
     }
 
+    // ---- (3b) V0.1.53 regression: an EMPTY base URL offers NOTHING ----
+
+    @Test
+    fun `empty base URL offers NOTHING - regression for every inert set`() {
+        for (v in listOf(
+            ModelVariant.QWEN3_ASR,
+            ModelVariant.QWEN3_ASR_17B,
+            ModelVariant.BART_SPELLING_EN,
+            ModelVariant.BART_SPELLING_DE,
+        )) {
+            assertNull("no free-space floor while inert: ${v.id}", DownloadPolicy.requiredFreeBytes(v))
+            assertFalse(
+                "never offered, no matter the RAM/space: ${v.id}",
+                DownloadPolicy.canOfferSet(v, totalRamBytes = 16L shl 30, freeBytes = 8L shl 30),
+            )
+        }
+    }
+
     // ---- (4) EXTRA_VARIANT routing (pure mapping, no network) ----
 
     @Test
@@ -169,7 +187,13 @@ class DownloadPolicyPerSetTest {
         assertEquals(ModelManifest.BASE_URL_QWEN, q.baseUrl)
         assertEquals(ModelManifest.forVariant(ModelVariant.QWEN3_ASR), q.manifest)
         assertEquals("production QWEN list is pinned (6 files)", 6, q.manifest.size)
-        assertTrue("1.7B draft id is NOT a set (gate: 0.6B)", downloadWiring("qwen3-asr-1.7b-int8").variant == ModelVariant.ONNX_CPU)
+        // V0.1.53 (PLAN_QWEN17B S1): the 1.7B id IS a set now — but INERT
+        // (empty manifest + empty base URL): the wiring maps to it and any
+        // download fails fast BEFORE a network attempt (controller guard).
+        val w17 = downloadWiring("qwen3-asr-1.7b-int8")
+        assertEquals(ModelVariant.QWEN3_ASR_17B, w17.variant)
+        assertTrue("no checked files pinned yet", w17.manifest.isEmpty())
+        assertEquals("", w17.baseUrl)
 
         // default (extra absent) and unknown ids: A, wiring unchanged:
         for (raw in listOf(null, "bogus", "QWEN3-ASR-1.7B-INT8")) {

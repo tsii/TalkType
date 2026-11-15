@@ -1,8 +1,10 @@
 # Local model import (V0.1.51, plan `PLAN_V0151.md` §D)
 
 The Qwen3-ASR and U2 (text correction) model sets have **no download host**:
-`BASE_URL_QWEN` and `BASE_URL_U2` in `ModelManifest.kt` are empty, so the
-Setup cards offer no download. This is intentional (no HTTPS host was
+`BASE_URL_QWEN` and `BASE_URL_U2_EN`/`BASE_URL_U2_DE` in `ModelManifest.kt` are
+empty, so the Setup cards offer no download. (The 1.7B set follows the same
+pattern with `BASE_URL_QWEN_17B` — it stays locked until checked files
+exist, see `docs/PLAN_QWEN17B.md`.) This is intentional (no HTTPS host was
 available: no DNS name, no certificate, no write access). Instead, the sets
 can be **imported from a folder on the phone** — copied there via USB cable,
 a cloud drive, or any other file transfer.
@@ -123,11 +125,38 @@ started, nothing was changed.
 ## Real downloads
 
 Nothing changed in the download policy: as long as `BASE_URL_QWEN` /
-`BASE_URL_U2` are empty, no download is offered anywhere, and a
-hand-triggered download fails fast **without any network attempt**. Real
-downloads become possible the moment a host is pinned in `ModelManifest.kt`
-(`BASE_URL_*`), without any further code change — the import path is an
-addition, not a replacement.
+`BASE_URL_U2_EN` / `BASE_URL_U2_DE` are empty, no download is offered
+anywhere, and a hand-triggered download fails fast **without any network
+attempt**. Real downloads become possible the moment a host is pinned in
+`ModelManifest.kt` (`BASE_URL_*`), without any further code change — the
+import path is an addition, not a replacement.
+
+## If a download source becomes available
+
+The unlock is exactly these two lines in `ModelManifest.kt` (plus the already
+existing `BASE_URL_QWEN` for the 0.6B set; the 1.7B `BASE_URL_QWEN_17B` stays
+empty until checked files exist):
+
+```kotlin
+const val BASE_URL_U2_EN = "https://huggingface.co/<org>/<repo>/resolve/<commit-sha>/u2-en/"
+const val BASE_URL_U2_DE = "https://huggingface.co/<org>/<repo>/resolve/<commit-sha>/u2-de/"
+```
+
+Rules (binding, see `docs/PLAN_HOSTING.md`):
+
+- **Commit-pinned URL, never a branch**: use the resolved commit SHA
+  (`…/resolve/<commit-sha>/…`), never `main` — only a pinned commit guarantees
+  that the files behind the URL keep matching the sha256 pins of the
+  manifest forever.
+- **The files must lie 1:1 under the base**: every `storeName` (U2 including
+  the subfolders `shared/…`, `tokenizer/…`) must be reachable at
+  `<BASE_URL><storeName>` — the downloader builds exactly
+  `URL(baseUrl + file.urlPath)`; `urlPath` defaults to `storeName`. A
+  deviating `urlPath` per file is only for hosts that cannot mirror the
+  folder tree (e. g. flat GitHub release asset names).
+- **`BASE_URL_U2_EN` and `BASE_URL_U2_DE` are separate on purpose**: the en
+  and de sets share the same file names with different hashes — one common
+  base URL is impossible.
 
 ## Automated regression coverage
 

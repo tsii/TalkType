@@ -39,17 +39,29 @@ object ModelManifest {
      */
     const val BASE_URL_QWEN = ""
 
+    /**
+     * V0.1.53 (PLAN_QWEN17B §B, S2): base URL of the 1.7B set — EMPTY until
+     * checked model files + sha256 pins exist (gate §B.2: export, quantization
+     * and the on-device measurement are still pending). Empty = the set is
+     * NOT offered (same pattern as [BASE_URL_QWEN]); the Setup card stays
+     * locked. Pinning files + host here is the unlock.
+     */
+    const val BASE_URL_QWEN_17B = ""
+
     /** Compatibility alias: today's single set = variant A (uncontrolled callers). */
     const val BASE_URL = BASE_URL_ONNX
 
     /**
-     * T24b (PLAN_V0147 §17.2, Gleis 3): base URL of the U2 TEXT sets — EMPTY
-     * until the download host is pinned at upload time (EXACTLY the Qwen
-     * pattern of BASE_URL_QWEN: empty = the set is not offered, the Setup
-     * card stays inert, a hand-started download fails fast without any
-     * network attempt). Pinning the host here is the one-line unlock.
+     * V0.1.53 (PLAN_HOSTING §2a): per-set base URLs of the U2 TEXT sets —
+     * EMPTY until the download host is pinned at upload time. en and de
+     * share the SAME file names (`encoder.int8.onnx`, …) with DIFFERENT
+     * sha256 hashes, so ONE common base URL is impossible — every set maps
+     * to its own base (one-line unlock each; commit-pinned URL, never a
+     * branch). Empty = the set is NOT offered (Qwen VK-2 pattern: inert,
+     * fail-fast, never a dead download promise).
      */
-    const val BASE_URL_U2 = ""
+    const val BASE_URL_U2_EN = ""
+    const val BASE_URL_U2_DE = ""
 
     /**
      * T24b U2 TEXT sets — MERGED int8 artifacts (BART_CORRECT_CONTRACT §12:
@@ -80,6 +92,16 @@ object ModelManifest {
         ModelFile("tokenizer/tokenizer_config.json", 2_488L, "682dc5904ee05fef4acddad8478ccf35aea659fecb927686bf77247d978648a1"),
         ModelFile("tokenizer/vocab_meta.json", 230L, "12d90200acae09451e327cb4402af03ba310f5002507a706dd4c9f351cca2da4"),
     )
+
+    /**
+     * V0.1.53 (PLAN_QWEN17B §B, S2): 1.7B set — DELIBERATELY EMPTY (inert):
+     * no verified export exists yet (prefill int8 corrupt, step not exported,
+     * no sha256 pins), so NOTHING may be offered or downloaded. An empty list
+     * keeps the set structurally inert (isAllowedName rejects everything,
+     * DownloadPolicy reports Unsupported, canOfferSet is false). Pinning the
+     * checked files here + [BASE_URL_QWEN_17B] is the unlock (gate §B.2).
+     */
+    val QWEN_17B: List<ModelFile> = emptyList()
 
     /** Variant A (ONNX_CPU): today's list, untouched. */
     val ONNX: List<ModelFile> = listOf(
@@ -183,6 +205,7 @@ object ModelManifest {
             de.voicekeyboard.model.ModelVariant.ONNX_CPU -> ONNX
             de.voicekeyboard.model.ModelVariant.LITERT_CPU -> LITERT
             de.voicekeyboard.model.ModelVariant.QWEN3_ASR -> QWEN
+            de.voicekeyboard.model.ModelVariant.QWEN3_ASR_17B -> QWEN_17B
             de.voicekeyboard.model.ModelVariant.BART_SPELLING_EN -> U2_EN
             de.voicekeyboard.model.ModelVariant.BART_SPELLING_DE -> U2_DE
         }
@@ -194,8 +217,9 @@ object ModelManifest {
             de.voicekeyboard.model.ModelVariant.ONNX_CPU -> BASE_URL_ONNX
             de.voicekeyboard.model.ModelVariant.LITERT_CPU -> BASE_URL_LITERT
             de.voicekeyboard.model.ModelVariant.QWEN3_ASR -> BASE_URL_QWEN
-            de.voicekeyboard.model.ModelVariant.BART_SPELLING_EN -> BASE_URL_U2
-            de.voicekeyboard.model.ModelVariant.BART_SPELLING_DE -> BASE_URL_U2
+            de.voicekeyboard.model.ModelVariant.QWEN3_ASR_17B -> BASE_URL_QWEN_17B
+            de.voicekeyboard.model.ModelVariant.BART_SPELLING_EN -> BASE_URL_U2_EN
+            de.voicekeyboard.model.ModelVariant.BART_SPELLING_DE -> BASE_URL_U2_DE
         }
 
     /** Compatibility: DEFAULT stays an alias to A. */

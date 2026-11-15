@@ -61,4 +61,23 @@ class ModelSwitchPolicyTest {
             ModelSwitchPolicy.policy(target = a, current = a, targetReady = true, dictationActive = false),
         )
     }
+
+    /** V0.1.53 (PLAN_QWEN17B §B): the 1.7B set is inert (never READY — empty
+     *  manifest, no host), so a switch to it is ALWAYS rejected, never applied
+     *  or deferred; the engine keeps falling back to Parakeet. */
+    @Test
+    fun `1_7B target is rejected while the set is inert - never applied`() {
+        for (active in listOf(false, true)) {
+            assertEquals(
+                "inert set => Rejected(NOT_READY), active=$active",
+                ModelSwitchPolicy.Decision.Rejected(ModelSwitchPolicy.Reason.NOT_READY),
+                ModelSwitchPolicy.policy(
+                    target = ModelVariant.QWEN3_ASR_17B,
+                    current = a,
+                    targetReady = false, // the only reachable state while inert
+                    dictationActive = active,
+                ),
+            )
+        }
+    }
 }

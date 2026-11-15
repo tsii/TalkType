@@ -15,7 +15,7 @@ import org.robolectric.annotation.Config
 
 /**
  * T24b (PLAN_V0147 §17.2, Gleis 3 B1b): the "Text (U2)" Setup card — third
- * model card, visible in RELEASE, honest inert state while BASE_URL_U2 is
+ * model card, visible in RELEASE, honest inert state while BASE_URL_U2_EN/_DE are
  * empty (Qwen VK-2 pattern), licence + size line, follows the CURRENT typing
  * language set, RAM-gate reason. READY/delete coverage follows with the
  * ModelStore multi-segment Teil (flat-name whitelist today).
@@ -69,7 +69,8 @@ class U2SetupCardTest {
     }
 
     @Test fun `download is never offered while BASE_URL_U2 is empty - honest inert state`() {
-        assertEquals("test precondition: host not pinned yet", "", de.voicekeyboard.model.ModelManifest.BASE_URL_U2)
+        assertEquals("test precondition: hosts not pinned yet", "", de.voicekeyboard.model.ModelManifest.BASE_URL_U2_EN)
+        assertEquals("test precondition: hosts not pinned yet", "", de.voicekeyboard.model.ModelManifest.BASE_URL_U2_DE)
         val activity = buildActivity()
         val texts = u2CardTexts(activity).joinToString("\n")
         assertTrue(

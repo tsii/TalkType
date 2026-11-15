@@ -195,4 +195,88 @@ class ModelDownloaderTest {
         assertEquals(1, last?.attempt)
         assertEquals(3, last?.maxAttempts)
     }
+
+    // ---- V0.1.53 (PLAN_HOSTING §2): URL construction — urlPath vs storeName ----
+
+    /** Opener that records every built URL before handing over to the fake. */
+    private fun recordingOpener(urls: MutableList<URL>): (URL) -> HttpURLConnection = { u ->
+        urls.add(u)
+        FakeConnection(server)
+    }
+
+    @Test fun `URL without urlPath is base plus storeName`() {
+        val body = ByteArray(12) { (it * 3 + 1).toByte() }
+        server = FakeServer(body, 200)
+        val ms = ModelStore(tmp.newFolder(), listOf(ModelFile("encoder.int8.onnx", 12L, "")))
+        val urls = ArrayList<URL>()
+        val dl = ModelDownloader(
+            baseUrl = "https://host/u2-en/",
+            store = ms,
+            variant = ModelVariant.BART_SPELLING_EN,
+            opener = recordingOpener(urls),
+        )
+        assertTrue(dl.download(ModelFile("encoder.int8.onnx", 12L, sha256Hex(body))))
+        assertEquals(
+            "no urlPath => the FLAT storeName lands 1:1 behind the base",
+            listOf("https://host/u2-en/encoder.int8.onnx"),
+            urls.map { it.toString() },
+        )
+    }
+
+    @Test fun `urlPath replaces the storeName in the URL`() {
+        val body = ByteArray(12) { (it * 3 + 1).toByte() }
+        server = FakeServer(body, 200)
+        val ms = ModelStore(tmp.newFolder(), listOf(ModelFile("token_vocab.bin", 12L, "")))
+        val urls = ArrayList<URL>()
+        val dl = ModelDownloader(
+            baseUrl = "https://host/release-assets/",
+            store = ms,
+            opener = recordingOpener(urls),
+        )
+        val file = ModelFile(
+            storeName = "token_vocab.bin",
+            sizeBytes = 12L,
+            sha256 = sha256Hex(body),
+            urlPath = "assets/token_vocab.bin", // flat host mapping (LITERT pattern)
+        )
+        assertTrue(dl.download(file))
+        assertEquals(
+            "urlPath => the URL uses urlPath, NOT the storeName",
+            listOf("https://host/release-assets/assets/token_vocab.bin"),
+            urls.map { it.toString() },
+        )
+    }
+
+    @Test fun `u2 en and de share file names but land on their own bases`() {
+        val body = ByteArray(12) { (it * 3 + 1).toByte() }
+        server = FakeServer(body, 200)
+        val file = ModelFile("encoder.int8.onnx", 12L, sha256Hex(body))
+        val urls = ArrayList<URL>()
+        val storeEn = ModelStore(tmp.newFolder(), listOf(file))
+        val storeDe = ModelStore(tmp.newFolder(), listOf(file))
+        assertTrue(
+            ModelDownloader(
+                baseUrl = "https://host/models/resolve/<sha>/u2-en/",
+                store = storeEn,
+                variant = ModelVariant.BART_SPELLING_EN,
+                opener = recordingOpener(urls),
+            ).download(file),
+        )
+        assertTrue(
+            ModelDownloader(
+                baseUrl = "https://host/models/resolve/<sha>/u2-de/",
+                store = storeDe,
+                variant = ModelVariant.BART_SPELLING_DE,
+                opener = recordingOpener(urls),
+            ).download(file),
+        )
+        assertEquals(
+            "identical storeName, DIFFERENT bases — the per-set split is the fix",
+            listOf(
+                "https://host/models/resolve/<sha>/u2-en/encoder.int8.onnx",
+                "https://host/models/resolve/<sha>/u2-de/encoder.int8.onnx",
+            ),
+            urls.map { it.toString() },
+        )
+    }
 }

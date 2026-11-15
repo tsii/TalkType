@@ -108,7 +108,11 @@ object DownloadPolicy {
         val floor = requiredFreeBytes(variant, manifest, baseUrl) ?: return false // not unlocked/not enabled
         if (freeBytes < floor) return false
         return when (variant) {
-            ModelVariant.QWEN3_ASR -> totalRamBytes >= QWEN_MIN_TOTAL_RAM_BYTES
+            // V0.1.53 (PLAN_QWEN17B §B): the 1.7B set joins the Qwen RAM-gate
+            // class — UNREACHABLE while inert (empty manifest ⇒ floor null
+            // ⇒ false above); the gate only matters after a future unlock.
+            ModelVariant.QWEN3_ASR, ModelVariant.QWEN3_ASR_17B ->
+                totalRamBytes >= QWEN_MIN_TOTAL_RAM_BYTES
             // T24b (Gleis 3): the U2 TEXT sets run NEXT TO the resident ASR
             // engine (session ~0.4-0.5 GB, BART_CORRECT_CONTRACT §9) — same
             // RAM gate class as Qwen (PLAN_V0147 §17.1 freeBytes/RAM guard).

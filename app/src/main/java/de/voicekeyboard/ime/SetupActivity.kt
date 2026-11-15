@@ -217,7 +217,9 @@ class SetupActivity : ComponentActivity() {
         // model section (appended at the end of the layout root).
         // T24b (PLAN_V0147 §17.2, Gleis 3): the U2 text-correction card — third
         // model card, programmatic (no XML change), honest inert state while
-        // BASE_URL_U2 is empty; the set follows the CURRENT typing language.
+        // BASE_URL_U2_EN/_DE are empty; the set follows the CURRENT typing
+        // language. V0.1.53 (PLAN_QWEN17B §B): the LOCKED 1.7B card follows —
+        // visible with an honest explanation, but inert (no buttons at all).
 
         // observer AFTER layout registration: the service informs us state-based
         // (no polling, no own thread); UI-thread delivery via runOnUiThread.
@@ -379,7 +381,7 @@ class SetupActivity : ComponentActivity() {
         u2Status = TextView(this).apply { textSize = 13f }
         container.addView(u2Status!!)
         // V0.1.51 (PLAN_V0151 §D): local folder import — the U2 sets have no
-        // download host (BASE_URL_U2 empty); the card follows the CURRENT
+        // download host (BASE_URL_U2_EN/_DE empty); the card follows the CURRENT
         // typing language set (en -> U2-en, de -> U2-de).
         u2Import = Button(this).apply {
             text = getString(R.string.setup_import_folder)
@@ -399,7 +401,7 @@ class SetupActivity : ComponentActivity() {
     /**
      * T24b: the honest card state — RAM gate (8 GB floor, Qwen class:
      * U2 session ~0.4-0.5 GB NEXT TO the resident ASR engine), empty
-     * BASE_URL_U2 = not offered (Qwen VK-2 pattern: inert, fail-fast,
+     * BASE_URL_U2_EN/_DE = not offered (Qwen VK-2 pattern: inert, fail-fast,
      * never a dead download promise); Delete only for a READY set (frees
      * the ~0.25 GB; C2 orphan rule applies like the ASR sets).
      */
@@ -435,6 +437,38 @@ class SetupActivity : ComponentActivity() {
             else ->
                 u2Status?.text = getString(R.string.setup_import_only)
         }
+    }
+
+    /**
+     * V0.1.53 (PLAN_QWEN17B §B): the LOCKED 1.7B card — title + honest
+     * explanation + state line, and NOTHING else. While the set is inert
+     * (empty pinned manifest [ModelManifest.QWEN_17B], no sha256 pins,
+     * [ModelManifest.BASE_URL_QWEN_17B] empty) there is deliberately NO
+     * button: no download, no import, no selection — the card can only
+     * EXPLAIN. States (offer/delete) come with the unlock slice (plan S4).
+     */
+    private fun buildQwen17bCard() {
+        val layoutRoot = findViewById<TextView>(R.id.setup_title).parent as android.widget.LinearLayout
+        val density = resources.displayMetrics.density
+        val container = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            setPadding(0, (16 * density).toInt(), 0, 0)
+        }
+        container.addView(TextView(this).apply {
+            text = getString(R.string.model_qwen17b_title)
+            textSize = 16f
+            setTypeface(typeface, android.graphics.Typeface.BOLD)
+        })
+        container.addView(TextView(this).apply {
+            text = getString(R.string.model_qwen17b_body)
+            textSize = 13f
+            setPadding(0, (4 * density).toInt(), 0, 0)
+        })
+        container.addView(TextView(this).apply {
+            text = getString(R.string.model_qwen17b_not_available)
+            textSize = 13f
+        })
+        layoutRoot.addView(container)
     }
 
     /**
@@ -892,6 +926,7 @@ class SetupActivity : ComponentActivity() {
                         buildLanguageSection()
                         buildTypingSection()
                         buildU2Card()
+                        buildQwen17bCard()
                     }
                     renderLoadedUi()
                     pendingImportUri?.let { onImportFolderPicked(it) }

@@ -21,6 +21,25 @@ from `dist/` (checksums of the last rotations: `dist/SHA256SUMS-*.txt`).
 - The "Grant permissions" button now reacts in every state: system dialog when something is
   missing, "All permissions granted" toast when nothing is (no dead click).
 
+## [0.1.53] - 2026-11-15 (versionCode 53) — download plumbing per set, locked 1.7B card
+### Changed (PLAN_HOSTING §2a + PLAN_QWEN17B §B)
+- **Per-set download base URLs**: `BASE_URL_U2` is split into `BASE_URL_U2_EN` and
+  `BASE_URL_U2_DE` — the U2 en/de sets share the same file names with different sha256 hashes,
+  so one common base URL is impossible. Both stay EMPTY: the sets remain import-only,
+  no download is offered anywhere, a hand-started download fails fast without any network
+  attempt (regression-tested for every inert set).
+- **URL construction pinned by tests**: the downloader builds
+  `URL(baseUrl + file.urlPath)`; a per-file `urlPath` (flat hosts, e. g. GitHub release assets)
+  replaces the `storeName` in the URL, without it the flat `storeName` applies. U2-en and
+  U2-de land on their own bases despite identical file names.
+### Added
+- **Qwen3-ASR 1.7B — locked setup card**: the variant (`qwen3-asr-1.7b-int8`) exists but stays
+  INERT — no checked model files exist yet (empty pinned manifest, no sha256, empty
+  `BASE_URL_QWEN_17B`), so `canOfferSet` is false and the card shows an honest explanation
+  (export/quantization/device measurement pending; ≥ 4 GB download and 5.5–6.5 GB RAM peak
+  in the worst-case export; Parakeet stays the standard). No download/import/select button,
+  never preselected. Unlock = a later commit pinning files + host (PLAN_QWEN17B gate §B.2).
+
 ## [0.1.52] - 2026-11-15 (versionCode 52) — glyph parity, punctuation order, digit nearest the finger, Setup responsiveness, working import
 ### Changed (user findings on 0.1.51)
 - **The backspace arrow now has the same optical box as shift and enter** (0.54 · s wide instead

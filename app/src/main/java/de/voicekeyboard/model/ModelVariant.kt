@@ -27,6 +27,17 @@ enum class ModelVariant(val id: String, val label: String, val kind: Kind = Kind
     QWEN3_ASR("qwen3-asr-0.6b-int8", "Qwen3-ASR (CPU)"),
 
     /**
+     * V0.1.53 (PLAN_QWEN17B §B/§C, S1): 1.7B dictation set — INERT entry.
+     * No checked artifacts exist yet (prefill int8 corrupt, step not exported,
+     * no sha256 pins), so [ModelManifest.QWEN_17B] is EMPTY and
+     * [ModelManifest.BASE_URL_QWEN_17B] is "": the set is never offered
+     * (DownloadPolicy Unsupported), the Setup card stays locked and a
+     * hand-bent pref falls back to Parakeet (never READY). The unlock is a
+     * later commit pinning files + host (gate §B.2, S8).
+     */
+    QWEN3_ASR_17B("qwen3-asr-1.7b-int8", "Qwen3-ASR 1.7B (CPU)"),
+
+    /**
      * T24b U2 TEXT sets (Gleis 3): BART (en) / FLAN-T5 (de) spelling
      * correction, MERGED int8 artifacts (BART_CORRECT_CONTRACT §12 —
      * 3 graphs + shared/ external-data blob + tokenizer trio). Opt-in

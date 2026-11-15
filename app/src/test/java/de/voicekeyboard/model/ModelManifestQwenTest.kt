@@ -41,8 +41,10 @@ class ModelManifestQwenTest {
         assertEquals(ModelVariant.ONNX_CPU, ModelVariant.fromId("no-such-set"))
         assertEquals(ModelVariant.ONNX_CPU, ModelVariant.fromId(null))
         assertEquals(ModelVariant.ONNX_CPU, ModelVariant.fromId("QWEN3-ASR-0.6B-INT8")) // case-sensitive
-        // the 1.7B candidate id of the draft is NOT a set (gate decision: 0.6B)
-        assertEquals(ModelVariant.ONNX_CPU, ModelVariant.fromId("qwen3-asr-1.7b-int8"))
+        // V0.1.53 (PLAN_QWEN17B S1): the 1.7B id IS a set now — QWEN3_ASR_17B,
+        // INERT (empty manifest, never READY, never offered); the engine
+        // falls back to Parakeet for it.
+        assertEquals(ModelVariant.QWEN3_ASR_17B, ModelVariant.fromId("qwen3-asr-1.7b-int8"))
         // old ids unchanged (0.1.45 users keep their set)
         assertEquals(ModelVariant.ONNX_CPU, ModelVariant.fromId("onnx-cpu"))
         assertEquals(ModelVariant.LITERT_CPU, ModelVariant.fromId("litert-cpu"))

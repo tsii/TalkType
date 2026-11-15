@@ -137,9 +137,18 @@ class ModelU2VariantTest {
     // ------------------------------------------------------------- base URL
 
     @Test fun u2BaseUrlStaysEmptyUntilHostPinned() {
-        assertEquals("", ModelManifest.BASE_URL_U2)
+        assertEquals("", ModelManifest.BASE_URL_U2_EN)
+        assertEquals("", ModelManifest.BASE_URL_U2_DE)
         assertEquals("", ModelManifest.baseUrlFor(ModelVariant.BART_SPELLING_EN))
         assertEquals("", ModelManifest.baseUrlFor(ModelVariant.BART_SPELLING_DE))
+    }
+
+    /** V0.1.53 (PLAN_HOSTING §2a): en/de share the SAME file names with
+     *  DIFFERENT hashes — one common base URL is impossible; the mapping
+     *  must stay PER SET so each set can be unlocked separately. */
+    @Test fun `u2 en and de map to SEPARATE base URLs - one per set`() {
+        assertEquals(ModelManifest.BASE_URL_U2_EN, ModelManifest.baseUrlFor(ModelVariant.BART_SPELLING_EN))
+        assertEquals(ModelManifest.BASE_URL_U2_DE, ModelManifest.baseUrlFor(ModelVariant.BART_SPELLING_DE))
     }
 
     @Test fun `ASR base URLs stay unchanged`() {

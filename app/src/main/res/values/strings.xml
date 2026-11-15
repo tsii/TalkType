@@ -14,6 +14,12 @@
     <string name="model_parakeet_body">Fast on-device engine · 0.67 GB</string>
     <string name="model_qwen_title">Qwen3-ASR 0.6B (experimental)</string>
     <string name="model_qwen_body">Multilingual alternative model · 1.7 GB download. Less accurate on our German tests and may invent words during silence. Slower than real time on our test device (RTF 1.2 measured); NOT yet measured on your phone — it may be much slower. Experimental. Parakeet stays recommended.</string>
+    <!-- V0.1.53 (PLAN_QWEN17B §B): the 1.7B card is LOCKED — honest text with
+         ONLY the numbers backed by the plan (≥ 4 GB download in the worst-case
+         export; 5.5–6.5 GB RAM peak in the worst-case export); no offer, no button. -->
+    <string name="model_qwen17b_title">Qwen3-ASR 1.7B — experimental (not available yet)</string>
+    <string name="model_qwen17b_body">Larger dictation model. The export, quantization and the measurement on a real phone are still pending — no checked model files exist yet. Risk: at least 4 GB to download and 5.5–6.5 GB RAM peak in the worst-case export. Parakeet stays the recommended standard.</string>
+    <string name="model_qwen17b_not_available">Not available yet — no download, no import, no selection.</string>
     <string name="model_ram_locked">Needs at least 8 GB device memory</string>
     <string name="model_active">Active</string>
     <string name="model_ready">Ready</string>

@@ -15,7 +15,7 @@ import java.io.File
  * merged sets ("shared/shared_weights.bin", "tokenizer/…") — per-segment
  * traversal safety, flat-name byte compatibility (regression), U2 READY/delete
  * fixture over a mini manifest, escaped flat part files (resume trail), and
- * the DownloadPolicy U2 wiring (empty BASE_URL_U2 = inert; RAM gate like Qwen).
+ * the DownloadPolicy U2 wiring (empty BASE_URL_U2_EN/_DE = inert; RAM gate like Qwen).
  */
 class ModelStoreMultiSegmentTest {
 

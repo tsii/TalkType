@@ -348,8 +348,10 @@ class ImeRootViewLayoutTest {
      * V0.1.51 (docs/PLAN_V0151.md §B): ⌫ = PURE left arrow — the vertical
      * base stroke at cx − 0.465s is GONE. Draw-op proof: exactly ONE path
      * inside the ⌫ key, its bounds reach only to the arrow tip
-     * (cx − 0.285s — no x below cx − 0.4s), the optical height stays 0.60·s
+     * (cx − 0.30s — no x below cx − 0.4s), the optical height stays 0.60·s
      * and the glyph stays vertically centered on the key (F29/P0 gate).
+     * V0.1.51b (user finding): the arrow must not look bigger than ⇧/⏎, so its
+     * optical box equals ⏎'s (0.54·s wide) — asserted at the end.
      */
     @Test
     fun `V0151 - backspace glyph is ONE pure left-arrow path - no base stroke, 060s height, centered`() {
@@ -371,11 +373,15 @@ class ImeRootViewLayoutTest {
         // NOT the old base line position (cx − 0.465s) — gap 0.18s is hard.
         assertTrue("no base stroke: bounds.left ≥ cx − 0.4s (is ${b.left})",
             b.left >= cx - 0.4f * s)
-        assertEquals("leftmost point = arrow tip at cx − 0.285s",
-            cx - 0.285f * s, b.left, 2f)
+        assertEquals("leftmost point = arrow tip at cx − 0.30s",
+            cx - 0.30f * s, b.left, 2f)
         // optical height gate (F29/P0): 0.60·s, vertically centered on the key.
         assertEquals("⌫ optical height stays 0.60·s", 0.60f * s, b.height(), 2f)
         assertEquals("⌫ vertically centered on the key", cy, b.centerY(), 2f)
+        // V0.1.51b (user finding): ⌫ must look neither bigger nor heavier than ⇧/⏎ —
+        // its optical box is ⏎'s box (0.54·s wide). The stroke extends ±stroke/2
+        // beyond the path ends, so the pure path box is compared here.
+        assertEquals("⌫ optical width equals ⏎ (0.54·s)", 0.54f * s, b.width(), 2f)
     }
 
     @Test

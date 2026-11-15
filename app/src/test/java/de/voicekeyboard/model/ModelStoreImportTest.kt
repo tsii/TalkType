@@ -219,6 +219,35 @@ class ModelStoreImportTest {
         assertNoRemnants(root, store)
     }
 
+    @Test fun `staging creation failure returns IoError without opening source`() {
+        val (store, root) = store()
+        assertTrue(File(root, "versions").deleteRecursively())
+        File(root, "versions").writeText("blocked")
+        val result = store.importSet(ModelVariant.BART_SPELLING_EN, ImportSource {
+            throw AssertionError("source must not be opened")
+        })
+        assertTrue("staging failure returned as value: $result", result is ImportResult.IoError)
+    }
+
+    @Test fun `activation write failure returns IoError and removes staging`() {
+        val manifest = miniU2()
+        val (store, root) = store(manifest)
+        File(root, "active-${ModelVariant.BART_SPELLING_EN.id}.txt.tmp").mkdirs()
+        val result = store.importSet(ModelVariant.BART_SPELLING_EN, FakeSource(goodFiles(manifest)))
+        assertTrue("activation failure returned as value: $result", result is ImportResult.IoError)
+        assertNoRemnants(root, store)
+    }
+
+    @Test fun `open failures carry manifest relative file name`() {
+        val (store, root) = store()
+        val result = store.importSet(ModelVariant.BART_SPELLING_EN, ImportSource {
+            throw SecurityException("permission revoked")
+        })
+        assertTrue(result is ImportResult.IoError)
+        assertEquals("encoder.int8.onnx", (result as ImportResult.IoError).relPath)
+        assertNoRemnants(root, store)
+    }
+
     // --------------------------------------------------------------- helpers
 
     /** Stages all manifest files with correct bytes (like the downloader does). */

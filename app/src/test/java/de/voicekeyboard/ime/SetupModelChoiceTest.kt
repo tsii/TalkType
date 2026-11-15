@@ -100,6 +100,7 @@ class SetupModelChoiceTest {
         controller.get().totalRamOverride = ram
         controller.get().manifestOverride = manifestOverride
         controller.setup()
+        controller.get().awaitSetupIo()
         return controller.get()
     }
 
@@ -223,6 +224,7 @@ class SetupModelChoiceTest {
         assertEquals(View.VISIBLE, parakeetDelete.visibility)
 
         parakeetDelete.performClick()
+        a.awaitSetupIo()
 
         assertNull("set freed via deleteSet", store.activeVersion(ModelVariant.ONNX_CPU))
         assertEquals(
@@ -270,6 +272,7 @@ class SetupModelChoiceTest {
         )
         // and the delete REALLY frees the set (deleteSet works on locked sets)
         a.findViewById<Button>(R.id.setup_qwen_delete).performClick()
+        a.awaitSetupIo()
         assertNull("set freed despite the lock", store.activeVersion(ModelVariant.QWEN3_ASR))
         assertEquals(
             "card falls back to the locked download-hidden state",

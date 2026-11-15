@@ -28,6 +28,7 @@ class U2SetupCardTest {
         val controller = Robolectric.buildActivity(SetupActivity::class.java)
         controller.get().totalRamOverride = ramBytes
         controller.setup()
+        controller.get().awaitSetupIo()
         return controller.get()
     }
 
@@ -73,7 +74,7 @@ class U2SetupCardTest {
         val texts = u2CardTexts(activity).joinToString("\n")
         assertTrue(
             "honest not-available text (Qwen VK-2 pattern)",
-            texts.contains(activity.getString(de.voicekeyboard.R.string.model_not_downloaded)),
+            texts.contains(activity.getString(de.voicekeyboard.R.string.setup_import_only)),
         )
         assertFalse("no dead download promise on the card", texts.contains("Download"))
     }

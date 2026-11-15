@@ -18,7 +18,7 @@ import org.robolectric.annotation.Config
  * base/shift footer r3 (ALL 15, incl. ru-ru — it already had this form since
  * F54): 6 keys — symbols 1.5, language 1, emoji 1, space **6.5** (7.5→6.5,
  * Σ stays 13), **period 1.0** (BACK from r2, between space and mic; F54 menu
- * `, ! ? : ; ( )` — ru-ru: @ as alternates[0] before the F54 cells), mic **2**
+ * `( ) : ; ! ? ,` — ru-ru: @ as alternates[0] before the F54 cells), mic **2**
  * (last); NO enter in r3; enter exactly ONCE in r2; NO period in r2; base/shift
  * r3 identical (id + width + value).
  *
@@ -82,8 +82,8 @@ class FooterAcrossAssetsTest {
         assertEquals("$ctx period is a text key '.'", ".", period.value)
         assertEquals(
             "$ctx period menu",
-            if (isRu) listOf("@",",", "!", "?", ":", ";", "(", ")")
-            else listOf(",", "!", "?", ":", ";", "(", ")"),
+            if (isRu) listOf("@", "(", ")", ":", ";", "!", "?", ",")
+            else listOf("(", ")", ":", ";", "!", "?", ","),
             period.alternates,
         )
         assertTrue(
@@ -110,7 +110,7 @@ class FooterAcrossAssetsTest {
             assertTrue("$layerName: no 'at' object in r1", rows[1].none { it.id == "at" })
             val period = rows[3].first { it.id == "period" }
             assertEquals("$layerName: @ is alternates[0] on the period key", "@", period.alternates.first())
-            assertEquals("$layerName: F54 standard cells behind @", listOf(",", "!", "?", ":", ";", "(", ")"), period.alternates.drop(1))
+            assertEquals("$layerName: F54 standard cells behind @", listOf("(", ")", ":", ";", "!", "?", ","), period.alternates.drop(1))
             assertEquals("$layerName: F54 — no more cursor actions", 0, period.cellActions.size)
         }
     }

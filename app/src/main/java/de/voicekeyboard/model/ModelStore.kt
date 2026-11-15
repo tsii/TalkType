@@ -69,9 +69,10 @@ sealed class ImportResult {
     data class SizeMismatch(val relPath: String) : ImportResult()
 
     /** Reading the source or writing the store failed (aborted, revoked,
-     *  unreadable). Detail is technical, for logs only — the UI shows the
-     *  generic [ImportResult.IoError] message. */
-    data class IoError(val detail: String) : ImportResult()
+     *  unreadable). [relPath] names the affected manifest file when known;
+     *  null denotes a store-level failure (staging/activation). [detail] is
+     *  technical, for logs only, never user-facing. */
+    data class IoError(val detail: String, val relPath: String? = null) : ImportResult()
 }
 
 /** Status of the model state (IMPLEMENTATION_PLAN §B.1). */
@@ -405,39 +406,48 @@ class ModelStore(
     fun importSet(variant: ModelVariant, source: ImportSource): ImportResult {
         val files = manifestFor(variant)
         if (files.isEmpty()) return ImportResult.IoError("no pinned manifest for variant ${variant.id}")
-        val staging = newStagingDir()
+        var staging: File? = null
         val touchedParts = mutableListOf<String>()
         var activated = false
+        var currentPath: String? = null
         try {
+            staging = newStagingDir()
             for (entry in files) {
+                currentPath = entry.storeName
                 val input = try {
                     source.open(entry.storeName)
                 } catch (e: Exception) {
-                    return ImportResult.IoError("open ${entry.storeName}: ${e.message ?: e.javaClass.simpleName}")
+                    return ImportResult.IoError("open ${entry.storeName}: ${e.message ?: e.javaClass.simpleName}", entry.storeName)
                 } ?: return ImportResult.Missing(entry.storeName)
                 touchedParts.add(entry.storeName)
-                val part = partFile(entry.storeName, variant)
-                part.parentFile?.mkdirs()
                 val verdict = try {
-                    copyVerifying(input, part, entry)
+                    input.use {
+                        val part = partFile(entry.storeName, variant)
+                        part.parentFile?.mkdirs()
+                        copyVerifying(it, part, entry)
+                    }
                 } catch (e: Exception) {
-                    return ImportResult.IoError("copy ${entry.storeName}: ${e.message ?: e.javaClass.simpleName}")
+                    return ImportResult.IoError("copy ${entry.storeName}: ${e.message ?: e.javaClass.simpleName}", entry.storeName)
                 }
                 verdict?.let { return it } // SizeMismatch / HashMismatch — file named
                 if (!movePartToStaging(entry.storeName, staging, variant)) {
-                    return ImportResult.IoError("move into staging failed: ${entry.storeName}")
+                    return ImportResult.IoError("move into staging failed: ${entry.storeName}", entry.storeName)
                 }
             }
+            currentPath = null
             activated = activate(staging, variant) // re-hashes everything, atomically flips the pointer
             return if (activated) {
                 ImportResult.Ready
             } else {
                 ImportResult.IoError("activation refused for variant ${variant.id}")
             }
+        } catch (e: Exception) {
+            return ImportResult.IoError(e.message ?: e.javaClass.simpleName, currentPath)
         } finally {
             if (!activated) {
-                staging.deleteRecursively()
-                touchedParts.forEach { partFile(it, variant).delete() }
+                // Cleanup is best effort and must not replace the typed failure.
+                runCatching { staging?.deleteRecursively() }
+                touchedParts.forEach { name -> runCatching { partFile(name, variant).delete() } }
             }
         }
     }
@@ -446,17 +456,15 @@ class ModelStore(
     private fun copyVerifying(input: java.io.InputStream, part: File, entry: ModelFile): ImportResult? {
         val digest = MessageDigest.getInstance("SHA-256")
         var written = 0L
-        input.use { stream ->
-            java.io.FileOutputStream(part).use { out ->
-                val buf = ByteArray(64 * 1024)
-                while (true) {
-                    val n = stream.read(buf)
-                    if (n < 0) break
-                    out.write(buf, 0, n)
-                    digest.update(buf, 0, n)
-                    written += n
-                    if (written > entry.sizeBytes) return ImportResult.SizeMismatch(entry.storeName)
-                }
+        java.io.FileOutputStream(part).use { out ->
+            val buf = ByteArray(64 * 1024)
+            while (true) {
+                val n = input.read(buf)
+                if (n < 0) break
+                out.write(buf, 0, n)
+                digest.update(buf, 0, n)
+                written += n
+                if (written > entry.sizeBytes) return ImportResult.SizeMismatch(entry.storeName)
             }
         }
         if (written != entry.sizeBytes) return ImportResult.SizeMismatch(entry.storeName)

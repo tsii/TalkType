@@ -25,7 +25,7 @@ import org.robolectric.annotation.Config
 class SetupCorrectionSwitchTest {
 
     private fun buildActivity(): SetupActivity =
-        Robolectric.buildActivity(SetupActivity::class.java).setup().get()
+        Robolectric.buildActivity(SetupActivity::class.java).setup().get().awaitSetupIo()
 
     private fun switches(activity: SetupActivity): List<Switch> {
         val root = activity.findViewById<TextView>(de.voicekeyboard.R.id.setup_title).parent as ViewGroup

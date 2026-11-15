@@ -126,7 +126,7 @@ class LayoutCompletenessTest {
      */
     @Test
     fun `F54 - period alternates of all 15 layouts - target state without cursor actions`() {
-        val standard = listOf(",", "!", "?", ":", ";", "(", ")")
+        val standard = listOf("(", ")", ":", ";", "!", "?", ",")
         val layouts = listOf(
             "cs-cz", "da-dk", "de-de", "el-gr", "en-us", "es-es", "fi-fi",
             "fr-fr", "it-it", "nl-nl", "pl-pl", "pt-pt", "ru-ru", "sv-se", "tr-tr",
@@ -148,7 +148,7 @@ class LayoutCompletenessTest {
                         val list = (0 until alts.length()).map { alts.getString(it) }
                         val expected = if (name == "ru-ru") listOf("@") + standard else standard
                         assertEquals(
-                            "$name/$layerName: period alternates == target state (language prefix + , ! ? : ; ( )",
+                            "$name/$layerName: period alternates == target state (language prefix + ( ) : ; ! ? ,",
                             expected, list,
                         )
                         assertTrue(
@@ -311,7 +311,7 @@ class LayoutCompletenessTest {
             )
             val period = rows[3].first { it.id == "period" }
             assertEquals("$layerName: @ is alternates[0] on period", "@", period.alternates.first())
-            assertEquals("$layerName: F54 standard cells behind @", listOf(",", "!", "?", ":", ";", "(", ")"), period.alternates.drop(1))
+            assertEquals("$layerName: F54 standard cells behind @", listOf("(", ")", ":", ";", "!", "?", ","), period.alternates.drop(1))
             assertEquals("$layerName: F54 — no more cursor actions", 0, period.cellActions.size)
         }
     }

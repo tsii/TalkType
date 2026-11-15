@@ -39,6 +39,7 @@ class SetupNetworkInviteTest {
         val controller = Robolectric.buildActivity(SetupActivity::class.java)
         controller.get().inviteStateOverride = state
         controller.setup()
+        controller.get().awaitSetupIo()
         return controller.get()
     }
 

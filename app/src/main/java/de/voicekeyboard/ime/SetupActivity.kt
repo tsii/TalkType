@@ -17,7 +17,6 @@ import de.voicekeyboard.R
 import de.voicekeyboard.model.DownloadController
 import de.voicekeyboard.model.DownloadPolicy
 import de.voicekeyboard.model.ImportResult
-import de.voicekeyboard.model.ImportSource
 import de.voicekeyboard.model.ModelDownloadService
 import de.voicekeyboard.model.ModelStore
 import de.voicekeyboard.model.ModelStatus
@@ -75,17 +74,55 @@ class SetupActivity : ComponentActivity() {
      *  open (survives activity recreation — the picker returns into a NEW
      *  instance after a rotation). */
     private var pendingImportVariant: de.voicekeyboard.model.ModelVariant? = null
+    private var pendingImportUri: Uri? = null
+    private var deletingVariant: de.voicekeyboard.model.ModelVariant? = null
 
     /** V0.1.51: variant whose import is RUNNING (background thread) — hides
      *  the import buttons, shows the running line. */
-    @Volatile private var importingVariant: de.voicekeyboard.model.ModelVariant? = null
-
-    /** V0.1.51: imports run OFF the UI thread, at most ONE at a time. */
-    private val importExecutor = java.util.concurrent.Executors.newSingleThreadExecutor { r ->
-        Thread(r, "vk-model-import").apply { isDaemon = true }
-    }
 
     private val prefs by lazy { getSharedPreferences(PERMISSION_PREFS, MODE_PRIVATE) }
+    private val setupExecutor = java.util.concurrent.Executors.newSingleThreadExecutor { r ->
+        Thread(r, "vk-setup-io").apply { isDaemon = true }
+    }
+    internal var ioExecutor: java.util.concurrent.Executor = setupExecutor
+    internal var storageLoaded = false
+        private set
+    private var sectionsBuilt = false
+    private var refreshPending = false
+    private var refreshAgain = false
+    private data class StorageSnapshot(
+        val statuses: Map<de.voicekeyboard.model.ModelVariant, ModelStatus>,
+        val setIds: Map<de.voicekeyboard.model.ModelVariant, String>,
+        val freeSpace: Long, val ramBytes: Long,
+        val wordAvailability: String, val versionLabel: String,
+    )
+    private var cachedStore: ModelStore? = null
+    private var statuses = emptyMap<de.voicekeyboard.model.ModelVariant, ModelStatus>()
+    private var setIds = emptyMap<de.voicekeyboard.model.ModelVariant, String>()
+    private var freeSpace = 0L
+    private var ramBytes = 0L
+    private var wordAvailability = ""
+    private var versionLabel = ""
+
+    private fun loadStorage(): StorageSnapshot {
+        check(android.os.Looper.myLooper() != android.os.Looper.getMainLooper())
+        prefs.all
+        getSharedPreferences(VoiceKeyboardService.LAYOUT_PREFS, MODE_PRIVATE).all
+        cachedStore = modelStoreOverride ?: cachedStore ?: ModelStore(File(filesDir, MODEL_DIR_NAME))
+        val store = cachedStore!!
+        return StorageSnapshot(
+            de.voicekeyboard.model.ModelVariant.entries.associateWith { store.statusQuick(it) },
+            de.voicekeyboard.model.ModelVariant.entries.associateWith { store.manifestSetId(it) },
+            filesDir.usableSpace, totalRamOverride ?: deviceTotalRamBytes(),
+            getString(R.string.setup_lang_word_correction,
+                assets.list("wordlists")?.filter { it.endsWith(".bin") }
+                    ?.joinToString(", ") { LanguageCycle.endonym(it.removeSuffix(".bin")) } ?: ""),
+            AppVersion.versionLabel(AppVersion.read(this), isDebugBuild()),
+        )
+    }
+
+    private fun cachedStatus(variant: de.voicekeyboard.model.ModelVariant =
+        de.voicekeyboard.model.ModelVariant.ONNX_CPU): ModelStatus = statuses[variant] ?: ModelStatus.ABSENT
 
     /** T19 (v0.1.45): debug flag as an injectable seam (T9-style
      *  ApplicationInfo.FLAG_DEBUGGABLE read via the application info);
@@ -122,11 +159,12 @@ class SetupActivity : ComponentActivity() {
         pendingImportVariant = savedInstanceState
             ?.getString(KEY_PENDING_IMPORT)
             ?.let { id -> de.voicekeyboard.model.ModelVariant.entries.firstOrNull { it.id == id } }
+        pendingImportUri = savedInstanceState?.getString(KEY_PENDING_IMPORT_URI)?.let(Uri::parse)
         stateView = findViewById(R.id.setup_state)
         // T19 (v0.1.45): version label via the ONE shared read path
         // (AppVersion.read — same source as the debug export).
         versionView = findViewById(R.id.setup_version)
-        versionView.text = AppVersion.versionLabel(AppVersion.read(this), isDebugBuild())
+        versionView.text = "…"
         fileInfoView = findViewById(R.id.setup_file_info)
         progress = findViewById(R.id.setup_progress)
         startButton = findViewById(R.id.setup_download_start)
@@ -148,6 +186,9 @@ class SetupActivity : ComponentActivity() {
         qwenDelete = findViewById(R.id.setup_qwen_delete)
         qwenImport = findViewById(R.id.setup_qwen_import)
         qwenProgress = findViewById(R.id.setup_qwen_progress)
+        qwenDownload.visibility = android.view.View.GONE
+        qwenImport.isEnabled = false
+        qwenStatus.setText(R.string.setup_import_only)
         parakeetSelect.setOnClickListener { onSelectModel(de.voicekeyboard.model.ModelVariant.ONNX_CPU) }
         parakeetDownload.setOnClickListener { onDownloadModel(de.voicekeyboard.model.ModelVariant.ONNX_CPU) }
         parakeetDelete.setOnClickListener { onDeleteModel(de.voicekeyboard.model.ModelVariant.ONNX_CPU) }
@@ -172,18 +213,16 @@ class SetupActivity : ComponentActivity() {
         }
         findViewById<Button>(R.id.setup_net_invite_later).setOnClickListener { markNetInviteShown() }
 
-        buildLanguageSection()
         // T23h (PLAN_V0147 §6): typing suggestions section BELOW the dictation
         // model section (appended at the end of the layout root).
-        buildTypingSection()
         // T24b (PLAN_V0147 §17.2, Gleis 3): the U2 text-correction card — third
         // model card, programmatic (no XML change), honest inert state while
         // BASE_URL_U2 is empty; the set follows the CURRENT typing language.
-        buildU2Card()
 
         // observer AFTER layout registration: the service informs us state-based
         // (no polling, no own thread); UI-thread delivery via runOnUiThread.
-        ModelDownloadService.observer = { state -> runOnUiThread { render(state) } }
+        ModelDownloadService.observer = { _ -> runOnUiThread { refreshUi() } }
+        importObserver = { refreshUi() }
     }
 
     // ---- Language selection (E9.1 rule 1/2, M8b-1) ----
@@ -282,14 +321,7 @@ class SetupActivity : ComponentActivity() {
     /** T23h/T23m: the ONE availability text — asset discovery over the
      *  word-list bin assets (§14.6(3)), rendered endonyms; used by the
      *  language section AND the typing section (string reused, not duplicated). */
-    private fun wordCorrectionAvailabilityText(): String {
-        val wordCorrLangs = assets.list("wordlists")
-            ?.filter { it.endsWith(".bin") }
-            ?.map { de.voicekeyboard.ime.LanguageCycle.endonym(it.removeSuffix(".bin")) }
-            ?.joinToString(", ")
-            ?: ""
-        return getString(R.string.setup_lang_word_correction, wordCorrLangs)
-    }
+    private fun wordCorrectionAvailabilityText(): String = wordAvailability
 
     // ---- T24b (Gleis 3): U2 text-correction card ----
 
@@ -373,9 +405,8 @@ class SetupActivity : ComponentActivity() {
      */
     private fun renderU2Card() {
         val variant = u2VariantForTypingLanguage()
-        val store = modelStore()
-        val status = store.statusQuick(variant)
-        val totalRam = totalRamOverride ?: deviceTotalRamBytes()
+        val status = cachedStatus(variant)
+        val totalRam = ramBytes
         u2SetLine?.text = getString(
             R.string.u2_set,
             de.voicekeyboard.ime.LanguageCycle.endonym(
@@ -388,6 +419,7 @@ class SetupActivity : ComponentActivity() {
             android.view.View.GONE
         }
         val importing = importingVariant == variant
+        u2Import?.isEnabled = importingVariant == null
         u2Import?.visibility = if (!importing && status != de.voicekeyboard.model.ModelStatus.READY) {
             android.view.View.VISIBLE
         } else {
@@ -401,7 +433,7 @@ class SetupActivity : ComponentActivity() {
             totalRam < de.voicekeyboard.model.DownloadPolicy.QWEN_MIN_TOTAL_RAM_BYTES ->
                 u2Status?.text = getString(R.string.model_ram_locked)
             else ->
-                u2Status?.text = getString(R.string.model_not_downloaded)
+                u2Status?.text = getString(R.string.setup_import_only)
         }
     }
 
@@ -477,26 +509,28 @@ class SetupActivity : ComponentActivity() {
 
     override fun onDestroy() {
         ModelDownloadService.observer = null
-        importExecutor.shutdown() // running imports finish; no new ones queued
+        importObserver = null
+        setupExecutor.shutdown()
         super.onDestroy()
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
         pendingImportVariant?.let { outState.putString(KEY_PENDING_IMPORT, it.id) }
+        pendingImportUri?.let { outState.putString(KEY_PENDING_IMPORT_URI, it.toString()) }
     }
 
     // ---- Download start path (L1: catch FGS block, never crash) ----
 
     private fun requestStartDownload() {
-        val store = modelStore()
-        val status = store.status()
+        if (!storageLoaded) return
+        val status = cachedStatus()
         val decision = DownloadPolicy.decide(
             // T20b: the E2 in-app switch is removed — the app never gates the
             // network itself. If the user revoked INTERNET at the system level,
             // the download fails with the known "netz" error (D1 taxonomy).
             networkEnabled = true,
-            freeBytes = filesDir.usableSpace,
+            freeBytes = freeSpace,
             status = status,
         )
         when (decision) {
@@ -526,8 +560,7 @@ class SetupActivity : ComponentActivity() {
     // ---- T22h: dictation model selection (one card per set) ----
 
     /** The ONE store of the Setup (injectable for tests). */
-    private fun modelStore(): ModelStore =
-        modelStoreOverride ?: ModelStore(File(filesDir, MODEL_DIR_NAME))
+    private fun modelStore(): ModelStore = checkNotNull(cachedStore) { "Storage not loaded" }
 
     /** Total device RAM (injectable for tests; production: ActivityManager). */
     private fun deviceTotalRamBytes(): Long {
@@ -548,12 +581,12 @@ class SetupActivity : ComponentActivity() {
      *  pref only on READY”); the service listener does the rest (incl. Deferred
      *  while a dictation runs) — the UI never switches an engine itself. */
     private fun onSelectModel(variant: de.voicekeyboard.model.ModelVariant) {
-        if (modelStore().statusQuick(variant) != ModelStatus.READY) return // never on not-ready
+        if (!storageLoaded || deletingVariant == variant || cachedStatus(variant) != ModelStatus.READY) return
         getSharedPreferences(de.voicekeyboard.ime.VoiceKeyboardService.LAYOUT_PREFS, MODE_PRIVATE)
             .edit()
             .putString(de.voicekeyboard.model.ModelVariant.PREFS_KEY, variant.id)
             .apply()
-        renderModelCards()
+        renderLoadedUi()
     }
 
     /** Download: starts the service with the card's EXTRA_VARIANT (T22d). */
@@ -571,10 +604,17 @@ class SetupActivity : ComponentActivity() {
     /** Delete: ONLY non-active sets — the running engine's model dir must never
      *  be ripped away ([ModelStore.deleteSet] refuses the active one anyway). */
     private fun onDeleteModel(variant: de.voicekeyboard.model.ModelVariant) {
-        val active = activeVariantFromPrefs()
-        val ok = modelStore().deleteSet(variant, active)
-        android.util.Log.i("VK-MODEL", "delete_set variant=${variant.id} ok=$ok") // codes only
+        if (!storageLoaded || deletingVariant != null) return
+        deletingVariant = variant
         renderModelCards()
+        ioExecutor.execute {
+            val ok = modelStore().deleteSet(variant, activeVariantFromPrefs())
+            android.util.Log.i("VK-MODEL", "delete_set variant=${variant.id} ok=$ok")
+            runOnUiThread {
+                deletingVariant = null
+                if (!isDestroyed) refreshUi()
+            }
+        }
     }
 
     // ---- V0.1.51 (PLAN_V0151 §D, P3): local import (folder on the device) ----
@@ -583,6 +623,7 @@ class SetupActivity : ComponentActivity() {
      *  The chosen folder must contain the pinned manifest files with their
      *  exact relative paths — see docs/MODEL_IMPORT.md. */
     private fun onImportFolder(variant: de.voicekeyboard.model.ModelVariant) {
+        if (!storageLoaded || importingVariant != null) return
         pendingImportVariant = variant
         importLauncher.launch(null)
     }
@@ -591,19 +632,28 @@ class SetupActivity : ComponentActivity() {
      *  error); a tree URI = import on the background executor, then a visible
      *  result message + refreshUi — never a silent failure. */
     internal fun onImportFolderPicked(uri: Uri?) {
-        val variant = pendingImportVariant
+        val variant = pendingImportVariant ?: return
+        if (uri == null) {
+            pendingImportVariant = null
+            pendingImportUri = null
+            return
+        }
+        pendingImportUri = uri
+        if (!storageLoaded || importingVariant != null) return
         pendingImportVariant = null
-        if (uri == null || variant == null) return
+        pendingImportUri = null
         val store = modelStore()
-        val source = DocumentTreeImportSource(contentResolver, uri)
+        val source = SafTreeImportSource(contentResolver, uri,
+            de.voicekeyboard.model.ModelManifest.forVariant(variant).map { it.storeName })
         importingVariant = variant
         renderModelCards()
         importExecutor.execute {
             val result = store.importSet(variant, source) // typed result, no throw
+            importingVariant = null
             runOnUiThread {
-                importingVariant = null
+                importObserver?.invoke()
+                if (isDestroyed) return@runOnUiThread
                 showImportResult(result)
-                refreshUi()
             }
         }
     }
@@ -619,14 +669,14 @@ class SetupActivity : ComponentActivity() {
 
     /** Card states: Ready+active / Ready+other / downloadable / locked. */
     private fun renderModelCards() {
-        val store = modelStore()
-        val totalRam = totalRamOverride ?: deviceTotalRamBytes()
-        val freeBytes = filesDir.usableSpace
+        if (!storageLoaded) return
+        val totalRam = ramBytes
+        val freeBytes = freeSpace
         val active = activeVariantFromPrefs()
         val controller = ModelDownloadService.controller
         renderModelCard(
             variant = de.voicekeyboard.model.ModelVariant.ONNX_CPU,
-            store = store, active = active, totalRam = totalRam, freeBytes = freeBytes,
+            active = active, totalRam = totalRam, freeBytes = freeBytes,
             statusView = parakeetStatus, selectButton = parakeetSelect,
             downloadButton = parakeetDownload, deleteButton = parakeetDelete,
             progressBar = parakeetProgress,
@@ -636,7 +686,7 @@ class SetupActivity : ComponentActivity() {
         )
         renderModelCard(
             variant = de.voicekeyboard.model.ModelVariant.QWEN3_ASR,
-            store = store, active = active, totalRam = totalRam, freeBytes = freeBytes,
+            active = active, totalRam = totalRam, freeBytes = freeBytes,
             statusView = qwenStatus, selectButton = qwenSelect,
             downloadButton = qwenDownload, deleteButton = qwenDelete,
             progressBar = qwenProgress,
@@ -652,7 +702,6 @@ class SetupActivity : ComponentActivity() {
 
     private fun renderModelCard(
         variant: de.voicekeyboard.model.ModelVariant,
-        store: ModelStore,
         active: de.voicekeyboard.model.ModelVariant,
         totalRam: Long,
         freeBytes: Long,
@@ -691,10 +740,10 @@ class SetupActivity : ComponentActivity() {
             return
         }
         progressBar.visibility = gone
-        selectButton.isEnabled = true
-        downloadButton.isEnabled = true
-        deleteButton.isEnabled = true
-        val status = store.statusQuick(variant)
+        selectButton.isEnabled = deletingVariant != variant
+        downloadButton.isEnabled = deletingVariant != variant
+        deleteButton.isEnabled = deletingVariant == null
+        val status = cachedStatus(variant)
         val manifest = manifestOverride ?: de.voicekeyboard.model.ModelManifest.forVariant(variant)
         // T22d/VK-2: locked = no download will EVER be offered right now —
         // RAM gate (Qwen only) or not-unlocked/not-enabled (empty base URL).
@@ -717,6 +766,7 @@ class SetupActivity : ComponentActivity() {
         // download host — offered exactly while the set is NOT READY (a
         // READY set shows select/delete instead; re-import is pointless).
         importButton?.visibility = if (status == ModelStatus.READY) gone else visible
+        importButton?.isEnabled = importingVariant == null
         // status text: honest and specific (semantics unchanged)
         when {
             status == ModelStatus.READY && variant == active -> {
@@ -733,7 +783,8 @@ class SetupActivity : ComponentActivity() {
             DownloadPolicy.requiredFreeBytes(variant, manifest) == null -> {
                 // set not usable: empty manifest (not unlocked) or — VK-2 —
                 // no pinned base URL yet ("not available yet" via this path)
-                statusView.text = getString(R.string.model_not_downloaded)
+                statusView.text = getString(if (importButton != null && manifest.isNotEmpty())
+                    R.string.setup_import_only else R.string.model_not_downloaded)
             }
             !offerable -> {
                 // offer blocked: RAM gate (Qwen only) or space floor
@@ -781,17 +832,22 @@ class SetupActivity : ComponentActivity() {
     }
 
     private fun evaluatePermissions(results: Map<String, Boolean>) {
+        // Rationale is a framework/UI call; preference initialization and writes
+        // are serialized with storage discovery on the setup worker.
+        val deniedForever = results.filter { !it.value && !shouldShowRequestPermissionRationale(it.key) }.keys
+        ioExecutor.execute {
         for ((permission, granted) in results) {
             if (granted) {
                 // granted: possibly delete a former marker
                 prefs.edit().remove(deniedKey(permission)).apply()
-            } else if (!shouldShowRequestPermissionRationale(permission)) {
+            } else if (permission in deniedForever) {
                 // denied again + no more rationale ⇒ permanently denied:
                 // marker into the SAME file that VoiceKeyboardService reads (C-3).
                 prefs.edit().putBoolean(deniedKey(permission), true).apply()
             }
         }
-        refreshUi()
+        runOnUiThread { if (!isDestroyed) refreshUi() }
+        }
     }
 
     private fun deniedKey(permission: String): String = DENIED_FOREVER_PREFIX + permission
@@ -811,6 +867,41 @@ class SetupActivity : ComponentActivity() {
     // ---- UI state ----
 
     private fun refreshUi() {
+        if (isDestroyed) return
+        if (refreshPending) { refreshAgain = true; return }
+        refreshPending = true
+        ioExecutor.execute {
+            val result = runCatching { loadStorage() }
+            runOnUiThread {
+                refreshPending = false
+                if (!isDestroyed) {
+                    val snapshot = result.getOrElse {
+                        stateView.text = getString(R.string.setup_import_io)
+                        return@runOnUiThread
+                    }
+                    statuses = snapshot.statuses
+                    setIds = snapshot.setIds
+                    freeSpace = snapshot.freeSpace
+                    ramBytes = snapshot.ramBytes
+                    wordAvailability = snapshot.wordAvailability
+                    versionLabel = snapshot.versionLabel
+                    storageLoaded = true
+                    versionView.text = versionLabel
+                    if (!sectionsBuilt) {
+                        sectionsBuilt = true
+                        buildLanguageSection()
+                        buildTypingSection()
+                        buildU2Card()
+                    }
+                    renderLoadedUi()
+                    pendingImportUri?.let { onImportFolderPicked(it) }
+                    if (refreshAgain) { refreshAgain = false; refreshUi() }
+                }
+            }
+        }
+    }
+
+    private fun renderLoadedUi() {
         render(ModelDownloadService.controller?.state)
         // T20b: re-evaluate the invite card for the CURRENT state — covers the
         // cold start (controller null, store READY ⇒ invite once) and the
@@ -847,7 +938,7 @@ class SetupActivity : ComponentActivity() {
     private fun inviteState(): DownloadController.State? {
         inviteStateOverride?.let { return it }
         ModelDownloadService.controller?.state?.let { return it }
-        return if (modelStore().status(activeVariantFromPrefs()) == ModelStatus.READY) {
+        return if (cachedStatus(activeVariantFromPrefs()) == ModelStatus.READY) {
             DownloadController.State.Ready
         } else null
     }
@@ -860,7 +951,7 @@ class SetupActivity : ComponentActivity() {
         val s = state ?: inviteState()
         val show = s != null && NetworkInvitePolicy.shouldShowInvite(
             s,
-            modelStore().manifestSetId(activeVariantFromPrefs()),
+            setIds.getValue(activeVariantFromPrefs()),
             prefs.getString(NET_INVITE_SHOWN_FOR_KEY, null),
         )
         netInviteCard.visibility =
@@ -870,11 +961,12 @@ class SetupActivity : ComponentActivity() {
     /** (b2) Both buttons persist shown_for = modelSetId of the ACTIVE set
      *  (pure [markShown]). */
     private fun markNetInviteShown() {
+        if (!storageLoaded) return
         prefs.edit()
             .putString(
                 NET_INVITE_SHOWN_FOR_KEY,
                 NetworkInvitePolicy.markShown(
-                    modelStore().manifestSetId(activeVariantFromPrefs()),
+                    setIds.getValue(activeVariantFromPrefs()),
                 ),
             )
             .apply()
@@ -954,7 +1046,7 @@ class SetupActivity : ComponentActivity() {
                 cancelButton.visibility = android.view.View.GONE
             }
             DownloadController.State.Idle -> {
-                val status = ModelStore(File(filesDir, MODEL_DIR_NAME)).status()
+                val status = cachedStatus()
                 stateView.text = if (status == ModelStatus.READY) {
                     getString(R.string.setup_state_ready)
                 } else {
@@ -977,6 +1069,14 @@ class SetupActivity : ComponentActivity() {
         )
 
     private companion object {
+        // Process scoped: a rotation must not allow another import to overwrite
+        // the running import's .part files. No Activity is retained after completion.
+        private var importObserver: (() -> Unit)? = null
+        @Volatile private var importingVariant: de.voicekeyboard.model.ModelVariant? = null
+        private val importExecutor = java.util.concurrent.Executors.newSingleThreadExecutor { r ->
+            Thread(r, "vk-model-import").apply { isDaemon = true }
+        }
+
         /** SAME file as VoiceKeyboardService (there PERMISSION_PREFS). */
         private const val PERMISSION_PREFS = "vk_permissions"
         private const val DENIED_FOREVER_PREFIX = "denied_forever_"
@@ -988,6 +1088,7 @@ class SetupActivity : ComponentActivity() {
 
         /** V0.1.51: instance-state key of the variant whose folder picker is open. */
         private const val KEY_PENDING_IMPORT = "pending_import_variant"
+        private const val KEY_PENDING_IMPORT_URI = "pending_import_uri"
     }
 }
 
@@ -1065,47 +1166,7 @@ internal fun importMessage(result: de.voicekeyboard.model.ImportResult): Pair<In
         is de.voicekeyboard.model.ImportResult.SizeMismatch ->
             R.string.setup_import_size to result.relPath
         is de.voicekeyboard.model.ImportResult.IoError ->
-            R.string.setup_import_io to null
+            if (result.relPath != null) R.string.setup_import_io_file to result.relPath
+            else R.string.setup_import_io to null
     }
 
-/**
- * V0.1.51 (PLAN §D P3): SAF adapter — the folder the user picked in the system
- * tree picker (ACTION_OPEN_DOCUMENT_TREE) as an [ImportSource], purely over
- * framework APIs (DocumentsContract — deliberately NO new AndroidX dependency,
- * androidx.documentfile is not in the offline Gradle cache). Relative set
- * paths (incl. "shared/…", "tokenizer/…") descend segment by segment via the
- * children query; a missing segment/file yields null (→ Missing), an
- * unreadable file throws (→ IoError in the store). The store core itself
- * stays Android-free (no ContentResolver there).
- */
-internal class DocumentTreeImportSource(
-    private val resolver: android.content.ContentResolver,
-    private val treeUri: Uri,
-) : ImportSource {
-
-    override fun open(relativePath: String): java.io.InputStream? {
-        var docId = android.provider.DocumentsContract.getTreeDocumentId(treeUri)
-        val segments = relativePath.split('/')
-        for (segment in segments.dropLast(1)) {
-            docId = findChild(docId, segment) ?: return null
-        }
-        val fileDocId = findChild(docId, segments.last()) ?: return null
-        return resolver.openInputStream(
-            android.provider.DocumentsContract.buildDocumentUriUsingTree(treeUri, fileDocId),
-        ) // unreadable ⇒ IOException ⇒ IoError
-    }
-
-    /** Document id of the direct child named [name], or null if absent. */
-    private fun findChild(parentDocId: String, name: String): String? {
-        val children = android.provider.DocumentsContract.buildChildDocumentsUriUsingTree(treeUri, parentDocId)
-        val idColumn = android.provider.DocumentsContract.Document.COLUMN_DOCUMENT_ID
-        val nameColumn = android.provider.DocumentsContract.Document.COLUMN_DISPLAY_NAME
-        return resolver.query(
-            children,
-            arrayOf(idColumn, nameColumn),
-            "$nameColumn=?",
-            arrayOf(name),
-            null,
-        )?.use { cursor -> if (cursor.moveToFirst()) cursor.getString(0) else null }
-    }
-}

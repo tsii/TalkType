@@ -147,11 +147,13 @@
   <!-- V0.1.51 (PLAN_V0151 §D): local model-set import — the user copies the set
        folder onto the phone (USB/cloud), the app imports it offline and verifies
        every file against the pinned manifest before the set becomes READY. -->
+  <string name="setup_import_only">No download host is configured. Import the original model files using “Import folder…”. Choose the model folder, not its parent. Keep subfolders, or place files with unique names in one folder.</string>
   <string name="setup_import_folder">Import folder…</string>
   <string name="setup_import_running">Importing and checking…</string>
   <string name="setup_import_ok">Model set imported and verified.</string>
   <string name="setup_import_missing">File missing in the folder: %1$s</string>
   <string name="setup_import_hash">File corrupt (checksum mismatch): %1$s</string>
   <string name="setup_import_size">File has the wrong size: %1$s</string>
+  <string name="setup_import_io_file">Cannot read or store file: %1$s. Check access, free space and the selected folder.</string>
   <string name="setup_import_io">Import failed – check the folder and try again.</string>
 </resources>

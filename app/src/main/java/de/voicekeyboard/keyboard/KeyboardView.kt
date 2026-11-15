@@ -565,7 +565,12 @@ class KeyboardView @JvmOverloads constructor(
     // LongPressMenu.withHint); MAX_CELLS cap and unfolding rules there.
     private fun alternatesOf(key: KeyboardModel.MeasuredKey): List<String> {
         val src = sourceKeys[key.id] ?: return emptyList()
-        return LongPressMenu.withHint(src.alternates, src.hint, LongPressMenu.MAX_CELLS)
+        // V0.1.52 (user finding): the digit of the hint row must be reachable as
+        // close as possible to the finger ⇒ centre slot instead of the last one.
+        return LongPressMenu.digitNearestToFinger(
+            LongPressMenu.withHint(src.alternates, src.hint, LongPressMenu.MAX_CELLS),
+            src.hint,
+        )
     }
 
     /** T23l (§14.2): popup labels — cell 0 endonym CURRENT, cell 1 ALL_ACTIVE
@@ -881,11 +886,15 @@ class KeyboardView @JvmOverloads constructor(
                 // proportional scaling (×1.5) into the s bounding box ⇒ optical
                 // height 0.60·s like ⇧/⏎ ("in the ⇧/⏎ style", P0 equal-height
                 // gate), stroke width ACTION_GLYPH_STROKE_DP, round caps.
-                outline.moveTo(cx + 0.465f * s, cy)               // shaft right
-                outline.lineTo(cx - 0.285f * s, cy)               // shaft toward the tip
-                outline.moveTo(cx + 0.045f * s, cy - 0.30f * s)   // head top
-                outline.lineTo(cx - 0.285f * s, cy)               // arrow tip left
-                outline.lineTo(cx + 0.045f * s, cy + 0.30f * s)    // head bottom
+                // V0.1.51b (user finding): the arrow keeps the SAME optical bounding
+                // box as ⏎ (x −0.30s…+0.24s = 0.54·s wide, y ±0.30s = 0.60·s tall) so
+                // ⌫ does not look bigger/heavier than ⇧ and ⏎. Only the right end of the
+                // shaft and the head base moved in (was +0.465s/+0.045s before).
+                outline.moveTo(cx + 0.24f * s, cy)                // shaft right (= ⏎ top end)
+                outline.lineTo(cx - 0.30f * s, cy)                // shaft toward the tip
+                outline.moveTo(cx + 0.02f * s, cy - 0.30f * s)    // head top
+                outline.lineTo(cx - 0.30f * s, cy)                // arrow tip left
+                outline.lineTo(cx + 0.02f * s, cy + 0.30f * s)    // head bottom
                 // NO detail path (base stroke removed in V0.1.51).
             }
             KeyActions.ENTER -> {

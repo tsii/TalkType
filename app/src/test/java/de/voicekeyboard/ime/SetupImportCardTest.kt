@@ -73,6 +73,7 @@ class SetupImportCardTest {
         controller.get().totalRamOverride = 8L * 1024 * 1024 * 1024
         if (store != null) controller.get().modelStoreOverride = store
         controller.setup()
+        controller.get().awaitSetupIo()
         return controller.get()
     }
 
@@ -143,6 +144,7 @@ class SetupImportCardTest {
         val controller = Robolectric.buildActivity(SetupActivity::class.java)
         controller.get().totalRamOverride = 4L * 1024 * 1024 * 1024
         controller.setup()
+        controller.get().awaitSetupIo()
         assertEquals(
             "local import is no download — the RAM gate does not apply",
             View.VISIBLE, importButtonIn(u2Card(controller.get())).visibility,

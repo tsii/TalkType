@@ -29,7 +29,8 @@ set, switch the typing language first (Setup → language, or the 🌐 key).
 ## What the folder must contain
 
 The picked folder is the **root of one set**. Every file must exist with its
-exact relative path, exact byte size and exact SHA-256 checksum (pinned
+exact relative path (or the unambiguous flat fallback described below), exact
+byte size and exact SHA-256 checksum (pinned
 manifest in `ModelManifest.kt`; identical to the download contract — the
 same hashes the downloader would verify). Extra files are ignored.
 
@@ -84,9 +85,20 @@ u2-en/
 ```
 
 The folder NAME itself does not matter ("qwen-set", "model", "Download" —
-irrelevant); only the relative paths inside must match the table above.
-When copying from a cloud drive, make sure the subfolders (`shared/`,
-`tokenizer/`) survived — some flattening transfer modes destroy them.
+irrelevant). The exact nested path is always preferred. If that path is
+absent, a file directly in the picked root with the same basename is accepted
+only when that basename belongs to exactly one path in the set manifest.
+For example, `shared_weights.bin` in the root can supply
+`shared/shared_weights.bin` after a transfer flattened the subfolders.
+
+This fallback never searches arbitrary subfolders and never chooses between
+duplicate display names. Ambiguous names, a file used as a directory, a
+directory used as a file, and unreadable provider listings are import errors.
+An unreadable or corrupt exact-path file is **not** replaced by a flat copy.
+All accepted files still undergo the same pinned size and checksum checks.
+SAF provider document ids may be opaque; lookup uses exact, case-sensitive
+display names and filters directory listings locally (providers need not
+honor SQL selection arguments).
 
 ## What happens on errors
 
@@ -95,14 +107,15 @@ check. On any failure the import aborts, all temporary data is removed and
 an **already installed set stays completely untouched** — there is never an
 intermediate state in which the set is missing or half-installed.
 
-Visible message per failure (each names the offending file):
+Visible message per failure (file verification errors name the manifest-relative
+path; store-level I/O failures have no file name):
 
 | message | cause |
 |---|---|
 | `File missing in the folder: <file>` | the file (or a subfolder) does not exist in the picked folder |
 | `File corrupt (checksum mismatch): <file>` | wrong content — transfer error, wrong version of the file |
 | `File has the wrong size: <file>` | truncated or oversized file |
-| `Import failed – check the folder and try again` | the source became unreadable mid-copy (USB stick unplugged, cloud app revoked access) |
+| `Import failed – check the folder and try again` | unreadable source/listing, ambiguous names, storage or staging/activation I/O failure; file-specific I/O errors carry the manifest path for the UI, never technical provider details |
 
 Closing the folder picker without a choice cancels silently — no import
 started, nothing was changed.
@@ -115,6 +128,17 @@ hand-triggered download fails fast **without any network attempt**. Real
 downloads become possible the moment a host is pinned in `ModelManifest.kt`
 (`BASE_URL_*`), without any further code change — the import path is an
 addition, not a replacement.
+
+## Automated regression coverage
+
+`ModelStoreImportTest` uses small pinned manifests for success, replacement,
+missing/short/oversized/corrupt files, interrupted reads, named open failures,
+staging creation failure and activation write failure. Failed imports preserve
+the installed set and remove their temporary data where the filesystem allows.
+`SafTreeImportSourceTest` runs against a fake framework `DocumentsProvider`
+with opaque ids and unfiltered listings, covering exact nested precedence,
+unique flat fallback, ambiguity, wrong document types and unreadable sources.
+These are local unit tests; no device, network, or full-size model is needed.
 
 ## Where to verify hashes yourself
 

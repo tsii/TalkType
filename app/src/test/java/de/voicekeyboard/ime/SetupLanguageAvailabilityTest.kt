@@ -26,7 +26,7 @@ import org.robolectric.annotation.Config
 class SetupLanguageAvailabilityTest {
 
     private fun buildActivity(): SetupActivity =
-        Robolectric.buildActivity(SetupActivity::class.java).setup().get()
+        Robolectric.buildActivity(SetupActivity::class.java).setup().get().awaitSetupIo()
 
     private fun languageBoxes(activity: SetupActivity): List<CheckBox> {
         val root = activity.findViewById<TextView>(de.voicekeyboard.R.id.setup_title).parent as ViewGroup

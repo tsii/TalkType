@@ -30,6 +30,7 @@ class SetupActivityVersionTest {
         val controller = Robolectric.buildActivity(SetupActivity::class.java)
         controller.get().debugBuildOverride = false
         controller.setup()
+        controller.get().awaitSetupIo()
 
         val versionView = controller.get().findViewById<TextView>(R.id.setup_version)
         assertEquals("setup_version VISIBLE", View.VISIBLE, versionView.visibility)
@@ -55,6 +56,7 @@ class SetupActivityVersionTest {
         val controller = Robolectric.buildActivity(SetupActivity::class.java)
         controller.get().debugBuildOverride = true
         controller.setup()
+        controller.get().awaitSetupIo()
 
         val versionView = controller.get().findViewById<TextView>(R.id.setup_version)
         val context = ApplicationProvider.getApplicationContext<Context>()

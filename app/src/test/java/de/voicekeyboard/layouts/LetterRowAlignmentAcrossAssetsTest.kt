@@ -22,7 +22,7 @@ import org.robolectric.annotation.Config
  *     — ⏎ == ⇧ (symmetric wings); Σ r2 = 10 puts the M CENTER on the
  *     i|o gap of r0 (8.0u = 864 px), see GeometryV0149Test.mCenteredUnderTheIAndOGap;
  *   - period: GONE from r2 — it moved back to the footer between space and
- *     mic (F54 menu , ! ? : ; ( ) unchanged); space 7.5 → 6.5 (Σ13 stays);
+ *     mic (F54 menu reordered to ( ) : ; ! ? , in V0.1.51b); space 7.5 → 6.5 (Σ13 stays);
  *   - alignment invariant: the letters of BOTH rows sit on the SAME cell
  *     raster — Z1 letter width == Z2 letter width (both 1.0).
  *   - cs-cz (10-key home row): r1 = 0.5 + 10 à 1.0 + ⌫ 1.0 (Σ 11.5);
@@ -114,8 +114,8 @@ class LetterRowAlignmentAcrossAssetsTest {
                 val period = r3.single { it.id == "period" }
                 assertEquals("$id/$ln period value '.'", ".", period.value)
                 assertEquals(
-                    "$id/$ln period F54 menu , ! ? : ; ( )",
-                    listOf(",", "!", "?", ":", ";", "(", ")"),
+                    "$id/$ln period F54 menu ( ) : ; ! ? ,",
+                    listOf("(", ")", ":", ";", "!", "?", ","),
                     period.alternates,
                 )
                 assertNull("$id/$ln/period no hint", period.hint)
@@ -165,8 +165,8 @@ class LetterRowAlignmentAcrossAssetsTest {
             assertTrue("cs-cz/$ln no period in r2", r2.none { it.id == "period" })
             val period = rows[3].single { it.id == "period" }
             assertEquals(
-                "cs-cz/$ln period F54 menu , ! ? : ; ( )",
-                listOf(",", "!", "?", ":", ";", "(", ")"),
+                "cs-cz/$ln period F54 menu ( ) : ; ! ? ,",
+                listOf("(", ")", ":", ";", "!", "?", ","),
                 period.alternates,
             )
             assertEquals("cs-cz/$ln space 6.5", 6.5, rows[3].single { it.id == "space" }.width, 0.001)

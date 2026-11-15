@@ -109,7 +109,7 @@ class SetupPermissionsButtonTest {
             .commit()
 
     private fun buildResumed(): SetupActivity =
-        Robolectric.buildActivity(SetupActivity::class.java).setup().resume().get()
+        Robolectric.buildActivity(SetupActivity::class.java).setup().resume().get().awaitSetupIo()
 
     private fun hintOf(activity: SetupActivity): String =
         activity.findViewById<TextView>(R.id.setup_permissions_hint).text.toString()

@@ -86,3 +86,9 @@
 ## T25a (2026-11-05, sum_ref Export)
 - Werkzeug installiert: `apt-get install time` (GNU /usr/bin/time für `-v` RSS-Messung der Export-Stufen).
 - Keine weiteren neuen Werkzeuge; .venv-asr unverändert (transformers 5.22.1, ort 1.31.1, torch 2.15 cpu, onnx 1.23.2).
+
+## Eric Setup / Import Fix
+- Setup storage/asset/version discovery off main; no model hashes in setup rendering.
+- SAF exact-name filtering + safe flat fallback; named IO errors; picker and delete races covered.
+- Final `:app:testDebugUnitTest --rerun-tasks`: 989 tests, 0 failures/errors/skips; XML `/tmp/v152_debug/`.
+- No tools installed; no git, adb, assemble or deployment. Device verification pending; see `docs/ERIC_DOWNLOAD_FIX.md`.

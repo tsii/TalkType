@@ -21,6 +21,37 @@ from `dist/` (checksums of the last rotations: `dist/SHA256SUMS-*.txt`).
 - The "Grant permissions" button now reacts in every state: system dialog when something is
   missing, "All permissions granted" toast when nothing is (no dead click).
 
+## [0.1.52] - 2026-11-15 (versionCode 52) — glyph parity, punctuation order, digit nearest the finger, Setup responsiveness, working import
+### Changed (user findings on 0.1.51)
+- **The backspace arrow now has the same optical box as shift and enter** (0.54 · s wide instead
+  of 0.75 · s): it no longer looks bigger/heavier than the other two action glyphs. Height (0.60 · s),
+  stroke width and centring are unchanged, and it is still a pure arrow without the base stroke.
+- **Punctuation menu reordered**: the period key's long-press row is now `( ) : ; ! ? ,`
+  (all 15 assets, base + shift; ru-ru keeps `@` in front).
+- **Digits in letter overlays sit as close as possible to the finger**: the hint digit is moved
+  from the end of the menu row into the centre slot (nearest to the pressed key), all other
+  characters keep their relative order — a pure permutation, no cell added or dropped
+  (`LongPressMenu.digitNearestToFinger`, 5 new tests).
+### Fixed
+- **Setup no longer freezes** (reproduced ANR: "Input dispatching timed out … SetupActivity"):
+  storage discovery, model status, free-space queries, asset enumeration and version lookup run
+  on background workers; late results are dropped when the activity is gone. Taps on
+  "Grant permissions" and the model cards react immediately.
+- **Import made robust** (expert review, `docs/ERIC_DOWNLOAD_FIX.md`): SAF lookup prefers exact
+  nested paths, accepts a unique flat basename only (ambiguous names are rejected), validates the
+  document type and returns typed errors with the offending file name. Two races fixed: a picker
+  result survives an activity recreation, and a queued delete can no longer remove a set the user
+  selected in the meantime.
+### Honest status on downloads
+- There is still **no hosting** for the pinned model files (Qwen3-ASR 1.7 GB, U2 179/249 MB), so
+  the cards are deliberately **import-only** (`BASE_URL_*` stays empty). Verified on the emulator:
+  importing the real U2-German set (241 MB) through the folder picker ends in
+  "Ready — upgrades the typing suggestions automatically".
+### Tests
+- Debug suite **989 / 0** (`--rerun-tasks`, `/tmp/v152_debug/`); new suites for the import adapter
+  (9 fake-DocumentsProvider cases), the Setup I/O regression, the permission matrix and the
+  digit-nearest permutation.
+
 ## [0.1.51] - 2026-11-15 (versionCode 51) — backspace fixes, reacting permission button, local model import
 ### Changed (user findings on 0.1.50)
 - **Backspace is a full key width now** (1.0 unit = 102.86 px @1080 in the German layout, cs 93.91,

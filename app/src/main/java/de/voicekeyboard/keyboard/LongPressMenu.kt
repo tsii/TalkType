@@ -46,6 +46,31 @@ object LongPressMenu {
     }
 
     /**
+     * V0.1.52 (user finding): a DIGIT reached through a letter overlay must sit as
+     * close as possible to the finger, all other characters may be further away.
+     * The menu is centred over the pressed key, so the cells closest to the finger
+     * are the MIDDLE ones — the digit is therefore moved from the end of the row
+     * into the centre slot (for an even cell count: one of the two centre slots,
+     * preferring the lower index so the wrap stays deterministic).
+     *
+     * Pure permutation, no cell is added or dropped: the cell count, the character
+     * inventory and the position of every other character relative to each other
+     * stay exactly as they were (only the digit's slot changes).
+     */
+    fun digitNearestToFinger(cells: List<String>, digit: String?): List<String> {
+        val d = digit?.trim().orEmpty()
+        if (d.isEmpty()) return cells
+        val from = cells.indexOf(d)
+        if (from < 0 || cells.size < 3) return cells
+        val to = (cells.size - 1) / 2
+        if (from == to) return cells
+        val out = cells.toMutableList()
+        out.removeAt(from)
+        out.add(to, d)
+        return out
+    }
+
+    /**
      * F24e0 (DESIGN_KEY_POPUP.md §7, user decision 07:2x): a menu cell can
      * carry an ACTION instead of committing text (e. g. cursor_left/cursor_right from
      * the footer row). [actionCells] is the optional action list indexed in parallel

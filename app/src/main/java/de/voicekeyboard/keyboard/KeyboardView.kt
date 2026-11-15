@@ -854,35 +854,39 @@ class KeyboardView @JvmOverloads constructor(
      *  Bounding box = ACTION_GLYPH_DP square, centered on (cx, cy). */
     /** F29/P0 (2026-11-01): the three action glyphs (⇧/⌫/⏎) as canvas paths —
      *  IDENTICAL stroke width ([KeyboardTheme.ACTION_GLYPH_STROKE_DP]) and
-     *  IDENTICAL optical height (bounding box 0.60·s tall). F36/V2 §8: ⌫ = pure
-     *  left arrow with base (X removed); F46: ⇧ = up arrow made of shaft +
-     *  head + base in the same style; ⏎ = enter arrow. [size] = bounding box (default
-     *  ACTION_GLYPH_DP; the popup passes its own glyph size). */
+     *  IDENTICAL optical height (bounding box 0.60·s tall). F36/V2 §8: ⌫ =
+     *  reiner Linkspfeil — the base stroke was removed in V0.1.51 on user
+     *  request (V0.1.50 still had the vertical bar); F46: ⇧ = up arrow made of
+     *  shaft + head + base in the same style; ⏎ = enter arrow. [size] = bounding
+     *  box (default ACTION_GLYPH_DP; the popup passes its own glyph size). */
     /** F34/P2-3 (REVIEW_F29_F33): path cache per glyph type + size + position —
      *  previously a new Path allocation per key per onDraw (hot path). The key positions
      *  are fixed per layout, so the cache grows once and stays stable. */
     private val glyphPathCache = HashMap<Triple<String, Int, Int>, List<Path>>()
 
-    /** F34/P2-3: build the glyph paths (2 per type) — ONCE per (value, size, cx, cy),
-     *  the result is held in [glyphPathCache]. Coordinates in view pixels. */
+    /** F34/P2-3: build the glyph paths — ONCE per (value, size, cx, cy),
+     *  the result is held in [glyphPathCache]. Coordinates in view pixels.
+     *  ⌫ carries ONE path (V0.1.51: the base stroke is gone — pure left arrow);
+     *  ⇧/⏎ keep two (outline + detail). */
     private fun buildActionGlyphPaths(value: String, s: Float, cx: Float, cy: Float): List<Path> {
         val outline = Path()
         val detail = Path()
         when (value) {
             KeyActions.BACKSPACE -> {
-                // F36/V2 §8: ⌫ = PURE left arrow with base (the old X is removed)
-                // — path points of the 1x1 spec box (shaft 0.80|0.50 → 0.30|0.50; head
-                // 0.52|0.30 → 0.30|0.50 → 0.52|0.70; base 0.18|0.32 → 0.18|0.68),
+                // F36/V2 §8 + V0.1.51 (user finding): ⌫ = PURE left arrow — the
+                // vertical base stroke at cx − 0.465s was removed in V0.1.51
+                // ("Basisstrich auf Nutzerwunsch entfernt"; V0.1.50 still drew it).
+                // Outline stays draw-identical: shaft 0.80|0.50 → 0.30|0.50, head
+                // 0.52|0.30 → 0.30|0.50 → 0.52|0.70 of the 1x1 spec box,
                 // proportional scaling (×1.5) into the s bounding box ⇒ optical
-                // height 0.60·s like ⇧/⏎ ("in the ⇧/⏎ style", P0 equal-height gate),
-                // stroke width ACTION_GLYPH_STROKE_DP, round caps (Paint.Cap ROUND).
+                // height 0.60·s like ⇧/⏎ ("in the ⇧/⏎ style", P0 equal-height
+                // gate), stroke width ACTION_GLYPH_STROKE_DP, round caps.
                 outline.moveTo(cx + 0.465f * s, cy)               // shaft right
                 outline.lineTo(cx - 0.285f * s, cy)               // shaft toward the tip
                 outline.moveTo(cx + 0.045f * s, cy - 0.30f * s)   // head top
                 outline.lineTo(cx - 0.285f * s, cy)               // arrow tip left
                 outline.lineTo(cx + 0.045f * s, cy + 0.30f * s)    // head bottom
-                detail.moveTo(cx - 0.465f * s, cy - 0.27f * s)    // base top
-                detail.lineTo(cx - 0.465f * s, cy + 0.27f * s)     // base bottom
+                // NO detail path (base stroke removed in V0.1.51).
             }
             KeyActions.ENTER -> {
                 // ⏎: return arrow — down, to the left, tip points left
@@ -915,7 +919,9 @@ class KeyboardView @JvmOverloads constructor(
                 detail.lineTo(cx + 0.20f * s, cy + KeyboardTheme.ShiftGlyph.BASE_LINE_RATIO * s)
             }
         }
-        return listOf(outline, detail)
+        // V0.1.51: ⌫ draws ONE path (pure left arrow, no base stroke);
+        // ⇧/⏎ keep outline + detail.
+        return if (detail.isEmpty) listOf(outline) else listOf(outline, detail)
     }
 
     private fun drawActionGlyph(

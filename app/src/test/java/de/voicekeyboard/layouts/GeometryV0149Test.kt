@@ -14,24 +14,25 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
 /**
- * V0.1.50 geometry warden tests (correction of docs/PLAN_GEOMETRY_V0149.md
- * §1/§2 — the tables below are the binding replacement, §7 rows 1a–1h).
+ * V0.1.51 geometry warden tests (docs/PLAN_V0151.md §A — the tables below
+ * are the binding replacement of the V0.1.50 correction of
+ * docs/PLAN_GEOMETRY_V0149.md §1/§2).
  * Target geometry, tolerance ±1e-3 for relative widths, ±0.5 px for the
  * pixel probe, ±1e-6 for the ⌫ ratio:
  *
  *  - Letter layers (base+shift), 13 standard assets: Z1 = margin 0.500 +
- *    9 × 1.000 + ⌫ 0.750 (Σ 10.25; ⌫ == 0.75 × letter width); Z2 = ⇧ 1.500 +
- *    7 × 1.000 + ⏎ 1.500 (⏎ == ⇧, symmetric wings); footer = symbols 1.5 ·
- *    language 1 · emoji 1 · space 6.5 · period 1 · mic 2 (Σ 13).
+ *    9 × 1.000 + ⌫ 1.000 (Σ 10.5; ⌫ == letter width, V0.1.51 user finding);
+ *    Z2 = ⇧ 1.500 + 7 × 1.000 + ⏎ 1.500 (⏎ == ⇧, symmetric wings); footer =
+ *    symbols 1.5 · language 1 · emoji 1 · space 6.5 · period 1 · mic 2 (Σ 13).
  *    NEW V0.1.50 alignment: the M center sits on the i|o GAP of Z0
  *    (8.0 units = 864 px at W=1080) — not centered under the i.
- *  - cs-cz: Z1 = margin 0.500 + 10 × 1.000 + ⌫ 0.750 (Σ 11.25); Z2 = ⇧ 2.000
+ *  - cs-cz: Z1 = margin 0.500 + 10 × 1.000 + ⌫ 1.000 (Σ 11.5); Z2 = ⇧ 2.000
  *    + 6 × 1.000 + ⏎ 2.000 (Σ 10, unchanged; the M is NOT on the i|o gap
  *    here by design — 6-letter row, table row "unverändert").
  *  - ru-ru: Z0 unchanged (13 keys, Σ 10); Z1 = margin 0.500 + 11 × 1.000 +
- *    ⌫ 0.750 (Σ 12.25); Z2 = ⇧ 1.500 + 10 × 0.900 + ⏎ 1.500 (Σ 12).
+ *    ⌫ 1.000 (Σ 12.5); Z2 = ⇧ 1.500 + 10 × 0.900 + ⏎ 1.500 (Σ 12).
  *  - Symbol layers (symbols+symbolsShift), all 15: Z1 = margin 0.500 +
- *    10 × 1.000 + ⌫ 0.750 (Σ 11.25); Z2 = toggle 1.000 + 10 × 0.750 +
+ *    10 × 1.000 + ⌫ 1.000 (Σ 11.5); Z2 = toggle 1.000 + 10 × 0.750 +
  *    ⏎ 1.500 (Σ 10); NO shift key; footer unchanged (space 7.5).
  */
 @RunWith(RobolectricTestRunner::class)
@@ -54,9 +55,9 @@ class GeometryV0149Test {
     private data class Z2Spec(val letters: Int, val letterW: Double, val shiftW: Double)
 
     private fun z1Spec(id: String) = when (id) {
-        "cs-cz" -> Z1Spec(10, 1.000, 0.500, 0.750)
-        "ru-ru" -> Z1Spec(11, 1.000, 0.500, 0.750)
-        else -> Z1Spec(9, 1.000, 0.500, 0.750)
+        "cs-cz" -> Z1Spec(10, 1.000, 0.500, 1.000)
+        "ru-ru" -> Z1Spec(11, 1.000, 0.500, 1.000)
+        else -> Z1Spec(9, 1.000, 0.500, 1.000)
     }
 
     private fun z2Spec(id: String) = when (id) {
@@ -85,22 +86,22 @@ class GeometryV0149Test {
 
     // ---------------------------------------------------------------- 1a
 
-    /** V0.1.50 Σ table: letters 10/10.25/10/13 (cs 10/11.25/10/13,
-     *  ru 10/12.25/12/13), symbols 10/11.25/10/13 for ALL 15. */
+    /** V0.1.51 Σ table: letters 10/10.5/10/13 (cs 10/11.5/10/13,
+     *  ru 10/12.5/12/13), symbols 10/11.5/10/13 for ALL 15. */
     private fun rowTarget(id: String, ln: String, r: Int): Double = when (r) {
         0 -> 10.0
         3 -> 13.0
         else -> when (ln) {
             "base", "shift" -> when (r) {
-                1 -> when (id) { "cs-cz" -> 11.25; "ru-ru" -> 12.25; else -> 10.25 }
+                1 -> when (id) { "cs-cz" -> 11.5; "ru-ru" -> 12.5; else -> 10.5 }
                 else -> if (id == "ru-ru") 12.0 else 10.0
             }
-            else -> if (r == 1) 11.25 else 10.0 // symbols/symbolsShift
+            else -> if (r == 1) 11.5 else 10.0 // symbols/symbolsShift
         }
     }
 
     @Test
-    fun rowSumsMatchTheV0150Table() {
+    fun rowSumsMatchTheV0151Table() {
         for (id in allAssets) {
             for (ln in allLayers) {
                 val rs = rows(id, ln)
@@ -135,8 +136,8 @@ class GeometryV0149Test {
                     assertEquals("$id/$ln/${k.id}: Z1 letter width", spec.letterW, k.width, 1e-3)
                 }
                 assertEquals(
-                    "$id/$ln: ⌫ == 0.75 × letter width (V0.1.50 mnemonic)",
-                    0.75 * letters.first().width, backspace.width, 1e-6,
+                    "$id/$ln: ⌫ == letter width (V0.1.51: one full unit)",
+                    letters.first().width, backspace.width, 1e-6,
                 )
                 assertEquals("$id/$ln: ⌫ width", spec.backspaceW, backspace.width, 1e-3)
             }
@@ -217,10 +218,10 @@ class GeometryV0149Test {
                 val backspace = z1.last()
                 assertEquals("$id/$ln: ⌫ at the end of Z1", KeyActions.BACKSPACE, backspace.value)
                 assertEquals(
-                    "$id/$ln: ⌫ == 0.75 × character width (V0.1.50)",
-                    0.75 * z1Letters.first().width, backspace.width, 1e-6,
+                    "$id/$ln: ⌫ == character width (V0.1.51: one full unit)",
+                    z1Letters.first().width, backspace.width, 1e-6,
                 )
-                assertEquals("$id/$ln: ⌫ width", 0.750, backspace.width, 1e-3)
+                assertEquals("$id/$ln: ⌫ width", 1.000, backspace.width, 1e-3)
 
                 val z2 = rs[2]
                 val toggle = z2.first()
@@ -278,28 +279,28 @@ class GeometryV0149Test {
                 }
                 when (id) {
                     "cs-cz" -> {
-                        // Z1 Σ 11.25 → unit 96.0 px; Z2 Σ 10 → unit 108.0 px.
-                        assertEquals("$id/$ln: Z1 margin 48.0 px", 48.0f, widthById(1, "m-left"), 0.5f)
-                        assertEquals("$id/$ln: Z1 letter 96.0 px", 96.0f, textWidth(1), 0.5f)
-                        assertEquals("$id/$ln: Z1 ⌫ 72.0 px", 72.0f, widthById(1, "backspace"), 0.5f)
+                        // Z1 Σ 11.5 → unit 93.91 px; Z2 Σ 10 → unit 108.0 px.
+                        assertEquals("$id/$ln: Z1 margin 46.96 px", 46.96f, widthById(1, "m-left"), 0.5f)
+                        assertEquals("$id/$ln: Z1 letter 93.91 px", 93.91f, textWidth(1), 0.5f)
+                        assertEquals("$id/$ln: Z1 ⌫ 93.91 px", 93.91f, widthById(1, "backspace"), 0.5f)
                         assertEquals("$id/$ln: Z2 letter 108.0 px", 108.0f, textWidth(2), 0.5f)
                         assertEquals("$id/$ln: ⇧ 216.0 px", 216.0f, widthById(2, "shift"), 0.5f)
                         assertEquals("$id/$ln: ⏎ 216.0 px (== ⇧)", 216.0f, widthById(2, "enter"), 0.5f)
                     }
                     "ru-ru" -> {
-                        // Z1 Σ 12.25 → unit 88.16 px; Z2 Σ 12 → unit 90.0 px.
-                        assertEquals("$id/$ln: Z1 margin 44.08 px", 44.08f, widthById(1, "m-left"), 0.5f)
-                        assertEquals("$id/$ln: Z1 letter 88.16 px", 88.16f, textWidth(1), 0.5f)
-                        assertEquals("$id/$ln: Z1 ⌫ 66.12 px (0.75 × letter)", 66.12f, widthById(1, "backspace"), 0.5f)
+                        // Z1 Σ 12.5 → unit 86.40 px; Z2 Σ 12 → unit 90.0 px.
+                        assertEquals("$id/$ln: Z1 margin 43.20 px", 43.2f, widthById(1, "m-left"), 0.5f)
+                        assertEquals("$id/$ln: Z1 letter 86.40 px", 86.4f, textWidth(1), 0.5f)
+                        assertEquals("$id/$ln: Z1 ⌫ 86.40 px (== letter)", 86.4f, widthById(1, "backspace"), 0.5f)
                         assertEquals("$id/$ln: Z2 letter 81.0 px (Σ12 → u=90)", 81.0f, textWidth(2), 0.5f)
                         assertEquals("$id/$ln: ⇧ 135.0 px", 135.0f, widthById(2, "shift"), 0.5f)
                         assertEquals("$id/$ln: ⏎ 135.0 px (== ⇧)", 135.0f, widthById(2, "enter"), 0.5f)
                     }
                     else -> {
-                        // Z1 Σ 10.25 → unit 105.37 px; Z2 Σ 10 → unit 108.0 px.
-                        assertEquals("$id/$ln: Z1 margin 52.68 px", 52.68f, widthById(1, "m-left"), 0.5f)
-                        assertEquals("$id/$ln: Z1 letter 105.37 px", 105.37f, textWidth(1), 0.5f)
-                        assertEquals("$id/$ln: Z1 ⌫ 79.03 px (0.75 × letter)", 79.03f, widthById(1, "backspace"), 0.5f)
+                        // Z1 Σ 10.5 → unit 102.86 px; Z2 Σ 10 → unit 108.0 px.
+                        assertEquals("$id/$ln: Z1 margin 51.43 px", 51.43f, widthById(1, "m-left"), 0.5f)
+                        assertEquals("$id/$ln: Z1 letter 102.86 px", 102.86f, textWidth(1), 0.5f)
+                        assertEquals("$id/$ln: Z1 ⌫ 102.86 px (== letter)", 102.86f, widthById(1, "backspace"), 0.5f)
                         assertEquals("$id/$ln: ⇧ 162.0 px", 162.0f, widthById(2, "shift"), 0.5f)
                         assertEquals("$id/$ln: Z2 letter 108.0 px", 108.0f, textWidth(2), 0.5f)
                         assertEquals("$id/$ln: ⏎ 162.0 px (== ⇧)", 162.0f, widthById(2, "enter"), 0.5f)
@@ -311,9 +312,9 @@ class GeometryV0149Test {
             for (ln in symbolLayers) {
                 val model = KeyboardModel(asset(id).layers.getValue(ln), 1080f, 100f, 0f, 0f, 0f)
                 val rowGroups = model.keys.groupBy { it.top }.values.toList()
-                // Z1 Σ 11.25 → unit 96.0 px: characters 96 px, ⌫ 72 px.
-                assertEquals("$id/$ln: symbol Z1 character 96.0 px", 96.0f, rowGroups[1].first { it.kind == "text" }.let { it.right - it.left }, 0.5f)
-                assertEquals("$id/$ln: symbol Z1 ⌫ 72.0 px (0.75 × character)", 72.0f, rowGroups[1].single { it.id == "backspace" }.let { it.right - it.left }, 0.5f)
+                // Z1 Σ 11.5 → unit 93.91 px: characters 93.91 px, ⌫ 93.91 px.
+                assertEquals("$id/$ln: symbol Z1 character 93.91 px", 93.91f, rowGroups[1].first { it.kind == "text" }.let { it.right - it.left }, 0.5f)
+                assertEquals("$id/$ln: symbol Z1 ⌫ 93.91 px (== character, V0.1.51)", 93.91f, rowGroups[1].single { it.id == "backspace" }.let { it.right - it.left }, 0.5f)
             }
         }
     }

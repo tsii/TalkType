@@ -202,6 +202,18 @@
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
                     android:text="@string/model_delete" />
+
+                <!-- V0.1.51 (PLAN_V0151 §D): local import instead of download —
+                     BASE_URL_QWEN is empty, so while the set is not READY this is
+                     the ONLY action on the card. -->
+                <Button
+                    android:id="@+id/setup_qwen_import"
+                    style="?android:attr/borderlessButtonStyle"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="@string/setup_import_folder"
+                    android:visibility="gone" />
             </LinearLayout>
 
             <ProgressBar

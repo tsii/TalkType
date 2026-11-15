@@ -139,9 +139,11 @@ object KeyboardTheme {
     /**
      * T2 (v0.1.35, user finding Pixel/vc34): pure geometry of the ⇧ glyph as
      * fractions of the bounding box s — the arrow (head + bar) is offset from the
-     * horizontal BASE BAR, in EXACT correspondence to ⌫, where
-     * the head is drawn offset 0.18·s from the vertical base
-     * ([BACKSPACE_HEAD_SOCKEL_GAP_RATIO]). Previously the shaft stood only 0.07·s
+     * horizontal BASE BAR, in EXACT correspondence to the HISTORICAL ⌫
+     * head↔base distance 0.18·s ([BACKSPACE_HEAD_SOCKEL_GAP_RATIO]). ⌫ itself
+     * is a PURE left arrow since V0.1.51 (the base stroke was removed on user
+     * request) — the constant stays the source of the ⇧ arrow↔base gap.
+     * Previously the shaft stood only 0.07·s
      * above the line — merged with the 2-dp stroke (round caps, ±0.083·s):
      * "arrow stands on the line". Only the shift glyph — ⌫/⏎ untouched.
      * The 0.60·s optical-height gate (F29/P0) stays: base bar = box bottom edge,
@@ -152,10 +154,13 @@ object KeyboardTheme {
         /** Base bar (horizontal line) — y fraction of the box bottom edge (0.60·s). */
         const val BASE_LINE_RATIO = 0.30f
 
-        /** T2: distance arrow foot ↔ base bar — identical to the ⌫ head↔base distance. */
+        /** T2: distance arrow foot ↔ base bar — identical to the historical ⌫ head↔base distance. */
         const val BASE_GAP_RATIO = 0.18f
 
-        /** ⌫ head↔base distance (0.465 − 0.285) — source of the correspondence (F36/V2 §8). */
+        /** Historical ⌫ head↔base distance (0.465 − 0.285) — the source of the ⇧
+         *  arrow↔base gap (F36/V2 §8). ⌫ itself is a PURE left arrow since V0.1.51
+         *  (base stroke removed on user request) — the constant survives as the
+         *  provenance of the shift offset. */
         const val BACKSPACE_HEAD_SOCKEL_GAP_RATIO = 0.465f - 0.285f
 
         /** T2: arrow foot (shaft bottom edge) in bounding-box units —

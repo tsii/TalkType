@@ -37,6 +37,43 @@ object Sha256 {
     }
 }
 
+/** V0.1.51 (PLAN_V0151 §D): source of a LOCAL model-set import — one stream
+ *  per RELATIVE set path (e.g. "shared/shared_weights.bin"; exactly the
+ *  [ModelFile.storeName] spelling of the pinned manifest). Deliberately
+ *  narrow and Android-free: tests fake it with a map, the app adapts a
+ *  SAF document tree ([ACTION_OPEN_DOCUMENT_TREE]) — the store core stays
+ *  JVM-pure (no ContentResolver, no network).
+ *
+ *  `null` = the file does not exist in the source (→ [ImportResult.Missing]).
+ */
+fun interface ImportSource {
+    /** Opens [relativePath] inside the chosen import root, or null if absent. */
+    fun open(relativePath: String): java.io.InputStream?
+}
+
+/** V0.1.51 (PLAN_V0151 §D, P1): typed result of [ModelStore.importSet] —
+ *  user-relevant failures come back as VALUES (no throw), so the UI can
+ *  name the offending file. [relPath] is always the manifest-relative name
+ *  the user must find in the folder (e.g. "tokenizer/tokenizer.json"). */
+sealed class ImportResult {
+    /** Every file verified (size + sha256) and atomically activated — READY. */
+    object Ready : ImportResult()
+
+    /** The folder does not contain this file. */
+    data class Missing(val relPath: String) : ImportResult()
+
+    /** File present, but its sha256 does not match the pinned manifest. */
+    data class HashMismatch(val relPath: String) : ImportResult()
+
+    /** File present, but its byte size does not match the pinned manifest. */
+    data class SizeMismatch(val relPath: String) : ImportResult()
+
+    /** Reading the source or writing the store failed (aborted, revoked,
+     *  unreadable). Detail is technical, for logs only — the UI shows the
+     *  generic [ImportResult.IoError] message. */
+    data class IoError(val detail: String) : ImportResult()
+}
+
 /** Status of the model state (IMPLEMENTATION_PLAN §B.1). */
 enum class ModelStatus { ABSENT, DOWNLOADING, VERIFYING, READY, BROKEN }
 
@@ -343,6 +380,90 @@ class ModelStore(
     fun clearDownloads() {
         downloadsDir.listFiles()?.forEach { it.delete() }
         ModelVariant.entries.forEach { clearMarkers(it) }
+    }
+
+    // ---- V0.1.51 (PLAN_V0151 §D, P1): local import (USB/cloud folder) ----
+
+    /**
+     * Imports a model set from a LOCAL source (folder on the device — USB
+     * transfer, cloud drive; NO network, no downloader, `BASE_URL_*` stays
+     * untouched). Reuses the download store pipeline instead of inventing a
+     * second one: every file is staged as a `.part` in [downloadsDir] (same
+     * resume/whitelist semantics as [ModelDownloader]), verified per file
+     * (size, then sha256 against the PINNED manifest of the variant —
+     * multi-segment store names included) and moved into a staging version;
+     * only a FULLY verified staging is activated ([activate] re-checks every
+     * hash and swaps the pointer atomically).
+     *
+     * Failure contract (PLAN §D P1): staging fully removed, the `.part` files
+     * written by THIS import deleted, and an EXISTING set stays byte-for-byte
+     * untouched — the pointer flips only after full verification, so there is
+     * never an intermediate state in which the set is missing or mixed.
+     * User-relevant failures are returned as typed [ImportResult] values;
+     * nothing is thrown to the caller.
+     */
+    fun importSet(variant: ModelVariant, source: ImportSource): ImportResult {
+        val files = manifestFor(variant)
+        if (files.isEmpty()) return ImportResult.IoError("no pinned manifest for variant ${variant.id}")
+        val staging = newStagingDir()
+        val touchedParts = mutableListOf<String>()
+        var activated = false
+        try {
+            for (entry in files) {
+                val input = try {
+                    source.open(entry.storeName)
+                } catch (e: Exception) {
+                    return ImportResult.IoError("open ${entry.storeName}: ${e.message ?: e.javaClass.simpleName}")
+                } ?: return ImportResult.Missing(entry.storeName)
+                touchedParts.add(entry.storeName)
+                val part = partFile(entry.storeName, variant)
+                part.parentFile?.mkdirs()
+                val verdict = try {
+                    copyVerifying(input, part, entry)
+                } catch (e: Exception) {
+                    return ImportResult.IoError("copy ${entry.storeName}: ${e.message ?: e.javaClass.simpleName}")
+                }
+                verdict?.let { return it } // SizeMismatch / HashMismatch — file named
+                if (!movePartToStaging(entry.storeName, staging, variant)) {
+                    return ImportResult.IoError("move into staging failed: ${entry.storeName}")
+                }
+            }
+            activated = activate(staging, variant) // re-hashes everything, atomically flips the pointer
+            return if (activated) {
+                ImportResult.Ready
+            } else {
+                ImportResult.IoError("activation refused for variant ${variant.id}")
+            }
+        } finally {
+            if (!activated) {
+                staging.deleteRecursively()
+                touchedParts.forEach { partFile(it, variant).delete() }
+            }
+        }
+    }
+
+    /** Copies [input] into [part] while hashing; null = size AND hash correct. */
+    private fun copyVerifying(input: java.io.InputStream, part: File, entry: ModelFile): ImportResult? {
+        val digest = MessageDigest.getInstance("SHA-256")
+        var written = 0L
+        input.use { stream ->
+            java.io.FileOutputStream(part).use { out ->
+                val buf = ByteArray(64 * 1024)
+                while (true) {
+                    val n = stream.read(buf)
+                    if (n < 0) break
+                    out.write(buf, 0, n)
+                    digest.update(buf, 0, n)
+                    written += n
+                    if (written > entry.sizeBytes) return ImportResult.SizeMismatch(entry.storeName)
+                }
+            }
+        }
+        if (written != entry.sizeBytes) return ImportResult.SizeMismatch(entry.storeName)
+        if (!Sha256.constantTimeEquals(Sha256.hex(digest.digest()), entry.sha256)) {
+            return ImportResult.HashMismatch(entry.storeName)
+        }
+        return null
     }
 
     // ---- markers (DOWNLOADING/VERIFYING for the status display) ----

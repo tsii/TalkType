@@ -16,6 +16,8 @@ import androidx.core.content.ContextCompat
 import de.voicekeyboard.R
 import de.voicekeyboard.model.DownloadController
 import de.voicekeyboard.model.DownloadPolicy
+import de.voicekeyboard.model.ImportResult
+import de.voicekeyboard.model.ImportSource
 import de.voicekeyboard.model.ModelDownloadService
 import de.voicekeyboard.model.ModelStore
 import de.voicekeyboard.model.ModelStatus
@@ -56,6 +58,7 @@ class SetupActivity : ComponentActivity() {
     private lateinit var qwenSelect: Button
     private lateinit var qwenDownload: Button
     private lateinit var qwenDelete: Button
+    private lateinit var qwenImport: Button
     private lateinit var qwenProgress: ProgressBar
 
     /** T22h test seam: store injection (null -> filesDir/models). */
@@ -67,6 +70,20 @@ class SetupActivity : ComponentActivity() {
     /** T22h test seam: manifest for the offer check (null -> pinned list of
      *  the variant; emptyList simulates a not-unlocked set). */
     internal var manifestOverride: List<de.voicekeyboard.model.ModelFile>? = null
+
+    /** V0.1.51 (PLAN_V0151 §D, P3): variant whose folder picker is currently
+     *  open (survives activity recreation — the picker returns into a NEW
+     *  instance after a rotation). */
+    private var pendingImportVariant: de.voicekeyboard.model.ModelVariant? = null
+
+    /** V0.1.51: variant whose import is RUNNING (background thread) — hides
+     *  the import buttons, shows the running line. */
+    @Volatile private var importingVariant: de.voicekeyboard.model.ModelVariant? = null
+
+    /** V0.1.51: imports run OFF the UI thread, at most ONE at a time. */
+    private val importExecutor = java.util.concurrent.Executors.newSingleThreadExecutor { r ->
+        Thread(r, "vk-model-import").apply { isDaemon = true }
+    }
 
     private val prefs by lazy { getSharedPreferences(PERMISSION_PREFS, MODE_PRIVATE) }
 
@@ -90,9 +107,21 @@ class SetupActivity : ComponentActivity() {
         ActivityResultContracts.StartActivityForResult()
     ) { /* return from system settings: re-evaluate the state */ refreshUi() }
 
+    /** V0.1.51 (PLAN_V0151 §D, P3): system folder picker (SAF tree) for the
+     *  local model import — no network, no permission; the picked folder is
+     *  only read while the import runs. */
+    private val importLauncher = registerForActivityResult(
+        ActivityResultContracts.OpenDocumentTree()
+    ) { uri -> onImportFolderPicked(uri) }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.setup_activity)
+        // V0.1.51: a rotation while the folder picker is open must not lose
+        // the import target — restored BEFORE the result can arrive.
+        pendingImportVariant = savedInstanceState
+            ?.getString(KEY_PENDING_IMPORT)
+            ?.let { id -> de.voicekeyboard.model.ModelVariant.entries.firstOrNull { it.id == id } }
         stateView = findViewById(R.id.setup_state)
         // T19 (v0.1.45): version label via the ONE shared read path
         // (AppVersion.read — same source as the debug export).
@@ -117,6 +146,7 @@ class SetupActivity : ComponentActivity() {
         qwenSelect = findViewById(R.id.setup_qwen_select)
         qwenDownload = findViewById(R.id.setup_qwen_download)
         qwenDelete = findViewById(R.id.setup_qwen_delete)
+        qwenImport = findViewById(R.id.setup_qwen_import)
         qwenProgress = findViewById(R.id.setup_qwen_progress)
         parakeetSelect.setOnClickListener { onSelectModel(de.voicekeyboard.model.ModelVariant.ONNX_CPU) }
         parakeetDownload.setOnClickListener { onDownloadModel(de.voicekeyboard.model.ModelVariant.ONNX_CPU) }
@@ -124,6 +154,9 @@ class SetupActivity : ComponentActivity() {
         qwenSelect.setOnClickListener { onSelectModel(de.voicekeyboard.model.ModelVariant.QWEN3_ASR) }
         qwenDownload.setOnClickListener { onDownloadModel(de.voicekeyboard.model.ModelVariant.QWEN3_ASR) }
         qwenDelete.setOnClickListener { onDeleteModel(de.voicekeyboard.model.ModelVariant.QWEN3_ASR) }
+        // V0.1.51 (PLAN_V0151 §D): Qwen has NO download host (BASE_URL_QWEN
+        // empty) — the local folder import is the offline way to the set.
+        qwenImport.setOnClickListener { onImportFolder(de.voicekeyboard.model.ModelVariant.QWEN3_ASR) }
 
         startButton.setOnClickListener { requestStartDownload() }
         cancelButton.setOnClickListener { sendServiceAction(ModelDownloadService.ACTION_CANCEL) }
@@ -264,6 +297,7 @@ class SetupActivity : ComponentActivity() {
     private var u2Status: TextView? = null
     private var u2Delete: Button? = null
     private var u2SetLine: TextView? = null
+    private var u2Import: Button? = null
 
     /**
      * T24b: the U2 set follows the CURRENT typing language (de layout ->
@@ -312,6 +346,14 @@ class SetupActivity : ComponentActivity() {
         container.addView(u2SetLine!!)
         u2Status = TextView(this).apply { textSize = 13f }
         container.addView(u2Status!!)
+        // V0.1.51 (PLAN_V0151 §D): local folder import — the U2 sets have no
+        // download host (BASE_URL_U2 empty); the card follows the CURRENT
+        // typing language set (en -> U2-en, de -> U2-de).
+        u2Import = Button(this).apply {
+            text = getString(R.string.setup_import_folder)
+            setOnClickListener { onImportFolder(u2VariantForTypingLanguage()) }
+        }
+        container.addView(u2Import!!)
         u2Delete = Button(this).apply {
             text = getString(R.string.model_delete)
             visibility = android.view.View.GONE
@@ -345,7 +387,15 @@ class SetupActivity : ComponentActivity() {
         } else {
             android.view.View.GONE
         }
+        val importing = importingVariant == variant
+        u2Import?.visibility = if (!importing && status != de.voicekeyboard.model.ModelStatus.READY) {
+            android.view.View.VISIBLE
+        } else {
+            android.view.View.GONE
+        }
         when {
+            importing ->
+                u2Status?.text = getString(R.string.setup_import_running)
             status == de.voicekeyboard.model.ModelStatus.READY ->
                 u2Status?.text = getString(R.string.u2_ready)
             totalRam < de.voicekeyboard.model.DownloadPolicy.QWEN_MIN_TOTAL_RAM_BYTES ->
@@ -427,7 +477,13 @@ class SetupActivity : ComponentActivity() {
 
     override fun onDestroy() {
         ModelDownloadService.observer = null
+        importExecutor.shutdown() // running imports finish; no new ones queued
         super.onDestroy()
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        pendingImportVariant?.let { outState.putString(KEY_PENDING_IMPORT, it.id) }
     }
 
     // ---- Download start path (L1: catch FGS block, never crash) ----
@@ -521,6 +577,46 @@ class SetupActivity : ComponentActivity() {
         renderModelCards()
     }
 
+    // ---- V0.1.51 (PLAN_V0151 §D, P3): local import (folder on the device) ----
+
+    /** Opens the system folder picker for [variant] (ACTION_OPEN_DOCUMENT_TREE).
+     *  The chosen folder must contain the pinned manifest files with their
+     *  exact relative paths — see docs/MODEL_IMPORT.md. */
+    private fun onImportFolder(variant: de.voicekeyboard.model.ModelVariant) {
+        pendingImportVariant = variant
+        importLauncher.launch(null)
+    }
+
+    /** Picker result: null = the user closed the picker (no import started, no
+     *  error); a tree URI = import on the background executor, then a visible
+     *  result message + refreshUi — never a silent failure. */
+    internal fun onImportFolderPicked(uri: Uri?) {
+        val variant = pendingImportVariant
+        pendingImportVariant = null
+        if (uri == null || variant == null) return
+        val store = modelStore()
+        val source = DocumentTreeImportSource(contentResolver, uri)
+        importingVariant = variant
+        renderModelCards()
+        importExecutor.execute {
+            val result = store.importSet(variant, source) // typed result, no throw
+            runOnUiThread {
+                importingVariant = null
+                showImportResult(result)
+                refreshUi()
+            }
+        }
+    }
+
+    /** Result as a VISIBLE toast — every rejection names its cause (missing/
+     *  corrupt/wrong-size file carries the relative path). */
+    private fun showImportResult(result: ImportResult) {
+        val (resId, fileName) = importMessage(result)
+        val text = if (fileName != null) getString(resId, fileName) else getString(resId)
+        android.widget.Toast.makeText(this, text, android.widget.Toast.LENGTH_LONG).show()
+        android.util.Log.i("VK-MODEL", "import result=${result.javaClass.simpleName}") // codes only
+    }
+
     /** Card states: Ready+active / Ready+other / downloadable / locked. */
     private fun renderModelCards() {
         val store = modelStore()
@@ -547,6 +643,8 @@ class SetupActivity : ComponentActivity() {
             downloading = controller?.variant == de.voicekeyboard.model.ModelVariant.QWEN3_ASR &&
                 controller.state is DownloadController.State.Downloading,
             fraction = (controller?.state as? DownloadController.State.Downloading)?.fraction ?: 0f,
+            importButton = qwenImport,
+            importing = importingVariant == de.voicekeyboard.model.ModelVariant.QWEN3_ASR,
         )
         // T24b (Gleis 3): the U2 card follows every model-card refresh.
         renderU2Card()
@@ -565,6 +663,8 @@ class SetupActivity : ComponentActivity() {
         progressBar: ProgressBar,
         downloading: Boolean,
         fraction: Float,
+        importButton: Button? = null, // V0.1.51: sets without a download host
+        importing: Boolean = false, // V0.1.51: a local import is running
     ) {
         val gone = android.view.View.GONE
         val visible = android.view.View.VISIBLE
@@ -576,6 +676,18 @@ class SetupActivity : ComponentActivity() {
             selectButton.visibility = gone
             downloadButton.visibility = gone
             deleteButton.visibility = gone
+            importButton?.visibility = gone
+            return
+        }
+        if (importing) {
+            // V0.1.51: honest running state — the copy of ~1.7 GB can take a
+            // while; nothing is clickable meanwhile (no parallel import).
+            statusView.text = getString(R.string.setup_import_running)
+            progressBar.visibility = gone
+            selectButton.visibility = gone
+            downloadButton.visibility = gone
+            deleteButton.visibility = gone
+            importButton?.visibility = gone
             return
         }
         progressBar.visibility = gone
@@ -601,6 +713,10 @@ class SetupActivity : ComponentActivity() {
         selectButton.visibility = if (ButtonKind.SELECT in actions) visible else gone
         downloadButton.visibility = if (ButtonKind.DOWNLOAD in actions) visible else gone
         deleteButton.visibility = if (ButtonKind.DELETE in actions) visible else gone
+        // V0.1.51 (PLAN §D): import is the OFFLINE way to a set without a
+        // download host — offered exactly while the set is NOT READY (a
+        // READY set shows select/delete instead; re-import is pointless).
+        importButton?.visibility = if (status == ModelStatus.READY) gone else visible
         // status text: honest and specific (semantics unchanged)
         when {
             status == ModelStatus.READY && variant == active -> {
@@ -651,8 +767,17 @@ class SetupActivity : ComponentActivity() {
         val missing = requiredPermissions().filter {
             ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
         }
-        if (missing.isEmpty()) return
-        permissionLauncher.launch(missing.toTypedArray())
+        // V0.1.51 (PLAN_V0151 §C): the button reacts in EVERY state — the old
+        // silent return when nothing is missing made it look dead.
+        when (PermissionAction.decide(missing.size)) {
+            PermissionAction.Action.REQUEST_DIALOG ->
+                permissionLauncher.launch(missing.toTypedArray())
+            PermissionAction.Action.ALL_GRANTED_TOAST ->
+                android.widget.Toast.makeText(
+                    this, R.string.setup_permissions_all_granted,
+                    android.widget.Toast.LENGTH_SHORT,
+                ).show()
+        }
     }
 
     private fun evaluatePermissions(results: Map<String, Boolean>) {
@@ -694,12 +819,23 @@ class SetupActivity : ComponentActivity() {
         updateNetInviteCard()
         // T22h: re-render the model cards (status/active/delete per set).
         renderModelCards()
+        // V0.1.51 (PLAN_V0151 §C): the permissions hint follows the ACTUAL
+        // state — the open-settings button appears as soon as a "denied
+        // forever" marker exists (the only way to a permanently denied
+        // permission is the system settings).
+        val missing = requiredPermissions().count {
+            ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
+        }
+        val deniedForeverMarker = anyPermissionDeniedForever()
         openSettingsButton.visibility =
-            if (anyPermissionDeniedForever()) android.view.View.VISIBLE else android.view.View.GONE
-        if (anyPermissionDeniedForever()) {
-            permissionsHint.text = getString(R.string.setup_permissions_denied_forever)
-        } else {
-            permissionsHint.text = getString(R.string.setup_permissions_hint)
+            if (deniedForeverMarker) android.view.View.VISIBLE else android.view.View.GONE
+        permissionsHint.text = when (PermissionAction.hint(missing, deniedForeverMarker)) {
+            PermissionAction.Hint.DENIED_FOREVER ->
+                getString(R.string.setup_permissions_denied_forever)
+            PermissionAction.Hint.ALL_GRANTED ->
+                getString(R.string.setup_permissions_hint_ok)
+            PermissionAction.Hint.NEEDS_PERMISSIONS ->
+                getString(R.string.setup_permissions_hint)
         }
     }
 
@@ -849,11 +985,45 @@ class SetupActivity : ComponentActivity() {
         /** T20b: persistence key of the one-time network-revoke invite
          *  (value = modelSetId; "Later" and settings click both set it). */
         private const val NET_INVITE_SHOWN_FOR_KEY = "net_invite_shown_for"
+
+        /** V0.1.51: instance-state key of the variant whose folder picker is open. */
+        private const val KEY_PENDING_IMPORT = "pending_import_variant"
     }
 }
 
 /** Buttons a model card can offer (pure render matrix, no views). */
 internal enum class ButtonKind { SELECT, DOWNLOAD, DELETE }
+
+/**
+ * V0.1.51 (docs/PLAN_V0151.md §C): pure decision of the "Grant permissions"
+ * button and the permissions hint — no views, pinned in
+ * SetupPermissionsButtonTest (state matrix missing × denied-forever).
+ *
+ * User finding: [SetupActivity.requestPermissionsNow] silently returned when
+ * nothing was missing — the button looked dead. Now EVERY state reacts:
+ * something missing ⇒ system dialog; nothing missing ⇒ confirmation toast.
+ */
+internal object PermissionAction {
+
+    /** What the button does when clicked. */
+    enum class Action { REQUEST_DIALOG, ALL_GRANTED_TOAST }
+
+    /** Which hint line [SetupActivity.refreshUi] shows under the button. */
+    enum class Hint { NEEDS_PERMISSIONS, DENIED_FOREVER, ALL_GRANTED }
+
+    /** Button action: [missing] = number of not-yet-granted required permissions. */
+    fun decide(missing: Int): Action =
+        if (missing > 0) Action.REQUEST_DIALOG else Action.ALL_GRANTED_TOAST
+
+    /** Hint text: all granted wins over a STALE marker (the permission was
+     *  granted afterwards); otherwise the denied-forever marker points to the
+     *  system settings, the default line asks for the permissions. */
+    fun hint(missing: Int, deniedForeverMarker: Boolean): Hint = when {
+        missing == 0 -> Hint.ALL_GRANTED
+        deniedForeverMarker -> Hint.DENIED_FOREVER
+        else -> Hint.NEEDS_PERMISSIONS
+    }
+}
 
 
 /** Pure render decision of a model card's buttons — no views, pinned in
@@ -875,4 +1045,67 @@ internal fun cardActions(
     locked -> emptySet()
     offerable -> setOf(ButtonKind.DOWNLOAD)
     else -> emptySet()
+}
+
+/**
+ * V0.1.51 (PLAN_V0151 §D, P3): pure mapping [ImportResult] → (message string
+ *  resource, offending file name or null) — pinned in SetupImportCardTest.
+ *  The file-carrying failures keep the RELATIVE manifest path so the user
+ *  can find the file in the folder; IoError shows the generic message only
+ *  (its technical detail never reaches the UI — rule 9).
+ */
+internal fun importMessage(result: de.voicekeyboard.model.ImportResult): Pair<Int, String?> =
+    when (result) {
+        de.voicekeyboard.model.ImportResult.Ready ->
+            R.string.setup_import_ok to null
+        is de.voicekeyboard.model.ImportResult.Missing ->
+            R.string.setup_import_missing to result.relPath
+        is de.voicekeyboard.model.ImportResult.HashMismatch ->
+            R.string.setup_import_hash to result.relPath
+        is de.voicekeyboard.model.ImportResult.SizeMismatch ->
+            R.string.setup_import_size to result.relPath
+        is de.voicekeyboard.model.ImportResult.IoError ->
+            R.string.setup_import_io to null
+    }
+
+/**
+ * V0.1.51 (PLAN §D P3): SAF adapter — the folder the user picked in the system
+ * tree picker (ACTION_OPEN_DOCUMENT_TREE) as an [ImportSource], purely over
+ * framework APIs (DocumentsContract — deliberately NO new AndroidX dependency,
+ * androidx.documentfile is not in the offline Gradle cache). Relative set
+ * paths (incl. "shared/…", "tokenizer/…") descend segment by segment via the
+ * children query; a missing segment/file yields null (→ Missing), an
+ * unreadable file throws (→ IoError in the store). The store core itself
+ * stays Android-free (no ContentResolver there).
+ */
+internal class DocumentTreeImportSource(
+    private val resolver: android.content.ContentResolver,
+    private val treeUri: Uri,
+) : ImportSource {
+
+    override fun open(relativePath: String): java.io.InputStream? {
+        var docId = android.provider.DocumentsContract.getTreeDocumentId(treeUri)
+        val segments = relativePath.split('/')
+        for (segment in segments.dropLast(1)) {
+            docId = findChild(docId, segment) ?: return null
+        }
+        val fileDocId = findChild(docId, segments.last()) ?: return null
+        return resolver.openInputStream(
+            android.provider.DocumentsContract.buildDocumentUriUsingTree(treeUri, fileDocId),
+        ) // unreadable ⇒ IOException ⇒ IoError
+    }
+
+    /** Document id of the direct child named [name], or null if absent. */
+    private fun findChild(parentDocId: String, name: String): String? {
+        val children = android.provider.DocumentsContract.buildChildDocumentsUriUsingTree(treeUri, parentDocId)
+        val idColumn = android.provider.DocumentsContract.Document.COLUMN_DOCUMENT_ID
+        val nameColumn = android.provider.DocumentsContract.Document.COLUMN_DISPLAY_NAME
+        return resolver.query(
+            children,
+            arrayOf(idColumn, nameColumn),
+            "$nameColumn=?",
+            arrayOf(name),
+            null,
+        )?.use { cursor -> if (cursor.moveToFirst()) cursor.getString(0) else null }
+    }
 }

@@ -12,12 +12,12 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
 /**
- * V0.1.50 (correction of docs/PLAN_GEOMETRY_V0149.md §1/§3): base/shift row
- * alignment across the assets.
+ * V0.1.50/V0.1.51 (docs/PLAN_V0151.md §A): base/shift row alignment across
+ * the assets.
  *
  * TARGET STATE (13 seven-key assets):
- *   - r1 = margin 0.5 + 9 letters à 1.0 (105.37 px at Σ 10.25) + ⌫ 0.75
- *     (79.03 px — THREE QUARTERS of a letter, user order V0.1.50);
+ *   - r1 = margin 0.5 + 9 letters à 1.0 (102.86 px at Σ 10.5) + ⌫ 1.0
+ *     (102.86 px — ONE FULL letter unit, user finding V0.1.51);
  *   - r2 = ⇧ 1.5 (162 px) + 7 letters à 1.0 (108 px) + ⏎ 1.5 (162 px)
  *     — ⏎ == ⇧ (symmetric wings); Σ r2 = 10 puts the M CENTER on the
  *     i|o gap of r0 (8.0u = 864 px), see GeometryV0149Test.mCenteredUnderTheIAndOGap;
@@ -25,12 +25,12 @@ import org.robolectric.annotation.Config
  *     mic (F54 menu , ! ? : ; ( ) unchanged); space 7.5 → 6.5 (Σ13 stays);
  *   - alignment invariant: the letters of BOTH rows sit on the SAME cell
  *     raster — Z1 letter width == Z2 letter width (both 1.0).
- *   - cs-cz (10-key home row): r1 = 0.5 + 10 à 1.0 + ⌫ 0.75 (Σ 11.25);
+ *   - cs-cz (10-key home row): r1 = 0.5 + 10 à 1.0 + ⌫ 1.0 (Σ 11.5);
  *     r2 = ⇧ 2.0 + 6 à 1.0 + ⏎ 2.0 (unchanged; ⏎ == ⇧).
- *   - ru-ru (exception row): r1 = 0.5 + 11 à 1.0 + ⌫ 0.75 (Σ 12.25);
+ *   - ru-ru (exception row): r1 = 0.5 + 11 à 1.0 + ⌫ 1.0 (Σ 12.5);
  *     r2 = ⇧ 1.5 + 10 à 0.9 + ⏎ 1.5 (Σ 12; ⏎ == ⇧); 6-key footer (period
  *     with @ as alternates[0]).
- * constant tolerance ±1e-3 (order V0.1.50).
+ * constant tolerance ±1e-3 (order V0.1.51).
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35])
@@ -45,27 +45,27 @@ class LetterRowAlignmentAcrossAssetsTest {
         LayoutParser.parse(java.io.File("src/main/assets/layouts/$id.json").readText())
 
     @Test
-    fun sevenLetterRows_v0150Grid_alignmentInvariant() {
+    fun sevenLetterRows_v0151Grid_alignmentInvariant() {
         for (id in sevenLetterAssets) {
             for (ln in listOf("base", "shift")) {
                 val rows = asset(id).layers.getValue(ln).rows
                 val r1 = rows[1]
                 val r2 = rows[2]
 
-                // r1: margin 0.5 + 9 letters à 1.0 + ⌫ 0.75 at the END.
-                assertEquals("$id/$ln Σ r1 = 10.25", 10.25, r1.sumOf { it.width }, 0.001)
+                // r1: margin 0.5 + 9 letters à 1.0 + ⌫ 1.0 at the END (V0.1.51).
+                assertEquals("$id/$ln Σ r1 = 10.5", 10.5, r1.sumOf { it.width }, 0.001)
                 assertEquals("$id/$ln r1 margin 0.5", 0.5, r1[0].width, 0.001)
                 assertEquals("$id/$ln r1[0] is the margin", KeyKind.MARGIN, r1[0].kind)
                 val r1Letters = r1.filter { it.kind == KeyKind.TEXT }
                 assertEquals("$id/$ln 9 letters in r1", 9, r1Letters.size)
                 for (k in r1Letters) {
-                    assertEquals("$id/$ln/${k.id} r1 at 1.0 (105.37 px)", 1.0, k.width, 0.001)
+                    assertEquals("$id/$ln/${k.id} r1 at 1.0 (102.86 px)", 1.0, k.width, 0.001)
                 }
                 val bs = r1.last()
-                assertEquals("$id/$ln ⌫ at the r1 end, width 0.75 (79.03 px)", 0.75, bs.width, 0.001)
+                assertEquals("$id/$ln ⌫ at the r1 end, width 1.0 (102.86 px)", 1.0, bs.width, 0.001)
                 assertEquals(
-                    "$id/$ln ⌫ == 0.75 × r1 letter width (V0.1.50)",
-                    0.75 * r1Letters.first().width, bs.width, 1e-6,
+                    "$id/$ln ⌫ == r1 letter width (V0.1.51: full unit)",
+                    r1Letters.first().width, bs.width, 1e-6,
                 )
                 assertEquals("$id/$ln ⌫ is an action key", KeyKind.ACTION, bs.kind)
                 assertEquals("$id/$ln ⌫ value", KeyActions.BACKSPACE, bs.value)
@@ -132,8 +132,8 @@ class LetterRowAlignmentAcrossAssetsTest {
             val rows = a.layers.getValue(ln).rows
             val r1 = rows[1]
             val r2 = rows[2]
-            // r1: margin 0.5 + 10 letters à 1.0 + ⌫ 0.75 (V0.1.50, Σ 11.25).
-            assertEquals("cs-cz/$ln Σ r1 = 11.25", 11.25, r1.sumOf { it.width }, 0.001)
+            // r1: margin 0.5 + 10 letters à 1.0 + ⌫ 1.0 (V0.1.51, Σ 11.5).
+            assertEquals("cs-cz/$ln Σ r1 = 11.5", 11.5, r1.sumOf { it.width }, 0.001)
             assertEquals("cs-cz/$ln r1 margin 0.5", 0.5, r1[0].width, 0.001)
             val r1Letters = r1.filter { it.kind == KeyKind.TEXT }
             assertEquals("cs-cz/$ln 10 letters in r1", 10, r1Letters.size)
@@ -141,10 +141,10 @@ class LetterRowAlignmentAcrossAssetsTest {
                 assertEquals("cs-cz/$ln/${k.id} r1 at 1.000", 1.0, k.width, 0.001)
             }
             assertEquals(
-                "cs-cz/$ln ⌫ == 0.75 × letter width (V0.1.50)",
-                0.75 * r1Letters.first().width, r1.last().width, 1e-6,
+                "cs-cz/$ln ⌫ == letter width (V0.1.51: full unit)",
+                r1Letters.first().width, r1.last().width, 1e-6,
             )
-            assertEquals("cs-cz/$ln ⌫ 0.75 at the r1 end", 0.75, r1.last().width, 0.001)
+            assertEquals("cs-cz/$ln ⌫ 1.0 at the r1 end", 1.0, r1.last().width, 0.001)
             assertEquals("cs-cz/$ln ⌫ value", KeyActions.BACKSPACE, r1.last().value)
             // r2: ⇧ 2.0 + 6 letters à 1.0 + ⏎ 2.0 (unchanged; ⏎ == ⇧; the
             // raster invariant holds here too: 1.0 == 1.0).
@@ -180,9 +180,9 @@ class LetterRowAlignmentAcrossAssetsTest {
             val rows = a.layers.getValue(ln).rows
             val r1 = rows[1]
             val r2 = rows[2]
-            // r1 (V0.1.50): margin 0.5 + 11 à 1.0 + ⌫ 0.75 (Σ 12.25) — the
+            // r1 (V0.1.51): margin 0.5 + 11 à 1.0 + ⌫ 1.0 (Σ 12.5) — the
             // backspace REPLACED the old m-right margin back in V0.1.49.
-            assertEquals("ru-ru/$ln Σ r1 = 12.25", 12.25, r1.sumOf { it.width }, 0.001)
+            assertEquals("ru-ru/$ln Σ r1 = 12.5", 12.5, r1.sumOf { it.width }, 0.001)
             assertEquals("ru-ru/$ln r1 margin 0.5", 0.5, r1[0].width, 0.001)
             assertEquals("ru-ru/$ln r1[0] is the margin", KeyKind.MARGIN, r1[0].kind)
             assertEquals(
@@ -197,10 +197,10 @@ class LetterRowAlignmentAcrossAssetsTest {
             val bs = r1.last()
             assertEquals("ru-ru/$ln ⌫ at the r1 end", KeyActions.BACKSPACE, bs.value)
             assertEquals(
-                "ru-ru/$ln ⌫ == 0.75 × letter width (V0.1.50)",
-                0.75 * r1Letters.first().width, bs.width, 1e-6,
+                "ru-ru/$ln ⌫ == letter width (V0.1.51: full unit)",
+                r1Letters.first().width, bs.width, 1e-6,
             )
-            assertEquals("ru-ru/$ln ⌫ width 0.75", 0.75, bs.width, 0.001)
+            assertEquals("ru-ru/$ln ⌫ width 1.0", 1.0, bs.width, 0.001)
             // r2 (V0.1.50): ⇧ 1.5 + 10 à 0.9 + ⏎ 1.5 → Σ12; ⏎ == ⇧.
             assertEquals("ru-ru/$ln Σ r2 = 12", 12.0, r2.sumOf { it.width }, 0.001)
             assertEquals("ru-ru/$ln ⇧ 1.5", 1.5, r2[0].width, 0.001)

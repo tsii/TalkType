@@ -83,9 +83,10 @@ dividers between keys (gaps = the only delimitation → calm picture).
 
 ## 8) Icon geometry (path points in a 1×1 box, stroke width **3.5 dp** ≈ 9.2 px,
 `lineCap = round`, `lineJoin = round`; icon box = 40 % of the key width, centered)
-- **⌫ = pure left arrow with a base** (no rectangle outline!): shaft
-  `(0.80;0.50)→(0.30;0.50)`; head `(0.52;0.30)→(0.30;0.50)→(0.52;0.70)`; base
-  (a short bar in front of the head, in the ⇧ style): `(0.18;0.32)→(0.18;0.68)`.
+- **⌫ = pure left arrow** (no rectangle outline!): shaft
+  `(0.80;0.50)→(0.30;0.50)`; head `(0.52;0.30)→(0.30;0.50)→(0.52;0.70)`.
+  ⌫ = reiner Linkspfeil — the vertical base stroke
+  `(0.18;0.32)→(0.18;0.68)` was removed in V0.1.51 on user request.
 - **⇧ (reference, unchanged):** shaft `(0.50;0.78)→(0.50;0.30)`; head
   `(0.28;0.52)→(0.50;0.30)→(0.72;0.52)`; base `(0.32;0.84)→(0.68;0.84)`.
 - **⏎ (reference, return):** bar `(0.74;0.26)→(0.74;0.60)→(0.32;0.60)`; head

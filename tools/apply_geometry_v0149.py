@@ -1,47 +1,51 @@
 #!/usr/bin/env python3
-"""V0.1.50 geometry correction (supersedes docs/PLAN_GEOMETRY_V0149.md §1/§2).
+"""V0.1.50/V0.1.51 geometry correction (supersedes docs/PLAN_GEOMETRY_V0149.md
+§1/§2 — the tables below are the ONLY source of truth; V0.1.51 widens the
+Z1 backspace to a FULL letter unit, docs/PLAN_V0151.md §A).
 
-User correction to V0.1.49: the M of the third letter row must sit at the
+User correction V0.1.50: the M of the third letter row must sit at the
 i|o GAP of the first row (M center on the i|o boundary = 8.0 units = 864 px
 at Σ 10 and unit 108 px), NOT centered under the i. Therefore the enter
-key becomes as slim as the shift key, and the Z1 backspace shrinks to
-THREE QUARTERS of a letter width (0.75). The tables below are the ONLY
-source of truth; cs-cz and ru-ru are their own table rows.
+key becomes as slim as the shift key. User finding V0.1.51: the Z1
+backspace becomes ONE FULL letter width (1.0 — it was 0.75 in V0.1.50).
+cs-cz and ru-ru are their own table rows.
 
 Letter layers (base+shift):
   - 13 standard assets (da-dk de-de el-gr en-us es-es fi-fi fr-fr it-it
     nl-nl pl-pl pt-pt sv-se tr-tr):
       Z0 = 10 × 1.0 (unchanged)
-      Z1 = m-left 0.500 + 9 × 1.000 + ⌫ 0.750   (Σ 10.25; px unit 105.37)
+      Z1 = m-left 0.500 + 9 × 1.000 + ⌫ 1.000   (Σ 10.5; px unit 102.86)
       Z2 = ⇧ 1.500 + 7 × 1.000 + ⏎ 1.500       (Σ 10 → M center 8.0u
                                                    = 864 px = i|o gap;
                                                    ⏎ == ⇧, 162 px each)
-  - cs-cz: Z0 = 10 × 1.0; Z1 = m-left 0.500 + 10 × 1.000 + ⌫ 0.750
-      (Σ 11.25); Z2 = ⇧ 2.000 + 6 × 1.000 + ⏎ 2.000 (Σ 10, unchanged).
+  - cs-cz: Z0 = 10 × 1.0; Z1 = m-left 0.500 + 10 × 1.000 + ⌫ 1.000
+      (Σ 11.5; px unit 93.91); Z2 = ⇧ 2.000 + 6 × 1.000 + ⏎ 2.000
+      (Σ 10, unchanged).
   - ru-ru: Z0 UNTOUCHED (13 keys, Σ 10); Z1 = m-left 0.500 + 11 × 1.000 +
-      ⌫ 0.750 (Σ 12.25); Z2 = ⇧ 1.500 + 10 × 0.900 + ⏎ 1.500 (Σ 12);
-      Z3 untouched (already symbols|language|emoji|space|period|mic 6.5).
+      ⌫ 1.000 (Σ 12.5; px unit 86.40); Z2 = ⇧ 1.500 + 10 × 0.900 + ⏎ 1.500
+      (Σ 12); Z3 untouched (already symbols|language|emoji|space|period|mic
+      6.5).
   - period (id 'period', F54 menu , ! ? : ; ( )) sits in Z3 between space
     and mic (space 7.5 -> 6.5, Σ stays 13) — carried over from V0.1.49.
 
 Symbol layers (symbols+symbolsShift, all 15 identical):
       Z0 = 10 × 1.0 (unchanged)
-      Z1 = m-left 0.500 + 10 × 1.000 + ⌫ 0.750  (Σ 11.25)
+      Z1 = m-left 0.500 + 10 × 1.000 + ⌫ 1.000  (Σ 11.5; px unit 93.91)
       Z2 = toggle 1.000 + 10 × 0.750 + ⏎ 1.500 (Σ 10, unchanged)
       Z3 untouched (base|language|emoji|space 7.5|mic)
   - toggle keys: symbols Z2[0]  = {id symbols-toggle, label #+=, width 1.0,
     action layer-symbols-shift}; symbolsShift Z2[0] = {id symbols-back,
     label ?123, width 1.0, action layer-symbols}.
 
-Mnemonic: ⌫ = 0.75 × letter width (never 1.5, never 1.0); ⏎ = ⇧ on ALL
-letter layers (symmetric wings).
+Mnemonic: ⌫ = 1.0 × letter width (V0.1.51: full unit; was 0.75 in V0.1.50,
+never 1.5); ⏎ = ⇧ on ALL letter layers (symmetric wings).
 
 Invariants (HARD-asserted per asset+layer):
   - character inventory (TEXT values ∪ labels ∪ alternates) before == after
     — nothing lost, nothing invented (the period only MOVES Z2 -> Z3 within
     the same layer; margins/actions carry no characters);
-  - Σ per row == target ± 0.001 (letters 10/10.25/10/13, cs 10/11.25/10/13,
-    ru 10/12.25/12/13; symbols 10/11.25/10/13);
+  - Σ per row == target ± 0.001 (letters 10/10.5/10/13, cs 10/11.5/10/13,
+    ru 10/12.5/12/13; symbols 10/11.5/10/13);
   - layer-wide unique key ids; letter Z3 ids == [symbols,language,emoji,
     space,period,mic], symbol Z3 ids == [base,language,emoji,space,mic];
   - ⏎ == ⇧ on every letter layer (symmetric wings, table property);
@@ -65,17 +69,17 @@ ALL = SEVEN + [CS, RU]
 LAYER_NAMES = ["base", "shift", "symbols", "symbolsShift"]
 F54 = [",", "!", "?", ":", ";", "(", ")"]
 
-# V0.1.50 letter tables, per asset class:
+# V0.1.51 letter tables, per asset class:
 # (z1_margin, z1_letter, z1_backspace, n_z1, z2_shift, z2_letter, n_z2, z2_enter)
-# Mnemonic: ⌫ = 0.75 × letter; ⏎ == ⇧ (symmetric wings).
+# Mnemonic: ⌫ = 1.0 × letter (V0.1.51 full unit); ⏎ == ⇧ (symmetric wings).
 LETTER = {
-    "std": (0.5, 1.0, 0.75, 9, 1.5, 1.0, 7, 1.5),
-    "cs":  (0.5, 1.0, 0.75, 10, 2.0, 1.0, 6, 2.0),
-    "ru":  (0.5, 1.0, 0.75, 11, 1.5, 0.9, 10, 1.5),
+    "std": (0.5, 1.0, 1.0, 9, 1.5, 1.0, 7, 1.5),
+    "cs":  (0.5, 1.0, 1.0, 10, 2.0, 1.0, 6, 2.0),
+    "ru":  (0.5, 1.0, 1.0, 11, 1.5, 0.9, 10, 1.5),
 }
 assert all(row[7] == row[4] for row in LETTER.values()), "⏎ == ⇧ on letter layers"
-# V0.1.50 symbol table (all 15 identical): ⌫ = 0.75 × letter width
-SYM = {"margin": 0.5, "z1_letter": 1.0, "backspace": 0.75, "toggle": 1.0,
+# V0.1.51 symbol table (all 15 identical): ⌫ = 1.0 × letter width
+SYM = {"margin": 0.5, "z1_letter": 1.0, "backspace": 1.0, "toggle": 1.0,
        "z2_letter": 0.75, "enter": 1.5}
 
 TOGGLE_FWD = {"id": "symbols-toggle", "label": "#+=", "width": 1.0,
@@ -123,7 +127,7 @@ def letter_class(asset_id):
 
 
 def rebuild_letter_layer(rows, cls):
-    """V0.1.50 letter rows: Z0 10×1.0, Z1 margin+letters+⌫ 0.75, Z2 ⇧+letters+⏎==⇧."""
+    """V0.1.51 letter rows: Z0 10×1.0, Z1 margin+letters+⌫ 1.0, Z2 ⇧+letters+⏎==⇧."""
     m, l1, bs, n1, sh, l2, n2, en = LETTER[cls]
     r1, r2, r3 = rows[1], rows[2], rows[3]
 
@@ -134,7 +138,7 @@ def rebuild_letter_layer(rows, cls):
         for k in z0_letters:
             set_width(k, 1.0)
 
-    # --- Z1: margin 0.5 + n1 letters à 1.0 + ONE ⌫ 0.75 ---
+    # --- Z1: margin 0.5 + n1 letters à 1.0 + ONE ⌫ 1.0 (V0.1.51) ---
     assert r1[0].get("kind") == "margin", "Z1[0] must be a margin key"
     set_width(r1[0], m)
     letters = text_keys(r1)
@@ -194,7 +198,7 @@ def rebuild_letter_layer(rows, cls):
 
 
 def rebuild_symbol_layer(rows, layer_name):
-    """V0.1.50 symbol rows: Z1 margin + 10 × 1.0 + ⌫ 0.75; Z2 toggle + 10 × 0.75 + ⏎ 1.5."""
+    """V0.1.51 symbol rows: Z1 margin + 10 × 1.0 + ⌫ 1.0; Z2 toggle + 10 × 0.75 + ⏎ 1.5."""
     r1, r2, r3 = rows[1], rows[2], rows[3]
 
     # --- Z0 untouched (10 × 1.0, Σ hard-asserted); Z1: left margin ---
@@ -239,11 +243,11 @@ def check_invariants(asset_id, doc):
     """Σ per row + unique ids + footer ids — HARD, after the migration."""
     cls = letter_class(asset_id)
     letter_targets = {
-        "std": [10.0, 10.25, 10.0, 13.0],
-        "cs":  [10.0, 11.25, 10.0, 13.0],
-        "ru":  [10.0, 12.25, 12.0, 13.0],
+        "std": [10.0, 10.5, 10.0, 13.0],
+        "cs":  [10.0, 11.5, 10.0, 13.0],
+        "ru":  [10.0, 12.5, 12.0, 13.0],
     }[cls]
-    symbol_targets = [10.0, 11.25, 10.0, 13.0]
+    symbol_targets = [10.0, 11.5, 10.0, 13.0]
     for name in LAYER_NAMES:
         rows = doc["layers"][name]["rows"]
         ids = [k["id"] for row in rows for k in row]
@@ -329,8 +333,8 @@ def main():
         label = {"std": "standard table (§1)", "cs": "cs-cz exception (§3)",
                  "ru": "ru-ru exception (§3)"}[cls]
         report.append(f"{asset_id}: OK — {label}")
-    print(f"migrated {len(ALL)} assets — letter Σ 10/10.25/10/13 "
-          f"(cs 10/11.25/10/13, ru 10/12.25/12/13), symbol Σ 10/11.25/10/13; "
+    print(f"migrated {len(ALL)} assets — letter Σ 10/10.5/10/13 "
+          f"(cs 10/11.5/10/13, ru 10/12.5/12/13), symbol Σ 10/11.5/10/13; "
           f"inventory/sums/ids hard-asserted")
     print("\n".join(report))
 

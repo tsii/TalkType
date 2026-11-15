@@ -272,9 +272,9 @@ class LayoutCompletenessTest {
 
     /**
      * F27d→F36/V2 stock geometry as a standalone gate: all 15 assets carry
-     * base+shift the V2 target image — sums 10/10.25/10/13 (cs 10/11.25/10/13,
-     * ru 10/12.25/12/13, V0.1.50), no ⌫ in r0, F40: ⌫ exactly 1x at the r1 END
-     * (width 0.75), @ exactly 1x in r2 before ⏎ as alternate (ru-ru:
+     * base+shift the V2 target image — sums 10/10.5/10/13 (cs 10/11.5/10/13,
+     * ru 10/12.5/12/13, V0.1.51), no ⌫ in r0, F40: ⌫ exactly 1x at the r1 END
+     * (width 1.0), @ exactly 1x in r2 before ⏎ as alternate (ru-ru:
      * exception, no swap).
      */
     @Test
@@ -532,14 +532,14 @@ class LayoutCompletenessTest {
     }
 
     /**
-     * V0.1.50 (correction of docs/PLAN_GEOMETRY_V0149.md §1/§3): base/shift
-     * carry the user-corrected row geometry — r0 = 10 letters at 1.0 (ru:
-     * 13-key full row, untouched); r1 = margin 0.5 + letter block à 1.0 + ONE
-     * ⌫ 0.75 (== 0.75 × letter width) at the r1 END; r2 = ⇧ 1.5 (cs 2.0,
-     * ru 1.5) + letters 7 × 1.0 (cs 6 × 1.0, ru 10 × 0.9) + ⏎ == ⇧ (symmetric
-     * wings); NO period in r2 anymore — it moves to the footer between
-     * space and mic (space 7.5→6.5, Σ stays 13). The M center of the standard
-     * r2 sits on the i|o gap of r0 (asserted in GeometryV0149Test).
+     * V0.1.51 (docs/PLAN_V0151.md §A): base/shift carry the user-corrected row
+     * geometry — r0 = 10 letters at 1.0 (ru: 13-key full row, untouched); r1 =
+     * margin 0.5 + letter block à 1.0 + ONE ⌫ 1.0 (== letter width, V0.1.51:
+     * full unit) at the r1 END; r2 = ⇧ 1.5 (cs 2.0, ru 1.5) + letters 7 × 1.0
+     * (cs 6 × 1.0, ru 10 × 0.9) + ⏎ == ⇧ (symmetric wings); NO period in r2
+     * anymore — it moves to the footer between space and mic (space 7.5→6.5,
+     * Σ stays 13). The M center of the standard r2 sits on the i|o gap of r0
+     * (asserted in GeometryV0149Test).
      */
     private fun checkGeometry(parsed: LayoutAsset) {
         val isRu = parsed.id == "ru-ru"
@@ -550,19 +550,19 @@ class LayoutCompletenessTest {
                 fail("Asset '${parsed.id}' $layerName: fewer than 4 rows (V0.1.50 geometry)")
             }
             val expectSums = when {
-                isRu -> listOf(10.0, 12.25, 12.0, 13.0)
-                isCs -> listOf(10.0, 11.25, 10.0, 13.0)
-                else -> listOf(10.0, 10.25, 10.0, 13.0)
+                isRu -> listOf(10.0, 12.5, 12.0, 13.0)
+                isCs -> listOf(10.0, 11.5, 10.0, 13.0)
+                else -> listOf(10.0, 10.5, 10.0, 13.0)
             }
             val sums = rows.take(4).map { row -> row.sumOf { it.width } }
             for (i in expectSums.indices) {
                 if (kotlin.math.abs(sums[i] - expectSums[i]) > 0.001) {
                     fail("Asset '${parsed.id}' $layerName: row sum r$i=" +
-                        "${"%.5f".format(sums[i])}u != ${expectSums[i]}u (V0.1.50)")
+                        "${"%.5f".format(sums[i])}u != ${expectSums[i]}u (V0.1.51)")
                 }
             }
             // ⌫ stays out of r0 and r2 (the F40 rule keeps holding: ⌫ sits at
-            // the r1 END — now at width 0.75, three quarters of a letter).
+            // the r1 END — now at width 1.0, one full letter unit, V0.1.51).
             val bsR0 = rows[0].count { it.kind == KeyKind.ACTION && it.value == KeyActions.BACKSPACE }
             if (bsR0 != 0) fail("Asset '${parsed.id}' $layerName: r0 must carry NO backspace")
             val bsR2 = rows[2].count { it.kind == KeyKind.ACTION && it.value == KeyActions.BACKSPACE }
@@ -574,7 +574,7 @@ class LayoutCompletenessTest {
             // r1: margin 0.5 + letters à 1.0 + ONE ⌫ 0.75 at the END.
             val r1 = rows[1]
             if (r1[0].kind != KeyKind.MARGIN || kotlin.math.abs(r1[0].width - 0.5) > 0.001) {
-                fail("Asset '${parsed.id}' $layerName: r1[0] must be margin 0.5 (V0.1.50)")
+                fail("Asset '${parsed.id}' $layerName: r1[0] must be margin 0.5 (V0.1.51)")
             }
             if (r1.any { it.kind == KeyKind.TEXT && it.value == "@" }) {
                 fail("Asset '${parsed.id}' $layerName: r1 must carry NO @ key (@ → M menu / ru: period menu)")
@@ -582,10 +582,10 @@ class LayoutCompletenessTest {
             val letters1 = r1.filter { it.kind == KeyKind.TEXT }
             val bsR1 = r1.filter { it.kind == KeyKind.ACTION && it.value == KeyActions.BACKSPACE }
             if (bsR1.size != 1 || r1.last() !== bsR1[0] ||
-                kotlin.math.abs(bsR1[0].width - 0.75) > 0.001 ||
-                kotlin.math.abs(bsR1[0].width - 0.75 * letters1.first().width) > 1e-6
+                kotlin.math.abs(bsR1[0].width - 1.0) > 0.001 ||
+                kotlin.math.abs(bsR1[0].width - letters1.first().width) > 1e-6
             ) {
-                fail("Asset '${parsed.id}' $layerName: ⌫ exactly 1x at the r1 END, width 0.75 == 0.75 × letter width expected (V0.1.50)")
+                fail("Asset '${parsed.id}' $layerName: ⌫ exactly 1x at the r1 END, width 1.0 == letter width expected (V0.1.51)")
             }
             val wantN1 = when { isRu -> 11; isCs -> 10; else -> 9 }
             if (letters1.size != wantN1) {
@@ -593,7 +593,7 @@ class LayoutCompletenessTest {
             }
             for (k in letters1) {
                 if (kotlin.math.abs(k.width - 1.0) > 0.001) {
-                    fail("Asset '${parsed.id}' $layerName r1 '${k.id}': width ${k.width} != 1.0 (V0.1.50)")
+                    fail("Asset '${parsed.id}' $layerName r1 '${k.id}': width ${k.width} != 1.0 (V0.1.51)")
                 }
             }
             // r2: ⇧ + letters + ⏎ == ⇧; period is GONE from r2 (footer since V0.1.49).
@@ -603,7 +603,7 @@ class LayoutCompletenessTest {
             if (r2.isEmpty() || r2[0].kind != KeyKind.ACTION || r2[0].value != KeyActions.SHIFT ||
                 kotlin.math.abs(r2[0].width - wantShift) > 0.001
             ) {
-                fail("Asset '${parsed.id}' $layerName: r2[0] must be shift width $wantShift (V0.1.50), is " +
+                fail("Asset '${parsed.id}' $layerName: r2[0] must be shift width $wantShift (V0.1.51), is " +
                     "${r2.firstOrNull()?.let { it.value + "/" + it.width }}")
             }
             val wantL2 = when { isRu -> 0.9; else -> 1.0 }
@@ -613,12 +613,12 @@ class LayoutCompletenessTest {
             }
             for (k in r2Texts) {
                 if (kotlin.math.abs(k.width - wantL2) > 0.001) {
-                    fail("Asset '${parsed.id}' $layerName r2 '${k.id}': width ${k.width} != $wantL2 (V0.1.50)")
+                    fail("Asset '${parsed.id}' $layerName r2 '${k.id}': width ${k.width} != $wantL2 (V0.1.51)")
                 }
             }
             val enter = r2.firstOrNull { it.kind == KeyKind.ACTION && it.value == KeyActions.ENTER }
             if (enter == null || kotlin.math.abs(enter.width - r2[0].width) > 0.001) {
-                fail("Asset '${parsed.id}' $layerName: ⏎ == ⇧ (symmetric wings) expected in r2 (V0.1.50)")
+                fail("Asset '${parsed.id}' $layerName: ⏎ == ⇧ (symmetric wings) expected in r2 (V0.1.51)")
             }
             if (r2.any { it.id == "period" }) {
                 fail("Asset '${parsed.id}' $layerName: NO period key in r2 (it sits in the footer, V0.1.49)")

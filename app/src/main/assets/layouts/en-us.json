@@ -169,7 +169,7 @@
           {
             "id": "backspace",
             "label": "⌫",
-            "width": 0.75,
+            "width": 1,
             "kind": "action",
             "value": "backspace"
           }
@@ -456,7 +456,7 @@
           {
             "id": "backspace",
             "label": "⌫",
-            "width": 0.75,
+            "width": 1,
             "kind": "action",
             "value": "backspace"
           }
@@ -764,7 +764,7 @@
           {
             "id": "backspace",
             "label": "⌫",
-            "width": 0.75,
+            "width": 1,
             "kind": "action",
             "value": "backspace"
           }
@@ -1074,7 +1074,7 @@
           {
             "id": "backspace",
             "label": "⌫",
-            "width": 0.75,
+            "width": 1,
             "kind": "action",
             "value": "backspace"
           }

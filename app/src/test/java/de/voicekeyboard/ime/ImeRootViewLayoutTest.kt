@@ -298,7 +298,9 @@ class ImeRootViewLayoutTest {
                 t in setOf("⌫", "⇧", "⏎", "⇪"),
             )
         }
-        // 2) path presence: every glyph has >= 2 drawn paths.
+        // 2) path presence: ⇧/⏎ have >= 2 drawn paths (outline + detail);
+        //    ⌫ EXACTLY ONE since V0.1.51 (the base stroke was removed on
+        //    user request — pure left arrow, see the own test below).
         val rects = glyphKeyRects(model)
         val byKey = rects.keys.associateWith { _ -> 0 }.toMutableMap()
         for (i in 0 until sh.pathPaintHistoryCount) {
@@ -307,7 +309,13 @@ class ImeRootViewLayoutTest {
             val hit = rects.entries.firstOrNull { it.value.contains(b.centerX(), b.centerY()) }
             if (hit != null) byKey[hit.key] = byKey.getValue(hit.key) + 1
         }
-        for ((k, n) in byKey) assertTrue("$k: >= 2 path draws (are $n)", n >= 2)
+        for ((k, n) in byKey) {
+            if (k == "backspace") {
+                assertEquals("$k: EXACTLY 1 path draw (V0.1.51: no base stroke — are $n)", 1, n)
+            } else {
+                assertTrue("$k: >= 2 path draws (are $n)", n >= 2)
+            }
+        }
     }
 
     @Test
@@ -336,6 +344,40 @@ class ImeRootViewLayoutTest {
         }
     }
 
+    /**
+     * V0.1.51 (docs/PLAN_V0151.md §B): ⌫ = PURE left arrow — the vertical
+     * base stroke at cx − 0.465s is GONE. Draw-op proof: exactly ONE path
+     * inside the ⌫ key, its bounds reach only to the arrow tip
+     * (cx − 0.285s — no x below cx − 0.4s), the optical height stays 0.60·s
+     * and the glyph stays vertically centered on the key (F29/P0 gate).
+     */
+    @Test
+    fun `V0151 - backspace glyph is ONE pure left-arrow path - no base stroke, 060s height, centered`() {
+        val (canvas, model) = recordDraw(night = false)
+        val sh = Shadows.shadowOf(canvas)
+        val rect = glyphKeyRects(model).getValue("backspace")
+        val cx = rect.centerX()
+        val cy = rect.centerY()
+        val s = KeyboardTheme.ACTION_GLYPH_DP * app.resources.displayMetrics.density
+
+        val paths = (0 until sh.pathPaintHistoryCount).map { i ->
+            val b = RectF()
+            sh.getDrawnPath(i).computeBounds(b, true)
+            b
+        }.filter { rect.contains(it.centerX(), it.centerY()) }
+        assertEquals("⌫ draws EXACTLY one path (base stroke removed in V0.1.51)", 1, paths.size)
+        val b = paths.single()
+        // no base stroke: the leftmost point is the ARROW TIP (cx − 0.285s),
+        // NOT the old base line position (cx − 0.465s) — gap 0.18s is hard.
+        assertTrue("no base stroke: bounds.left ≥ cx − 0.4s (is ${b.left})",
+            b.left >= cx - 0.4f * s)
+        assertEquals("leftmost point = arrow tip at cx − 0.285s",
+            cx - 0.285f * s, b.left, 2f)
+        // optical height gate (F29/P0): 0.60·s, vertically centered on the key.
+        assertEquals("⌫ optical height stays 0.60·s", 0.60f * s, b.height(), 2f)
+        assertEquals("⌫ vertically centered on the key", cy, b.centerY(), 2f)
+    }
+
     @Test
     fun `finding-3 - identical stroke width in all three glyphs (light + dark)`() {
         for (night in listOf(false, true)) {
@@ -348,7 +390,7 @@ class ImeRootViewLayoutTest {
                 if (rects.values.any { it.contains(b.centerX(), b.centerY()) })
                     sh.getDrawnPathPaint(i).strokeWidth else null
             }
-            assertTrue("night=$night: glyph paths found", strokes.size >= 6)
+            assertTrue("night=$night: glyph paths found", strokes.size >= 5)
             assertTrue(
                 "night=$night: stroke width identical (are ${strokes.toSet()})",
                 strokes.all { it == strokes.first() },

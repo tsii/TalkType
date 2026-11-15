@@ -5,6 +5,44 @@ HANDOFF.md, state/progress.md and the review documents; kept current from now on
 `versionCode` in parentheses. APKs older than the current dist rotation are removed
 from `dist/` (checksums of the last rotations: `dist/SHA256SUMS-*.txt`).
 
+## [0.1.51] — (unreleased, versionCode 51)
+### Added (user finding d3: no download host)
+- **Local model import ("Import folder…")**: Qwen3-ASR and the U2 text-correction sets can be
+  installed WITHOUT any network — the user copies the set folder onto the phone (USB/cloud),
+  taps *Import folder…* on the model card and the app copies and verifies every file against the
+  pinned manifest (per-file sha256 + size) before activating the set (`ModelStore.importSet`:
+  `.part` staging, atomic activation, on any failure full cleanup with the old set untouched).
+  Errors are visible and named (`File missing…`, `checksum mismatch…`, `wrong size…`, generic
+  IO); details in `docs/MODEL_IMPORT.md`. `BASE_URL_QWEN`/`BASE_URL_U2` stay empty — real
+  downloads remain disabled until a host is pinned.
+### Changed (user findings from 0.1.50)
+- Backspace in the home row is as wide as a letter key again; the ⌫ glyph lost its vertical
+  base stroke (pure arrow).
+- The "Grant permissions" button now reacts in every state: system dialog when something is
+  missing, "All permissions granted" toast when nothing is (no dead click).
+
+## [0.1.51] - 2026-11-15 (versionCode 51) — backspace fixes, reacting permission button, local model import
+### Changed (user findings on 0.1.50)
+- **Backspace is a full key width now** (1.0 unit = 102.86 px @1080 in the German layout, cs 93.91,
+  ru 86.40; symbol pages 93.91) instead of 0.75 — the row sum grows to 10.5/11.5/12.5, the half-key
+  indent and every other row stay untouched (M centre 864 px, ⇧/⏎ 162 px unchanged).
+- **Backspace glyph without the vertical base stroke**: only the left arrow is drawn (path is
+  draw-identical apart from the removed base line); ⇧ and ⏎ untouched.
+- **"Grant permissions" always reacts**: missing permission → system dialog; everything granted →
+  toast "All permissions granted" plus a state-aware hint line; permanently denied → the app-settings
+  button becomes visible and the hint names that path. New `PermissionAction` (pure) + UI matrix tests.
+### Added
+- **Local model import** (`ModelStore.importSet` + "Import folder…" per model card, SAF folder picker):
+  the user copies a model set onto the phone, the app stages it, verifies **every sha256** against the
+  pinned manifest and only then activates it. A wrong hash, a missing file, a size mismatch or an
+  aborted copy leaves the existing set untouched and reports which file failed. No download, no network
+  access without a user action — `BASE_URL_QWEN` / `BASE_URL_U2` stay empty.
+  Docs: `docs/MODEL_IMPORT.md`.
+### Tests
+- Debug suite **967 / 0** (`--rerun-tasks`, `/tmp/v151_debug2/`): new `ModelStoreImportTest`
+  (6 failure/success cases incl. "old set survives every error"), `SetupPermissionsButtonTest`
+  (action + hint matrix, Robolectric UI), `GeometryV0149Test` extended to the new widths.
+
 ## [0.1.50] - 2026-11-14 (versionCode 50) — geometry correction: M under the i|o gap
 ### Fixed (user finding on 0.1.49)
 - **`M` sits centred under the gap between `i` and `o`** again: row 3 letters are back to the

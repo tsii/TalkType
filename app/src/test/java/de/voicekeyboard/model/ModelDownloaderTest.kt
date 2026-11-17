@@ -48,10 +48,12 @@ class ModelDownloaderTest {
         var contentLength = -1L
         var calls = 0
         var bodyOffset = 0
+        var seenUserAgent: String? = null
 
         fun nextStatus(conn: FakeConnection): Int {
             calls++
             conn.seenRange = conn.getRequestProperty("Range")
+            seenUserAgent = conn.getRequestProperty("User-Agent")
             val range = conn.seenRange
             return when {
                 status == 416 && range != null -> 416
@@ -86,6 +88,29 @@ class ModelDownloaderTest {
     }
 
     private lateinit var server: FakeServer
+
+    // (ua) V0.1.54c: honest app User-Agent — catbox blocks the Android
+    // DEFAULT UA (Dalvik/…): curl with a Dalvik UA gets connection refused,
+    // the TalkType UA gets 206. The downloader must identify itself.
+    @Test fun setsHonestTalkTypeUserAgentOnEveryConnection() {
+        val body = ByteArray(12) { (it * 3 + 1).toByte() }
+        server = FakeServer(body, 206)
+        val (ms, opener) = store()
+        val part = ms.partFile("model.bin")
+        part.writeBytes(body.copyOfRange(0, 6))
+        ms.storeEtag("model.bin", "\"v1\"")
+        val file = ModelFile("model.bin", 12L, sha256Hex(body))
+        val dl = ModelDownloader(baseUrl = "http://test/", store = ms, opener = opener)
+        assertTrue(dl.download(file))
+        val ua = server.seenUserAgent
+        assertTrue("User-Agent header must be set", !ua.isNullOrEmpty())
+        assertEquals(
+            "honest app UA with the dynamic version",
+            "TalkType/${de.voicekeyboard.BuildConfig.VERSION_NAME} (model downloader)",
+            ua,
+        )
+        assertFalse("never the blocked Dalvik default UA", ua!!.contains("Dalvik"))
+    }
 
     // (a) 206 resume: .part prefix + new piece, hash over the total data
     @Test fun resume206AppendsAndHashMatches() {

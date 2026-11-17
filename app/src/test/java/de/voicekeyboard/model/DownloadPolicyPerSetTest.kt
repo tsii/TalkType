@@ -83,28 +83,19 @@ class DownloadPolicyPerSetTest {
     }
 
     @Test
-    fun `spaceNeedFor QWEN is not enabled in production - pinned numbers via baseUrl fixture`() {
-        // VK-2: the production base URL is EMPTY (server host pinned at upload
-        // time) — the set reports Unsupported("not enabled yet"):
+    fun `spaceNeedFor QWEN is enabled in production - pinned numbers and floor`() {
+        // V0.1.54: BASE_URL_QWEN is pinned (litterbox host) — the production
+        // set reports the pinned numbers now (1_704_302_777 model bytes +
+        // 1.5 GB reserve > A floor):
         assertEquals(
-            DownloadPolicy.SpaceNeed.Unsupported(DownloadPolicy.SpaceNeed.REASON_NOT_ENABLED),
+            DownloadPolicy.SpaceNeed.Required(1_704_302_777L + 1_500_000_000L),
             DownloadPolicy.spaceNeedFor(ModelVariant.QWEN3_ASR),
         )
-        assertNull(
-            "no free-space floor while not enabled",
-            DownloadPolicy.requiredFreeBytes(ModelVariant.QWEN3_ASR),
-        )
-        // the PINNED numbers stay sharp via the baseUrl fixture (host pinned =
-        // one-line unlock): 1_704_302_777 model bytes + 1.5 GB reserve > A floor.
-        val enabled = "https://download-server.example/TalkType/models/qwen3-asr-0.6b-int8/"
-        val need = DownloadPolicy.spaceNeedFor(ModelVariant.QWEN3_ASR, baseUrl = enabled)
-        assertTrue(need is DownloadPolicy.SpaceNeed.Required)
-        assertEquals(1_704_302_777L + 1_500_000_000L, (need as DownloadPolicy.SpaceNeed.Required).bytes)
-        assertEquals(3_204_302_777L, DownloadPolicy.requiredFreeBytes(ModelVariant.QWEN3_ASR, baseUrl = enabled))
-        // an EMPTY list (fixture injection) stays Unsupported("not unlocked")
+        assertEquals(3_204_302_777L, DownloadPolicy.requiredFreeBytes(ModelVariant.QWEN3_ASR))
+        // an EMPTY list (fixture injection) stays Unsupported("not unlocked"):
         assertEquals(
             DownloadPolicy.SpaceNeed.Unsupported(),
-            DownloadPolicy.spaceNeedFor(ModelVariant.QWEN3_ASR, emptyList(), enabled),
+            DownloadPolicy.spaceNeedFor(ModelVariant.QWEN3_ASR, emptyList(), ModelManifest.BASE_URL_QWEN),
         )
     }
 
@@ -130,23 +121,17 @@ class DownloadPolicyPerSetTest {
         )
         assertTrue(DownloadPolicy.canOfferSet(ModelVariant.ONNX_CPU, ram12, DownloadPolicy.MIN_FREE_BYTES))
 
-        // QWEN in PRODUCTION (VK-2: empty base URL): never offerable —
-        // "not enabled yet", no matter the RAM:
-        for (ram in listOf(ram79, ram8, ram12)) {
-            assertFalse(DownloadPolicy.canOfferSet(ModelVariant.QWEN3_ASR, ram, plentyFree))
-        }
-
-        // QWEN with a PINNED base URL (fixture): RAM gate at 8 GB + the
-        // 3.2 GB space floor of the set (1.7 GB model + 1.5 GB reserve):
-        assertFalse(DownloadPolicy.canOfferSet(ModelVariant.QWEN3_ASR, ram79, plentyFree, baseUrl = enabled))
-        assertTrue(DownloadPolicy.canOfferSet(ModelVariant.QWEN3_ASR, ram8, plentyFree, baseUrl = enabled))
-        assertTrue(DownloadPolicy.canOfferSet(ModelVariant.QWEN3_ASR, ram12, plentyFree, baseUrl = enabled))
+        // QWEN in PRODUCTION (V0.1.54: base URL PINNED): RAM gate at 8 GB +
+        // the 3.2 GB space floor of the set (1.7 GB model + 1.5 GB reserve):
+        assertFalse("RAM gate blocks below 8 GB", DownloadPolicy.canOfferSet(ModelVariant.QWEN3_ASR, ram79, plentyFree))
+        assertTrue(DownloadPolicy.canOfferSet(ModelVariant.QWEN3_ASR, ram8, plentyFree))
+        assertTrue(DownloadPolicy.canOfferSet(ModelVariant.QWEN3_ASR, ram12, plentyFree))
         assertFalse(
             "below the QWEN space floor",
-            DownloadPolicy.canOfferSet(ModelVariant.QWEN3_ASR, ram12, 3_204_302_776L, baseUrl = enabled),
+            DownloadPolicy.canOfferSet(ModelVariant.QWEN3_ASR, ram12, 3_204_302_776L),
         )
         assertTrue(
-            DownloadPolicy.canOfferSet(ModelVariant.QWEN3_ASR, ram12, 3_204_302_777L, baseUrl = enabled),
+            DownloadPolicy.canOfferSet(ModelVariant.QWEN3_ASR, ram12, 3_204_302_777L),
         )
 
         // QWEN with an EMPTY manifest (fixture): never offerable —
@@ -162,19 +147,26 @@ class DownloadPolicyPerSetTest {
     // ---- (3b) V0.1.53 regression: an EMPTY base URL offers NOTHING ----
 
     @Test
-    fun `empty base URL offers NOTHING - regression for every inert set`() {
+    fun `an inert set offers NOTHING - regression for every not-enabled set`() {
+        // V0.1.54: QWEN and the U2 sets have PINNED hosts — only the 1.7B set
+        // stays inert in PRODUCTION; the empty-base-URL guard stays pinned
+        // via the baseUrl="" fixture for every set:
         for (v in listOf(
             ModelVariant.QWEN3_ASR,
-            ModelVariant.QWEN3_ASR_17B,
             ModelVariant.BART_SPELLING_EN,
             ModelVariant.BART_SPELLING_DE,
         )) {
-            assertNull("no free-space floor while inert: ${v.id}", DownloadPolicy.requiredFreeBytes(v))
+            assertNull("no free-space floor with an empty base: ${v.id}", DownloadPolicy.requiredFreeBytes(v, baseUrl = ""))
             assertFalse(
-                "never offered, no matter the RAM/space: ${v.id}",
-                DownloadPolicy.canOfferSet(v, totalRamBytes = 16L shl 30, freeBytes = 8L shl 30),
+                "never offered with an empty base, no matter the RAM/space: ${v.id}",
+                DownloadPolicy.canOfferSet(v, totalRamBytes = 16L shl 30, freeBytes = 8L shl 30, baseUrl = ""),
             )
         }
+        // the 1.7B set stays inert in PRODUCTION (empty manifest + empty base):
+        assertNull(DownloadPolicy.requiredFreeBytes(ModelVariant.QWEN3_ASR_17B))
+        assertFalse(
+            DownloadPolicy.canOfferSet(ModelVariant.QWEN3_ASR_17B, totalRamBytes = 16L shl 30, freeBytes = 8L shl 30),
+        )
     }
 
     // ---- (4) EXTRA_VARIANT routing (pure mapping, no network) ----
@@ -261,15 +253,15 @@ class DownloadPolicyPerSetTest {
 
     @Test
     fun `controller refuses a not-enabled set without any download op (VK-2)`() {
-        // production QWEN: manifest pinned (6 files) but base URL EMPTY —
+        // production 1.7B (V0.1.54): no pinned files AND base URL EMPTY —
         // the run must fail BEFORE any staging/marker/download op.
         val store = ModelStore(tmp.newFolder())
         val controller = DownloadController(
             store,
             { throw AssertionError("no download op may run for a set that is not enabled") },
-            ModelManifest.forVariant(ModelVariant.QWEN3_ASR),
+            ModelManifest.forVariant(ModelVariant.QWEN3_ASR_17B),
             DirectExecutor(),
-            variant = ModelVariant.QWEN3_ASR,
+            variant = ModelVariant.QWEN3_ASR_17B,
         )
 
         controller.start()
@@ -277,10 +269,10 @@ class DownloadPolicyPerSetTest {
         val failed = controller.state
         assertTrue("not-enabled set => FAILED, never READY", failed is DownloadController.State.Failed)
         assertTrue(
-            "reason: set not enabled yet",
+            "reason: set not enabled/unlocked",
             (failed as DownloadController.State.Failed).error is ModelError.Storage,
         )
-        assertEquals(ModelStatus.ABSENT, store.statusQuick(ModelVariant.QWEN3_ASR))
+        assertEquals(ModelStatus.ABSENT, store.statusQuick(ModelVariant.QWEN3_ASR_17B))
     }
 
     private class DirectExecutor : Executor {

@@ -63,23 +63,24 @@ class ModelManifestQwenTest {
             assertTrue("size > 0: ${f.storeName}", f.sizeBytes > 0)
             assertTrue("sha256 64-hex: ${f.storeName}",
                 Regex("^[0-9a-f]{64}$").matches(f.sha256))
-            assertTrue("urlPath flat == storeName: ${f.storeName}", f.urlPath == f.storeName)
+            assertTrue("urlPath FLAT (litterbox name, no subdirectory): ${f.storeName}",
+                f.urlPath.isNotEmpty() && '/' !in f.urlPath && '\\' !in f.urlPath)
         }
         // the pinned production list verbatim (QWEN_ASR_CONTRACT §3):
         assertEquals(
             listOf(
                 ModelFile("encoder.int8.onnx", 187_361_021L,
-                    "327974e11e2914037272224fc439af093bb251d0d232c0513bc9054d1ae6adba"),
+                    "327974e11e2914037272224fc439af093bb251d0d232c0513bc9054d1ae6adba", urlPath = "lget9z.onnx"),
                 ModelFile("qwen_prefill.int8.onnx", 752_810_624L,
-                    "1a505e73e42074a2fdded9cdef4d9484586d52dbd654760982df738e1c03e48d"),
+                    "1a505e73e42074a2fdded9cdef4d9484586d52dbd654760982df738e1c03e48d", urlPath = "9r67k7.onnx"),
                 ModelFile("qwen_step.int8.onnx", 752_598_179L,
-                    "9a7f8946996be4f36c0687265cc18f0d929c459001d15d1dfc5b6f783cb198d5"),
+                    "9a7f8946996be4f36c0687265cc18f0d929c459001d15d1dfc5b6f783cb198d5", urlPath = "hzd13o.onnx"),
                 ModelFile("tokenizer.json", 11_429_653L,
-                    "fe1fad59be22a41ee293363fcf95fdedbc7c93f3b49270b1d2e18bd1399a7a05"),
+                    "fe1fad59be22a41ee293363fcf95fdedbc7c93f3b49270b1d2e18bd1399a7a05", urlPath = "6cae7m.json"),
                 ModelFile("mel_filters.npy", 103_040L,
-                    "8abf12444e0d9c0fd6c5e49f8b977d41e47b51a5eb48d399c232578d3d5e914f"),
+                    "8abf12444e0d9c0fd6c5e49f8b977d41e47b51a5eb48d399c232578d3d5e914f", urlPath = "66z3qn.npy"),
                 ModelFile("mel_config.json", 260L,
-                    "1888b2defc1b7db6ca081bd706f31e8fc1107cd44f1eba644834251f6dccd24c"),
+                    "1888b2defc1b7db6ca081bd706f31e8fc1107cd44f1eba644834251f6dccd24c", urlPath = "7d4dyq.json"),
             ),
             qwen,
         )
@@ -148,16 +149,29 @@ class ModelManifestQwenTest {
 
     // ---- (d) base URL per set ----
     @Test
-    fun `baseUrlFor points every set to its own source - QWEN empty until the server host is pinned`() {
+    fun `baseUrlFor points every set to its own source - QWEN pinned to the litterbox host`() {
         assertEquals(ModelManifest.BASE_URL, ModelManifest.baseUrlFor(ModelVariant.ONNX_CPU))
         assertEquals(ModelManifest.BASE_URL_LITERT, ModelManifest.baseUrlFor(ModelVariant.LITERT_CPU))
 
-        // VK-2 (REVIEW_V0146): the QWEN base URL is EMPTY — the draft
-        // placeholder host was NOT resolvable; the server host is pinned at
-        // upload time (post-GATE). Empty = not offered (DownloadPolicy
-        // Unsupported "not enabled yet", Setup card not downloadable).
-        assertEquals("", ModelManifest.baseUrlFor(ModelVariant.QWEN3_ASR))
+        // V0.1.54 (PLAN_HOSTING): the QWEN base URL is PINNED — litterbox
+        // (temporary 72h upload, valid until ~2026-11-19 22:30 UTC). Non-empty
+        // = offered (DownloadPolicy frees the set, RAM gate stays).
+        assertEquals("https://litter.catbox.moe/", ModelManifest.baseUrlFor(ModelVariant.QWEN3_ASR))
         assertEquals(ModelManifest.BASE_URL_QWEN, ModelManifest.baseUrlFor(ModelVariant.QWEN3_ASR))
+    }
+
+    /** V0.1.54 (PLAN_HOSTING): the downloader builds baseUrl + urlPath —
+     *  the EXACT full URLs of all 6 QWEN files (litterbox flat names). */
+    @Test
+    fun `qwen download defaults build the exact full URLs (base + urlPath)`() {
+        assertEquals("https://litter.catbox.moe/", ModelManifest.BASE_URL_QWEN)
+        val urls = ModelManifest.QWEN.associate { it.storeName to ModelManifest.BASE_URL_QWEN + it.urlPath }
+        assertEquals("https://litter.catbox.moe/lget9z.onnx", urls.getValue("encoder.int8.onnx"))
+        assertEquals("https://litter.catbox.moe/9r67k7.onnx", urls.getValue("qwen_prefill.int8.onnx"))
+        assertEquals("https://litter.catbox.moe/hzd13o.onnx", urls.getValue("qwen_step.int8.onnx"))
+        assertEquals("https://litter.catbox.moe/6cae7m.json", urls.getValue("tokenizer.json"))
+        assertEquals("https://litter.catbox.moe/66z3qn.npy", urls.getValue("mel_filters.npy"))
+        assertEquals("https://litter.catbox.moe/7d4dyq.json", urls.getValue("mel_config.json"))
     }
 }
 

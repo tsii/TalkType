@@ -21,6 +21,32 @@ from `dist/` (checksums of the last rotations: `dist/SHA256SUMS-*.txt`).
 - The "Grant permissions" button now reacts in every state: system dialog when something is
   missing, "All permissions granted" toast when nothing is (no dead click).
 
+## [0.1.54] - 2026-11-16 (versionCode 54) — download defaults: U2 permanent, Qwen befristet, two real download bugs fixed
+### Changed (PLAN_HOSTING)
+- **Download defaults pinned** in `ModelManifest.kt`: the U2 text-correction sets (en/de) are
+  permanently hosted on catbox (`https://files.catbox.moe/`, flat `urlPath` per file); the
+  Qwen3-ASR 0.6B set is hosted on litterbox (`https://litter.catbox.moe/`) — a TEMPORARY 72h
+  upload, valid until ~2026-11-19 22:30 UTC. `BASE_URL_QWEN`/`BASE_URL_U2_EN`/`BASE_URL_U2_DE`
+  are non-empty now, so `DownloadPolicy.canOfferSet` frees all three cards (the 8 GB RAM gate
+  stays). Only the URL paths are new — `storeName`/`sha256`/`sizeBytes` are untouched, the
+  store-name whitelist is unchanged (multi-segment store names keep their subdirectories,
+  the downloader builds `baseUrl + urlPath` flat). The 1.7B set stays locked (empty manifest,
+  empty base URL). After the litterbox expiry the Qwen download host must be re-pinned
+  (permanent host or a fresh 72h upload).
+### Fixed (found on the emulator, both TDD)
+- **Host blocked the Android default user agent**: catbox refuses connections with the
+  platform default UA (`Dalvik/…` — verified: 000 with Dalvik, 206 with an app UA). The
+  downloader now sends an honest `TalkType/<version> (model downloader)` UA.
+- **Only one download per process**: the download controller survived its terminal state in
+  the service (`start()` was a silent no-op after `Ready`), so after a completed Parakeet
+  download neither U2 nor Qwen could be downloaded — nothing happened, no error. The
+  service now rebuilds the controller per set (terminal state or different variant → new
+  run; different variant while busy → `start-busy`, single-run guarantee stays).
+- **U2 download wiring**: `downloadWiring` resolves the TEXT sets explicitly (a U2 download
+  would otherwise have silently pulled variant A).
+- Emulator evidence: Parakeet (HF) Ready in 64 s; U2-en (183 MB from catbox) `state=Ready`
+  in 140 s, hash-checked and staged.
+
 ## [0.1.53] - 2026-11-15 (versionCode 53) — download plumbing per set, locked 1.7B card
 ### Changed (PLAN_HOSTING §2a + PLAN_QWEN17B §B)
 - **Per-set download base URLs**: `BASE_URL_U2` is split into `BASE_URL_U2_EN` and

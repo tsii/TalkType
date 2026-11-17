@@ -144,19 +144,36 @@ class ModelStoreMultiSegmentTest {
 
     // ------------------------------------------------------ DownloadPolicy U2
 
-    @Test fun `empty BASE_URL_U2 keeps the U2 sets inert (null floor - Qwen pattern)`() {
-        assertNull(
-            "no pinned host -> no floor -> never offered",
+    @Test fun `pinned BASE_URL_U2 gives the sets a floor and offer - RAM gate stays`() {
+        // V0.1.54: hosts pinned — the U2 sets have a free-space floor now
+        // (set bytes + 1.5 GB reserve < the 2.5 GB A floor → floor = A floor)
+        assertEquals(
+            DownloadPolicy.MIN_FREE_BYTES,
             DownloadPolicy.requiredFreeBytes(ModelVariant.BART_SPELLING_EN),
         )
-        assertNull(DownloadPolicy.requiredFreeBytes(ModelVariant.BART_SPELLING_DE))
+        assertEquals(
+            DownloadPolicy.MIN_FREE_BYTES,
+            DownloadPolicy.requiredFreeBytes(ModelVariant.BART_SPELLING_DE),
+        )
         assertFalse(
-            "canOffer false while inert",
+            "RAM gate blocks below 8 GB",
+            DownloadPolicy.canOfferSet(
+                ModelVariant.BART_SPELLING_EN,
+                totalRamBytes = 4L * 1024 * 1024 * 1024,
+                freeBytes = 8L * 1024 * 1024 * 1024,
+            ),
+        )
+        assertTrue(
+            "offered with pinned host, enough RAM and free space",
             DownloadPolicy.canOfferSet(
                 ModelVariant.BART_SPELLING_EN,
                 totalRamBytes = 16L * 1024 * 1024 * 1024,
                 freeBytes = 8L * 1024 * 1024 * 1024,
             ),
+        )
+        // empty base URL fixture keeps the inert guard pinned (Qwen pattern):
+        assertNull(
+            DownloadPolicy.requiredFreeBytes(ModelVariant.BART_SPELLING_EN, baseUrl = ""),
         )
     }
 

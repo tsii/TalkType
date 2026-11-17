@@ -29,15 +29,12 @@ object ModelManifest {
     const val BASE_URL_LITERT = "https://huggingface.co/Arm/parakeet-tdt-0-6b-v3-int8-litert/resolve/main/"
 
     /**
-     * T22b'/VK-2 (REVIEW_V0146): base URL of the QWEN set — EMPTY until the
-     * download server host is pinned at upload time (post-GATE decision;
-     * the placeholder host of the draft was NOT resolvable — see review).
-     * Empty = the set is NOT offered: DownloadPolicy reports Unsupported
-     * ("not enabled yet"), the Setup card stays in the not-downloaded state
-     * and a hand-started download fails fast WITHOUT any network attempt.
-     * Pinning the host here is the one-line unlock (plus contract §3 server).
+     * V0.1.54 (PLAN_HOSTING): base URL of the QWEN set — PINNED to litterbox
+     * (temporary 72h upload, valid until ~2026-11-19 22:30 UTC). Non-empty =
+     * the set IS offered (DownloadPolicy frees the card; the 8 GB RAM gate
+     * stays). The per-file [urlPath]s below carry the flat litterbox names.
      */
-    const val BASE_URL_QWEN = ""
+    const val BASE_URL_QWEN = "https://litter.catbox.moe/"
 
     /**
      * V0.1.53 (PLAN_QWEN17B §B, S2): base URL of the 1.7B set — EMPTY until
@@ -53,15 +50,14 @@ object ModelManifest {
 
     /**
      * V0.1.53 (PLAN_HOSTING §2a): per-set base URLs of the U2 TEXT sets —
-     * EMPTY until the download host is pinned at upload time. en and de
-     * share the SAME file names (`encoder.int8.onnx`, …) with DIFFERENT
-     * sha256 hashes, so ONE common base URL is impossible — every set maps
-     * to its own base (one-line unlock each; commit-pinned URL, never a
-     * branch). Empty = the set is NOT offered (Qwen VK-2 pattern: inert,
-     * fail-fast, never a dead download promise).
+     * V0.1.54: PINNED to catbox (permanent). en and de share the SAME file
+     * names (`encoder.int8.onnx`, …) with DIFFERENT sha256 hashes, so ONE
+     * common base URL is impossible — every set maps to its own base
+     * (commit-pinned URL, never a branch). Non-empty = the set IS offered
+     * (RAM gate stays); the per-file [urlPath]s carry the flat catbox names.
      */
-    const val BASE_URL_U2_EN = ""
-    const val BASE_URL_U2_DE = ""
+    const val BASE_URL_U2_EN = "https://files.catbox.moe/"
+    const val BASE_URL_U2_DE = "https://files.catbox.moe/"
 
     /**
      * T24b U2 TEXT sets — MERGED int8 artifacts (BART_CORRECT_CONTRACT §12:
@@ -74,23 +70,23 @@ object ModelManifest {
      * download — this list is the pin, not yet the unlock.
      */
     val U2_EN: List<ModelFile> = listOf(
-        ModelFile("encoder.int8.onnx", 43_601_202L, "bba119c4dc16830e6a0a0d670167134862ce124e1ac6b39c5abc936e2436cf54"),
-        ModelFile("decoder_init.int8.onnx", 7_466_649L, "d986026349e944bbf1f2da44cf5a7e7da4b4bf211b1e3a6c2b86fd7704f96629"),
-        ModelFile("decoder_step.int8.onnx", 324_984L, "2d1a70e4e4217f06fe42517003ec099035447b4a83cf1e508f2cb455901dc8b2"),
-        ModelFile("shared/shared_weights.bin", 127_859_712L, "0a8a2920ae3412512ee60bfc48f31984a092c77cb3efd83a7fa80d7a39c3479c"),
-        ModelFile("tokenizer/tokenizer.json", 3_558_746L, "dcf1e4d967564d18f9b7721e268b8a517027319a5cac544b9c1d9a0ce0163f44"),
-        ModelFile("tokenizer/tokenizer_config.json", 497L, "123732aac64b1214daae8ad115a9efcd59d935f09db70872c01efb713781ae51"),
-        ModelFile("tokenizer/vocab_meta.json", 225L, "5787c24699747b0db708eccc72475af62d38a1d6661b406a562986d41257f662"),
+        ModelFile("encoder.int8.onnx", 43_601_202L, "bba119c4dc16830e6a0a0d670167134862ce124e1ac6b39c5abc936e2436cf54", urlPath = "t2vaz4.onnx"),
+        ModelFile("decoder_init.int8.onnx", 7_466_649L, "d986026349e944bbf1f2da44cf5a7e7da4b4bf211b1e3a6c2b86fd7704f96629", urlPath = "pwnz00.onnx"),
+        ModelFile("decoder_step.int8.onnx", 324_984L, "2d1a70e4e4217f06fe42517003ec099035447b4a83cf1e508f2cb455901dc8b2", urlPath = "myoxbf.onnx"),
+        ModelFile("shared/shared_weights.bin", 127_859_712L, "0a8a2920ae3412512ee60bfc48f31984a092c77cb3efd83a7fa80d7a39c3479c", urlPath = "gci74c.bin"),
+        ModelFile("tokenizer/tokenizer.json", 3_558_746L, "dcf1e4d967564d18f9b7721e268b8a517027319a5cac544b9c1d9a0ce0163f44", urlPath = "5a626s.json"),
+        ModelFile("tokenizer/tokenizer_config.json", 497L, "123732aac64b1214daae8ad115a9efcd59d935f09db70872c01efb713781ae51", urlPath = "8m7dbj.json"),
+        ModelFile("tokenizer/vocab_meta.json", 225L, "5787c24699747b0db708eccc72475af62d38a1d6661b406a562986d41257f662", urlPath = "zcwse1.json"),
     )
 
     val U2_DE: List<ModelFile> = listOf(
-        ModelFile("encoder.int8.onnx", 85_228_809L, "05507b81ecdad185131bdfdaccf942cf066584eb11ea20d85e5343eb25dbb89e"),
-        ModelFile("decoder_init.int8.onnx", 14_453_095L, "97872f564c62c091db9b8f47b8b743ebcafa685d1bd2b01f37a088778d6ccda2"),
-        ModelFile("decoder_step.int8.onnx", 333_394L, "275a785385b759351f84a74fc4ba7a18cd64b8823838c9e73f716291fd1a2b63"),
-        ModelFile("shared/shared_weights.bin", 148_509_696L, "68296cd919fa2691744c80d62c981b55047b8f1ab3ed3e6a2f31b1111da430cd"),
-        ModelFile("tokenizer/tokenizer.json", 2_422_267L, "483ff18e85be28f7c6a27b6a4ed17583abf139bb016bd4bd91277e35924a536d"),
-        ModelFile("tokenizer/tokenizer_config.json", 2_488L, "682dc5904ee05fef4acddad8478ccf35aea659fecb927686bf77247d978648a1"),
-        ModelFile("tokenizer/vocab_meta.json", 230L, "12d90200acae09451e327cb4402af03ba310f5002507a706dd4c9f351cca2da4"),
+        ModelFile("encoder.int8.onnx", 85_228_809L, "05507b81ecdad185131bdfdaccf942cf066584eb11ea20d85e5343eb25dbb89e", urlPath = "yufd3r.onnx"),
+        ModelFile("decoder_init.int8.onnx", 14_453_095L, "97872f564c62c091db9b8f47b8b743ebcafa685d1bd2b01f37a088778d6ccda2", urlPath = "41jloi.onnx"),
+        ModelFile("decoder_step.int8.onnx", 333_394L, "275a785385b759351f84a74fc4ba7a18cd64b8823838c9e73f716291fd1a2b63", urlPath = "4ya4lm.onnx"),
+        ModelFile("shared/shared_weights.bin", 148_509_696L, "68296cd919fa2691744c80d62c981b55047b8f1ab3ed3e6a2f31b1111da430cd", urlPath = "vp343k.bin"),
+        ModelFile("tokenizer/tokenizer.json", 2_422_267L, "483ff18e85be28f7c6a27b6a4ed17583abf139bb016bd4bd91277e35924a536d", urlPath = "vsjzg0.json"),
+        ModelFile("tokenizer/tokenizer_config.json", 2_488L, "682dc5904ee05fef4acddad8478ccf35aea659fecb927686bf77247d978648a1", urlPath = "2psg6n.json"),
+        ModelFile("tokenizer/vocab_meta.json", 230L, "12d90200acae09451e327cb4402af03ba310f5002507a706dd4c9f351cca2da4", urlPath = "wvn408.json"),
     )
 
     /**
@@ -168,31 +164,37 @@ object ModelManifest {
     val QWEN: List<ModelFile> = listOf(
         ModelFile(
             storeName = "encoder.int8.onnx",
+            urlPath = "lget9z.onnx",
             sizeBytes = 187_361_021L,
             sha256 = "327974e11e2914037272224fc439af093bb251d0d232c0513bc9054d1ae6adba",
         ),
         ModelFile(
             storeName = "qwen_prefill.int8.onnx",
+            urlPath = "9r67k7.onnx",
             sizeBytes = 752_810_624L,
             sha256 = "1a505e73e42074a2fdded9cdef4d9484586d52dbd654760982df738e1c03e48d",
         ),
         ModelFile(
             storeName = "qwen_step.int8.onnx",
+            urlPath = "hzd13o.onnx",
             sizeBytes = 752_598_179L,
             sha256 = "9a7f8946996be4f36c0687265cc18f0d929c459001d15d1dfc5b6f783cb198d5",
         ),
         ModelFile(
             storeName = "tokenizer.json",
+            urlPath = "6cae7m.json",
             sizeBytes = 11_429_653L,
             sha256 = "fe1fad59be22a41ee293363fcf95fdedbc7c93f3b49270b1d2e18bd1399a7a05",
         ),
         ModelFile(
             storeName = "mel_filters.npy",
+            urlPath = "66z3qn.npy",
             sizeBytes = 103_040L,
             sha256 = "8abf12444e0d9c0fd6c5e49f8b977d41e47b51a5eb48d399c232578d3d5e914f",
         ),
         ModelFile(
             storeName = "mel_config.json",
+            urlPath = "7d4dyq.json",
             sizeBytes = 260L,
             sha256 = "1888b2defc1b7db6ca081bd706f31e8fc1107cd44f1eba644834251f6dccd24c",
         ),

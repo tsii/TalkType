@@ -1,5 +1,6 @@
 package de.voicekeyboard.model
 
+import de.voicekeyboard.BuildConfig
 import java.io.File
 import java.io.IOException
 import java.io.InputStream
@@ -10,6 +11,9 @@ import java.security.MessageDigest
 /**
  * JDK downloader for model files (no new dependency).
  *
+ * - Honest app User-Agent `TalkType/<version> (model downloader)`: catbox
+ *   (files.catbox.moe) BLOCKS the Android default UA (Dalvik/…) — downloads
+ *   die as connection refused. No browser spoofing: the app names itself.
  * - `HttpURLConnection` with connect/read timeouts.
  * - Resume: an existing `.part` is continued with `Range: bytes=<len>-`;
  *   the server ETag is stored per file — if it changes, the download starts
@@ -107,6 +111,10 @@ class ModelDownloader(
                 readTimeout = readTimeoutMs
                 if (resumeFrom > 0) setRequestProperty("Range", "bytes=$resumeFrom-")
                 setRequestProperty("Accept-Encoding", "identity") // no compression: range+hash would break
+                // V0.1.54c: catbox blocks the Android DEFAULT UA (Dalvik/…)
+                // with connection refused — identify as the app, honestly,
+                // with the dynamic version (no spoofing, no hard-coded UA).
+                setRequestProperty("User-Agent", "TalkType/${BuildConfig.VERSION_NAME} (model downloader)")
             }
             connection.connect()
             val status = connection.responseCode

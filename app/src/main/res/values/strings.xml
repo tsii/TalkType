@@ -150,6 +150,7 @@
   <string name="u2_body">Optional spelling model on-device · 179 MB (en) / 249 MB (de) · MIT / Apache-2.0 · downloads only with your consent</string>
   <string name="u2_ready">Ready — upgrades the typing suggestions automatically</string>
   <string name="u2_set">Set: %1$s</string>
+  <string name="u2_download_or_import">Download (~%1$s) or import the model folder.</string>
   <!-- V0.1.51 (PLAN_V0151 §D): local model-set import — the user copies the set
        folder onto the phone (USB/cloud), the app imports it offline and verifies
        every file against the pinned manifest before the set becomes READY. -->

@@ -244,10 +244,11 @@ class SetupModelChoiceTest {
     // ---- (d2) C2 (Oracle §20b): locked + READY keeps the delete button ----
 
     @Test
-    fun `(d2) qwen ready but locked (BASE_URL_QWEN empty) keeps select and delete - no orphaned 1,7 GB`() {
-        // production state today: BASE_URL_QWEN = "" (VK-2, no server pinned)
-        // while the qwen files sit READY on disk — the card must stay operable.
-        assertEquals("", de.voicekeyboard.model.ModelManifest.BASE_URL_QWEN)
+    fun `(d2) qwen ready with PINNED BASE_URL keeps select and delete AND offers download`() {
+        // production state since V0.1.54: BASE_URL_QWEN pinned (litterbox) —
+        // while the qwen files sit READY on disk the card keeps select/delete
+        // (C2, no orphaned 1.7 GB) and the download is offered for re-install.
+        assertEquals("https://litter.catbox.moe/", de.voicekeyboard.model.ModelManifest.BASE_URL_QWEN)
         val store = storeWith(ModelVariant.QWEN3_ASR)
         val a = buildActivity(store = store) // active defaults to Parakeet
         assertEquals(
@@ -256,26 +257,33 @@ class SetupModelChoiceTest {
             a.findViewById<TextView>(R.id.setup_qwen_status).text.toString(),
         )
         assertEquals(
-            "C2: delete stays visible on the locked READY card",
+            "C2: delete stays visible on the READY card",
             View.VISIBLE,
             a.findViewById<Button>(R.id.setup_qwen_delete).visibility,
         )
         assertEquals(
-            "select stays visible on the locked READY card",
+            "select stays visible on the READY card",
             View.VISIBLE,
             a.findViewById<Button>(R.id.setup_qwen_select).visibility,
         )
+        // button matrix (SetupCardActionsTest): a READY non-active card offers
+        // select+delete — the download only returns on the ABSENT card below.
         assertEquals(
-            "download stays hidden while the base URL is empty (VK-2)",
+            "no download on the READY card (matrix)",
             View.GONE,
             a.findViewById<Button>(R.id.setup_qwen_download).visibility,
         )
-        // and the delete REALLY frees the set (deleteSet works on locked sets)
+        // and the delete REALLY frees the set (deleteSet works on READY sets)
         a.findViewById<Button>(R.id.setup_qwen_delete).performClick()
         a.awaitSetupIo()
-        assertNull("set freed despite the lock", store.activeVersion(ModelVariant.QWEN3_ASR))
+        assertNull("set freed via deleteSet", store.activeVersion(ModelVariant.QWEN3_ASR))
         assertEquals(
-            "card falls back to the locked download-hidden state",
+            "card falls back to the offered download state",
+            View.VISIBLE,
+            a.findViewById<Button>(R.id.setup_qwen_download).visibility,
+        )
+        assertEquals(
+            "delete gone once the set is ABSENT",
             View.GONE,
             a.findViewById<Button>(R.id.setup_qwen_delete).visibility,
         )

@@ -66,6 +66,9 @@ class SetupActivity : ComponentActivity() {
     /** T22h test seam: total device RAM (null -> ActivityManager.MemoryInfo). */
     internal var totalRamOverride: Long? = null
 
+    /** V0.1.54b test seam: overrides the measured free space (space-floor tests). */
+    internal var freeSpaceOverride: Long? = null
+
     /** T22h test seam: manifest for the offer check (null -> pinned list of
      *  the variant; emptyList simulates a not-unlocked set). */
     internal var manifestOverride: List<de.voicekeyboard.model.ModelFile>? = null
@@ -113,7 +116,7 @@ class SetupActivity : ComponentActivity() {
         return StorageSnapshot(
             de.voicekeyboard.model.ModelVariant.entries.associateWith { store.statusQuick(it) },
             de.voicekeyboard.model.ModelVariant.entries.associateWith { store.manifestSetId(it) },
-            filesDir.usableSpace, totalRamOverride ?: deviceTotalRamBytes(),
+            freeSpaceOverride ?: filesDir.usableSpace, totalRamOverride ?: deviceTotalRamBytes(),
             getString(R.string.setup_lang_word_correction,
                 assets.list("wordlists")?.filter { it.endsWith(".bin") }
                     ?.joinToString(", ") { LanguageCycle.endonym(it.removeSuffix(".bin")) } ?: ""),
@@ -330,6 +333,7 @@ class SetupActivity : ComponentActivity() {
     /** U2 views (programmatic card — no XML layout change). */
     private var u2Status: TextView? = null
     private var u2Delete: Button? = null
+    private var u2Download: Button? = null
     private var u2SetLine: TextView? = null
     private var u2Import: Button? = null
 
@@ -383,6 +387,14 @@ class SetupActivity : ComponentActivity() {
         // V0.1.51 (PLAN_V0151 §D): local folder import — the U2 sets have no
         // download host (BASE_URL_U2_EN/_DE empty); the card follows the CURRENT
         // typing language set (en -> U2-en, de -> U2-de).
+        u2Download = Button(this).apply {
+            text = getString(R.string.model_download)
+            visibility = android.view.View.GONE
+            // V0.1.54b: the U2 download rides the SAME service path as the
+            // ASR cards (EXTRA_VARIANT = the card's U2 set id).
+            setOnClickListener { onDownloadModel(u2VariantForTypingLanguage()) }
+        }
+        container.addView(u2Download!!)
         u2Import = Button(this).apply {
             text = getString(R.string.setup_import_folder)
             setOnClickListener { onImportFolder(u2VariantForTypingLanguage()) }
@@ -400,26 +412,34 @@ class SetupActivity : ComponentActivity() {
 
     /**
      * T24b: the honest card state — RAM gate (8 GB floor, Qwen class:
-     * U2 session ~0.4-0.5 GB NEXT TO the resident ASR engine), empty
-     * BASE_URL_U2_EN/_DE = not offered (Qwen VK-2 pattern: inert, fail-fast,
-     * never a dead download promise); Delete only for a READY set (frees
-     * the ~0.25 GB; C2 orphan rule applies like the ASR sets).
+     * U2 session ~0.4-0.5 GB NEXT TO the resident ASR engine). V0.1.54b:
+     * with the pinned catbox hosts the card offers the DOWNLOAD next to the
+     * parallel folder import (button matrix = pure [u2CardActions]); the
+     * status line names the honest size instead of the outdated
+     * "no download host" text (setup_import_only is gone from this card).
      */
     private fun renderU2Card() {
         val variant = u2VariantForTypingLanguage()
         val status = cachedStatus(variant)
         val totalRam = ramBytes
+        val freeBytes = freeSpace
         u2SetLine?.text = getString(
             R.string.u2_set,
             de.voicekeyboard.ime.LanguageCycle.endonym(
                 if (variant == de.voicekeyboard.model.ModelVariant.BART_SPELLING_EN) "en-us" else "de-de",
             ),
         )
-        u2Delete?.visibility = if (status == de.voicekeyboard.model.ModelStatus.READY) {
-            android.view.View.VISIBLE
-        } else {
-            android.view.View.GONE
-        }
+        val offerable = de.voicekeyboard.model.DownloadPolicy.canOfferSet(variant, totalRam, freeBytes)
+        val actions = u2CardActions(
+            locked = totalRam < de.voicekeyboard.model.DownloadPolicy.QWEN_MIN_TOTAL_RAM_BYTES,
+            ready = status == de.voicekeyboard.model.ModelStatus.READY,
+            importing = importingVariant == variant,
+            offerable = offerable,
+        )
+        u2Download?.visibility =
+            if (ButtonKind.DOWNLOAD in actions) android.view.View.VISIBLE else android.view.View.GONE
+        u2Delete?.visibility =
+            if (ButtonKind.DELETE in actions) android.view.View.VISIBLE else android.view.View.GONE
         val importing = importingVariant == variant
         u2Import?.isEnabled = importingVariant == null
         u2Import?.visibility = if (!importing && status != de.voicekeyboard.model.ModelStatus.READY) {
@@ -434,8 +454,15 @@ class SetupActivity : ComponentActivity() {
                 u2Status?.text = getString(R.string.u2_ready)
             totalRam < de.voicekeyboard.model.DownloadPolicy.QWEN_MIN_TOTAL_RAM_BYTES ->
                 u2Status?.text = getString(R.string.model_ram_locked)
+            offerable ->
+                // honest size hint: the ACTUAL download bytes of the set
+                u2Status?.text = getString(
+                    R.string.u2_download_or_import,
+                    "${(de.voicekeyboard.model.ModelManifest.totalBytes(variant) + 500_000L) / 1_000_000L} MB",
+                )
             else ->
-                u2Status?.text = getString(R.string.setup_import_only)
+                // RAM ok but the free-space floor fails (existing space text)
+                u2Status?.text = getString(R.string.setup_error_space)
         }
     }
 
@@ -1178,6 +1205,26 @@ internal fun cardActions(
 ): Set<ButtonKind> = when {
     ready && active -> emptySet() // active set: select is pointless, delete forbidden
     ready -> setOf(ButtonKind.SELECT, ButtonKind.DELETE) // C2: ALSO when locked
+    locked -> emptySet()
+    offerable -> setOf(ButtonKind.DOWNLOAD)
+    else -> emptySet()
+}
+
+/**
+ * V0.1.54b: pure render decision of the U2 card's buttons — no views,
+ * pinned in U2CardActionsTest. The U2 TEXT sets have NO select button
+ * (never the active dictation set), so the matrix is: DOWNLOAD while the
+ * set is offered (RAM >= 8 GB AND space floor ok), DELETE on a READY set
+ * (C2: the loaded set always stays freeable), NOTHING while locked or
+ * importing. */
+internal fun u2CardActions(
+    locked: Boolean, // RAM below the 8 GB gate (Qwen class)
+    ready: Boolean, // U2 set READY on disk (statusQuick)
+    importing: Boolean, // a folder import of this set is running
+    offerable: Boolean, // DownloadPolicy.canOfferSet: RAM ok AND space floor ok
+): Set<ButtonKind> = when {
+    importing -> emptySet()
+    ready -> setOf(ButtonKind.DELETE)
     locked -> emptySet()
     offerable -> setOf(ButtonKind.DOWNLOAD)
     else -> emptySet()

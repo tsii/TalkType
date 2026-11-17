@@ -11,8 +11,8 @@ android {
         applicationId = "de.voicekeyboard"
         minSdk = 29
         targetSdk = 36
-        versionCode = 53
-        versionName = "0.1.53"
+        versionCode = 54
+        versionName = "0.1.54"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         // clearPackageData bewusst false: Ein Instrumented-Lauf darf einen echten
@@ -37,6 +37,12 @@ android {
         }
     }
 
+
+    // V0.1.54c: BuildConfig.VERSION_NAME feeds the honest downloader
+    // User-Agent (ModelDownloader) — generated for app AND unit tests.
+    buildFeatures {
+        buildConfig = true
+    }
 
     signingConfigs {
         create("release") {
@@ -89,6 +95,10 @@ android {
 
     testOptions {
         unitTests.isIncludeAndroidResources = true
+        // V0.1.54d: DownloadController logs diagnosis codes via android.util.Log;
+        // the pure-JVM controller tests need the stubbed default (0) instead of
+        // "Method i in android.util.Log not mocked".
+        unitTests.isReturnDefaultValues = true
     }
 
     compileOptions {

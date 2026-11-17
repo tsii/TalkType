@@ -96,6 +96,23 @@ class DownloadControllerTest {
         assertEquals(4, downloading.last().totalFiles)
     }
 
+    // (g) V0.1.54e: READY is NOT a lock — start() runs again (service restart
+    // bug: the old singleton swallowed every later ACTION_START of another set).
+    @Test fun startAfterReadyRunsANewDownload() {
+        val files = manifest("a.bin" to 10L)
+        val (store, controller, ex) = makeController(files)
+        controller.start()
+        assertEquals(DownloadController.State.Ready, controller.state)
+        assertEquals(1, ex.runs.get())
+        // second start: READY must NOT no-op — a NEW run begins; the state
+        // stays Ready until run() sets its first new state (start() itself
+        // touches no state), then reaches Ready again via the fresh run.
+        controller.start()
+        assertEquals("READY stays until the first new state", DownloadController.State.Ready, controller.state)
+        assertEquals("a new run really executed", 2, ex.runs.get())
+        assertTrue(store.isReady())
+    }
+
     // (b) cancel at file 2 → CANCELLED, file 1's .part was moved
     @Test fun cancelKeepsPriorPartAndGoesCancelled() {
         val files = manifest("a.bin" to 10L, "b.bin" to 20L, "c.bin" to 30L)
@@ -139,14 +156,26 @@ class DownloadControllerTest {
         assertTrue(store.isReady())
     }
 
-    // (e) double start() = one run
-    @Test fun doubleStartIsOneRun() {
+    // (e) double start() = one run — WHILE RUNNING. V0.1.54e: after a
+    // terminal state a later start() is a legitimate NEW run (see (g)); the
+    // one-run guarantee only guards a live run (running flag / Downloading).
+    @Test fun doubleStartWhileRunningIsOneRun() {
         val files = manifest("a.bin" to 10L)
-        val (store, controller, ex) = makeController(files)
-        controller.start()
-        controller.start()
-        assertEquals(1, ex.runs.get())
+        val store = ModelStore(tmp.newFolder(), files)
+        val deferred = DeferredExecutor()
+        val controller = DownloadController(store, { fakeOp(store) }, files, deferred)
+        controller.start() // queued, running=true, run not yet executed
+        controller.start() // running flag blocks the second run request
+        assertEquals("exactly ONE run queued", 1, deferred.commands.size)
+        deferred.commands.forEach { it.run() } // execute the single run
         assertEquals(DownloadController.State.Ready, controller.state)
+    }
+
+    private class DeferredExecutor : Executor {
+        val commands = mutableListOf<Runnable>()
+        override fun execute(command: Runnable) {
+            commands += command
+        }
     }
 
     // (f) activation fails → FAILED instead of READY

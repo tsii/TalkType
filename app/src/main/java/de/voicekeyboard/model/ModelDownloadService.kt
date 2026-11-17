@@ -63,15 +63,43 @@ data class DownloadWiring(
     val baseUrl: String,
 )
 
-/** Maps the EXTRA_VARIANT intent extra to the complete per-set wiring. */
+/** Maps the EXTRA_VARIANT intent extra to the complete per-set wiring.
+ *  V0.1.54b: U2 TEXT ids resolve EXPLICITLY — [ModelVariant.fromId] is the
+ *  ACTIVE-DICTATION resolver and deliberately falls back to A for TEXT ids
+ *  (a TEXT set never becomes the dictation engine); a U2 download must not
+ *  silently pull variant A. */
 fun downloadWiring(extraVariant: String?): DownloadWiring {
-    val variant = ModelVariant.fromId(extraVariant)
+    val variant = ModelVariant.textFromId(extraVariant) ?: ModelVariant.fromId(extraVariant)
     return DownloadWiring(
         variant = variant,
         manifest = ModelManifest.forVariant(variant),
         baseUrl = ModelManifest.baseUrlFor(variant),
     )
 }
+
+/** V0.1.54e (restart bug): may an ACTION_START reuse the existing
+ *  process-singleton controller? Pure decision, pinned in
+ *  ModelDownloadServiceRestartTest. */
+internal enum class ControllerReuse { REUSE, NEW, BUSY }
+
+/** V0.1.54e: TERMINAL states (Idle/Ready/Failed/Cancelled) always yield a
+ *  NEW controller — a finished run must never swallow a later start of
+ *  another set; the SAME variant while running is REUSE (idempotent start);
+ *  ANOTHER variant while running is BUSY (single-run: never two parallel
+ *  downloads). */
+internal fun controllerReuseDecision(
+    current: ModelVariant?,
+    state: DownloadController.State?,
+    requested: ModelVariant,
+): ControllerReuse = when {
+    current == null || state == null -> ControllerReuse.NEW
+    state.isTerminalControllerState() -> ControllerReuse.NEW
+    current == requested -> ControllerReuse.REUSE
+    else -> ControllerReuse.BUSY
+}
+
+internal fun DownloadController.State.isTerminalControllerState(): Boolean =
+    this !is DownloadController.State.Downloading && this !is DownloadController.State.Verifying
 
 class ModelDownloadService : Service() {
 
@@ -88,6 +116,14 @@ class ModelDownloadService : Service() {
         /** Process singleton: exactly one running download per process (L9). */
         @Volatile var controller: DownloadController? = null
             private set
+
+        /** V0.1.54e test seams: injectable factory (NO network in tests) and a
+         *  reset of the process singleton between tests. */
+        @Volatile internal var controllerFactoryOverride: ((DownloadWiring) -> DownloadController)? = null
+
+        fun resetControllerForTest() {
+            controller = null
+        }
 
         /** External UI observer (setup activity): informed IN ADDITION to the internal
          *  notification listener — never overrides it. */
@@ -116,27 +152,55 @@ class ModelDownloadService : Service() {
             stopSelf()
             return START_NOT_STICKY
         }
+        // V0.1.54d diagnosis: codes/ids only (rule 9 — never URLs/contents).
+        Log.i(TAG, "onStart action=$action extra=${intent.getStringExtra(EXTRA_VARIANT) ?: "none"}")
         // L2: startForeground BEFORE any init — notification visible immediately.
         // E7 cascade: see startForegroundCompat.
         if (!startForegroundCompat()) {
             // No download without FGS (Doze/process-kill risk) — cancel cleanly.
+            Log.w(TAG, "fgs-blocked")
             stopSelf()
             return START_NOT_STICKY
         }
 
         when (action) {
             ACTION_START -> {
-                // T22d: per-set wiring from the intent extra (default A);
-                // a controller that is already running WINS (single-run).
+                // T22d: per-set wiring from the intent extra (default A).
+                // V0.1.54e (restart bug): the controller singleton must never
+                // swallow a start — TERMINAL runs and OTHER variants get a NEW
+                // controller; a running OTHER variant is BUSY (single-run).
                 val wiring = downloadWiring(intent.getStringExtra(EXTRA_VARIANT))
-                val c = controller ?: createController(wiring).also { controller = it }
-                val startedAt = System.currentTimeMillis()
-                c.listener = { state ->
-                    notifyAll(state)
-                    onStateChanged(state, startedAt)
+                when (controllerReuseDecision(controller?.variant, controller?.state, wiring.variant)) {
+                    ControllerReuse.BUSY -> {
+                        Log.w(
+                            TAG,
+                            "start-busy running=${controller?.variant?.id} requested=${wiring.variant.id}",
+                        )
+                    }
+                    ControllerReuse.REUSE -> {
+                        Log.i(TAG, "wiring variant=${wiring.variant.id} files=${wiring.manifest.size} controller=reused")
+                        val c = controller!!
+                        val startedAt = System.currentTimeMillis()
+                        c.listener = { state ->
+                            notifyAll(state)
+                            onStateChanged(state, startedAt)
+                        }
+                        notifyAll(c.state) // current state to the new UI immediately
+                        c.start() // idempotent: no-op while Downloading/Verifying
+                    }
+                    ControllerReuse.NEW -> {
+                        Log.i(TAG, "wiring variant=${wiring.variant.id} files=${wiring.manifest.size} controller=new")
+                        val factory = controllerFactoryOverride ?: ::createController
+                        val c = factory(wiring).also { controller = it }
+                        val startedAt = System.currentTimeMillis()
+                        c.listener = { state ->
+                            notifyAll(state)
+                            onStateChanged(state, startedAt)
+                        }
+                        notifyAll(c.state) // current state to the new UI immediately
+                        c.start()
+                    }
                 }
-                notifyAll(c.state) // current state to the new UI immediately
-                c.start() // idempotent: no-op during Downloading/Verifying/Ready
             }
             ACTION_CANCEL -> {
                 controller?.cancel()

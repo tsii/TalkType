@@ -136,11 +136,56 @@ class ModelU2VariantTest {
 
     // ------------------------------------------------------------- base URL
 
-    @Test fun u2BaseUrlStaysEmptyUntilHostPinned() {
-        assertEquals("", ModelManifest.BASE_URL_U2_EN)
-        assertEquals("", ModelManifest.BASE_URL_U2_DE)
-        assertEquals("", ModelManifest.baseUrlFor(ModelVariant.BART_SPELLING_EN))
-        assertEquals("", ModelManifest.baseUrlFor(ModelVariant.BART_SPELLING_DE))
+    @Test fun u2BaseUrlsArePinnedToTheCatboxHost() {
+        // V0.1.54 (PLAN_HOSTING §2a): hosts pinned — catbox (permanent),
+        // PER SET (en/de share file names with different hashes):
+        assertEquals("https://files.catbox.moe/", ModelManifest.BASE_URL_U2_EN)
+        assertEquals("https://files.catbox.moe/", ModelManifest.BASE_URL_U2_DE)
+        assertEquals(ModelManifest.BASE_URL_U2_EN, ModelManifest.baseUrlFor(ModelVariant.BART_SPELLING_EN))
+        assertEquals(ModelManifest.BASE_URL_U2_DE, ModelManifest.baseUrlFor(ModelVariant.BART_SPELLING_DE))
+    }
+
+    // ------------------------------------------------- download wiring (U2)
+
+    /** V0.1.54b: the U2 download button routes through the SAME service
+     *  path — downloadWiring must resolve TEXT ids EXPLICITLY ([fromId]
+     *  deliberately falls back to A for TEXT ids, never a TEXT dictation). */
+    @Test fun `downloadWiring resolves the TEXT sets explicitly - full U2 wiring per set`() {
+        val en = downloadWiring("bart-spelling-en-int8")
+        assertEquals(ModelVariant.BART_SPELLING_EN, en.variant)
+        assertEquals(ModelManifest.U2_EN, en.manifest)
+        assertEquals(ModelManifest.BASE_URL_U2_EN, en.baseUrl)
+        val de = downloadWiring("bart-spelling-de-int8")
+        assertEquals(ModelVariant.BART_SPELLING_DE, de.variant)
+        assertEquals(ModelManifest.U2_DE, de.manifest)
+        assertEquals(ModelManifest.BASE_URL_U2_DE, de.baseUrl)
+        // ASR ids keep their EXACT old wiring (default A, 17B inert):
+        assertEquals(ModelVariant.ONNX_CPU, downloadWiring(null).variant)
+        assertEquals(ModelVariant.ONNX_CPU, downloadWiring("bogus").variant)
+        assertEquals(ModelVariant.QWEN3_ASR_17B, downloadWiring("qwen3-asr-1.7b-int8").variant)
+        assertEquals(ModelVariant.QWEN3_ASR, downloadWiring("qwen3-asr-0.6b-int8").variant)
+    }
+
+    /** V0.1.54 (PLAN_HOSTING): the downloader builds baseUrl + urlPath — the
+     *  EXACT full URLs of both U2 sets (flat catbox names for EVERY file,
+     *  including the multi-segment store names under shared/ and tokenizer/). */
+    @Test fun `u2 download defaults build the exact full URLs (base + flat urlPath)`() {
+        val en = ModelManifest.U2_EN.associate { it.storeName to ModelManifest.BASE_URL_U2_EN + it.urlPath }
+        assertEquals("https://files.catbox.moe/t2vaz4.onnx", en.getValue("encoder.int8.onnx"))
+        assertEquals("https://files.catbox.moe/pwnz00.onnx", en.getValue("decoder_init.int8.onnx"))
+        assertEquals("https://files.catbox.moe/myoxbf.onnx", en.getValue("decoder_step.int8.onnx"))
+        assertEquals("https://files.catbox.moe/gci74c.bin", en.getValue("shared/shared_weights.bin"))
+        assertEquals("https://files.catbox.moe/5a626s.json", en.getValue("tokenizer/tokenizer.json"))
+        assertEquals("https://files.catbox.moe/8m7dbj.json", en.getValue("tokenizer/tokenizer_config.json"))
+        assertEquals("https://files.catbox.moe/zcwse1.json", en.getValue("tokenizer/vocab_meta.json"))
+        val de = ModelManifest.U2_DE.associate { it.storeName to ModelManifest.BASE_URL_U2_DE + it.urlPath }
+        assertEquals("https://files.catbox.moe/yufd3r.onnx", de.getValue("encoder.int8.onnx"))
+        assertEquals("https://files.catbox.moe/41jloi.onnx", de.getValue("decoder_init.int8.onnx"))
+        assertEquals("https://files.catbox.moe/4ya4lm.onnx", de.getValue("decoder_step.int8.onnx"))
+        assertEquals("https://files.catbox.moe/vp343k.bin", de.getValue("shared/shared_weights.bin"))
+        assertEquals("https://files.catbox.moe/vsjzg0.json", de.getValue("tokenizer/tokenizer.json"))
+        assertEquals("https://files.catbox.moe/2psg6n.json", de.getValue("tokenizer/tokenizer_config.json"))
+        assertEquals("https://files.catbox.moe/wvn408.json", de.getValue("tokenizer/vocab_meta.json"))
     }
 
     /** V0.1.53 (PLAN_HOSTING §2a): en/de share the SAME file names with

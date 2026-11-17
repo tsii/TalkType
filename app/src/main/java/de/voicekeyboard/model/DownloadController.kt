@@ -1,5 +1,6 @@
 package de.voicekeyboard.model
 
+import android.util.Log
 import java.util.concurrent.Executor
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -71,13 +72,25 @@ class DownloadController(
 
     @Volatile private var currentOp: DownloadOp? = null
 
-    /** Starts; no-op during DOWNLOADING/VERIFYING/READY, resumes after FAILED/CANCELLED. */
+    /** Starts; no-op during DOWNLOADING/VERIFYING, resumes after
+     *  FAILED/CANCELLED — and since V0.1.54e also after READY: a finished run
+     *  must never lock the controller (restart bug: a terminal singleton
+     *  swallowed every later start). The `running` flag is reset in run()'s
+     * finally, so a terminal state is always re-runnable.
+     *  V0.1.54d diagnosis: every path logs WHY (codes/ids only, rule 9). */
     fun start() {
         when (state) {
-            is State.Downloading, is State.Verifying, is State.Ready -> return
+            is State.Downloading, is State.Verifying -> {
+                Log.i(TAG, "start-noop state=${state::class.simpleName}")
+                return
+            }
             else -> {}
         }
-        if (!running.compareAndSet(false, true)) return // double start = one run
+        if (!running.compareAndSet(false, true)) { // double start = one run
+            Log.i(TAG, "start-noop running=true state=${state::class.simpleName}")
+            return
+        }
+        Log.i(TAG, "start-run variant=${variant.id}")
         executor.execute(::run)
     }
 
@@ -92,6 +105,7 @@ class DownloadController(
     }
 
     private fun run() {
+        Log.i(TAG, "run-enter variant=${variant.id} files=${order.size}")
         try {
             // T22d: a set without a pinned manifest is structurally not
             // downloadable — abort BEFORE any staging/marker/download op
@@ -153,8 +167,13 @@ class DownloadController(
             setState(State.Ready)
         } catch (e: ModelError) {
             setState(State.Failed(e))
-        } catch (e: Exception) {
-            setState(State.Failed(ModelError.Storage(e.message ?: e.javaClass.simpleName, e)))
+        } catch (t: Throwable) {
+            // V0.1.54d diagnosis: an UNEXPECTED crash must be visible — the
+            // executor otherwise swallows the uncaught throwable SILENTLY
+            // (thread dies, notification stays on its initial state).
+            Log.w(TAG, "run-crashed ${t.javaClass.simpleName}")
+            setState(State.Failed(ModelError.Storage(t.message ?: t.javaClass.simpleName, t)))
+            throw t // finally resets `running`; the executor logs nothing — WE do
         } finally {
             running.set(false)
         }
@@ -164,6 +183,9 @@ class DownloadController(
         if (totalBytes <= 0) 0f else (bytes.toDouble() / totalBytes).toFloat().coerceIn(0f, 1f)
 
     companion object {
+        /** V0.1.54d: same log tag as the service — one download trace. */
+        private const val TAG = "VK-DL"
+
         /** Production: bind the real ModelDownloader to the port. */
         fun opOf(downloader: ModelDownloader): DownloadOp = object : DownloadOp {
             override fun download(file: ModelFile, listener: DownloadProgressListener?): Boolean =
